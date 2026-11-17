@@ -978,6 +978,7 @@ static QoreValue read_expr_static_method_call_intern(AOTExprReadCtx& ctx, const 
     if (receiver_type_path && *receiver_type_path) {
         QoreAOTTypeResolver type_resolver(ctx.pgm);
         std::string type_error;
+        // the receiver of a call in a generic function can have its type parameters (qore#6308)
         receiver_type_info = type_resolver.resolveForSignature(receiver_type_path, type_error,
             qore_aot_get_type_param_owner());
         if (!receiver_type_info || !type_error.empty()) {
@@ -2151,7 +2152,8 @@ static bool write_expr_call_ref(AOTExprWriteCtx& ctx) {
     if (auto* scr = dynamic_cast<const LocalStaticMethodCallReferenceNode*>(node)) {
         ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::STATIC_METHOD_REF));
         const QoreMethod* method = scr->getMethod();
-        const QoreClass* qc = method ? method->getClass() : nullptr;
+        // the class that the reference names (qore#6285)
+        const QoreClass* qc = scr->getScopeClass();
         std::string class_ref = qore_aot_encode_class_ref(qc);
         ctx.writer.writeStringRef(class_ref.c_str());
         ctx.writer.writeStringRef(method ? method->getName() : "");
@@ -2375,7 +2377,7 @@ const QoreMethod* qore_aot_find_loading_method(const QoreClass* qc, const char* 
 }
 
 static const QoreMethod* read_aot_method_ref_target(AOTExprReadCtx& ctx, const char* kind,
-        bool prefer_static) {
+        bool prefer_static, const QoreClass** class_out = nullptr) {
     const char* class_path = ctx.reader.readStringRef(ctx.ptr);
     const char* method_name = ctx.reader.readStringRef(ctx.ptr);
     if (!class_path || !*class_path || !method_name || !*method_name) {
@@ -2405,6 +2407,9 @@ static const QoreMethod* read_aot_method_ref_target(AOTExprReadCtx& ctx, const c
     if (!method) {
         ctx.error = std::string("cannot resolve ") + kind + " method reference '"
             + class_path + "::" + method_name + "'";
+    }
+    if (class_out) {
+        *class_out = qc;
     }
     return method;
 }
@@ -2476,7 +2481,8 @@ static bool write_expr_static_method_ref(AOTExprWriteCtx& ctx) {
     }
     ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::STATIC_METHOD_REF));
     const QoreMethod* method = scr->getMethod();
-    const QoreClass* qc = method ? method->getClass() : nullptr;
+    // the class that the reference names (qore#6285)
+    const QoreClass* qc = scr->getScopeClass();
     std::string class_ref = qore_aot_encode_class_ref(qc);
     ctx.writer.writeStringRef(class_ref.c_str());
     ctx.writer.writeStringRef(method ? method->getName() : "");
@@ -2484,8 +2490,9 @@ static bool write_expr_static_method_ref(AOTExprWriteCtx& ctx) {
 }
 
 static QoreValue read_expr_static_method_ref(AOTExprReadCtx& ctx) {
-    const QoreMethod* method = read_aot_method_ref_target(ctx, "static", true);
-    return method ? QoreValue(new LocalStaticMethodCallReferenceNode(&loc_builtin, method)) : QoreValue();
+    const QoreClass* qc = nullptr;
+    const QoreMethod* method = read_aot_method_ref_target(ctx, "static", true, &qc);
+    return method ? QoreValue(new LocalStaticMethodCallReferenceNode(&loc_builtin, method, qc)) : QoreValue();
 }
 
 static bool write_expr_deferred_static_method_ref(AOTExprWriteCtx& ctx) {
@@ -4207,7 +4214,11 @@ static bool write_expr_implicit_arg(AOTExprWriteCtx& ctx) {
 
 static QoreValue read_expr_implicit_arg(AOTExprReadCtx& ctx) {
     int64_t offset = QoreAOTBinaryReader::readI64(ctx.ptr);
-    int ctor_offset = offset >= 0 ? static_cast<int>(offset + 1) : static_cast<int>(offset);
+    int ctor_offset;
+    if (!qore_aot_implicit_arg_ctor_offset(offset, ctor_offset)) {
+        ctx.error = "invalid implicit argument offset " + std::to_string(offset);
+        return QoreValue();
+    }
     return QoreValue(new QoreImplicitArgumentNode(&loc_builtin, ctor_offset));
 }
 
@@ -5685,6 +5696,10 @@ static QoreValue read_expr_complex_context_ref(AOTExprReadCtx& ctx) {
     const char* name = ctx.reader.readStringRef(ctx.ptr);
     const char* member = ctx.reader.readStringRef(ctx.ptr);
     int64_t stack_offset = QoreAOTBinaryReader::readI64(ctx.ptr);
+    if (!qore_aot_valid_context_stack_offset(stack_offset)) {
+        ctx.error = "invalid context stack offset " + std::to_string(stack_offset);
+        return QoreValue();
+    }
 
     std::string spec = name ? name : "";
     spec += ":";

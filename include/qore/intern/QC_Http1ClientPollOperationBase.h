@@ -296,18 +296,16 @@ public:
         protocol_switched_listener = listener;
     }
 
-    //! Can be called from any thread: the error is set by the I/O thread under the stream lock
+    //! Can be called from any thread: reads @ref has_error, which is set when the error is stored under the stream lock
     DLLLOCAL bool hasError() const {
-        AutoLocker al(stream_lock);
-        return error_info != nullptr;
+        return has_error.load(std::memory_order_acquire);
     }
 
-    DLLLOCAL QoreHashNode* getErrorInfo() const {
-        if (error_info) {
-            error_info->ref();
-        }
-        return error_info;
-    }
+    //! Returns the recorded error with a new reference, or nullptr if none was recorded; can be called from any thread
+    /** Read under @c stream_lock, which the writer (publishError()) holds while it records the error, so the hash is
+        returned complete and safely published to the calling thread
+    */
+    DLLLOCAL QoreHashNode* getErrorInfo() const;
 
     DLLLOCAL std::string getNegotiatedProtocol() const {
         AutoLocker al(stream_lock);
@@ -746,6 +744,9 @@ private:
 
     //! Error info (ref'd or nullptr)
     QoreHashNode* error_info = nullptr;
+    //! Set (release) when @ref error_info is stored, under the lock that protects it; read (acquire) without a lock
+    //! by hasError()
+    std::atomic<bool> has_error{false};
 
     //! ALPN protocol captured from the async SSL upgrade output.
     std::string negotiated_protocol;

@@ -1,0 +1,21 @@
+#!/usr/bin/env qore
+# test-platform: macos - JIT code generation of generic hashdecl code in many Programs
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+#
+# Part 4 of 4 of the cases of GenericHashdeclPrograms.qc (qore#6359)
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires ../../../TestInterpreter.qm
+%requires FsUtil
+
+%include GenericHashdeclPrograms.qc
+
+%exec-class GenericHashdeclProgramsPart4
+
+#! runs part 4 of 4 of the cases of GenericHashdeclProgramsBase
+class GenericHashdeclProgramsPart4 inherits GenericHashdeclProgramsBase {
+    constructor() : GenericHashdeclProgramsBase("generic hashdecls of destroyed Programs, part 4", 4) {
+    }
+}

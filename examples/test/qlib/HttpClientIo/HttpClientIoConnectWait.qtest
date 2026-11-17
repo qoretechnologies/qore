@@ -1,0 +1,774 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - TCP connections completed into the backlog of a listener that never accepts, TLS connect waits
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    Tests for the waits of HttpClientIo requests for connections that are not ready: shared pending connections
+    (#6430) and the bound of the request's timeout on the acquisition of a connection (#6429)
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Logger
+%requires Mime
+%requires HttpServerUtil
+%requires HttpServer
+%requires HttpClientIo
+%requires ../../TestCertificates.qm
+
+%exec-class HttpClientIoConnectWaitTest
+
+#! Captures the log messages of a connection manager, signals the first one that matches a pattern, and can hold the
+#! threads that log given messages
+class ConnectWaitLog inherits Logger {
+    private {
+        list<string> messages();
+        Mutex m();
+        #! the pattern of the message to signal
+        *string signal_pattern;
+        #! decremented once, when a message matches the pattern
+        Counter signal(0);
+        #! holds by name: pattern, occurrences to let pass, held counter, release counter
+        hash<string, hash<auto>> holds;
+    }
+
+    #! Sets the pattern of the message to signal; the counter is decremented when such a message is logged
+    Counter signalOn(string pattern) {
+        AutoLock al(m);
+        signal_pattern = pattern;
+        signal = new Counter(1);
+        return signal;
+    }
+
+    #! Holds the thread that logs the given occurrence of a message that matches the pattern until it is released
+    /** @param pattern the pattern of the message
+        @param name the name of the hold, for @ref release()
+        @param occurrence the occurrence of the message that is held (1: the first one logged from now on)
+
+        @return a counter that is decremented when the thread is held
+    */
+    Counter holdOn(string pattern, string name = "default", int occurrence = 1) {
+        AutoLock al(m);
+        holds{name} = {
+            "pattern": pattern,
+            "skip": occurrence - 1,
+            "held": new Counter(1),
+            "release": new Counter(1),
+        };
+        return holds{name}.held;
+    }
+
+    #! Releases the thread of a hold, or one that is held later; without a name, all holds are released
+    release(*string name) {
+        AutoLock al(m);
+        foreach string n in (keys holds) {
+            if (name && n != name) {
+                continue;
+            }
+            Counter c = holds{n}.release;
+            if (c.getCount()) {
+                c.dec();
+            }
+        }
+    }
+
+    constructor() : Logger("connect-wait", LoggerLevel::getLevelDebug()) {
+    }
+
+    log(int level, string message, ...) {
+        string formatted = argv ? vsprintf(message, argv) : message;
+        *Counter wait_for;
+        {
+            AutoLock al(m);
+            push messages, formatted;
+            if (signal_pattern && regex(formatted, signal_pattern)) {
+                remove signal_pattern;
+                signal.dec();
+            }
+            foreach string n in (keys holds) {
+                if (!holds{n}.pattern || !regex(formatted, holds{n}.pattern)) {
+                    continue;
+                }
+                if (holds{n}.skip) {
+                    --holds{n}.skip;
+                    continue;
+                }
+                remove holds{n}.pattern;
+                holds{n}.held.dec();
+                wait_for = holds{n}.release;
+                break;
+            }
+        }
+        # a bounded hold: the test releases the thread when it is done with it
+        if (wait_for) {
+            wait_for.waitForZero(60s);
+        }
+    }
+
+    #! Returns the messages that match the given pattern
+    list<string> getMatching(string pattern) {
+        AutoLock al(m);
+        return select messages, regex($1, pattern);
+    }
+}
+
+#! Answers "/stall" once its counter is zero, and everything else at once
+class StallHandler inherits AbstractHttpRequestHandler {
+    public {
+        #! "/stall" requests wait until this counter is zero
+        Counter stall(1);
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        if (cx.raw_path == "/stall") {
+            stall.waitForZero(60s);
+        }
+        return makeResponse({"Content-Type": MimeTypeText}, 200, "ok");
+    }
+}
+
+#! A TCP listener that never accepts: the kernel completes the TCP handshake into its backlog, TLS never starts
+class SilentListener {
+    private {
+        Socket sock();
+    }
+
+    constructor() {
+        sock.bind("127.0.0.1:0");
+        sock.listen();
+    }
+
+    string getUrl() {
+        return sprintf("https://127.0.0.1:%d", sock.getSocketInfo().port);
+    }
+
+    close() {
+        sock.close();
+    }
+}
+
+class HttpClientIoConnectWaitTest inherits QUnit::Test {
+    constructor() : Test("HttpClientIoConnectWaitTest", "1.0") {
+        addTestCase("a request whose wait expires leaves a shared pending connection to the other requests",
+            \testSharedPendingConnection());
+        addTestCase("a manager request is not failed by another request's expired wait",
+            \testSharedPendingConnectionManager());
+        addTestCase("a request whose wait expires leaves a pending connection to an asynchronous waiter",
+            \testAsyncWaiterOnPendingConnection());
+        addTestCase("a request's timeout bounds the happy-eyeballs race", \testRaceBoundByRequestTimeout());
+        addTestCase("a request's timeout bounds the wait for a connection that another request creates",
+            \testCreationWaitBoundByRequestTimeout());
+        addTestCase("acquireStream() with a timeout bounds the happy-eyeballs race",
+            \testAcquireStreamTimeout());
+        addTestCase("a request that times out on a pending connection is not sent again",
+            \testNoRetryOnPendingConnection());
+        addTestCase("a request whose time ran out on a ready connection is not sent again",
+            \testNoRetryPastDeadline());
+        addTestCase("an async request whose acquisition times out is not sent again",
+            \testAsyncAcquisitionTimeoutFinal());
+        addTestCase("async and streaming requests whose deadline ends their connection wait are not sent again",
+            \testDeadlineOnPendingConnectionIsFinal());
+        addTestCase("a happy-eyeballs race that a request's deadline cuts off still pools its winner",
+            \testAbandonedRacePoolsWinner());
+        addTestCase("the caller of a race handed over to the background does not release a later creator's claim",
+            \testHandedOverClaimOwnership());
+        set_return_value(main());
+    }
+
+    #! Two stream handles of one pending connection: the one whose time runs out does not end the other ones (#6430)
+    /** Three streams are reserved on one HTTP/2 connection that never becomes ready.  The first one's request times
+        out; the connection must keep connecting for the other two: the second one's request ends with its own
+        timeout, and a request waiting in a background thread is ended only by an explicit close of the connection,
+        with a connection error that names the close.  Before the fix, the first timeout closed the connection, and the
+        other requests failed at once with \c HTTPCLIENT-CONNECT-ERROR "connection closed: UNKNOWN: unknown".
+    */
+    testSharedPendingConnection() {
+        SilentListener listener();
+        on_exit listener.close();
+        string url = listener.getUrl();
+
+        HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{
+            "protocol": "h2",
+            "connect_timeout": 60s,
+            "request_timeout": 60s,
+        });
+        on_exit mgr.closeAll();
+
+        # all reservations are taken on this thread before any wait starts
+        HttpClientStreamHandle s1 = mgr.acquireStream(url);
+        HttpClientStreamHandle s2 = mgr.acquireStream(url);
+        HttpClientStreamHandle s3 = mgr.acquireStream(url);
+        HttpClientConnection conn = s1.getConnection();
+        assertTrue(conn == s2.getConnection() && conn == s3.getConnection(), "one pending connection");
+        assertFalse(conn.isReady(), "the connection is not ready");
+        assertEq(3, conn.getPendingStreamCount(), "three reservations");
+
+        # a request with the time of the whole test waits in the background; it is ended by the close below
+        Counter done(1);
+        *hash<ExceptionInfo> s3_err;
+        bool s3_ok = False;
+        background sub () {
+            on_exit done.dec();
+            try {
+                s3.request("GET", "/", NOTHING, NOTHING, 60s);
+                s3_ok = True;
+            } catch (hash<ExceptionInfo> ex) {
+                s3_err = ex;
+            }
+        }();
+        # the background request is ended in any case, also when an assertion below fails
+        on_exit {
+            conn.close();
+            done.waitForZero(60s);
+        }
+
+        *hash<ExceptionInfo> err = getError(sub () { s1.request("GET", "/", NOTHING, NOTHING, 500ms); });
+        assertEq("HTTPCLIENT-TIMEOUT", err.err, "s1 times out; got " + describe(err));
+        # deterministic: the expired request returned, and the connection is still connecting for the other ones
+        assertFalse(conn.isClosed(), "the connection is not closed by s1's timeout");
+        assertEq(HttpClientConnectionState::Connecting, conn.getConnectionState(), "the connection is connecting");
+        assertEq(2, conn.getPendingStreamCount(), "s1's reservation is released");
+
+        # the second request ends with its own timeout, not with an error of the connection
+        err = getError(sub () { s2.request("GET", "/", NOTHING, NOTHING, 500ms); });
+        assertEq("HTTPCLIENT-TIMEOUT", err.err, "s2 times out; got " + describe(err));
+        assertFalse(conn.isClosed(), "the connection is not closed by s2's timeout");
+        assertEq(1, conn.getPendingStreamCount(), "s2's reservation is released");
+        assertEq(1, done.getCount(), "the background request is still waiting");
+
+        # a close of the connection ends the last request with an error that names the close
+        conn.close();
+        assertEq(0, done.waitForZero(60s), "the background request ends");
+        assertFalse(s3_ok, "the background request does not succeed");
+        assertEq("HTTPCLIENT-CONNECT-ERROR", s3_err.err, "s3: connection error; got " + describe(s3_err));
+        assertFalse((s3_err.desc ?? "") =~ /UNKNOWN/, "s3: the error describes the close; got " + describe(s3_err));
+    }
+
+    #! A manager request waiting on a shared pending connection is not failed by another request's timeout (#6430)
+    /** A stream handle reserves a pending HTTP/2 connection, and a manager request in a background thread reuses
+        it (signaled by the manager's log message for the reuse).  The stream handle's request times out; the
+        connection must not be closed under the manager request, which keeps waiting and is not retried for a
+        connection error until the manager is closed.  Before the fix, the close failed the manager request with
+        \c HTTPCLIENT-CONNECT-ERROR, which it retried on a new connection.
+    */
+    testSharedPendingConnectionManager() {
+        SilentListener listener();
+        on_exit listener.close();
+        string url = listener.getUrl();
+
+        ConnectWaitLog log();
+        HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{
+            "protocol": "h2",
+            "connect_timeout": 60s,
+            "request_timeout": 60s,
+            "logger": log,
+        });
+
+        HttpClientStreamHandle s1 = mgr.acquireStream(url);
+        HttpClientConnection conn = s1.getConnection();
+        assertFalse(conn.isReady(), "the connection is not ready");
+
+        Counter reused = log.signalOn("reusing h2 connection " + conn.getConnectionId() + " ");
+        Counter done(1);
+        *hash<ExceptionInfo> mgr_err;
+        bool mgr_ok = False;
+        background sub () {
+            on_exit done.dec();
+            try {
+                mgr.request(url, "GET", "/", NOTHING, NOTHING, 60s);
+                mgr_ok = True;
+            } catch (hash<ExceptionInfo> ex) {
+                mgr_err = ex;
+            }
+        }();
+        # closing the manager ends the background request in any case, also when an assertion below fails
+        on_exit {
+            mgr.closeAll();
+            done.waitForZero(60s);
+        }
+
+        # the manager request has reserved a stream of the pending connection
+        assertEq(0, reused.waitForZero(60s), "the manager request reuses the pending connection");
+
+        *hash<ExceptionInfo> err = getError(sub () { s1.request("GET", "/", NOTHING, NOTHING, 500ms); });
+        assertEq("HTTPCLIENT-TIMEOUT", err.err, "s1 times out; got " + describe(err));
+        # deterministic: the manager request holds its reservation for 60 s, so the connection is still connecting
+        assertFalse(conn.isClosed(), "the connection is not closed by s1's timeout");
+        assertEq(HttpClientConnectionState::Connecting, conn.getConnectionState(), "the connection is connecting");
+        assertEq(1, conn.getPendingStreamCount(), "only s1's reservation is released");
+        assertEq(1, done.getCount(), "the manager request is still waiting");
+        assertEq((), log.getMatching("HTTPCLIENT-CONNECT-ERROR"), "no connection error is retried");
+
+        mgr.closeAll();
+        assertEq(0, done.waitForZero(60s), "the manager request ends when the manager is closed");
+        assertFalse(mgr_ok, "the manager request does not succeed");
+        assertTrue(exists mgr_err, "the manager request raises an error");
+    }
+
+    #! An asynchronous waiter of a pending connection is not failed by a request's expired wait (#6430)
+    /** acquireConnectionAsync() returns a notifier for a pending pooled connection without reserving a stream of
+        it.  A stream handle's request on the same connection times out; the connection must keep connecting for the
+        asynchronous waiter.  Before the fix, the expiring request saw no other reservation and closed it.
+    */
+    testAsyncWaiterOnPendingConnection() {
+        SilentListener listener();
+        on_exit listener.close();
+        string url = listener.getUrl();
+
+        HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{
+            "protocol": "h2",
+            "connect_timeout": 60s,
+            "request_timeout": 60s,
+        });
+        on_exit mgr.closeAll();
+
+        HttpClientStreamHandle s1 = mgr.acquireStream(url);
+        HttpClientConnection conn = s1.getConnection();
+
+        *HttpClientConnection async_conn;
+        *EventNotifier notifier = mgr.acquireConnectionAsync(url, \async_conn);
+        assertTrue(exists notifier, "the asynchronous waiter waits for the connection");
+        assertTrue(async_conn == conn, "the asynchronous waiter waits for the pending connection");
+
+        *hash<ExceptionInfo> err = getError(sub () { s1.request("GET", "/", NOTHING, NOTHING, 500ms); });
+        assertEq("HTTPCLIENT-TIMEOUT", err.err, "s1 times out; got " + describe(err));
+        assertFalse(conn.isClosed(), "the connection is not closed under the asynchronous waiter");
+        assertEq(HttpClientConnectionState::Connecting, conn.getConnectionState(), "the connection is connecting");
+    }
+
+    #! The happy-eyeballs race of the "auto" protocol is bounded by the request's timeout (#6429)
+    /** The HTTP/2 candidate's TLS handshake never starts, so the race can end only with the connect timeout, which is
+        far beyond the request's timeout.  The request must raise \c HTTPCLIENT-TIMEOUT after one race, and must not
+        be sent again.  Before the fix, the race waited for the connect timeout, failed with
+        \c HTTPCLIENT-CONNECT-ERROR, and the request was sent again until its budget was used up.
+    */
+    testRaceBoundByRequestTimeout() {
+        SilentListener listener();
+        on_exit listener.close();
+        string url = listener.getUrl();
+
+        ConnectWaitLog log();
+        HttpClientConnectionManager mgr = getAutoManager(log);
+        on_exit mgr.closeAll();
+
+        *hash<ExceptionInfo> err = getError(sub () { mgr.request(url, "GET", "/", NOTHING, NOTHING, 500ms); });
+        assertEq("HTTPCLIENT-TIMEOUT", err.err, "the request times out; got " + describe(err));
+        assertFalse((err.desc ?? "") =~ /request budget/, "not the budget of all attempts; got " + describe(err));
+        assertEq(1, log.getMatching("happy eyeballs: starting H3 \\+ H2 race").size(), "one race");
+        assertEq((), log.getMatching("retrying|sending (the request|it) again"), "the request is not sent again");
+    }
+
+    #! The wait for a connection that another request is creating is bounded by the request's timeout (#6429)
+    /** A request that starts the happy-eyeballs race is held (in the manager's log message for the start of the
+        race) while a second request for the same origin waits for the connection that the first one is creating.
+        The second request must raise \c HTTPCLIENT-TIMEOUT for that wait, without a race of its own.  Before the
+        fix, it waited for the connect timeout, then created a connection itself.
+    */
+    testCreationWaitBoundByRequestTimeout() {
+        SilentListener listener();
+        on_exit listener.close();
+        string url = listener.getUrl();
+
+        ConnectWaitLog log();
+        HttpClientConnectionManager mgr = getAutoManager(log);
+        on_exit mgr.closeAll();
+
+        Counter held = log.holdOn("happy eyeballs: starting H3 \\+ H2 race");
+        Counter done(1);
+        *hash<ExceptionInfo> creator_err;
+        background sub () {
+            on_exit done.dec();
+            creator_err = getError(sub () { mgr.request(url, "GET", "/", NOTHING, NOTHING, 500ms); });
+        }();
+        on_exit {
+            log.release();
+            done.waitForZero(60s);
+        }
+
+        # the first request is creating the connection
+        assertEq(0, held.waitForZero(60s), "the first request starts the race");
+
+        *hash<ExceptionInfo> err = getError(sub () { mgr.request(url, "GET", "/", NOTHING, NOTHING, 500ms); });
+        assertEq("HTTPCLIENT-TIMEOUT", err.err, "the waiting request times out; got " + describe(err));
+        assertRegex("another request is creating the connection", err.desc ?? "",
+            "the wait for the other request's connection times out; got " + describe(err));
+
+        log.release();
+        assertEq(0, done.waitForZero(60s), "the first request ends");
+        # the first request's time ran out while it was held
+        assertEq("HTTPCLIENT-TIMEOUT", creator_err.err, "the first request times out; got " + describe(creator_err));
+        assertEq(1, log.getMatching("happy eyeballs: starting H3 \\+ H2 race").size(), "one race");
+        assertEq((), log.getMatching("retrying|sending (the request|it) again"), "no request is sent again");
+    }
+
+    #! acquireStream() with a timeout bounds the happy-eyeballs race (#6429)
+    testAcquireStreamTimeout() {
+        SilentListener listener();
+        on_exit listener.close();
+        string url = listener.getUrl();
+
+        ConnectWaitLog log();
+        HttpClientConnectionManager mgr = getAutoManager(log);
+        on_exit mgr.closeAll();
+
+        *hash<ExceptionInfo> err = getError(sub () { mgr.acquireStream(url, NOTHING, 500ms); });
+        if (log.getMatching("H3 creation failed")) {
+            # without HTTP/3, there is no race: an HTTP/2 connection is returned at once
+            testSkip("HTTP/3 is not available");
+        }
+        assertEq("HTTPCLIENT-TIMEOUT", err.err, "the acquisition times out; got " + describe(err));
+        assertRegex("happy-eyeballs race", err.desc ?? "", "the race times out; got " + describe(err));
+        assertEq(0, mgr.getStats().total_connections, "no connection is left in the pool");
+    }
+
+    #! A request that times out on a reused connection that never became ready is not sent again (#6429)
+    /** A stream handle holds a reservation of a pending HTTP/2 connection, and a manager request reuses it: its time
+        runs out while the connection is still connecting.  That connection is not a stale pooled connection, and the
+        request's time has run out, so the request is not sent again: one reuse, no stale-connection retry.  Before the
+        change, it was retried on the same pending connection, with a second timeout of its own (a 5 s request took
+        10 s).
+    */
+    testNoRetryOnPendingConnection() {
+        SilentListener listener();
+        on_exit listener.close();
+        string url = listener.getUrl();
+
+        ConnectWaitLog log();
+        HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{
+            "protocol": "h2",
+            "connect_timeout": 60s,
+            "request_timeout": 60s,
+            "logger": log,
+        });
+        on_exit mgr.closeAll();
+
+        HttpClientStreamHandle s1 = mgr.acquireStream(url);
+        HttpClientConnection conn = s1.getConnection();
+        on_exit s1.cancel();
+
+        *hash<ExceptionInfo> err = getError(sub () { mgr.request(url, "GET", "/", NOTHING, NOTHING, 500ms); });
+        assertEq("HTTPCLIENT-TIMEOUT", err.err, "the request times out; got " + describe(err));
+        assertEq(1, log.getMatching("reusing h2 connection " + conn.getConnectionId() + " ").size(),
+            "one attempt on the pending connection");
+        assertEq((), log.getMatching("evicting stale connection|retrying|sending (the request|it) again"),
+            "the request is not sent again");
+        assertFalse(conn.isClosed(), "the connection keeps connecting for the stream handle");
+    }
+
+    #! A request whose time runs out on a ready pooled connection is not sent again (#6429)
+    /** A pooled HTTP/1.1 connection is ready, and the server does not answer the request within its timeout.  The
+        request's time has run out, so the stale-connection retry is not started: the request raises
+        \c HTTPCLIENT-TIMEOUT stating its timeout.  Before the change, it was sent again on a new connection with a
+        timeout of its own.
+    */
+    testNoRetryPastDeadline() {
+        StallHandler handler();
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": new Logger("server", LoggerLevel::getLevelError()),
+        });
+        server.setDefaultHandler("stall", handler);
+        string url = sprintf("http://127.0.0.1:%d", server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
+            "service": 0,
+        }).port);
+        on_exit {
+            handler.stall.dec();
+            server.stop();
+        }
+
+        ConnectWaitLog log();
+        HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{
+            "protocol": "h1",
+            "connect_timeout": 60s,
+            "request_timeout": 60s,
+            "logger": log,
+        });
+        on_exit mgr.closeAll();
+
+        # the connection is pooled and ready
+        assertEq(200, mgr.request(url, "GET", "/").status_code, "the first request succeeds");
+
+        *hash<ExceptionInfo> err = getError(sub () { mgr.request(url, "GET", "/stall", NOTHING, NOTHING, 500ms); });
+        assertEq("HTTPCLIENT-TIMEOUT", err.err, "the request times out; got " + describe(err));
+        assertEq("request timed out after 500 ms", err.desc, "the error states the request's timeout");
+        assertEq((), log.getMatching("evicting stale connection|retrying|sending (the request|it) again"),
+            "the request is not sent again");
+    }
+
+    #! An async request whose acquisition the request timeout ends is not sent again, without a fallback (#6429)
+    /** With the \c request_timeout option far below the connect timeout, submitRequestAsync()'s acquisition of a
+        connection (the happy-eyeballs race) is ended by the deadline.  The \c HTTPCLIENT-TIMEOUT is final: no
+        retry, so no protocol fallback either.  Before the change, it was retried as a connection error.
+    */
+    testAsyncAcquisitionTimeoutFinal() {
+        SilentListener listener();
+        on_exit listener.close();
+        string url = listener.getUrl();
+
+        ConnectWaitLog log();
+        HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{
+            "protocol": "auto",
+            "connect_timeout": 10s,
+            "request_timeout": 500ms,
+            "logger": log,
+        });
+        on_exit mgr.closeAll();
+
+        *hash<ExceptionInfo> err = getError(sub () { mgr.submitRequestAsync(url, "GET", "/"); });
+        assertEq("HTTPCLIENT-TIMEOUT", err.err, "the submission times out; got " + describe(err));
+        assertEq(1, log.getMatching("happy eyeballs: starting H3 \\+ H2 race").size(), "one race");
+        assertEq((), log.getMatching("retrying|falling back"), "no retry and no fallback");
+    }
+
+    #! An async or streaming request whose deadline ends its wait for a pending connection is final (#6429)
+    /** A stream handle holds a pending HTTP/2 connection; submitRequestAsync() and acquireAndStartStreaming(), with
+        a short \c request_timeout option, reuse it and their wait for it ends at their deadline.  The timeout
+        is final: no retry, no fallback.  Before the fix, the wait ended up to a millisecond before the deadline, the
+        clock comparison that should have stopped a retry mostly missed it, and the timeout was retried as a
+        connection error (with handleProtocolFallback(), which caches HTTP/2 for an origin cached as HTTP/3).
+    */
+    testDeadlineOnPendingConnectionIsFinal() {
+        SilentListener listener();
+        on_exit listener.close();
+        string url = listener.getUrl();
+
+        ConnectWaitLog log();
+        # a short timeout, so that the requests can be repeated: whether a wait ended before the deadline by the
+        # clock is a matter of chance, the result must not depend on it
+        HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{
+            "protocol": "h2",
+            "connect_timeout": 60s,
+            "request_timeout": 20ms,
+            "logger": log,
+        });
+        on_exit mgr.closeAll();
+
+        HttpClientStreamHandle s0 = mgr.acquireStream(url);
+        on_exit s0.cancel();
+        HttpClientConnection conn = s0.getConnection();
+        string reuse = "reusing h2 connection " + conn.getConnectionId() + " ";
+
+        const int Rounds = 10;
+        for (int i = 1; i <= Rounds; ++i) {
+            *hash<ExceptionInfo> err = getError(sub () { mgr.submitRequestAsync(url, "GET", "/"); });
+            assertEq("HTTPCLIENT-TIMEOUT", err.err, sprintf("submitRequestAsync() %d times out; got %s", i,
+                describe(err)));
+            err = getError(sub () { mgr.acquireAndStartStreaming(url, "GET", "/"); });
+            assertEq("HTTPCLIENT-TIMEOUT", err.err, sprintf("acquireAndStartStreaming() %d times out; got %s", i,
+                describe(err)));
+        }
+        assertEq(Rounds * 2, log.getMatching(reuse).size(), "one attempt for each request");
+        assertEq((), log.getMatching("retrying|falling back"), "no retry and no fallback");
+        assertFalse(conn.isClosed(), "the connection keeps connecting");
+    }
+
+    #! A happy-eyeballs race that a request's deadline cuts off goes on in the background and pools its winner (#6429)
+    /** The HTTP/3 candidate's datagrams are absorbed by a UDP socket on the server's port, and its TCP port never
+        accepts, so the first request's race cannot end within its 500 ms.  After that request has raised
+        \c HTTPCLIENT-TIMEOUT, the UDP socket is replaced by an HTTP/3 listener on the same port: the QUIC client
+        retransmits its handshake, which then completes, and the race, which went on in the background, pools the
+        HTTP/3 connection (signaled by the manager's log message).  A second request reuses it.  Before the change,
+        the race's candidates were closed with the first request's timeout, so no connection could be made on a link
+        slower than the request timeout.
+    */
+    testAbandonedRacePoolsWinner() {
+        # another process may already use the port number for UDP, in which case another port is chosen
+        const int MaxPortAttempts = 20;
+        Socket tcp_hold;
+        Socket udp_hold;
+        int port;
+        for (int attempt = 1; ; ++attempt) {
+            tcp_hold = new Socket();
+            tcp_hold.bind("127.0.0.1:0");
+            tcp_hold.listen();
+            port = tcp_hold.getSocketInfo().port;
+            udp_hold = new Socket();
+            try {
+                udp_hold.bindINET("127.0.0.1", string(port), False, AF_INET, SOCK_DGRAM);
+                break;
+            } catch (hash<ExceptionInfo> ex) {
+                tcp_hold.close();
+                if (ex.err != "SOCKET-BIND-ERROR" || attempt == MaxPortAttempts) {
+                    rethrow;
+                }
+            }
+        }
+        on_exit {
+            udp_hold.close();
+            tcp_hold.close();
+        }
+        string url = "https://127.0.0.1:" + port;
+
+        ConnectWaitLog log();
+        HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{
+            "protocol": "auto",
+            "accept_all_certs": True,
+            "connect_timeout": 30s,
+            "request_timeout": 60s,
+            "logger": log,
+        });
+        on_exit mgr.closeAll();
+
+        Counter pooled = log.signalOn("happy eyeballs: pooled h3 connection");
+        *hash<ExceptionInfo> err = getError(sub () { mgr.request(url, "GET", "/", NOTHING, NOTHING, 500ms); });
+        if (log.getMatching("H3 creation failed")) {
+            testSkip("HTTP/3 is not available");
+        }
+        assertEq("HTTPCLIENT-TIMEOUT", err.err, "the first request times out; got " + describe(err));
+
+        # the HTTP/3 server takes over the port
+        udp_hold.close();
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": new Logger("server", LoggerLevel::getLevelError()),
+        });
+        on_exit server.stop();
+        StallHandler handler();
+        on_exit handler.stall.dec();
+        server.setDefaultHandler("default", handler);
+        try {
+            server.addQuicListener(<HttpListenerOptionInfo>{
+                "node": "127.0.0.1",
+                "cert": new SSLCertificate(CertPem),
+                "key": new SSLPrivateKey(KeyPem),
+            }, port);
+        } catch (hash<ExceptionInfo> ex) {
+            testSkip("QUIC listener not available: " + ex.desc);
+        }
+        server.waitForAsyncIo();
+
+        assertEq(0, pooled.waitForZero(60s), "the race that went on in the background pools its HTTP/3 winner");
+        hash<auto> resp = mgr.request(url, "GET", "/", NOTHING, NOTHING, 30s);
+        assertEq(200, resp.status_code, "the second request succeeds");
+        assertEq(1, log.getMatching("reusing h3 connection").size(), "the second request reuses the winner");
+        assertEq(1, log.getMatching("happy eyeballs: starting H3 \\+ H2 race").size(), "one race");
+    }
+
+    #! The caller of a race handed over to the background does not release the creation claim of a later creator
+    /** The caller of a happy-eyeballs race whose deadline passes hands the race over to the background, which owns the
+        creation claim of the key from then on.  Nothing listens on the UDP port, so the HTTP/3 candidate fails on its
+        own, and the HTTP/2 candidate waits in the TCP listener's backlog.  The caller is held after the handover (in the manager's log message
+        for it) while the background race fails (its server goes away), releases its claim, and a waiting request
+        takes the creation over and starts a race of its own (held in its log message for the start of the race).
+        The first caller then unwinds; the waiter's claim must survive it: a further request waits for the waiter's
+        creation and times out there, with no race of its own.  Before the fix, the caller's unwinding released the
+        claim of the key whoever held it, and the further request started a third race beside the waiter's.
+    */
+    testHandedOverClaimOwnership() {
+        # the HTTP/3 candidate fails on its own (nothing listens on the UDP port); the HTTP/2 candidate's TLS
+        # handshake waits in the listener's backlog until the test accepts and closes its connection
+        Socket tcp_hold();
+        tcp_hold.bind("127.0.0.1:0");
+        tcp_hold.listen();
+        int port = tcp_hold.getSocketInfo().port;
+        on_exit tcp_hold.close();
+        string url = "https://127.0.0.1:" + port;
+        string race_start = "happy eyeballs: starting H3 \\+ H2 race";
+
+        ConnectWaitLog log();
+        HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{
+            "protocol": "auto",
+            "accept_all_certs": True,
+            "connect_timeout": 30s,
+            "request_timeout": 60s,
+            "max_request_retries": 0,
+            "logger": log,
+        });
+        Counter caller_done(1);
+        Counter waiter_done(1);
+        # the held threads are released, and closing the manager ends their races at once
+        on_exit {
+            log.release();
+            mgr.closeAll();
+            caller_done.waitForZero(60s);
+            waiter_done.waitForZero(60s);
+        }
+
+        # the caller, held after it handed its race over to the background
+        Counter caller_held = log.holdOn("handed the race for .* over to the background", "caller");
+        *hash<ExceptionInfo> caller_err;
+        background sub () {
+            on_exit caller_done.dec();
+            caller_err = getError(sub () { mgr.request(url, "GET", "/", NOTHING, NOTHING, 300ms); });
+        }();
+        assertEq(0, caller_held.waitForZero(60s), "the caller hands its race over to the background");
+        if (log.getMatching("H3 creation failed")) {
+            testSkip("HTTP/3 is not available");
+        }
+
+        # a waiter for the background race's creation; it starts the second race, where it is held
+        Counter waiter_held = log.holdOn(race_start, "waiter");
+        Counter waiting = log.signalOn("waiting for the connection that another request is creating");
+        *hash<ExceptionInfo> waiter_err;
+        background sub () {
+            on_exit waiter_done.dec();
+            waiter_err = getError(sub () { mgr.request(url, "GET", "/", NOTHING, NOTHING, 60s); });
+        }();
+        assertEq(0, waiting.waitForZero(60s), "the waiter waits for the background race's creation");
+
+        # the background race fails: its server goes away; the HTTP/2 candidate's connection, which is in the
+        # listener's backlog, is accepted and closed, so that its TLS handshake fails at once
+        *Socket h2_leg = tcp_hold.accept(30s);
+        assertTrue(exists h2_leg, "the HTTP/2 candidate's connection is accepted");
+        if (h2_leg) {
+            h2_leg.close();
+        }
+        tcp_hold.close();
+        assertEq(0, waiter_held.waitForZero(60s), "the waiter takes the creation over after the background race");
+
+        # the caller unwinds while the waiter holds the creation
+        log.release("caller");
+        assertEq(0, caller_done.waitForZero(60s), "the caller ends");
+
+        # a further request waits for the waiter's creation and times out there
+        *hash<ExceptionInfo> err = getError(sub () { mgr.request(url, "GET", "/", NOTHING, NOTHING, 300ms); });
+        assertEq("HTTPCLIENT-TIMEOUT", err.err, "the further request times out; got " + describe(err));
+        assertRegex("another request is creating the connection", err.desc ?? "",
+            "the further request waits for the waiter's creation; got " + describe(err));
+        assertEq(2, log.getMatching(race_start).size(), "the caller's race and the waiter's race only");
+        assertEq("HTTPCLIENT-TIMEOUT", caller_err.err, "the caller times out; got " + describe(caller_err));
+    }
+
+    #! Returns a connection manager with the "auto" protocol whose connect timeout is far beyond the requests' ones
+    private static HttpClientConnectionManager getAutoManager(Logger log) {
+        return new HttpClientConnectionManager(<HttpClientConnectionManagerOptions>{
+            "protocol": "auto",
+            "connect_timeout": 10s,
+            "request_timeout": 60s,
+            "logger": log,
+        });
+    }
+
+    private static *hash<ExceptionInfo> getError(code c) {
+        try {
+            c();
+        } catch (hash<ExceptionInfo> ex) {
+            return ex;
+        }
+    }
+
+    private static string describe(*hash<ExceptionInfo> err) {
+        return err ? sprintf("%s: %s", err.err, err.desc) : "no error";
+    }
+}

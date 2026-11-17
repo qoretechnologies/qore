@@ -234,12 +234,6 @@ public:
         return nullptr;
     }
 
-protected:
-    //! the restrictions that the module's \c domains key removed from its Program (see setDomains())
-    int64 dom_removed = QDOM_DEFAULT;
-
-public:
-
     //! Records a child module declared with %try-child-module in this module
     /** @param loc the location of the directive
         @param spec the module specification (feature name with an optional version constraint)
@@ -925,6 +919,14 @@ enum qore_dbg_program_entry_site_e : int {
 //! Makes the next step of an entry into another Program at \a site throw std::bad_alloc; several sites can be armed,
 //! each fails once; -1 disarms all of them
 DLLLOCAL void qore_dbg_fail_next_program_entry(int site);
+//! Holds the next background thread that releases its TID for up to \a ms milliseconds before it leaves
+//! thread_counter, or until the static objects are destroyed (issue #6405)
+DLLLOCAL void qore_dbg_hold_next_thread_finish(int ms);
+//! Holds the next background thread that ends for up to \a ms milliseconds in a thread-local destructor, after it
+//! has returned from its thread function, or until the static objects are destroyed (issue #6412)
+DLLLOCAL void qore_dbg_hold_next_thread_tls_exit(int ms);
+//! Waits until a finishing background thread is held; returns false on timeout
+DLLLOCAL bool qore_dbg_wait_thread_finish_held(int timeout_ms);
 
 //! Returns true, and disarms the site, if the next step at \a site is armed to fail
 DLLLOCAL bool qore_dbg_program_entry_fails(int site);
@@ -1158,35 +1160,33 @@ DLLLOCAL bool runtime_module_call_override_in_effect(const QoreProgram* module_p
 //! runtime_module_call_override_in_effect() for the data of the current thread, \a td
 DLLLOCAL bool runtime_module_call_override_in_effect(ThreadData* td, const QoreProgram* module_pgm);
 
-//! The run-time parse options of a thread and the override that they are computed with; the first part of the
-//! thread's data (ThreadData)
-/** Defined here, so that RuntimeParseOptionsOverrideHelper::restore(), which runs at the end of every call of a user
-    variant, is inline in every caller
+//! The run-time parse options of a thread and the override that they were computed with (ThreadData)
+/** Declared here, so that RuntimeParseOptionsOverrideHelper restores it inline in every build: it runs on every call
+    of a user variant (qore#6446).  The members other than the parse options have no initializers, so that the copy
+    that the helper saves is not initialized on every call: a value-initialized struct (\c QoreRuntimePoState()) has
+    them zero
 */
-struct QoreThreadRuntimePoState {
-    QoreParseOptions runtime_po;
-    QoreParseOptions runtime_po_override_mask;
-    QoreParseOptions runtime_po_override_value;
-    //! the options of runtime_po_override_mask whose value is that of the override, not also that of the code
+struct QoreRuntimePoState {
+    //! the run-time parse options of the thread, with the override applied
+    QoreParseOptions po;
+    QoreParseOptions override_mask;
+    QoreParseOptions override_value;
+    //! the options of override_mask whose value is that of the override, not also that of the code
     /** see QoreCallParseOptionsOverride::replace
     */
-    QoreParseOptions runtime_po_override_replace;
-    //! the restrictions that the code of runtime_po_module_pgm inherits from its caller
+    QoreParseOptions override_replace;
+    //! the restrictions that the code of module_pgm inherits from its caller
     /** see runtime_get_own_program_state_parse_options()
     */
-    QoreParseOptions runtime_po_caller_restrictions;
-    //! the Program of the module whose code runs with runtime_po_caller_restrictions, or nullptr
-    const QoreProgram* runtime_po_module_pgm = nullptr;
-    //! the Program that the next user call is made on behalf of, or nullptr; see QoreCallbackCallerHelper
-    const QoreProgram* callback_caller_pgm = nullptr;
-    //! the Program running on the thread when callback_caller_pgm was set
-    const QoreProgram* callback_from_pgm = nullptr;
-    //! the ID of the application Program that the code of runtime_po_module_pgm runs for
-    qore_program_id_t runtime_po_app_pgm_id = 0;
+    QoreParseOptions caller_restrictions;
+    //! the Program of the module whose code runs with caller_restrictions, or nullptr
+    const QoreProgram* module_pgm;
+    //! the ID of the application Program that the code of module_pgm runs for
+    qore_program_id_t app_pgm_id;
     //! true while module code runs for a sandboxed caller; see QoreCallParseOptionsOverride::sandboxed
-    bool runtime_po_sandboxed = false;
+    bool sandboxed;
     //! the module Program whose code the override was set for; see QoreCallParseOptionsOverride::override_pgm
-    const QoreProgram* runtime_po_override_pgm = nullptr;
+    const QoreProgram* override_pgm;
 };
 
 class RuntimeParseOptionsOverrideHelper {
@@ -1233,39 +1233,19 @@ public:
 
 private:
     //! true if the override has been set; the state saved below is valid only then (it is written by set() and read
-    //! by restore() only), so it takes no initialization: the helper is created on every call of a user variant
+    //! by restore() only), so it takes no initialization beyond that of its parse options: the helper is created on
+    //! every call of a user variant
     bool active = false;
-    bool old_sandboxed;
-    //! the data of the thread that the override was set on, the current thread
-    QoreThreadRuntimePoState* td;
-    QoreParseOptions old_mask;
-    QoreParseOptions old_value;
-    QoreParseOptions old_replace;
-    QoreParseOptions old_po;
-    QoreParseOptions old_caller_restrictions;
-    const QoreProgram* old_module_pgm;
-    qore_program_id_t old_app_pgm_id;
-    const QoreProgram* old_override_pgm;
+    //! the state of the thread (ThreadData::runtime_po_state)
+    QoreRuntimePoState* state;
+    //! the state that set() replaced
+    QoreRuntimePoState old;
 
-    //! restores the saved state; inline, as it runs at the end of every call of a user variant that sets an override
+    //! restores the state that set() replaced; inline, as it runs on every call of a user variant (qore#6446)
     DLLLOCAL QORE_INTERN_ALWAYS_INLINE void restore() {
         assert(active);
-        assert(isCurrentThread());
-        td->runtime_po_override_mask = old_mask;
-        td->runtime_po_override_value = old_value;
-        td->runtime_po_override_replace = old_replace;
-        td->runtime_po_caller_restrictions = old_caller_restrictions;
-        td->runtime_po_module_pgm = old_module_pgm;
-        td->runtime_po_app_pgm_id = old_app_pgm_id;
-        td->runtime_po_sandboxed = old_sandboxed;
-        td->runtime_po_override_pgm = old_override_pgm;
-        td->runtime_po = old_po;
+        *state = old;
     }
-
-#ifndef NDEBUG
-    //! returns true if the override was set on the current thread
-    DLLLOCAL bool isCurrentThread() const;
-#endif
 };
 
 //! The run-time parse options in effect on a thread: its options and the override that they were computed with
@@ -1765,13 +1745,21 @@ private:
     @param timeout_ms the timeout in milliseconds; negative for no timeout
     @param xsink for the cancellation exception; may be nullptr
     @param operation the operation named in the cancellation exception
+    @param before_block if not nullptr, called with \a before_block_arg and the mutex held after the wait is
+    registered and the last check for a request, just before the thread blocks (also when the wait cannot be
+    registered: then nothing can wake it for what the check reads); if it returns non-zero, the thread does not
+    block and QORE_COND_RESULT_SUCCESS is returned.  A thread that sets what the check reads and then wakes the
+    waiter with QoreThreadList::wakeCondWaiter() is never lost: either the check sees it, or the wakeup sees the
+    registration
+    @param before_block_arg the argument of \a before_block
 
     @return QORE_COND_RESULT_SUCCESS if woken, QORE_COND_RESULT_TIMEOUT on timeout, or QORE_COND_RESULT_INTERRUPTED
     if the thread was cancelled or interrupted (or the condition waker thread could not be started), in which case
     an exception has been raised on \a xsink if it is not nullptr
 */
 DLLLOCAL int qore_cond_wait_cancellable(QoreCondition& cond, pthread_mutex_t* m, int64 timeout_ms,
-        ExceptionSink* xsink, const char* operation);
+        ExceptionSink* xsink, const char* operation, int (*before_block)(void*) = nullptr,
+        void* before_block_arg = nullptr);
 
 //! Stops the condition waker thread; called when no thread can be waiting any more
 DLLLOCAL void qore_stop_cond_waker();
@@ -1779,6 +1767,8 @@ DLLLOCAL void qore_stop_cond_waker();
 #ifdef DEBUG
 //! Test hook called by qore_cond_wait_cancellable() after its final check for a request and before it blocks
 DLLLOCAL extern std::atomic<void (*)()> qore_cond_wait_window_hook;
+//! Test hook called by qore_cond_wait_cancellable() before it registers a wait that it can register for a wakeup
+DLLLOCAL extern std::atomic<void (*)()> qore_cond_wait_register_hook;
 #endif
 
 //! Sleeps for the given number of microseconds or until the current thread is cancelled or interrupted
@@ -2538,6 +2528,11 @@ public:
         return active;
     }
 
+    //! returns true if the last entry failed with a C++ exception during or after the entry handler
+    DLLLOCAL bool handlerFailedWithCppException() const {
+        return handler_cpp_exception;
+    }
+
 private:
     //! runs the entry handler of the Program, if any; see enter()
     DLLLOCAL QORE_INTERN_NOINLINE int enterHandlers(ThreadData* td, QoreProgram* pgm, ExceptionSink* xsink);
@@ -2555,6 +2550,8 @@ private:
     QoreValue token;
     //! true while the frame is entered
     bool active = false;
+    //! true if the last entry failed with a C++ exception during or after the entry handler (issue #6255)
+    bool handler_cpp_exception = false;
 };
 
 //! returns true if a call into the given Program must enter it although it is the thread's current Program
@@ -2583,7 +2580,20 @@ public:
     }
     DLLLOCAL ~ProgramThreadCountContextHelper();
 
+    //! enters the Program; a C++ exception of the entry (std::bad_alloc) is raised in \a xsink as a Qore exception
+    /** The entry leaves the thread as it was, enterFailed() is true, and the exception is \c THREAD-ENTRY-HANDLER-ERROR
+        if the entry handler failed, otherwise \c PROGRAM-ENTRY-ERROR; if \a xsink already holds an exception, as when
+        a destructor runs while an exception propagates, no other is added.  The calls that the interpreter makes into
+        other Programs have nothing above them that converts a C++ exception, which would end the process (issue
+        #6255).
+    */
     DLLLOCAL void set(ExceptionSink* xsink, QoreProgram* pgm, bool runtime);
+
+    //! enters the Program as set() does, except that a C++ exception of the entry propagates
+    /** For the C++ API (QoreExternalProgramContextHelper): the exception propagates once the thread is as it was
+        (issue #6198); the helper's destructor then finds nothing to undo.
+    */
+    DLLLOCAL void setRethrow(ExceptionSink* xsink, QoreProgram* pgm, bool runtime);
 
     //! Returns the data of the thread in the Program of the given frame and the index of the frame there
     /** @param frame the frame, counted from the caller of the builtin function that looks it up; set to its index
@@ -2790,6 +2800,10 @@ protected:
 
 // raises STACK-LIMIT-EXCEEDED and returns -1 if the stack of the thread is exhausted; see thread.cpp
 DLLLOCAL int check_stack(ExceptionSink* xsink);
+
+// raises STACK-LIMIT-EXCEEDED and returns -1 if the stack of the thread cannot take \a reserve more bytes before its
+// stack check would fail (the frame of a compiled function, qore#6414); see thread.cpp
+DLLLOCAL int check_stack_reserve(ExceptionSink* xsink, size_t reserve);
 
 //! Keeps the Program of a reference from being deleted while the reference's lvalue is used
 /** A reference can outlive the Program whose lvalue it refers to: a function of the Program can return one, and the

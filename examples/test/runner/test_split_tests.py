@@ -28,7 +28,7 @@ class SplitTestsTest(unittest.TestCase):
             with self.subTest(qc=str(qc.relative_to(ROOT))):
                 name = qc.stem
                 parts = sorted({int(n) for n in PART_CASE.findall(qc.read_text())})
-                # the numbered part tests; other tests may share the name's prefix (CMakeBuildHelpers-preload.qtest)
+                # the numbered part tests; other tests may share the name's prefix (CMakeBuildHelpers-generic-context.qtest)
                 part_test = re.compile(re.escape(name) + r"-(\d+)\.qtest")
                 tests = sorted((t for t in qc.parent.glob(name + "-*.qtest") if part_test.fullmatch(t.name)),
                                key=lambda t: int(part_test.fullmatch(t.name).group(1)))

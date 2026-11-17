@@ -124,6 +124,22 @@ struct QoreIRNaturalLoop {
 //! @return natural loops ordered from smallest to largest
 std::vector<QoreIRNaturalLoop> qore_ir_find_natural_loops(const QoreIRControlFlowGraph& cfg);
 
+//! Decides the release checks of functional loop bodies (pending CheckExceptions, see QoreIRReleaseCheck; qore#6072)
+/** The lowering emits one after each container, at the start of each call's continuation and after the Phis of each
+    block in the body of a functional loop, with the value whose release it checks as its operand, and one at the
+    loop's back-edge.  A check is removed when its value cannot hold an object (a monotone data-flow analysis over the
+    value facts, local types, resolved variants' return types and opcodes), when a ListAppendElement with the same
+    handler follows it past instructions that cannot observe the exception, or, at a back-edge, when such an append
+    precedes it, or when no value of the back-edge's loop can hold an object.  A kept check of a container's value gives
+    the container its handler and becomes QoreIRReleaseCheck::Kept (native code emits nothing for it); one of a call's
+    or a Phi's value becomes QoreIRReleaseCheck::Native (native code checks the sink there); the operands are cleared.
+    Decided checks are left alone, so running it again changes nothing.  A loop of values that cannot hold an object
+    gets no check, and a map of objects whose elements are appended none per element.
+
+    @return the number of instructions removed
+*/
+size_t qore_ir_prune_release_checks(QoreIRFunction& func);
+
 //! Returns the values that a call takes as an argument and that a later execution of the call uses again.
 /** A call that consumes an argument releases it when the call returns (see design/temporary-lifetime.md); that is
     only correct if the argument is defined again for each execution of the call.  Neither the static use count nor

@@ -65,6 +65,18 @@ public:
         return copyBackgroundExplicit<QoreLogicalEqualsOperatorNode>(xsink);
     }
 
+    //! compares the values of the operands as the operator does, with the specialization for their types that parse
+    //! initialization selected; used by a switch case with the operator, whose value is the switch value (qore#6252)
+    /** @param strict_boolean true if the operator has strict boolean semantics (create())
+    */
+    DLLLOCAL QoreValue evalValues(const QoreValue& l, const QoreValue& r, bool strict_boolean,
+            ExceptionSink* xsink) const;
+
+    //! returns true if parse initialization selected a specialization of the comparison for the types of the operands
+    DLLLOCAL bool hasSpecialization() const {
+        return pfunc != nullptr;
+    }
+
     DLLLOCAL static bool softEqual(const QoreValue& l, const QoreValue& r, ExceptionSink *xsink);
     DLLLOCAL static bool softEqualLexical(const QoreValue& l, const QoreValue& r, ExceptionSink* xsink,
             LexicalSemanticPolicy policy);
@@ -84,6 +96,16 @@ public:
 protected:
     template <bool StrictBoolean>
     DLLLOCAL QORE_INTERN_ALWAYS_INLINE QoreValue evalCommon(bool& needs_deref, ExceptionSink* xsink) const;
+
+    //! compares the values of the operands as evalCommon() does once it has evaluated them
+    template <bool StrictBoolean>
+    DLLLOCAL QORE_INTERN_ALWAYS_INLINE QoreValue evalValuesCommon(const QoreValue& l, const QoreValue& r,
+            ExceptionSink* xsink) const;
+
+    //! compares the values of the operands once the buffer and plugin operations do not apply
+    template <bool StrictBoolean>
+    DLLLOCAL QORE_INTERN_ALWAYS_INLINE QoreValue evalScalarsCommon(const QoreValue& l, const QoreValue& r,
+            ExceptionSink* xsink) const;
 
     // type of pointer to optimized versions depending on arguments found at parse-time
     typedef bool(QoreLogicalEqualsOperatorNode::*eval_t)(ExceptionSink *xsink) const;

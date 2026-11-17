@@ -1555,6 +1555,22 @@ const WARN_NONEXHAUSTIVE_SWITCH = QP_WARN_NONEXHAUSTIVE_SWITCH;
     code into the same %Program object will fail with an exception.  If parsing fails due to a parse exception, the Program
     object is generally no longer usable and must be recreated to be used.
 
+    @anchor program_parse_lock_waits
+    @par Waiting for the Parse Lock
+    A parse action waits while another thread holds the Program's parse lock, which a thread holds for the whole parse
+    action, including the code that a commit runs (such as the initializers of global variables and static class
+    members).  A thread that holds the parse lock of one Program and waits for that of another could otherwise wait
+    forever: when the initializers of two Programs that are committed in two threads each parse code in the other
+    Program, each thread waits for a lock that the other holds.  The wait of a parse action that would close such a
+    cycle (also through further threads and Programs) is therefore refused with a \c PROGRAM-ERROR exception, and the
+    wait of a parse action for the parse lock can be ended with @ref Qore::cancel_thread() "cancel_thread()" or
+    @ref Qore::SandboxManager::requestInterrupt() "SandboxManager::requestInterrupt()", as other blocking waits can
+    (unless cancellation is deferred, as in the destructor of a trusted class).  A wait that does not close a cycle is
+    not refused, also when the thread that holds the lock waits for the parse lock of a third Program itself.  Some
+    internal waits for the parse lock (of binary modules, for example) can neither be refused nor ended; when such a
+    wait closes a cycle, a wait of a parse action in the cycle is refused instead (unless all of them wait in code
+    run with cancellation deferred by @ref Qore::defer_thread_cancel() "defer_thread_cancel()").
+
     @ref parse_options "Parse option constants" can be used to limit the capabilities of a Program object. These options should be
     binary-OR'ed together and passed to the Program object's constructor. Also see @ref command_line_processing for equivalent
     command-line options, and @ref parse_directives for equivalent parse directives.
@@ -3752,8 +3768,10 @@ pgm.setThreadEntryHandler(
     If \a on_enter raises an exception, the thread does not run the Program's code: the call that entered the
     Program raises the exception instead, and no \a on_exit runs for that entry (a thread started in the Program
     ends without running its code).  An exception raised by \a on_exit is raised after any exception that was already
-    propagating; the Program has been left in any case.  If \a on_exit cannot be run because no memory can be
-    allocated, the exit raises \c THREAD-ENTRY-HANDLER-ERROR in the same way.
+    propagating; the Program has been left in any case.  If \a on_enter or \a on_exit cannot be run because no
+    memory can be allocated, the entry or the exit raises \c THREAD-ENTRY-HANDLER-ERROR in the same way, also in
+    a call into the Program from Qore code (any other step of an entry that fails so raises
+    \c PROGRAM-ENTRY-ERROR).
 
     @par Restrictions
     This method requires both @ref Qore::Program::setThreadInit() "setThreadInit()"'s functional domain (@ref
@@ -4171,6 +4189,12 @@ code Program::getCallReference(string identifier) [flags=RET_VALUE_ONLY,NAMED_AR
 //! returns an expression object for the given source code
 /** @param source The source to the expression
     @param label the label for the expression
+
+    @throw EXPRESSION-ERROR the Program has code pending (@ref Qore::Program::parsePending() "Program::parsePending()"
+    without @ref Qore::Program::parseCommit() "Program::parseCommit()" or
+    @ref Qore::Program::parseRollback() "Program::parseRollback()"), or a parse of it was rolled back without
+    @ref Qore::PO_ALLOW_REPARSE "PO_ALLOW_REPARSE"; the code must be committed or rolled back before an expression
+    can be created in the Program (since %Qore 3.0)
 
     @since %Qore 0.9.5
 

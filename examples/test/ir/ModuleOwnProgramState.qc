@@ -1,0 +1,491 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.
+
+# The cases of the ModuleOwnProgramState-<n>.qtest tests: each runs one part of them, so that each takes a short time,
+# and together they run every case (see addPartCase()); part 1 runs the case with the source forms of the Mapper and
+# DataProvider modules, whose jit and tiered runs compile them to native code function by function, and part 2 the
+# case with their AOT forms (qore#6358)
+
+#! Module code running in its own Program uses its thread-local data for a restricted caller in every execution mode
+/** Module code runs with the restrictions of a sandboxed caller as well as its own, so a method of a module class that
+    keeps a context in its thread-local data (Mapper::mapData(), the AbstractDataProcessor methods) failed with
+    \c INVALID-FUNCTION-ACCESS for a caller with \c PO_NO_THREAD_CONTROL, such as a Qorus workflow step.  Builtin
+    variants flagged with \c QCF_OWN_PROGRAM_STATE change only the state that the Program running them keeps for the
+    current thread; module code, which runs in the module's Program, can reach only the module's own thread-local data
+    with them, so they are checked against the module's own restrictions.
+
+    The tests check that:
+    - module code (a function, static and normal methods, a call reference, a nested call, a closure created in
+      module code and calls resolved at run time) can use every flagged function for a sandboxed
+      \c PO_NO_THREAD_CONTROL caller, as can Mapper::mapData() and AbstractDataProcessor::processRecord();
+    - a thread-control function that is not confined to the module's own state stays refused for module code called
+      by a sandboxed caller, and is allowed for a caller restricted only by its parse options, which restrict its own
+      code only; restricted code calling a flagged function directly is refused at parse time and at run time;
+    - a module's Program roots its own thread-local data family: the user code of a Program that uses the module can
+      neither read nor change the module's thread-local data, and the module code (functions and methods alike) can
+      neither read nor change the user code's.
+
+    Each case runs with the test module as source and AOT-compiled, in every execution mode, against the output of the
+    source module with the AST interpreter; the Mapper and DataProvider modules run from source, and also AOT-compiled
+    when the build has AOT qlib modules.
+*/
+class ModuleOwnProgramStateBase inherits QUnit::Test {
+    private {
+        #! the part of the cases that this test runs (see addPartCase())
+        int part;
+
+        string qore_bin;
+        string libqore_dir;
+        string qlib_dir;
+
+        TmpDir tmp("qore-module-own-program-state-");
+        string src_dir;
+        string qmod_dir;
+        #! a module directory with only the sources of the Mapper and DataProvider modules
+        string qlib_src_dir;
+
+        #! the output of the source module with the AST interpreter, after the line that gives the qlib module form
+        const ExpectedOutput = "sandboxed static_put: \"module\"
+sandboxed static_put: \"module\"
+unsandboxed static_put: \"module\"
+unsandboxed static_put: \"module\"
+sandboxed static_get: \"module\"
+sandboxed static_get: \"module\"
+unsandboxed static_get: \"module\"
+unsandboxed static_get: \"module\"
+sandboxed get_all: {k: \"module\"}
+sandboxed get_all: {k: \"module\"}
+unsandboxed get_all: {k: \"module\"}
+unsandboxed get_all: {k: \"module\"}
+sandboxed remove_key: \"module\"
+sandboxed remove_key: null
+unsandboxed remove_key: null
+unsandboxed remove_key: null
+sandboxed delete_key: null
+sandboxed delete_key: null
+unsandboxed delete_key: null
+unsandboxed delete_key: null
+sandboxed del_all: 0
+sandboxed del_all: 0
+unsandboxed del_all: 0
+unsandboxed del_all: 0
+sandboxed method_put: \"method\"
+sandboxed method_put: \"method\"
+unsandboxed method_put: \"method\"
+unsandboxed method_put: \"method\"
+sandboxed callref_put: \"callref\"
+sandboxed callref_put: \"callref\"
+unsandboxed callref_put: \"callref\"
+unsandboxed callref_put: \"callref\"
+sandboxed nested_put: \"nested\"
+sandboxed nested_put: \"nested\"
+unsandboxed nested_put: \"nested\"
+unsandboxed nested_put: \"nested\"
+sandboxed closure_put: \"closure\"
+sandboxed closure_put: \"closure\"
+unsandboxed closure_put: \"closure\"
+unsandboxed closure_put: \"closure\"
+sandboxed dyn_put: \"dynamic\"
+sandboxed dyn_put: \"dynamic\"
+unsandboxed dyn_put: \"dynamic\"
+unsandboxed dyn_put: \"dynamic\"
+sandboxed mapper: {a: 1}
+sandboxed mapper: {a: 1}
+unsandboxed mapper: {a: 1}
+unsandboxed mapper: {a: 1}
+sandboxed processor: 2
+sandboxed processor: 2
+unsandboxed processor: 2
+unsandboxed processor: 2
+sandboxed mark_resources: INVALID-FUNCTION-ACCESS
+sandboxed mark_resources: INVALID-FUNCTION-ACCESS
+unsandboxed mark_resources: \"marked\"
+unsandboxed mark_resources: \"marked\"
+sandboxed module_function_put: \"function\"
+sandboxed module_function_put: \"function\"
+unsandboxed module_function_put: \"function\"
+unsandboxed module_function_put: \"function\"
+sandboxed direct_dyn_put: INVALID-FUNCTION-ACCESS
+sandboxed direct_dyn_put: INVALID-FUNCTION-ACCESS
+unsandboxed direct_dyn_put: INVALID-FUNCTION-ACCESS
+unsandboxed direct_dyn_put: INVALID-FUNCTION-ACCESS
+restricted direct parse: PARSE-EXCEPTION
+user module_put_user_get: null
+user module_put_user_get: null
+user user_put_module_get: \"module\"
+user user_put_module_get: \"module\"
+user user_only_module_get: null
+user user_only_module_get: null
+user user_only_module_function_get: null
+user user_only_module_function_get: null
+user module_del_all_user_get: \"user\"
+user module_del_all_user_get: \"user\"
+user user_del_all_module_get: \"module\"
+user user_del_all_module_get: \"module\"
+user mark_resources: \"marked\"
+user mark_resources: \"marked\"
+";
+    }
+
+    constructor(string name, int part) : QUnit::Test(name, "1.0", \ARGV) {
+        self.part = part;
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qlib_dir = realpath(get_script_dir() + "/../../../qlib");
+        src_dir = tmp.path + "/src";
+        qmod_dir = tmp.path + "/qmod";
+        qlib_src_dir = tmp.path + "/qlib-src";
+        mkdir(src_dir);
+        mkdir(qmod_dir);
+        writeFile(src_dir + "/OwnStateMod.qm", moduleCode());
+        makeQlibSourceDir();
+
+        # the source qlib modules are compiled to native code function by function in the jit and tiered runs, which
+        # takes most of the time: each part runs alone (qore#6358)
+        addPartCase(1, "module code uses its own thread-local data for a PO_NO_THREAD_CONTROL caller with source qlib "
+            "modules in every mode", \testSourceQlib());
+        addPartCase(2, "module code uses its own thread-local data for a PO_NO_THREAD_CONTROL caller with AOT qlib "
+            "modules in every mode", \testAotQlib());
+
+        set_return_value(main());
+    }
+
+    #! adds the test case if it is in the part that this test runs
+    private addPartCase(int case_part, string name, code call, *softlist<auto> args) {
+        if (case_part == part) {
+            addTestCase(name, call, args);
+        }
+    }
+
+    #! links the sources of the Mapper and DataProvider modules, without any AOT form, in a module directory
+    private makeQlibSourceDir() {
+        mkdir(qlib_src_dir);
+        symlink(qlib_dir + "/Mapper.qm", qlib_src_dir + "/Mapper.qm");
+        string dp_dir = qlib_src_dir + "/DataProvider";
+        mkdir(dp_dir);
+        foreach string path in (glob(qlib_dir + "/DataProvider/*")) {
+            if (path =~ /\.qmod$/) {
+                continue;
+            }
+            symlink(path, dp_dir + "/" + basename(path));
+        }
+    }
+
+    #! returns a directory with the AOT forms of the Mapper and DataProvider modules, if the build has them
+    /** The build's own AOT forms (next to the Qore under test) must load: a loader warning for them fails the test,
+        unless the forms were compiled for another AOT runtime identity.  The forms in the source tree's qlib
+        directory may be another build's, so they are only used if they load.
+    */
+    private *string getQlibAotDir() {
+        foreach hash<auto> c in ({"dir": dirname(qore_bin) + "/qlib-qmod", "own": True}, {"dir": qlib_dir}) {
+            if (is_file(c.dir + "/Mapper.qmod") && is_file(c.dir + "/DataProvider/DataProvider.qmod")
+                && aotFormsLoad(c.dir, c.own ?? False)) {
+                return c.dir;
+            }
+        }
+    }
+
+    #! Returns True if the AOT forms of the Mapper and DataProvider modules in @a dir load in the Qore under test
+    /** AOT modules compiled by another libqore (a different AOT runtime identity, such as qmods of a debug build tree
+        found by an installed release qore) fall back to their source with a loader warning; the test of the AOT
+        forms needs them to load as AOT modules.
+
+        @param own True if @a dir has the build's own AOT forms: any other loader warning (e.g. a dependency missing
+        from the module path) fails the test
+    */
+    private bool aotFormsLoad(string dir, bool own) {
+        string probe = tmp.path + "/aot-probe.q";
+        writeFile(probe, "%requires Mapper\n%requires DataProvider\n");
+        hash<ExecModeHarness::ModeRunResult> r = runScriptQuiet(dir + ":" + qlib_dir, probe);
+        if (!r.rc && !r.loader_warnings) {
+            return True;
+        }
+        string why = r.loader_warnings ? r.loader_warnings[0] : r.out;
+        if (own && why !~ /compiled for (another )?AOT runtime identity/) {
+            fail(sprintf("the build's AOT qlib modules in %y do not load in this Qore: %s", dir, why));
+        }
+        printf("the AOT qlib modules in %y do not load in this Qore: %s\n", dir, why);
+        return False;
+    }
+
+    #! runs the script like runScript() in the default mode, without echoing loader warnings
+    private hash<ExecModeHarness::ModeRunResult> runScriptQuiet(string module_path, string script_path) {
+        if (ENV.QORE_MODULE_DIR) {
+            module_path += ":" + ENV.QORE_MODULE_DIR;
+        }
+        return ExecModeHarness::run_command(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s "
+            "QORE_MODULE_DIR=%s %s -b %s", libqore_dir, libqore_dir, libqore_dir, module_path, qore_bin, script_path),
+            True);
+    }
+
+    private string moduleCode() {
+        return "%modern
+
+module OwnStateMod {
+    version = \"1.0\";
+    desc = \"module own Program state regression module\";
+    author = \"Qore\";
+    license = \"MIT\";
+}
+
+public namespace OwnStateMod {
+public class Store {
+    static auto put(string k, auto v) {
+        save_thread_data(k, v);
+        return get_thread_data(k);
+    }
+
+    static auto get(string k) {
+        return get_thread_data(k);
+    }
+
+    static hash<auto> all() {
+        return get_all_thread_data();
+    }
+
+    static auto removeKey(string k) {
+        return remove_thread_data(k){k};
+    }
+
+    static auto deleteKey(string k) {
+        delete_thread_data(k);
+        return get_thread_data(k);
+    }
+
+    static int delAll() {
+        delete_all_thread_data();
+        return get_all_thread_data().size();
+    }
+
+    # resolved at run time
+    static auto dynPut(string k, auto v) {
+        call_function(\"save_thread_data\", k, v);
+        return call_function(\"get_thread_data\", k);
+    }
+
+    # a thread-control function that is not confined to the module's own state
+    static string markResources() {
+        call_function(\"mark_thread_resources\");
+        return \"marked\";
+    }
+
+    auto methodPut(string k, auto v) {
+        save_thread_data(k, v);
+        return get_thread_data(k);
+    }
+
+    auto nested(string k, auto v) {
+        return Store::put(k, v);
+    }
+
+    code makeClosure() {
+        return auto sub (string k, auto v) {
+            save_thread_data(k, v);
+            return get_thread_data(k);
+        };
+    }
+}
+
+# a module function runs in the module's Program, as a method does, and so uses the module's thread-local data
+public auto sub functionPut(string k, auto v) {
+    save_thread_data(k, v);
+    return get_thread_data(k);
+}
+
+public auto sub functionGet(string k) {
+    return get_thread_data(k);
+}
+}
+";
+    }
+
+    private string script() {
+        return "%modern
+%requires OwnStateMod
+%requires Mapper
+%requires DataProvider
+
+# the form of the qlib modules under test
+string sub form(string mod) {
+    return get_module_hash(){mod}.filename =~ /\\.qmod$/ ? \"aot\" : \"source\";
+}
+printf(\"qlib: %s %s\\n\", form(\"Mapper\"), form(\"DataProvider\"));
+
+const RestrictedCode = \"
+class Processor inherits DataProvider::AbstractDataProcessor {
+    private *auto processRecordImpl(auto r) { return r + 1; }
+}
+auto sub static_put() { return OwnStateMod::Store::put('k', 'module'); }
+auto sub static_get() { return OwnStateMod::Store::get('k'); }
+auto sub get_all() { return OwnStateMod::Store::all(); }
+auto sub remove_key() { return OwnStateMod::Store::removeKey('k'); }
+auto sub delete_key() { OwnStateMod::Store::put('d', 'x'); return OwnStateMod::Store::deleteKey('d'); }
+auto sub del_all() { OwnStateMod::Store::put('d', 'x'); return OwnStateMod::Store::delAll(); }
+auto sub method_put() { OwnStateMod::Store s(); return s.methodPut('m', 'method'); }
+auto sub callref_put() { code c = \\\\OwnStateMod::Store::put(); return c('c', 'callref'); }
+auto sub nested_put() { OwnStateMod::Store s(); return s.nested('n', 'nested'); }
+auto sub closure_put() { OwnStateMod::Store s(); code c = s.makeClosure(); return c('l', 'closure'); }
+auto sub dyn_put() { return OwnStateMod::Store::dynPut('y', 'dynamic'); }
+auto sub mapper() { Mapper::Mapper m({'a': 'b'}); return m.mapData({'b': 1}); }
+auto sub processor() { Processor pr(); pr.setThreadLocalData({'x': 1}); return pr.processRecord(1); }
+auto sub mark_resources() { return OwnStateMod::Store::markResources(); }
+auto sub module_function_put() { return OwnStateMod::functionPut('f', 'function'); }
+auto sub direct_dyn_put() { return call_function('save_thread_data', 'k', 'direct'); }
+\";
+
+# a sandboxed PO_NO_THREAD_CONTROL Program, whose restrictions apply to the module code that it calls, and one
+# restricted only by its parse options, which restrict its own code only
+hash<string, Program> restricted;
+foreach string label in (\"sandboxed\", \"unsandboxed\") {
+    Program p(PO_NEW_STYLE);
+    if (label == \"sandboxed\") {
+        p.setSandboxManager(new SandboxManager());
+    }
+    p.loadModule(\"OwnStateMod\");
+    p.loadModule(\"Mapper\");
+    p.loadModule(\"DataProvider\");
+    p.setParseOptions(PO_NO_THREAD_CONTROL);
+    p.parse(RestrictedCode, label);
+    restricted{label} = p;
+}
+
+# a Program that uses the module and may use thread-local data itself
+Program u(PO_NEW_STYLE);
+u.loadModule(\"OwnStateMod\");
+u.parse(\"
+auto sub module_put_user_get() { OwnStateMod::Store::put('iso', 'module'); return get_thread_data('iso'); }
+auto sub user_put_module_get() { save_thread_data('iso', 'user'); return OwnStateMod::Store::get('iso'); }
+auto sub user_only_module_get() { save_thread_data('only_user', 'user'); return OwnStateMod::Store::get('only_user'); }
+auto sub user_only_module_function_get() { return OwnStateMod::functionGet('only_user'); }
+auto sub module_del_all_user_get() { OwnStateMod::Store::delAll(); return get_thread_data('only_user'); }
+auto sub user_del_all_module_get() {
+    OwnStateMod::Store::put('iso', 'module');
+    delete_all_thread_data();
+    save_thread_data('only_user', 'user');
+    return OwnStateMod::Store::get('iso');
+}
+auto sub mark_resources() { return OwnStateMod::Store::markResources(); }
+\", \"user\");
+
+sub call(string label, Program pgm, string f) {
+    string r;
+    try {
+        r = sprintf(\"%y\", pgm.callFunction(f));
+    } catch (hash<ExceptionInfo> ex) {
+        r = ex.err;
+    }
+    printf(\"%s %s: %s\\n\", label, f, r);
+}
+
+# repeated calls run the code on every tier with tiered execution
+foreach string f in (\"static_put\", \"static_get\", \"get_all\", \"remove_key\", \"delete_key\", \"del_all\", \"method_put\",
+        \"callref_put\", \"nested_put\", \"closure_put\", \"dyn_put\", \"mapper\", \"processor\", \"mark_resources\",
+        \"module_function_put\", \"direct_dyn_put\") {
+    foreach string label in (\"sandboxed\", \"unsandboxed\") {
+        call(label, restricted{label}, f);
+        call(label, restricted{label}, f);
+    }
+}
+# restricted code calling a flagged function directly
+string direct_err;
+try {
+    Program d(PO_NEW_STYLE | PO_NO_THREAD_CONTROL);
+    d.parse(\"save_thread_data('k', 1);\", \"direct\");
+    direct_err = \"no error\";
+} catch (hash<ExceptionInfo> ex) {
+    direct_err = ex.err;
+}
+printf(\"restricted direct parse: %s\\n\", direct_err);
+foreach string f in (\"module_put_user_get\", \"user_put_module_get\", \"user_only_module_get\",
+        \"user_only_module_function_get\", \"module_del_all_user_get\", \"user_del_all_module_get\", \"mark_resources\") {
+    call(\"user\", u, f);
+    call(\"user\", u, f);
+}
+";
+    }
+
+    private string writeFile(string path, string contents) {
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(contents);
+        f.close();
+        return path;
+    }
+
+    private compileModule(string qm_path, string qmod_path) {
+        string compile_out = backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s "
+            "%s -b --compile-module --output %s %s 2>&1", libqore_dir, libqore_dir, libqore_dir, qore_bin,
+            qmod_path, qm_path));
+        assertTrue(is_file(qmod_path), sprintf("compiled %s: %s", basename(qmod_path), compile_out));
+    }
+
+    #! runs the script with the given module directories first in the module path
+    /** The inherited module path follows them: it provides the binary modules (\c reflection, \c yaml and \c json, for
+        example) that the qlib modules under test require, which a test environment can provide only through it
+    */
+    private hash<ExecModeHarness::ModeRunResult> runScript(string module_path, string script_path, string mode) {
+        if (ENV.QORE_MODULE_DIR) {
+            module_path += ":" + ENV.QORE_MODULE_DIR;
+        }
+        return ExecModeHarness::run_command(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s "
+            "QORE_MODULE_DIR=%s %s -b --enable-debug --exec-mode=%s %s", libqore_dir, libqore_dir, libqore_dir,
+            module_path, qore_bin, mode, script_path));
+    }
+
+    #! runs the script with the source and the AOT test module in every mode against the source module's AST output
+    /** @param qlib_path the module path that provides the Mapper and DataProvider modules
+        @param qlib_form the form of the Mapper and DataProvider modules that the module path provides
+    */
+    private checkAllModes(string script_path, string qlib_path, string qlib_form) {
+        string expected = sprintf("qlib: %s %s\n", qlib_form, qlib_form) + ExpectedOutput;
+        hash<ExecModeHarness::ModeRunResult> reference = runScript(src_dir + ":" + qlib_path, script_path, "ast");
+        assertEq(expected, reference.out, sprintf("qlib %s, source module, ast", qlib_form));
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            hash<ExecModeHarness::ModeRunResult> r = runScript(src_dir + ":" + qlib_path, script_path, mode);
+            assertEq(reference.out, r.out, sprintf("qlib %s, source module, %s", qlib_form, mode));
+            r = runScript(qmod_dir + ":" + qlib_path, script_path, mode);
+            assertEq(reference.out, r.out, sprintf("qlib %s, AOT module, %s", qlib_form, mode));
+        }
+    }
+
+    #! compiles the test module and writes the script, once
+    private string prepare() {
+        string script_path = tmp.path + "/own-state.q";
+        if (!is_file(script_path)) {
+            compileModule(src_dir + "/OwnStateMod.qm", qmod_dir + "/OwnStateMod.qmod");
+            writeFile(script_path, script());
+        }
+        return script_path;
+    }
+
+    #! skips the test if a binary module that the Mapper and DataProvider modules require is not available
+    /** A partial build (without logger_bin, msgpack or xml, for example) cannot load those modules at all; the test
+        then has nothing to check, which is not a failure of the code under test.  Any other load failure is one.
+    */
+    private skipIfBinaryDependencyMissing() {
+        string probe = tmp.path + "/dependency-probe.q";
+        writeFile(probe, "%requires Mapper\n%requires DataProvider\n");
+        hash<ExecModeHarness::ModeRunResult> r = runScriptQuiet(qlib_src_dir + ":" + qlib_dir, probe);
+        if (r.rc) {
+            *list<*string> m = (r.out =~ x/feature '([^']+)' is not builtin and no module with this name could be found/);
+            if (m) {
+                testSkip(sprintf("the binary module %y that the Mapper and DataProvider modules require is not "
+                    "available", m[0]));
+            }
+        }
+    }
+
+    testSourceQlib() {
+        skipIfBinaryDependencyMissing();
+        checkAllModes(prepare(), qlib_src_dir + ":" + qlib_dir, "source");
+    }
+
+    testAotQlib() {
+        skipIfBinaryDependencyMissing();
+        *string aot_dir = getQlibAotDir();
+        if (!aot_dir) {
+            testSkip("the build has no AOT forms of the Mapper and DataProvider modules that load in this Qore");
+        }
+        checkAllModes(prepare(), aot_dir + ":" + qlib_dir, "aot");
+    }
+}

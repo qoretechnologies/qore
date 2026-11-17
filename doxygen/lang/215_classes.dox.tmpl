@@ -197,6 +197,25 @@ Factory<int> f = Factory<int>::make(10);
 int made = f.get();
     @endcode
 
+    A static method called without type arguments of its generic class has the class's type parameters bound as
+    follows:
+    - through a class that inherits a specialization of the generic class, directly or through other classes, they
+      are the type arguments of the specialization: with <tt>class IntFactory inherits Factory&lt;int&gt;</tt>,
+      <tt>IntFactory::make(10)</tt> is <tt>Factory&lt;int&gt;::make(10)</tt>; the same holds for a call through the
+      generic class or an implicit call in the code of such a class, and for a call reference
+      (<tt>\\IntFactory::make()</tt>), @ref Qore::call_static_method() "call_static_method()" and
+      @ref Qore::call_static_method_args() "call_static_method_args()"
+    - in the code of the generic class or of a generic class that inherits it (<tt>make(10)</tt>,
+      <tt>Factory::make(10)</tt> or <tt>\\Factory::make()</tt> in a method of <tt>Factory&lt;T&gt;</tt>), they are
+      those of the running instantiation
+    - otherwise they are inferred from the types of the arguments that are known when the code is parsed
+      (<tt>Factory::make(10)</tt> is <tt>Factory&lt;int&gt;::make(10)</tt>), and for a call reference or a dynamic call,
+      from the types of the argument values when it is made
+
+    The type arguments of a static call can be type parameters of the code making the call
+    (<tt>Factory&lt;U&gt;::make(v)</tt> in <tt>sub f&lt;U&gt;(U v)</tt>); they are then those of the running
+    instantiation of that code.
+
     Methods and static methods can also declare their own call-local type
     parameters after the method name. These type parameters can be inferred from
     call arguments or supplied explicitly:
@@ -341,6 +360,19 @@ softstring MyNamespace::MyClass::myMethod(softint i) {
     return i + 2;
 }
     @endcode
+
+    @anchor outofline_methods_in_namespaces
+    An out-of-line method definition in a @ref qore_namespaces "namespace" block names its class relative to that
+    namespace, as do the scoped functions and constants declared in it: in
+    <tt>namespace NS { namespace I { class C {} } int I::C::m() { return 1; } }</tt>, \c I::C is \c NS::I::C.  The
+    class path is resolved in the namespaces and classes declared before the method in the same block, and it cannot
+    be anchored at the root namespace (<tt>::NS::I::C</tt>).  A class path that starts with the name of the enclosing
+    namespace (<tt>int NS::I::C::m() { return 1; }</tt> in \c NS) is also accepted when it does not name a class
+    relative to the namespace.  A class path that names no class this way is a parse error (before %Qore 3.0, release
+    builds ignored the first part of such a path and could add the method to a class of the enclosing namespace).
+    Like any out-of-line method definition, one in a namespace block is refused under
+    @ref strong-encapsulation "%strong-encapsulation", which @ref modern "%modern" sets, so it is code for the AST
+    interpreter only.
 
     @note Because method definitions are allowed out-of-line, this means that builtin classes may be extended with new user methods, however user constructor, destructor, and copy methods cannot be added to builtin classes; to customize the behavior of these methods for builtin classes, subclass the class instead.\n\n
     When parse option @ref allow-bare-refs "%allow-bare-refs" or @ref new-style "%new-style" is enabled, no \c "$" or \c "$." prefixes can be used with variable or method or member names.
@@ -688,6 +720,15 @@ D::p = new Program(PO_NEW_STYLE);
     @ref threading_and_variables), and to global variables, but not to the local variables of a function, method or
     closure, so naming one is a parse error.  A static class variable's initializer is evaluated when the class is
     initialized, which can be before the top-level code has assigned the variable.
+
+    An untyped member that more than one class of the hierarchy declares (possible only without
+    @ref require-types "%require-types": a class that declares a member of a base class again, or two base classes
+    that declare the same member; a typed declaration of such a member is a parse error) is one member of the object.
+    Its initialization expressions run in the order of initialization, base classes first and in the order of the
+    inheritance list, each once: the last one gives the value, it can read the value that the one before it gave (ex:
+    <tt>class B inherits A { public { $.a = $.a + 1; } }</tt>), and the value that it replaces is released (an object
+    that nothing else references is destroyed).  A declaration without an initialization expression leaves the value
+    as it is.
 
     @note The automatic <tt>argv</tt> local variable is instantiated as usual in all class methods where there are more arguments than variables declared in the method declaration.\n\n
 

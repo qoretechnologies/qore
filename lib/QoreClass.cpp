@@ -35,6 +35,7 @@
 #include "qore/intern/QoreRuntimeDiagnostic.h"
 #include "qore/intern/QoreClassIntern.h"
 #include "qore/intern/QoreDeferredRelease.h"
+#include "qore/intern/QoreAOTBinary.h"
 #include "qore/intern/qore_enum_decl_private.h"
 #include "qore/intern/ConstantList.h"
 #include "qore/intern/qore_program_private.h"
@@ -1005,7 +1006,7 @@ qore_class_private::qore_class_private(const qore_class_private& old, qore_ns_pr
     }
 
     // copy member list
-    for (auto& i : old.members.member_list) {
+    for (auto& i : old.members.getList()) {
         members.addNoCheck(strdup(i.first), i.second ? new QoreMemberInfo(*i.second, this) : nullptr);
     }
 
@@ -1021,6 +1022,10 @@ qore_class_private::qore_class_private(const qore_class_private& old, qore_ns_pr
         }
         // issue #3368: must add local members to initialization list after parent class members
         addLocalMembersForInit();
+    }
+    // a copy of a class whose members are frozen is complete when it is made (#6272)
+    if (old.members.isFrozen()) {
+        members.freeze();
     }
 }
 #endif
@@ -1072,6 +1077,7 @@ qore_class_private::qore_class_private(const qore_class_private& old, qore_ns_pr
         raw_construction_defaults_to_auto(old.raw_construction_defaults_to_auto),
         type_params(old.type_params),
         type_param_bound_types(old.type_param_bound_types),
+        type_param_default_types(old.type_param_default_types),
         parameterized_vparents(old.parameterized_vparents),
         domain(old.domain),
         num_methods(old.num_methods),
@@ -1173,7 +1179,7 @@ qore_class_private::qore_class_private(const qore_class_private& old, qore_ns_pr
     }
 
     // copy member list
-    for (auto& i : old.members.member_list) {
+    for (auto& i : old.members.getList()) {
         members.addNoCheck(strdup(i.first), i.second ? new QoreMemberInfo(*i.second, this) : nullptr);
     }
 
@@ -1189,6 +1195,10 @@ qore_class_private::qore_class_private(const qore_class_private& old, qore_ns_pr
     }
     // issue #3368: must add local members to initialization list after parent class members
     addLocalMembersForInit();
+    // a copy of a class whose members are frozen is complete when it is made (#6272)
+    if (old.members.isFrozen()) {
+        members.freeze();
+    }
 }
 
 qore_class_private::~qore_class_private() {
@@ -1310,11 +1320,7 @@ void qore_class_private::retireTypeOwner() {
     // what the type checks of the class's types read is kept; see the header
     releaseMethodsAndData(true);
     constlist.reset();
-    for (auto& i : members.member_list) {
-        free(i.first);
-        delete i.second;
-    }
-    members.member_list.clear();
+    members.clearAndFree();
     member_init_list.clear();
     for (auto& i : ahm) {
         delete i.second;
@@ -1334,7 +1340,7 @@ void qore_class_private::retireTypeOwner() {
 }
 
 void qore_class_private::getTypeOwnerNames(std::vector<QoreTypeOwner*>& names) const {
-    for (auto& i : members.member_list) {
+    for (auto& i : members.getList()) {
         if (i.second) {
             qore_type_owner_add_name(names, i.second->getTypeInfo(), &type_owner);
         }
@@ -1580,6 +1586,23 @@ int qore_class_private::initializeIntern() {
             }
             type_param_bound_types[i] = QoreParseTypeInfo::resolveAny(pti.get(), loc, bound_err);
         }
+        // the defaults, which a call made at run time without type arguments binds the type parameters that its
+        // arguments do not bind to (QoreFunction::runtimeInferClassReceiverTypeInfo())
+        type_param_default_types.assign(type_params.size(), nullptr);
+        for (size_t i = 0, e = type_params.size(); i < e; ++i) {
+            if (!type_params[i].hasDefault()) {
+                continue;
+            }
+            std::unique_ptr<QoreParseTypeInfo> pti(qore_parse_type_string_to_pti(type_params[i].getDefaultType()));
+            if (!pti) {
+                parseException(*loc, "PARSE-TYPE-ERROR", "cannot parse default type '%s' for generic class '%s' "
+                    "type parameter '%s'", type_params[i].getDefaultType(), name.c_str(),
+                    type_params[i].name.c_str());
+                bound_err = -1;
+                continue;
+            }
+            type_param_default_types[i] = QoreParseTypeInfo::resolveAny(pti.get(), loc, bound_err);
+        }
     }
 
     // first resolve types in pending variants in all method signatures (incl. return types)
@@ -1652,7 +1675,7 @@ int qore_class_private::initializeIntern() {
 
     if (!members.empty()) {
         // add committed members to signature
-        for (auto& i : members.member_list) {
+        for (auto& i : members.getList()) {
             do_sig(csig, i);
         }
 
@@ -1660,7 +1683,7 @@ int qore_class_private::initializeIntern() {
             SelfLocalVarParseHelper slvph(&selfid);
 
             // add committed members to signature
-            for (auto& i : members.member_list) {
+            for (auto& i : members.getList()) {
                 // check new members for conflicts in base classes
                 if (parseCheckMemberInBaseClasses(i.first, i.second) && !err) {
                     err = -1;
@@ -1766,6 +1789,8 @@ void qore_class_private::finalizeBuiltin(const char* nspath) {
         assert(!xsink);
     }
     generateBuiltinSignature(nspath);
+    // the class is published by the caller: its members are read without a lock from now on (#6272)
+    members.freeze();
 }
 
 void qore_class_private::initializeBuiltin() {
@@ -1805,7 +1830,7 @@ void qore_class_private::generateBuiltinSignature(const char* nspath) {
         do_sig(csig, i);
     }
 
-    for (auto& i : members.member_list) {
+    for (auto& i : members.getList()) {
         do_sig(csig, i);
     }
 
@@ -1981,8 +2006,11 @@ int qore_class_private::initMember(QoreObject& o, bool& need_scan, const char* m
     printd(5, "qore_class_private::initMember() this: %p '%s::%s' initializing '%s::%s' member_class_ctx: %p'\n",
         this, name.c_str(), member_name, member_class_ctx ? member_class_ctx->name.c_str() : "<self>", member_name,
         member_class_ctx);
+    // the slot already has a value when another declaration of the member in the same storage has an initializer
+    // that ran before this one: a parent class's declaration that the class declares again, or another parent
+    // class's declaration (qore#6411); the declarations are initialized in the order of the list, so the last one with
+    // an initializer gives the value, and its initializer can read the value of the earlier one
     QoreValue& v = qore_object_private::get(o)->getMemberValueRefForInitialization(member_name, member_class_ctx);
-    assert(v.isNothing());
     if (!info.exp.isNothing()) {
         // set runtime location
         QoreProgramLocationHelper l(info.loc);
@@ -2048,12 +2076,25 @@ int qore_class_private::initMember(QoreObject& o, bool& need_scan, const char* m
                 return -1;
             }
         }
+        // the value of an earlier declaration, if any, is replaced; it is released after the new value is stored.  No
+        // recursive-reference repair is needed before the release, as an assignment that replaces a value makes:
+        // the object is being constructed, and its constructor holds it
+        QoreValue old = v;
         v = val.takeReferencedValue();
         //printd(5, " + val: %d (%s)\n", v.getType() == NT_INT ? (int)v.getAsBigInt() : 0, v.getTypeName());
         if (needs_scan(v)) {
             qore_object_private::incScanCount(o, 1);
             if (!need_scan) {
                 need_scan = true;
+            }
+        }
+        if (!old.isNothing()) {
+            if (needs_scan(old)) {
+                qore_object_private::incScanCount(o, -1);
+            }
+            old.discard(xsink);
+            if (*xsink) {
+                return -1;
             }
         }
     }
@@ -2351,7 +2392,7 @@ void qore_class_private::parseCommit() {
                     do_sig(csig, i);
                 }
 
-                for (auto& i : members.member_list) {
+                for (auto& i : members.getList()) {
                     do_sig(csig, i);
                 }
             }
@@ -2412,12 +2453,14 @@ void qore_class_private::parseCommit() {
     if (!has_public_memdecl && (scl ? scl->parseHasPublicMembersInHierarchy() : false)) {
         has_public_memdecl = true;
     }
+    // the committed class is visible to running code, which reads its members without a lock (#6272)
+    members.freeze();
 }
 
 void qore_class_private::addLocalMembersForInit() {
     // the list is complete when the local members have been added: getMemberInitCode() looks at it again
     member_init_code.store(-1, std::memory_order_relaxed);
-    for (auto& i : members.member_list) {
+    for (auto& i : members.getList()) {
         // skip imported members, and members held in external storage, which have no value in the object
         if (!i.second->local() || i.second->getAccessors()) {
             continue;
@@ -3975,7 +4018,11 @@ void qore_class_private::addBuiltinMemberWithAccessors(const char* mem, ClassAcc
     if (access == Public && !has_public_memdecl) {
         has_public_memdecl = true;
     }
-    has_member_accessors = true;
+    // written only when it changes: a member added to a published class (module-jni) is added while other threads
+    // read the class's flags without a lock
+    if (!has_member_accessors) {
+        has_member_accessors = true;
+    }
 }
 
 QoreValue qore_class_private::evalMemberAccessorGet(QoreObject* self, const char* mem, const QoreMemberInfo& mi,
@@ -4164,6 +4211,103 @@ const QoreTypeInfo* qore_class_private::getConcreteParameterizedBaseTypeInfo(con
     }
 
     return raw_target_fallback;
+}
+
+const QoreTypeInfo* qore_class_private::runtimeResolveTypeParamDefault(size_t index) const {
+    const char* default_type = index < type_params.size() ? type_params[index].getDefaultType() : nullptr;
+    if (!default_type) {
+        return nullptr;
+    }
+    {
+        std::lock_guard<std::mutex> lock(runtime_default_lock);
+        if (index < runtime_default_types.size() && runtime_default_types[index]) {
+            return runtime_default_types[index];
+        }
+    }
+    QoreProgram* pgm = spgm.load();
+    QoreAOTTypeResolver resolver(pgm ? pgm : getProgram());
+    // the name is resolved as in the class's declaration: in the namespace of the class first, then in the ones that
+    // enclose it
+    std::vector<std::string> candidates;
+    if (*default_type != ':') {
+        std::string ns_path = cls->getNamespacePath(false);
+        size_t pos = ns_path.rfind("::");
+        ns_path = pos == std::string::npos ? std::string() : ns_path.substr(0, pos);
+        while (!ns_path.empty()) {
+            candidates.push_back(ns_path + "::" + default_type);
+            pos = ns_path.rfind("::");
+            ns_path = pos == std::string::npos ? std::string() : ns_path.substr(0, pos);
+        }
+    }
+    candidates.push_back(default_type);
+    const QoreTypeInfo* rv = nullptr;
+    for (const std::string& candidate : candidates) {
+        // a class type is written as object<path> in compiled code
+        for (const std::string& path : {candidate, "object<" + candidate + ">"}) {
+            std::string error;
+            const QoreTypeInfo* ti = resolver.resolve(path.c_str(), error);
+            // object<X> of a class that does not exist gives a placeholder for a class to be loaded, not a type
+            if (ti && error.empty() && !qore_type_info_is_aot_deferred(ti)) {
+                rv = ti;
+                break;
+            }
+        }
+        if (rv) {
+            break;
+        }
+    }
+    if (rv) {
+        std::lock_guard<std::mutex> lock(runtime_default_lock);
+        if (runtime_default_types.size() < type_params.size()) {
+            runtime_default_types.resize(type_params.size(), nullptr);
+        }
+        runtime_default_types[index] = rv;
+    }
+    return rv;
+}
+
+const QoreTypeInfo* qore_class_private::getStaticCallReceiverTypeInfo(const QoreMethod& m) const {
+    const QoreClass* mcls = m.getClass();
+    if (hasTypeParams() || !mcls || !mcls->hasTypeParameters()) {
+        return nullptr;
+    }
+    return getConcreteParameterizedBaseTypeInfo(mcls, false);
+}
+
+const QoreTypeInfo* qore_class_private::parseGetStaticCallReceiverTypeInfo(const QoreMethod& m,
+        const QoreClass* scope_cls, const qore_class_private* class_ctx, bool& current_receiver) {
+    current_receiver = false;
+    const QoreClass* mcls = m.getClass();
+    if (!mcls || !mcls->hasTypeParameters()) {
+        return nullptr;
+    }
+    // a class without type parameters names the specialization that it inherits
+    if (scope_cls) {
+        const qore_class_private* scope = qore_class_private::get(*scope_cls);
+        if (!scope->hasTypeParams()) {
+            return scope->getStaticCallReceiverTypeInfo(m);
+        }
+    }
+    // a generic class named outside of its hierarchy: the type arguments are inferred from the arguments
+    ClassAccess access;
+    if (!class_ctx || (scope_cls && !class_ctx->parseCheckHierarchy(scope_cls, access))) {
+        return nullptr;
+    }
+    if (!class_ctx->hasTypeParams()) {
+        return class_ctx->getStaticCallReceiverTypeInfo(m);
+    }
+    current_receiver = true;
+    // in a generic class, the receiver is the class with its own type parameters (G<T>) or the specialization of the
+    // method's class that it inherits with them (G<list<X>> in K<X> inherits G<list<X>>), whose type parameters are
+    // those of the running instantiation when the call is made (see CodeEvaluationHelper::initImpl())
+    type_vec_t own_params;
+    own_params.reserve(class_ctx->type_params.size());
+    for (size_t i = 0, e = class_ctx->type_params.size(); i < e; ++i) {
+        own_params.push_back(qore_get_type_parameter_type(class_ctx->cls, i, class_ctx->type_params[i].name.c_str()));
+    }
+    const QoreParameterizedClassTypeInfo* self = QoreTypeInfo::getParameterizedClassType(
+        class_ctx->cls->getTypeInfo(own_params));
+    return self ? class_ctx->getParameterizedBaseTypeInfo(self, mcls) : nullptr;
 }
 
 void QoreClass::addParameterizedBuiltinVirtualBaseClass(const QoreTypeInfo* typeInfo) {
@@ -4520,7 +4664,7 @@ void qore_class_private::parseImportMembers(qore_class_private& qc, ClassAccess 
 
     // issue #2657: ensure that parent class members are initialized before merging
     qc.members.parseInit(qc.selfid);
-    for (auto& i : qc.members.member_list) {
+    for (auto& i : qc.members.getList()) {
         QoreMemberInfo* mi = members.find(i.first);
         if (mi) {
             // issue #2970: if the member is declared as private:internal in this class
@@ -4551,9 +4695,15 @@ void qore_class_private::parseImportMembers(qore_class_private& qc, ClassAccess 
                 "access: '%s' this access: '%s'\n", this, name.c_str(), qc.name.c_str(), i.first,
                 i.second->exp.getTypeName(), privpub(access), privpub(mi->access));
 
-            if (!mi->getClass()->equal(*i.second->getClass())) {
-                mi->getClass()->parseCheckClassHierarchyMembers(i.first, *(i.second), *mi);
+            if (!mi->getClass()->equal(*i.second->getClass())
+                    && mi->getClass()->parseCheckClassHierarchyMembers(i.first, *(i.second), *mi)) {
+                // the declarations cannot be combined: the hierarchy is a parse error
+                continue;
             }
+            // issue #6393: both declarations are the same member in the object, so the contexts of the base class
+            // member apply to this class too: a private:internal member of an ancestor of the base class keeps its
+            // own storage when this class initializes it
+            mi->addContextMap(*i.second);
             continue;
         }
         i.second->parseInit(i.first, selfid);
@@ -4755,7 +4905,7 @@ void BCSMList::processMemberInitializationList(const QoreMemberMap& members, mem
 
         //printd(5, "BCSMList::processMemberInitializationList() processing %p '%s'\n", i.first->priv,
         //    i.first->getName());
-        for (auto& mi : i.first->priv->members.member_list) {
+        for (auto& mi : i.first->priv->members.getList()) {
             // skip imported members
             if (!mi.second->local()) {
                 //printd(5, "BCSMList::processMemberInitializationList() %p '%s::%s' NOT LOCAL\n", i.first->priv,
@@ -5389,6 +5539,34 @@ QoreValue qore_class_private::evalMethodGivenArgs(QoreObject* self, const char* 
     }
     // anything else is called as evalMethod() calls it
     return evalMethod(self, nme, args, class_ctx, rc, xsink, nullptr, pgm_ctx);
+}
+
+QoreValue qore_class_private::getMemberCode(QoreObject* self, const char* nme, const qore_class_private* class_ctx,
+        ExceptionSink* xsink) const {
+    const QoreMemberInfo* mi = runtimeGetMemberInfo(nme, class_ctx);
+    if (!mi) {
+        return QoreValue();
+    }
+    const qore_class_private* member_class_ctx = mi->getClassContext(class_ctx);
+    qore_object_private* obj_priv = qore_object_private::get(*self);
+    QoreValue mv{};
+    bool exists = false;
+    {
+        QoreAutoVarRWReadLocker al(obj_priv->rml);
+        if (obj_priv->status == OS_DELETED) {
+            return QoreValue();
+        }
+        const QoreHashNode* odata = member_class_ctx ? obj_priv->getInternalData(member_class_ctx) : obj_priv->data;
+        if (odata) {
+            mv = qore_hash_private::get(*odata)->getReferencedKeyValueIntern(nme, exists);
+        }
+    }
+    if (exists && (mv.getType() == NT_FUNCREF || mv.getType() == NT_RUNTIME_CLOSURE)
+            && dynamic_cast<const ResolvedCallReferenceNode*>(mv.getInternalNode())) {
+        return mv;
+    }
+    mv.discard(xsink);
+    return QoreValue();
 }
 
 // Member-call references, pseudo-methods and methodGate are only considered after method lookup fails.
@@ -6614,6 +6792,10 @@ void collect_hierarchy_functions(const qore_class_private& qc, const std::string
 
 } // namespace
 
+#ifdef DEBUG
+std::atomic<int64> qore_generic_parent_check_steps{0};
+#endif
+
 namespace {
 
 //! an instantiation of a generic class that a class inherits, and the direct parent class through which it does
@@ -6632,15 +6814,29 @@ std::string generic_parent_name(const QoreTypeInfo* type) {
     return str;
 }
 
+//! the parent classes that a walk of collect_generic_parents() has expanded, with the name of the type arguments that
+//! it was given for each (empty for none)
+typedef std::set<std::pair<const qore_class_private*, std::string>> generic_parents_expanded_t;
+
 //! collects the instantiations of the generic classes that \a cls inherits through all paths, in the order of the
 //! parent classes; returns false and fills \a first and \a second if one class has two different instantiations
+/** Each parent class is expanded once for the type arguments that the walk gives it (\a expanded): a class reached
+    again through another path (a diamond) gives the instantiations that it gave when it was first reached, which are
+    collected and compared already, so a walk takes steps linear in the parent class edges of the hierarchy, not in
+    its paths, which a lattice of classes multiplies with each level (qore#6423).  Leaving them out changes neither
+    the first two different instantiations found nor the paths that they are reported through: an instantiation that
+    is reached again was compared with every other when it was first collected.  The type arguments are compared by
+    name: a type parameter left in them is one of the class whose instantiations are checked, the same on every path,
+    or one of a generic parent class inherited without type arguments, whose instantiations are never compared.
+*/
 bool collect_generic_parents(const qore_class_private& cls, const QoreTypeInfo* source, const std::string& via,
         std::vector<GenericParentSeen>& seen, std::unordered_set<const qore_class_private*>& path,
-        GenericParentSeen*& first, GenericParentSeen& second) {
+        generic_parents_expanded_t& expanded, GenericParentSeen*& first, GenericParentSeen& second) {
     if (!cls.scl || !cls.scl->valid) {
         return true;
     }
     for (auto& i : *cls.scl) {
+        QORE_GENERIC_PARENT_CHECK_STEP();
         QoreClass* pc = i->sclass;
         if (!pc) {
             continue;
@@ -6656,21 +6852,37 @@ bool collect_generic_parents(const qore_class_private& cls, const QoreTypeInfo* 
         if (pti) {
             // type arguments that contain a type parameter are known when the class is instantiated
             const bool concrete = !qore_type_contains_type_parameter(subst);
+            bool collected = false;
             for (auto& s : seen) {
-                if (qore_class_private::sameDeclaration(s.base, pti->getBaseClass()) && concrete
-                        && !qore_type_contains_type_parameter(s.type)
-                        && strcmp(QoreTypeInfo::getName(s.type), QoreTypeInfo::getName(subst))) {
+                if (!qore_class_private::sameDeclaration(s.base, pti->getBaseClass())) {
+                    continue;
+                }
+                // the instantiation was collected and compared with the others already
+                if (!strcmp(QoreTypeInfo::getName(s.type), QoreTypeInfo::getName(subst))) {
+                    collected = true;
+                    break;
+                }
+                if (concrete && !qore_type_contains_type_parameter(s.type)) {
                     first = &s;
                     second = {pti->getBaseClass(), subst, pvia};
                     return false;
                 }
             }
-            seen.push_back({pti->getBaseClass(), subst, pvia});
+            if (!collected) {
+                seen.push_back({pti->getBaseClass(), subst, pvia});
+            }
         }
-        if (!path.insert(pcp).second) {
+        // a class on the path is its own ancestor (an error reported by the parse of the hierarchy)
+        if (path.count(pcp)) {
             continue;
         }
-        const bool ok = collect_generic_parents(*pcp, pti ? subst : nullptr, pvia, seen, path, first, second);
+        // a parent class that the walk has expanded for the same type arguments gives nothing new
+        if (!expanded.emplace(pcp, pti ? std::string(QoreTypeInfo::getName(subst)) : std::string()).second) {
+            continue;
+        }
+        path.insert(pcp);
+        const bool ok = collect_generic_parents(*pcp, pti ? subst : nullptr, pvia, seen, path, expanded, first,
+            second);
         path.erase(pcp);
         if (!ok) {
             return false;
@@ -6688,9 +6900,10 @@ int qore_class_private::parseCheckGenericParentInstantiations() const {
     std::vector<GenericParentSeen> seen;
     std::unordered_set<const qore_class_private*> path;
     path.insert(this);
+    generic_parents_expanded_t expanded;
     GenericParentSeen* first = nullptr;
     GenericParentSeen second;
-    if (collect_generic_parents(*this, nullptr, std::string(), seen, path, first, second)) {
+    if (collect_generic_parents(*this, nullptr, std::string(), seen, path, expanded, first, second)) {
         return 0;
     }
     parse_error(*loc, "class '%s' inherits generic class '%s' with different type arguments: '%s' through '%s' and "
@@ -9323,6 +9536,26 @@ void QoreMemberInfo::addContextAccess(const QoreMemberInfo& mi, const qore_class
 #endif
 }
 
+void QoreMemberInfo::addContextMap(const QoreMemberInfo& mi) {
+    if (!mi.cls_context_map) {
+        return;
+    }
+    if (!cls_context_map) {
+        cls_context_map = new cls_context_map_t;
+        assert(!member_info_list);
+        member_info_list = new member_info_list_t;
+    }
+    for (auto& i : *mi.cls_context_map) {
+        // an entry already present is kept, as addContextAccess() keeps it; it gives the same storage
+        cls_context_map_t::iterator ci = cls_context_map->lower_bound(i.first);
+        if (ci == cls_context_map->end() || ci->first != i.first) {
+            cls_context_map->insert(ci, i);
+        } else {
+            assert(ci->second == i.second);
+        }
+    }
+}
+
 void QoreMemberInfo::addContextAccessForClass(const qore_class_private* class_ctx,
         const qore_class_private* member_class_ctx) {
     if (!class_ctx || !member_class_ctx) {
@@ -9339,6 +9572,44 @@ void QoreMemberInfo::addContextAccessForClass(const qore_class_private* class_ct
     if (i == cls_context_map->end() || i->first != class_ctx) {
         cls_context_map->insert(i, cls_context_map_t::value_type(class_ctx, member_class_ctx));
     }
+}
+
+//! returns true if an ancestor of the class declares the member with an initialization expression (qore#526)
+/** A member that redeclares such a member reads the value that the ancestor's initializer assigns, which runs first,
+    from any level and any parent list: the nearest declaration need not have an initializer.  A private:internal
+    member is kept in its class's own slot, so it does not count.  An ancestor that another ancestor inherits with
+    private:internal access is not visible to the class, so it does not count either; the class's own parents are
+    visible to it whatever their inheritance access.
+
+    Known limitation: in a hierarchy where an ancestor is reached both through private:internal inheritance and
+    through another path, the member is taken as initialized, while the runtime does not initialize it (the
+    behavior before qore#526 is kept: no parse error)
+
+    @param visited the ancestors already searched (a class can be reached on several paths)
+    @param own_parents true for the parents of the class that redeclares the member
+*/
+static bool qore_ancestor_member_initialized(const qore_class_private* cls, const char* name,
+        std::set<const qore_class_private*>& visited, bool own_parents) {
+    if (!cls->scl) {
+        return false;
+    }
+    for (const BCNode* node : *cls->scl) {
+        if (!node->sclass || (!own_parents && node->access == Internal)) {
+            continue;
+        }
+        const qore_class_private* parent = qore_class_private::get(*node->sclass);
+        if (!visited.insert(parent).second) {
+            continue;
+        }
+        const QoreMemberInfo* mi = parent->members.find(name);
+        if (mi && mi->local() && !mi->exp.isNothing() && mi->getAccess() != Internal) {
+            return true;
+        }
+        if (qore_ancestor_member_initialized(parent, name, visited, false)) {
+            return true;
+        }
+    }
+    return false;
 }
 
 int QoreMemberInfo::parseInit(const char* name, LocalVar& selfid) {
@@ -9371,8 +9642,22 @@ int QoreMemberInfo::parseInit(const char* name, LocalVar& selfid) {
             pwh.emplace(decl_pwo);
         }
         QoreParseContext parse_context(&selfid);
-        if (parse_init_value(exp, parse_context) && !err) {
-            err = -1;
+        {
+            // a member used in its own initialization expression has no value yet (qore#526); the expression can
+            // be parsed on demand while another one is parsed
+            QoreParseInitializerTargetBarrier init_barrier;
+            // a member that redeclares one of an ancestor class whose initializer sets it reads that value, which is
+            // assigned first; without such an initializer, the member has no value either
+            const qore_class_private* mcls = getClass();
+            std::set<const qore_class_private*> visited;
+            bool ancestor_initialized = mcls && qore_ancestor_member_initialized(mcls, name, visited, true);
+            QoreParseInitializerTarget init_target(ancestor_initialized ? nullptr : parse_get_class(), name);
+            if (parse_init_value(exp, parse_context) && !err) {
+                err = -1;
+            }
+            if (init_target.raiseUseError("member", name) && !err) {
+                err = -1;
+            }
         }
         const QoreTypeInfo* argTypeInfo = parse_context.typeInfo;
         if (parse_context.lvids) {
@@ -9433,8 +9718,17 @@ int QoreVarInfo::parseInit(const char* name) {
             pwh.emplace(decl_pwo);
         }
         QoreParseContext parse_context;
-        if (parse_init_value(exp, parse_context) && !err) {
-            err = -1;
+        {
+            // a static variable used in its own initialization expression has no value yet (qore#526); the
+            // expression can be parsed on demand while another one is parsed
+            QoreParseInitializerTargetBarrier init_barrier;
+            QoreParseInitializerTarget init_target(this);
+            if (parse_init_value(exp, parse_context) && !err) {
+                err = -1;
+            }
+            if (init_target.raiseUseError("class static variable", name) && !err) {
+                err = -1;
+            }
         }
         const QoreTypeInfo* argTypeInfo = parse_context.typeInfo;
         if (parse_context.lvids) {
@@ -9621,6 +9915,48 @@ int QoreMemberMap::parseInit(LocalVar& selfid) {
     return err;
 }
 
+#ifdef DEBUG
+std::string QoreMemberMap::dbgCheckIndex() const {
+    const MemberIndex* idx = index.load(std::memory_order_acquire);
+    if (!frozen) {
+        return idx ? "an unfrozen map has an index" : "";
+    }
+    if (member_list.size() >= IndexThreshold && !idx) {
+        return "a frozen map with " + std::to_string(member_list.size()) + " members has no index";
+    }
+    if (member_list.size() < IndexThreshold && idx) {
+        return "a frozen map with " + std::to_string(member_list.size()) + " members has an index";
+    }
+    bool internal = false;
+    for (auto& i : member_list) {
+        if (i.second && (i.second->access == Internal || i.second->access == Inaccessible
+                || i.second->getContextSize())) {
+            internal = true;
+        }
+        if (find(i.first) != i.second) {
+            return std::string("member '") + i.first + "' is not found as it is in the list";
+        }
+    }
+    if (idx && idx->size() != member_list.size()) {
+        return "the index has " + std::to_string(idx->size()) + " entries for " + std::to_string(member_list.size())
+            + " members";
+    }
+    if (internal != has_internal_entries) {
+        return std::string("the internal-member flag is ") + (has_internal_entries ? "set" : "not set")
+            + " but the list says otherwise";
+    }
+    if (find("\x01no such member")) {
+        return "a member that does not exist is found";
+    }
+    return "";
+}
+#endif
+
+QoreMemberInfo* QoreMemberMap::findIndexed(const MemberIndex& idx, const char* name) {
+    MemberIndex::const_iterator i = idx.find(std::string_view(name));
+    return i == idx.end() ? nullptr : i->second;
+}
+
 void QoreMemberMap::moveAllTo(QoreClass* qc, ClassAccess access) {
     // a public member declaration, whatever it declares (or if it declares nothing), means that the class declares
     // its members, so that an undeclared member is refused (INVALID-MEMBER); this does not depend on which of the
@@ -9805,7 +10141,7 @@ const QoreExternalConstant& QoreClassConstantIterator::get() const {
 class qore_class_member_iterator_private : public PrivateMemberIteratorBase<QoreMemberMap, QoreExternalNormalMember> {
 public:
     DLLLOCAL qore_class_member_iterator_private(const qore_class_private& obj)
-            : PrivateMemberIteratorBase<QoreMemberMap, QoreExternalNormalMember>(obj.members.member_list) {
+            : PrivateMemberIteratorBase<QoreMemberMap, QoreExternalNormalMember>(obj.members.getList()) {
     }
 
     DLLLOCAL bool next() {

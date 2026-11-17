@@ -16,11 +16,16 @@
     interpreter's output is checked against the rules above, and every other execution mode and a qcc-compiled
     executable must give the same output.
 
-    The cases are in four parts (see addPartCase()), CompoundAssignmentOrNothingPlain-<n>.qtest, so that each runs for
-    a short time (about a minute in a debug build; the whole matrix took 200 s, close to the 300 s limit of a test, and
-    exceeded it when the machine was busy, qore#6226): every part generates the program and checks the AST
-    interpreter's output, and part 1 also runs the ir mode and the qcc-compiled executable, part 2 the jit mode, part 3
-    the tiered mode and part 4 the default mode.  The AST interpreter is the reference of every part.
+    The program has about 400 functions, and the time of the test is in their native compilation: the jit, tiered
+    and default runs compile every function synchronously (ExecModeHarness::TraceEnv; about 0.1-0.25 s each, 50-95 s
+    for a run), and qcc compiles all of them (30-45 s).  The cases are therefore in twelve parts (see addPartCase()),
+    CompoundAssignmentOrNothingPlain-<n>.qtest, each of which takes well under a minute (qore#6226, qore#6360): part 1
+    checks the AST interpreter's output of the whole program against the rules and runs the whole program in the ir
+    mode; parts 2-3 compile half of the functions each with qcc and run the executable; parts 4-6, 7-9 and 10-12 run a
+    third of the functions each in the jit, tiered and default modes.  A part that runs a slice of the functions runs
+    a program with only those functions, and checks its output against the AST interpreter's output of that program;
+    the functions are independent of each other, so a function gives the same output in either program, which part 1
+    checks for the AST interpreter: its outputs of the slices, in order, must be its output of the whole program.
 */
 class CompoundAssignmentOrNothingPlainBase inherits QUnit::Test {
     public {
@@ -90,6 +95,9 @@ class CompoundAssignmentOrNothingPlainBase inherits QUnit::Test {
         string qore_bin;
         string libqore_dir;
         string qcc_bin;
+
+        #! the generated program, made once by generate()
+        *hash<auto> program;
     }
 
     constructor(string name, int part) : QUnit::Test(name, "1.0", \ARGV) {
@@ -98,16 +106,31 @@ class CompoundAssignmentOrNothingPlainBase inherits QUnit::Test {
         libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
         qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
 
-        # the AST interpreter is the reference of every part; each other mode is checked by one part
-        addPartCase(1, "or-nothing lvalues give the plain type's results: ir and the executable", \testMatrix(),
-            (("ir",), False, True));
+        # the AST interpreter is the reference of every part; the native compilation of each other mode and of the
+        # executable is shared by several parts, each of which runs a slice of the functions
+        addPartCase(1, "the AST interpreter's results follow the rules", \testAstRules());
         addPartCase(1, "the parts check every execution mode", \testPartsCoverModes());
-        addPartCase(2, "or-nothing lvalues give the plain type's results: jit", \testMatrix(),
-            (("jit",), False, False));
-        addPartCase(3, "or-nothing lvalues give the plain type's results: tiered", \testMatrix(),
-            (("tiered",), False, False));
-        addPartCase(4, "or-nothing lvalues give the plain type's results: the default mode", \testMatrix(),
-            ((), True, False));
+        addPartCase(1, "the slices of the program give the output of the whole program", \testSlices());
+        addPartCase(1, "or-nothing lvalues give the plain type's results: ir", \testMode(), ("ir", 1, 1));
+        addPartCase(2, "or-nothing lvalues give the plain type's results: the executable (1/2)", \testMode(),
+            ("executable", 1, 2));
+        addPartCase(3, "or-nothing lvalues give the plain type's results: the executable (2/2)", \testMode(),
+            ("executable", 2, 2));
+        addPartCase(4, "or-nothing lvalues give the plain type's results: jit (1/3)", \testMode(), ("jit", 1, 3));
+        addPartCase(5, "or-nothing lvalues give the plain type's results: jit (2/3)", \testMode(), ("jit", 2, 3));
+        addPartCase(6, "or-nothing lvalues give the plain type's results: jit (3/3)", \testMode(), ("jit", 3, 3));
+        addPartCase(7, "or-nothing lvalues give the plain type's results: tiered (1/3)", \testMode(),
+            ("tiered", 1, 3));
+        addPartCase(8, "or-nothing lvalues give the plain type's results: tiered (2/3)", \testMode(),
+            ("tiered", 2, 3));
+        addPartCase(9, "or-nothing lvalues give the plain type's results: tiered (3/3)", \testMode(),
+            ("tiered", 3, 3));
+        addPartCase(10, "or-nothing lvalues give the plain type's results: the default mode (1/3)", \testMode(),
+            ("default", 1, 3));
+        addPartCase(11, "or-nothing lvalues give the plain type's results: the default mode (2/3)", \testMode(),
+            ("default", 2, 3));
+        addPartCase(12, "or-nothing lvalues give the plain type's results: the default mode (3/3)", \testMode(),
+            ("default", 3, 3));
 
         set_return_value(main());
     }
@@ -124,32 +147,71 @@ class CompoundAssignmentOrNothingPlainBase inherits QUnit::Test {
             "the execution modes that the parts check: update the parts when the harness has another mode");
     }
 
-    #! runs the program in the modes given (and in the default mode, and as a qcc-compiled executable) and checks the
-    #! output against the AST interpreter's, which is checked against the rules
-    testMatrix(list<string> modes, bool default_mode, bool executable) {
+    #! checks the AST interpreter's output of the whole program against the rules
+    testAstRules() {
         TmpDir tmp("qore-compound-or-nothing-plain-");
         string file = tmp.path + DirSep + "plain.q";
-        int pairs = writeProgram(file);
+        hash<auto> p = generate();
+        writeProgram(file, 0, p.funcs.size());
+        checkAst(runMode("ast", file), p.pairs);
+    }
+
+    #! checks that the AST interpreter's outputs of the slices that the parts run, in order, are the output of the
+    #! whole program, so that a function gives the same output in a slice as in the whole program
+    testSlices() {
+        TmpDir tmp("qore-compound-or-nothing-plain-");
+        string file = tmp.path + DirSep + "plain.q";
+        int count = generate().funcs.size();
+        writeProgram(file, 0, count);
+        # each output ends with a newline, which leaves no empty line in the list of its lines
+        list<string> whole = runMode("ast", file);
+        foreach int slices in ((2, 3)) {
+            list<string> joined = ();
+            for (int slice = 1; slice <= slices; ++slice) {
+                writeProgram(file, count * (slice - 1) / slices, count * slice / slices);
+                joined += runMode("ast", file);
+            }
+            compare(sprintf("%d slices", slices), whole, joined);
+        }
+    }
+
+    #! runs a slice of the functions in a mode, or as a qcc-compiled executable, and checks the output against the
+    #! AST interpreter's output of the same functions
+    /** @param mode an execution mode, \c "default" for the default execution mode, or \c "executable"
+        @param slice the slice of the functions, from 1
+        @param slices the number of slices that the functions are divided into
+    */
+    testMode(string mode, int slice, int slices) {
+        TmpDir tmp("qore-compound-or-nothing-plain-");
+        string file = tmp.path + DirSep + "plain.q";
+        int count = generate().funcs.size();
+        int first = count * (slice - 1) / slices;
+        int end = count * slice / slices;
+        writeProgram(file, first, end);
+        string label = slices > 1 ? sprintf("%s (functions %d-%d of %d)", mode, first, end - 1, count) : mode;
 
         list<string> expected = runMode("ast", file);
-        checkAst(expected, pairs);
+        assertTrue(expected.size() > 100, sprintf("%s: AST output: %d lines", label, expected.size()));
 
-        foreach string mode in (modes) {
-            compare(mode, expected, runMode(mode, file));
-        }
+        switch (mode) {
+            case "default":
+                compare(label, expected, ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s "
+                    "DYLD_LIBRARY_PATH=%s %s %s", libqore_dir, libqore_dir, qore_bin, file)).split("\n"));
+                break;
 
-        if (default_mode) {
-            # the default execution mode
-            compare("default", expected, ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s "
-                "DYLD_LIBRARY_PATH=%s %s %s", libqore_dir, libqore_dir, qore_bin, file)).split("\n"));
-        }
+            case "executable": {
+                string exe = tmp.path + DirSep + "plain";
+                string out = backquote(sprintf("QORE_LIBDIR=%s %s -o %s %s 2>&1", libqore_dir, qcc_bin, exe,
+                    file));
+                assertTrue(is_file(exe), "compiled the executable: " + out);
+                compare(label, expected, ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s "
+                    "DYLD_LIBRARY_PATH=%s %s", libqore_dir, libqore_dir, exe)).split("\n"));
+                break;
+            }
 
-        if (executable) {
-            string exe = tmp.path + DirSep + "plain";
-            string out = backquote(sprintf("QORE_LIBDIR=%s %s -o %s %s 2>&1", libqore_dir, qcc_bin, exe, file));
-            assertTrue(is_file(exe), "compiled the executable: " + out);
-            compare("executable", expected, ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s "
-                "DYLD_LIBRARY_PATH=%s %s", libqore_dir, libqore_dir, exe)).split("\n"));
+            default:
+                compare(label, expected, runMode(mode, file));
+                break;
         }
     }
 
@@ -259,8 +321,14 @@ class CompoundAssignmentOrNothingPlainBase inherits QUnit::Test {
             "    }\n", Operands.size(), label, decl, lvalue, op, lvalue);
     }
 
-    #! writes the program and returns the number of plain and or-nothing result pairs
-    private int writeProgram(string file) {
+    #! generates the program once and returns it
+    /** @return a hash: \c decls: the declarations, \c funcs: the functions (\c f<n> is element n), \c pairs: the
+        number of plain and or-nothing result pairs
+    */
+    private hash<auto> generate() {
+        if (program) {
+            return program;
+        }
         list<string> decls = ();
         list<string> funcs = ();
         int pairs = 0;
@@ -327,18 +395,28 @@ class CompoundAssignmentOrNothingPlainBase inherits QUnit::Test {
             }
         }
 
+        program = {
+            "decls": decls,
+            "funcs": funcs,
+            "pairs": pairs,
+        };
+        return program;
+    }
+
+    #! writes a program with the declarations and the functions f<first> to f<end - 1> of the generated program
+    private writeProgram(string file, int first, int end) {
         # the functions are called by name, so that the top-level code stays small; they run three times, so that
         # tiered execution compiles them, and the last run's results are printed
-        string main = sprintf("string sub run_all() {\n    string out;\n    for (int i = 0; i < %d; ++i) {\n"
+        string main = sprintf("string sub run_all() {\n    string out;\n    for (int i = %d; i < %d; ++i) {\n"
             "        out += call_function(\"f\" + i);\n    }\n    return out;\n}\n"
             "string out;\nfor (int run = 0; run < 3; ++run) {\n    out = run_all();\n}\nprint(out);\n",
-            funcs.size());
+            first, end);
 
+        hash<auto> p = generate();
         File f();
         f.open2(file, O_CREAT | O_WRONLY | O_TRUNC);
-        f.write(Prelude + (select decls, $1).join("\n") + "\n" + funcs.join("\n") + main);
+        f.write(Prelude + (select p.decls, $1).join("\n") + "\n" + p.funcs[first..end - 1].join("\n") + main);
         f.close();
-        return pairs;
     }
 
     #! returns True if the statement parses in a function

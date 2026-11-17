@@ -121,9 +121,6 @@ DLLLOCAL QoreValue copy_value_and_resolve_lvar_refs_not_lvalue(const QoreValue& 
 */
 DLLLOCAL QoreValue copy_value_and_resolve_lvar_refs_bound_implicit(const QoreValue& n, ExceptionSink* xsink);
 
-// type of logical operator function
-typedef bool (*op_log_func_t)(const QoreValue& l, const QoreValue& r, ExceptionSink* xsink);
-
 class QoreOperatorNode : public ParseNode {
 private:
    bool in_parentheses;

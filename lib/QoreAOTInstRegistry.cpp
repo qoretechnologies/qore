@@ -468,7 +468,9 @@ constexpr AOTOpcodeLayout aot_opcode_layouts[] = {
     {O::ContextRow, {G::Base}},
     {O::RefSelf, {G::Base}},
     {O::DebugBlock, {G::Base, G::DebugStatement}},
-    {O::CheckException, {G::Base}},
+    // an image carries a CheckException without operands: a release check (qore#6072) has its value as an operand only
+    // until qore_ir_prune_release_checks() decides it, before the IR is serialized
+    {O::CheckException, {G::Base}, false, -1, 0, 0},
     {O::NewComplexBuffer, {G::NewComplexBuffer}, true},
     {O::PluginUnary, {G::Plugin}},
     {O::PluginBinary, {G::Plugin}},
@@ -1088,6 +1090,35 @@ static std::unique_ptr<QoreIRInstruction> readConst(
         return nullptr;
     }
     ci->constant.kind = static_cast<QoreIRConstant::Kind>(kind_byte);
+    // the value of the constant is checked against the end of the IR before it is read (qore#6265)
+    size_t value_size = 0;
+    switch (ci->constant.kind) {
+        case QoreIRConstant::Kind::Int:
+        case QoreIRConstant::Kind::Float:
+            value_size = 8;
+            break;
+        case QoreIRConstant::Kind::Bool:
+            value_size = 1;
+            break;
+        case QoreIRConstant::Kind::Char:
+        case QoreIRConstant::Kind::String:
+            value_size = 4;
+            break;
+        case QoreIRConstant::Kind::Date:
+            // the time, the relative flag and at least the zone reference
+            value_size = 8 + 1 + 4;
+            break;
+        case QoreIRConstant::Kind::Enum:
+            // the enum path and the member name references
+            value_size = 8;
+            break;
+        default:
+            break;
+    }
+    if (static_cast<size_t>(ctx.end - ctx.ptr) < value_size) {
+        ctx.error = "truncated AOT IR constant value";
+        return nullptr;
+    }
     switch (ci->constant.kind) {
         case QoreIRConstant::Kind::Int:
             ci->constant.int_value = QoreAOTBinaryReader::readI64(ctx.ptr);
@@ -1114,6 +1145,11 @@ static std::unique_ptr<QoreIRInstruction> readConst(
         case QoreIRConstant::Kind::Date:
             ci->constant.date_microseconds = QoreAOTBinaryReader::readI64(ctx.ptr);
             ci->constant.date_is_relative = QoreAOTBinaryReader::readU8(ctx.ptr) != 0;
+            // a relative date has 7 fields of 4 bytes
+            if (ci->constant.date_is_relative && static_cast<size_t>(ctx.end - ctx.ptr) < 7 * 4) {
+                ctx.error = "truncated AOT IR relative date constant";
+                return nullptr;
+            }
             if (ci->constant.date_is_relative) {
                 ci->constant.rel_years = static_cast<int>(QoreAOTBinaryReader::readU32(ctx.ptr));
                 ci->constant.rel_months = static_cast<int>(QoreAOTBinaryReader::readU32(ctx.ptr));

@@ -51,6 +51,13 @@
 #include <llvm/MC/TargetRegistry.h>
 #include <llvm/TargetParser/Host.h>
 #include <llvm/TargetParser/Triple.h>
+#include <llvm/ExecutionEngine/Orc/CompileUtils.h>
+#include <llvm/ExecutionEngine/Orc/IRCompileLayer.h>
+#include <llvm/ExecutionEngine/Orc/JITTargetMachineBuilder.h>
+#include <llvm/IR/LegacyPassManager.h>
+#include <llvm/MC/MCContext.h>
+#include <llvm/Support/SmallVectorMemoryBuffer.h>
+#include "qore/intern/QoreIRFrameCheck.h"
 #include "qore/intern/QoreIRToLLVM.h"
 #include "qore/intern/JITRuntime.h"
 
@@ -1126,6 +1133,51 @@ void __jit_debug_register_code();
 }
 
 namespace {
+//! Compiles a module of the JIT to an object; a function whose frame is larger than the stack guard allows gets a
+//! thunk that checks the stack for its frame (see QoreIRFrameCheck, qore#6414)
+class QoreFrameCheckCompiler : public llvm::orc::IRCompileLayer::IRCompiler {
+public:
+    QoreFrameCheckCompiler(std::unique_ptr<llvm::TargetMachine> tm)
+            : llvm::orc::IRCompileLayer::IRCompiler(llvm::orc::irManglingOptionsFromTargetOptions(tm->Options)),
+            tm(std::move(tm)) {
+    }
+
+    llvm::Expected<std::unique_ptr<llvm::MemoryBuffer>> operator()(llvm::Module& m) override {
+        llvm::SmallVector<char, 0> obj;
+        std::string error;
+        bool ok = QoreIRFrameCheck::emit(m, [&](llvm::Module& mod, std::string& err) {
+            obj.clear();
+            llvm::raw_svector_ostream os(obj);
+            llvm::legacy::PassManager pm;
+            llvm::MCContext* mc_ctx;
+            if (tm->addPassesToEmitMC(pm, mc_ctx, os)) {
+                err = "the target machine cannot emit machine code";
+                return false;
+            }
+            pm.run(mod);
+            return true;
+        }, error);
+        if (!ok) {
+            return llvm::make_error<llvm::StringError>(error, llvm::inconvertibleErrorCode());
+        }
+        return std::make_unique<llvm::SmallVectorMemoryBuffer>(std::move(obj),
+            m.getModuleIdentifier() + "-jitted-objectbuffer", false);
+    }
+
+private:
+    std::unique_ptr<llvm::TargetMachine> tm;
+};
+
+//! creates the compiler of the JIT's modules (QoreFrameCheckCompiler)
+static llvm::Expected<std::unique_ptr<llvm::orc::IRCompileLayer::IRCompiler>> qore_jit_create_compiler(
+        llvm::orc::JITTargetMachineBuilder jtmb) {
+    auto tm = jtmb.createTargetMachine();
+    if (!tm) {
+        return tm.takeError();
+    }
+    return std::make_unique<QoreFrameCheckCompiler>(std::move(*tm));
+}
+
 //! Deregisters the debug objects of removed JIT code from the GDB JIT interface (qore#5772)
 /** LLVM's debugger support (ELFDebugObjectPlugin, installed by enableDebuggerSupport()) registers a copy of each
     linked object with the GDB JIT interface (__jit_debug_descriptor), but ORC never deregisters it: when the code is
@@ -1268,9 +1320,12 @@ bool QoreJIT::initialize(std::string& error) {
     jtmb->setCodeGenOptLevel(llvm::CodeGenOptLevel::None);
     auto jit_or_err = llvm::orc::LLJITBuilder()
         .setJITTargetMachineBuilder(std::move(*jtmb))
+        .setCompileFunctionCreator(qore_jit_create_compiler)
         .create();
 #else
-    auto jit_or_err = llvm::orc::LLJITBuilder().create();
+    auto jit_or_err = llvm::orc::LLJITBuilder()
+        .setCompileFunctionCreator(qore_jit_create_compiler)
+        .create();
 #endif
     if (!jit_or_err) {
         error = llvm::toString(jit_or_err.takeError());
@@ -1909,6 +1964,8 @@ bool QoreJIT::compileFunctionInternal(const QoreIRFunction& func, std::string& e
     optimizeModule(*module, opt_level, bg_compile_ctx ? &bg_in_progress_detached : nullptr);
     // the float to int conversions of an x86-64 host (issue #6181); the JIT emits code for the process's target
     QoreIRToLLVM::expandFloatToIntForTarget(*module, llvm::Triple(llvm::sys::getProcessTriple()));
+    // the addresses of the slots of the cleanup frames in the blocks that use them (qore#6299)
+    QoreIRToLLVM::sinkFrameSlotAddresses(*module);
 
     // Dump LLVM IR if requested (after optimization)
     if (q_env_is_set("QORE_DUMP_LLVM_IR")) {
@@ -2481,6 +2538,8 @@ bool QoreJIT::compileFunctionBatchInternal(const QoreIRFunction& root_func, std:
     optimizeModule(*module, opt_level, bg_compile_ctx ? &bg_in_progress_detached : nullptr);
     // the float to int conversions of an x86-64 host (issue #6181); the JIT emits code for the process's target
     QoreIRToLLVM::expandFloatToIntForTarget(*module, llvm::Triple(llvm::sys::getProcessTriple()));
+    // the addresses of the slots of the cleanup frames in the blocks that use them (qore#6299)
+    QoreIRToLLVM::sinkFrameSlotAddresses(*module);
 
     // Dump LLVM IR if requested (after optimization)
     if (q_env_is_set("QORE_DUMP_LLVM_IR")) {

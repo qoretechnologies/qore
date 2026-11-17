@@ -101,6 +101,11 @@
     @endparblock
 
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
+    @par Strong Encapsulation Refuses Out-of-Line Methods in Namespace Blocks
+    @ref strong-encapsulation "%strong-encapsulation" (also set by @ref modern "%modern") refuses an out-of-line method
+    definition in a namespace block, as it does at the top level (see
+    @ref outofline_methods_in_namespaces "out-of-line methods in namespaces"; issue #6384).
+
     @par Parse Directives Are Not Allowed in an Expression
     A parse directive in the source of an @ref Qore::Expression "Expression" is now a parse exception and is not
     applied; it changed the parse state of the Program that the expression was created in (see
@@ -301,6 +306,11 @@
     \c OPTION-VALUE-ERROR, instead of \c RUNTIME-TYPE-ERROR, which now means a type error in the code; soft types also
     refuse text that is no number or date.  Code that catches a refused value by its error code must use the new
     codes.  See @ref dataprovider_v3_11.
+
+    @par File Pollers Keep Polling After an Error in a File Event Handler
+    When a \c singleFileEvent() (or an observer it notifies) throws, a @ref filepollererrors "FilePoller" now logs the
+    error and retries that file at the next poll, and an @ref ftppollererrors "FtpPoller" or \c SftpPoller after the
+    \c "error_delay", instead of stopping polling; code that relied on the stop must call \c stop() itself.
 
     @par date() Raises an Exception for Text After a Date or Time
     @ref Qore::date(string) "date(string)" and @ref Qore::TimeZone::date(string) "TimeZone::date(string)" raise
@@ -605,10 +615,10 @@
     set; see @ref modern "%modern".
 
     @par Compatibility Parse Options Refused Under \%modern
-    Parse directives and options that change the meaning of code, such as @ref no-negative-offsets "%no-negative-offsets" and
-    the \c %%broken-* options, cannot be used while @ref modern "%modern" is in effect, nor can
-    @ref modern "%modern" be set while one of them is in effect; legacy code that needs them is parsed without
-    @ref modern "%modern" (see @ref modern_option_consistency).
+    Options that change the meaning of code, such as @ref no-negative-offsets "%no-negative-offsets" and the
+    \c %%broken-* options, cannot be used while @ref modern "%modern" is in effect, nor with it in the same code; a
+    \c %%modern directive resets one that the application set through the API as a default for legacy code (see
+    @ref modern_option_consistency).
 
     @par Unassigned Local Variable Values Rejected Under \%modern
     @ref modern "%modern" implies @ref strict-parse-errors "%strict-parse-errors", so a local variable that cannot
@@ -813,6 +823,12 @@
     \c date lvalue, is a \c PARSE-TYPE-ERROR in every mode, as an assignment of the result is, where it raised an
     exception when it ran (see @ref compound_assignment_parse_checks "parse-time checks"; issue #6103).
 
+    @par A Variable Used in Its Own Initializer Is a Parse Error
+    A use of a local variable, member or static class variable in its own initialization expression, where it has no
+    value yet (ex: <tt>int a = a + 1;</tt>, <tt>list&lt;auto&gt; l = (l,);</tt>), is a parse error in every mode; a use
+    in a closure created there and a global, which keeps its value, are not affected (see
+    @ref variable_initializer_scope; issue #526).
+
     @par Calls Through Method References on Deleted Objects Name the Method
     The \c OBJECT-ALREADY-DELETED exception of a call through a method call reference on a deleted object names the
     method (<tt>cannot call U::m() ...</tt>) instead of <tt>cannot call a method ...</tt>, in every execution mode
@@ -844,7 +860,27 @@
     function, method or closure that first uses the type-safe hash is a parse error, as it already was for class
     members; 2.2.1 evaluated it with that code's variable (issue #6268).
 
+    @par Modulo-Equals by Zero Raises DIVISION-BY-ZERO
+    @ref modulo_equals_operator "%=" with a divisor of zero raises \c DIVISION-BY-ZERO as the other division operators
+    do, following the rule for @ref undefined_arithmetic "undefined arithmetic"; 2.2.1 assigned \c 0 (issue #1034).
+
+    @par Every Number Division by Zero Raises DIVISION-BY-ZERO
+    A @ref number_type "number" dividend of \c 0, infinity or NaN divided by zero raises \c DIVISION-BY-ZERO, as any
+    other dividend does (see @ref undefined_arithmetic); 2.2.1 gave NaN or infinity (ex: <tt>0n / 0n</tt>), also for
+    constant operands, which now raise the exception when they are parsed (issue #1034).
+
+    @par pow() of a Negative Float and a Fractional Exponent Returns NaN
+    @ref Qore::pow() "pow()" of a negative float and an exponent that is not an integer returns NaN, as the other math
+    functions do for an argument outside their domain (see @ref undefined_arithmetic); 2.2.1 raised
+    \c INVALID-POW-ARGUMENTS (issue #1034).
+
     @subsection qore_3_0_0_new_features New Features in Qore
+    @par Strict Number Parsing
+    @ref parse_int(string, string, bool) "parse_int()", @ref parse_float(string, string, bool) "parse_float()" and
+    @ref parse_number(string, string, bool) "parse_number()" take a \a strict argument that raises
+    \c PARSE-NUMBER-ERROR unless the string is the number and nothing else (see @ref strict_number_parsing;
+    <a href="https://github.com/qoretechnologies/qore/issues/305">issue 305</a>).
+
     @par Module Commands Know the Restrictions of the Code That Issues Them
     A binary module's command handler gets the effective restrictions of the issuing code, not those of the target
     %Program, from the new \c QoreModuleCommandContext (module API 2.3; see @ref qore_modules), also for
@@ -1183,6 +1219,13 @@
     every member does), so that a module refuses an operation for a sandboxed caller only if
     <tt>!trustsUncontrolledApis() && restricts()</tt>.
 
+    @par Asking Whether the Calling Code Is Restricted From a Domain
+    @ref Qore::SandboxManager::isCallerRestricted() "SandboxManager::isCallerRestricted()" and the C++ function
+    \c qore_caller_restricts_domain() (\c QORE_HAVE_CALLER_RESTRICTS_DOMAIN) tell module code whether the code that
+    calls it, not the module's own %Program, is restricted from a functional domain, so that it refuses an operation
+    that it performs for a restricted caller; see @ref sandbox_caller_domains
+    (<a href="https://github.com/qoretechnologies/qore/issues/6257">issue 6257</a>).
+
     @par C++ API: Module Threads and Callbacks Run Under the Caller's Sandbox
     A binary module can run work for sandboxed callers on its own worker or callback threads under each caller's
     @ref sandboxing "sandbox" with the new \c QoreSandboxCapture and \c QoreSandboxCaptureHelper classes, and check
@@ -1407,7 +1450,16 @@
       - resources with their metadata (see @ref filelocationhandler_resources), and \c conn:// locations
       - see @ref filelocationhandler_v3_0 for all changes
 
+    - @ref filepollerintro "FilePoller" module
+      - an error while a polled file is handled (ex: an observer that refuses the file event) keeps the file for the
+        next poll instead of stopping polling (see @ref filepollererrors;
+        <a href="https://github.com/qoretechnologies/qore/issues/6400">issue 6400</a>)
+      - see @ref file_poller_2_1 for all changes
+
     - @ref ftppollerintro "FtpPoller" module
+      - an error while a polled file is handled (ex: an observer that refuses the file event) keeps the remote file
+        and retries the poll after the \c "error_delay" option's delay instead of stopping polling (see
+        @ref ftppollererrors; <a href="https://github.com/qoretechnologies/qore/issues/6400">issue 6400</a>)
       - see @ref ftppollerv2_2 for all changes
 
     - @ref gmaildataproviderintro "GmailDataProvider" module
@@ -1979,6 +2031,33 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - when more than one class of a hierarchy declares a member with an initialization expression, the value that a
+      later one replaces is released, so that an object that a base class stored there is destroyed (see
+      @ref member_initialization; issue #6411)
+    - a module blacklisted with @ref Qore::qore_add_module_to_blacklist() "qore_add_module_to_blacklist()" is also
+      refused when it is a @ref separated_modules "separated module", however it is loaded (issue #6450)
+    - a sleep with @ref Qore::usleep() "usleep()" or @ref Qore::sleep() "sleep()" that a signal interrupted while
+      it slept with \c nanosleep() (2) slept its whole time again instead of the time that was left (issue #6364)
+    - an out-of-line method definition in a namespace block resolves its class path relative to that namespace
+      (<tt>int I::C::m() {}</tt> in \c NS for \c NS::I::C), and a path that names no such class, which release builds
+      used to resolve by ignoring its first part, is now an error (see
+      @ref outofline_methods_in_namespaces "out-of-line methods in namespaces"; issue #6340)
+    - a parse that fails rolls back the local variables that it declared in the top-level block of a %Program, which a
+      later parse could not declare again, and a %Program whose first parse failed can declare them in the next one
+      (issue #678)
+    - the initializer of a \c private:internal member writes its own member when a class two or more levels below
+      declares a member with the same name again (or inherits one from two base classes); it wrote the other member,
+      and the methods of its class saw it unset (see @ref private_members; issue #6393)
+    - the parse options that a parse gives only part of its code (a module header, a file with
+      @ref push-parse-options "%push-parse-options", code parsed before a directive) are no longer visible to other
+      threads, and changes to the Program's options made meanwhile are kept; @ref lock-options "%lock-options" in a
+      file with %push-parse-options keeps its restrictions after the file (issues #6175, #6207)
+    - the time zone of a @ref Qore::Program "Program" is read and set atomically: setting it with
+      @ref Qore::TimeZone::setRegion() "TimeZone::setRegion()" and the other @ref Qore::TimeZone "TimeZone" methods
+      while other threads of the Program read it was a data race (issue #6346)
+    - with @ref broken-list-range "%broken-list-range", a range past the end of a list whose element type does not
+      allow @ref nothing (ex: \c list<int>) gives @ref nothing for the elements outside of the list in a list with the
+      or-nothing element type instead of raising a \c RUNTIME-TYPE-ERROR exception (issue #5757)
     - the report of an unhandled exception or of a warning on stderr is written whole, so that the output of other
       threads is no longer mixed into its lines (see @ref exception_handling; issue #6290)
     - a range of the @ref list_element_operator "[] operator" (ex: <tt>x[-9..1]</tt>) gives only elements of its
@@ -1989,6 +2068,19 @@
       (see @ref unittestformats; issue #2297)
     - an empty \c "regex_mask" option of @ref FtpPoller::FtpPoller::constructor() "FtpPoller::constructor()" matches
       every file; it caused the constructor to throw an \c INVALID-MEMBER exception (issue #3377)
+    - two @ref Qore::Program "Program" objects whose commits run code that parses code in each other waited for each
+      other's parse lock forever; such a wait is refused with \c PROGRAM-ERROR, and the wait of a parse action for a
+      parse lock can be ended with @ref Qore::cancel_thread() "cancel_thread()"; see @ref program_parse_lock_waits
+      (issue #5693)
+    - creating an @ref Qore::Expression "Expression" in a %Program with code pending, or whose parse was rolled back
+      without @ref Qore::PO_ALLOW_REPARSE "PO_ALLOW_REPARSE", raises \c EXPRESSION-ERROR; it let threads enter the
+      %Program before its code was committed, and could refer to code that a rollback deleted (issue #6353)
+    - a child process created with @ref Qore::fork() "fork()" while another thread changed the parse options of a
+      %Program or of a module, or created a %Program that copies the external data of its parent, could block when it
+      did the same, or when the %Program was destroyed (issue #6403)
+    - a @ref call_reference_pseudo_method "call reference to a pseudo-method" (ex: <tt>\\l.size()</tt> for a list
+      \c l, or <tt>\\o.className()</tt>) refers to the pseudo-method of the value; it raised a parse or run-time
+      exception (issue #995)
     - an allocation that fails while a thread enters another %Program (ex: in a binary module's
       \c QoreExternalProgramContextHelper or a parse commit) leaves the thread in the calling %Program and releases
       its thread count in the entered %Program, which could otherwise not be deleted (issue #6198)
@@ -2864,6 +2956,10 @@
         (<a href="https://github.com/qoretechnologies/qore/issues/4996">issue 4996</a>)
     - \c qpp writes its output files to relative paths correctly and reports an error for a hashdecl member without
       a <tt>//!</tt> comment and for unexpected text after the comment of a function or constant group
+    - \c qpp reports an error for a function or constant with a <tt>//!</tt> comment outside a group and for a %Qore
+      declaration without one instead of dropping it or copying it unprocessed, takes <tt>-vv</tt> and
+      <tt>-v</tt><i>n</i> (not <tt>-v</tt> <i>n</i>), and gives generated code its source lines; see the \c qpp(1)
+      manual page
     - fixed a deadlock when a @ref Qore::Program "Program" was created from a Program in which a binary module such
       as \c python keeps data while another thread used the module
     - a value whose return is interrupted by an exception that a \c catch block handles is not returned; see
@@ -2963,6 +3059,10 @@
       @ref Qore::get_local_vars() "get_local_vars()" and @ref Qore::set_local_var_value() "set_local_var_value()"
       from the calls it makes or from a debugger's callbacks in the same thread
       (<a href="https://github.com/qoretechnologies/qore/issues/5871">issue 5871</a>)
+    - a call of a method that a class does not have, of the name of a member whose type can hold code (\c auto, no
+      type, or a code type), is no longer checked at parse time against the pseudo-method of objects of the same name,
+      which refused a call that the member's code accepts; the member's code is called at run time, and a named call
+      binds its names to the code's parameters (see @ref function_named_arguments; issue #6361)
     - in the C++ API, \c QoreString::replace() clamps an offset past the end of the string to its end instead of
       accessing memory outside the string, and \c QoreString::concat() with a position and a length takes only that
       many characters in a single-byte encoding instead of the rest of the string (issue #6238)
@@ -2970,6 +3070,9 @@
       @ref <number>::format() "<number>::format(string)" and @ref <float>::format() "<float>::format(string)" used
       the rest of the format string as each separator: <tt>format_number(".,2", 1234567.891)</tt> gave
       <tt>1.,2234.,2567,289</tt> instead of <tt>1.234.567,89</tt> (issue #6238)
+    - a @ref number_type "number" divisor that is not zero but converts to the float \c 0.0 (ex: \c 1e-400n) raised
+      \c DIVISION-BY-ZERO with @ref divide_equals_operator "/=" and was a parse error as a constant divisor of
+      @ref division_operator "/", while \c / with the divisor in a variable divided (issue #6387)
     - a class or hashdecl member or static class variable initialization expression that uses a top-level local
       variable no longer crashes the process when the class or hashdecl is first used in a closure and then used
       elsewhere (see @ref member_initialization and @ref hashdecl_initializer_scope; issue #6268)
@@ -2981,6 +3084,10 @@
       where clause or the \c "groupby" option, which gave invalid SQL such as <tt>order by distinct ddt_number</tt>
       (<a href="https://github.com/qoretechnologies/qore/issues/6331">issue 6331</a>,
       <a href="https://github.com/qoretechnologies/qore/issues/6332">issue 6332</a>)
+    - @ref Qore::pow() "pow()" with @ref number_type "number" arguments and an exponent that is negative, NaN or
+      between -1 and 1 (ex: <tt>pow(2n, 0.5n)</tt>) ended the process with an MPFR assertion (issue #1034)
+    - a @ref number_type "number" division after a number operation that left an MPFR flag set (ex: <tt>nlog(0n)</tt>)
+      raised \c DIVISION-BY-ZERO for a divisor that is not zero (issue #1034)
 
     @section qore_2_2_1 Qore 2.2.1
 

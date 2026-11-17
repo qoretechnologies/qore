@@ -36,6 +36,7 @@
 #include <qore/intern/CallReferenceCallNode.h>
 #include <qore/intern/OnBlockExitStatement.h>
 #include "qore/intern/QorePseudoMethods.h"
+#include "qore/intern/QoreIRPointerSlot.h"
 #include <qore/intern/QoreRegex.h>
 #include <qore/intern/StaticClassVarRefNode.h>
 #include <qore/intern/QoreRegexSubst.h>
@@ -1242,6 +1243,15 @@ private:
         list.erase(it);
     }
 };
+
+// the iterators whose addresses an IR value slot holds (see QoreIRPointerSlot.h)
+QORE_IR_POINTER_SLOT_TYPE_CHECK(FunctionalOperatorInterface);
+
+//! Raises the exception for an object whose address an IR value slot cannot hold (see ir_pointer_fits())
+static void ir_pointer_raise(const void* p, ExceptionSink* xsink) {
+    xsink->raiseException("IR-POINTER-ERROR", "the address %p of an object of the IR interpreter is not 8-byte "
+        "aligned or is above 2^50, which the interpreter cannot keep in a value slot", p);
+}
 
 #ifndef QORE_IR_INTERPRETER_GIVEN_ARGS_UNIT
 //! The cache of the values of the local variables of a frame, indexed by slot
@@ -2918,7 +2928,11 @@ static bool buildValueUseCounts(const QoreIRFunction& func,
             if (inst->result.isValid() && inst->result.id < def_block.size()) {
                 def_block[inst->result.id] = block.get();
                 def_scope[inst->result.id] = inst->temp_scope_id;
-                def_by_call[inst->result.id] = arg_start >= 0 || qore_ir_is_sequence_temp(inst);
+                // a RefSelf gives the value a reference of the frame's own: the value of a fold or of a functional
+                // operator over a single value, whose source has been released (see lowerWithSourceRelease()), which
+                // a call takes over as a call's value (f(foldl $1 + $2, l); issue #6262)
+                def_by_call[inst->result.id] = arg_start >= 0 || qore_ir_is_sequence_temp(inst)
+                    || inst->opcode == QoreIROpcode::RefSelf;
                 def_by_variable_read[inst->result.id] = qore_ir_reads_variable_for_call_arg(inst->opcode);
                 def_inst[inst->result.id] = inst;
                 def_pos[inst->result.id] = static_cast<uint32_t>(inst_pos);
@@ -2953,7 +2967,11 @@ static bool buildValueUseCounts(const QoreIRFunction& func,
                         return;
                     }
                     if (phi_inst) {
-                        ++phi_uses[operand.id];
+                        // a Phi that is its own incoming value on a loop's back edge (the accumulator of foldl $1, l)
+                        // does not use it otherwise: the Phi after the loop can take its value over (issue #6262)
+                        if (operand.id != inst->result.id) {
+                            ++phi_uses[operand.id];
+                        }
                     } else if (def_block[operand.id] != block.get()) {
                         used_elsewhere[operand.id] = 1;
                     }
@@ -2969,6 +2987,13 @@ static bool buildValueUseCounts(const QoreIRFunction& func,
             def_by_call[phi->result.id] = 1;
         }
     }
+    // a new list or hash that the frame owns: a literal, or the result container of map and hash map, which a Phi
+    // takes over as a call's value (the source of a fold, c ? (mk(), mk()) : (); the value of map; issue #6262)
+    auto is_new_container = [](QoreIROpcode op) -> bool {
+        return op == QoreIROpcode::CreateEmptyList || op == QoreIROpcode::CreateSizedList
+            || op == QoreIROpcode::MakeList || op == QoreIROpcode::MakeHash
+            || op == QoreIROpcode::MakeHashConstKeys;
+    };
     for (const QoreIRPhiInstruction* phi : phis) {
         for (const auto& inc : phi->incoming) {
             // the element that an iterator gives owns its slot too (see IteratorNext): the first element of a fold
@@ -2982,7 +3007,8 @@ static bool buildValueUseCounts(const QoreIRFunction& func,
                     && (def_by_call[inc.value.id] || (def_inst[inc.value.id]
                         && (def_inst[inc.value.id]->opcode == QoreIROpcode::IteratorNext
                             || def_inst[inc.value.id]->opcode == QoreIROpcode::AddAny
-                            || def_inst[inc.value.id]->opcode == QoreIROpcode::SubAny)))
+                            || def_inst[inc.value.id]->opcode == QoreIROpcode::SubAny
+                            || is_new_container(def_inst[inc.value.id]->opcode))))
                     && phi_uses[inc.value.id] == 1 && !used_elsewhere[inc.value.id]) {
                 phi_takes_incoming[inc.value.id] = 1;
             }
@@ -3007,8 +3033,9 @@ static bool buildValueUseCounts(const QoreIRFunction& func,
                             || !used_elsewhere[id] || !def_inst[id] || !def_block[id]) {
                         continue;
                     }
+                    // the result container of map and hash map: a new list or hash (issue #6262)
                     if (!def_by_call[id] && def_inst[id]->opcode != QoreIROpcode::IteratorNext
-                            && def_inst[id]->opcode != QoreIROpcode::CreateEmptyList) {
+                            && !is_new_container(def_inst[id]->opcode)) {
                         continue;
                     }
                     candidates[id] = block.get();
@@ -11943,28 +11970,33 @@ dispatch_folded_step_host:
                 break;
             }
             case QoreIROpcode::ExceptionSuspend: {
-                setValueSlotDirect(values, inst->result.id,
-                    QoreValue(reinterpret_cast<int64_t>(qore_rt_exception_suspend(xsink))));
+                void* saved = qore_rt_exception_suspend(xsink);
+                if (saved && !ir_pointer_fits(saved)) {
+                    // the exception is restored, and the failure is raised after it
+                    qore_rt_exception_resume(saved, xsink);
+                    ir_pointer_raise(saved, xsink);
+                    saved = nullptr;
+                }
+                setValueSlotDirect(values, inst->result.id, ir_pointer_value(saved));
                 ++ip;
                 break;
             }
             case QoreIROpcode::ExceptionResume: {
                 // no exception check: the code that follows routes the exceptions
-                qore_rt_exception_resume(reinterpret_cast<void*>(getIRValue(values, inst->operands[0]).getAsBigInt()),
-                    xsink);
+                qore_rt_exception_resume(ir_value_pointer<void>(getIRValue(values, inst->operands[0])), xsink);
                 ++ip;
                 break;
             }
             case QoreIROpcode::SelectorIteratorPending: {
                 // operands: the iterator handle
-                void* iter = reinterpret_cast<void*>(getIRValue(values, inst->operands[0]).getAsBigInt());
+                void* iter = ir_value_pointer<void>(getIRValue(values, inst->operands[0]));
                 setValueSlotDirect(values, inst->result.id, QoreValue(qore_rt_selector_iterator_pending(iter)));
                 ++ip;
                 break;
             }
             case QoreIROpcode::SelectorIteratorFeed: {
                 // operands: the iterator handle, the flags, and the index or the bounds of a range
-                void* iter = reinterpret_cast<void*>(getIRValue(values, inst->operands[0]).getAsBigInt());
+                void* iter = ir_value_pointer<void>(getIRValue(values, inst->operands[0]));
                 uint64_t second_bits = inst->operands.size() > 3
                     ? toBits(getIRValue(values, inst->operands[3])) : toBits(QoreValue());
                 if (qore_rt_selector_iterator_feed(iter, getIRValue(values, inst->operands[1]).getAsBigInt(),
@@ -15122,6 +15154,9 @@ load_local_done:
                 FunctionalOperator::FunctionalValueType value_type;
                 FunctionalOperatorInterface* iter = FunctionalOperatorInterface::getFunctionalIteratorForValue(
                     value_type, iterable, false, "foldr operator", xsink);
+                if (iter && xsink && !*xsink && !ir_pointer_fits(iter)) {
+                    ir_pointer_raise(iter, xsink);
+                }
                 if (xsink && *xsink) {
                     delete iter;
                     if (inst->exception_target) {
@@ -15146,8 +15181,7 @@ load_local_done:
                 if (iter) {
                     addActiveIterator(iter, inst);
                 }
-                setValueSlot(values, inst->result.id,
-                        QoreValue(reinterpret_cast<int64_t>(iter)), xsink);
+                setValueSlot(values, inst->result.id, ir_pointer_value(iter), xsink);
                 ++ip;
                 break;
             }
@@ -16345,6 +16379,10 @@ load_local_done:
                     toBits(context_inst->where_exp),
                     toBits(context_inst->sort_exp),
                     context_inst->sort_type, xsink);
+                if (state && !ir_pointer_fits(reinterpret_cast<void*>(state))) {
+                    qore_rt_context_destroy(state, xsink);
+                    ir_pointer_raise(reinterpret_cast<void*>(state), xsink);
+                }
                 if (xsink && *xsink) {
                     if (inst->exception_target) {
                         // in-frame landing pad: drain by scope so enclosing-scope temps
@@ -16359,8 +16397,7 @@ load_local_done:
                     cleanupLocalCaches();
                     return exitAfterUnwind();
                 }
-                setValueSlotDirect(values, inst->result.id,
-                    QoreValue(static_cast<int64_t>(state)));
+                setValueSlotDirect(values, inst->result.id, ir_pointer_value(reinterpret_cast<void*>(state)));
                 ++ip;
                 break;
             }
@@ -16414,8 +16451,7 @@ load_local_done:
             }
             case QoreIROpcode::ContextMaxPos: {
                 QoreValue state_val = getIRValue(values, inst->operands[0]);
-                int64_t max_pos = qore_rt_context_max_pos(
-                    static_cast<uint64_t>(state_val.getAsBigInt()));
+                int64_t max_pos = qore_rt_context_max_pos(ir_value_handle(state_val));
                 setValueSlotDirect(values, inst->result.id, QoreValue(max_pos));
                 ++ip;
                 break;
@@ -16423,16 +16459,13 @@ load_local_done:
             case QoreIROpcode::ContextSetPos: {
                 QoreValue state_val = getIRValue(values, inst->operands[0]);
                 QoreValue idx_val = getIRValue(values, inst->operands[1]);
-                qore_rt_context_set_pos(
-                    static_cast<uint64_t>(state_val.getAsBigInt()),
-                    idx_val.getAsBigInt());
+                qore_rt_context_set_pos(ir_value_handle(state_val), idx_val.getAsBigInt());
                 ++ip;
                 break;
             }
             case QoreIROpcode::ContextDestroy: {
                 QoreValue state_val = getIRValue(values, inst->operands[0]);
-                qore_rt_context_destroy(
-                    static_cast<uint64_t>(state_val.getAsBigInt()), xsink);
+                qore_rt_context_destroy(ir_value_handle(state_val), xsink);
                 ++ip;
                 break;
             }
@@ -16553,6 +16586,9 @@ load_local_done:
                     iter = FunctionalOperatorInterface::getFunctionalIteratorForValue(value_type, iterable, true,
                         "foreach statement", xsink);
                 }
+                if (iter && xsink && !*xsink && !ir_pointer_fits(iter)) {
+                    ir_pointer_raise(iter, xsink);
+                }
                 if (xsink && *xsink) {
                     delete iter;
                     if (inst->exception_target) {
@@ -16574,7 +16610,7 @@ load_local_done:
                 if (iter) {
                     addActiveIterator(iter, inst);
                 }
-                setValueSlot(values, iter_inst->result.id, QoreValue(reinterpret_cast<int64_t>(iter)), xsink);
+                setValueSlot(values, iter_inst->result.id, ir_pointer_value(iter), xsink);
                 ++ip;
                 break;
             }
@@ -16638,8 +16674,7 @@ load_local_done:
                 // selector, or the lowering releases it
                 const bool keep_iterator = inst->opcode == QoreIROpcode::IteratorNextSelectors;
                 QoreValue iter_val = getIRValue(values, iter_inst->iterator);
-                FunctionalOperatorInterface* iter = reinterpret_cast<FunctionalOperatorInterface*>(
-                    iter_val.getAsBigInt());
+                FunctionalOperatorInterface* iter = ir_value_pointer<FunctionalOperatorInterface>(iter_val);
                 if (!iter) {
                     // Empty iterator - branch to done
                     prev_block = block;
@@ -16763,6 +16798,10 @@ load_local_done:
             case QoreIROpcode::RefForeachInit: {
                 auto* ref_init = static_cast<QoreIRRefForeachInitInstruction*>(inst);
                 uint64_t state = qore_rt_ref_foreach_init(toBits(ref_init->expr), xsink);
+                if (state && !ir_pointer_fits(reinterpret_cast<void*>(state))) {
+                    qore_rt_ref_foreach_cleanup(state, xsink);
+                    ir_pointer_raise(reinterpret_cast<void*>(state), xsink);
+                }
                 if (xsink && *xsink) {
                     if (inst->exception_target) {
                         // in-frame landing pad: drain by scope so enclosing-scope temps
@@ -16777,15 +16816,13 @@ load_local_done:
                     cleanupLocalCaches();
                     return exitAfterUnwind();
                 }
-                setValueSlotDirect(values, inst->result.id,
-                    QoreValue(static_cast<int64_t>(state)));
+                setValueSlotDirect(values, inst->result.id, ir_pointer_value(reinterpret_cast<void*>(state)));
                 ++ip;
                 break;
             }
             case QoreIROpcode::RefForeachSize: {
                 QoreValue state_val = getIRValue(values, inst->operands[0]);
-                int64_t size = qore_rt_ref_foreach_size(
-                    static_cast<uint64_t>(state_val.getAsBigInt()));
+                int64_t size = qore_rt_ref_foreach_size(ir_value_handle(state_val));
                 setValueSlotDirect(values, inst->result.id, QoreValue(size));
                 ++ip;
                 break;
@@ -16793,9 +16830,8 @@ load_local_done:
             case QoreIROpcode::RefForeachGetEntry: {
                 QoreValue state_val = getIRValue(values, inst->operands[0]);
                 QoreValue index_val = getIRValue(values, inst->operands[1]);
-                uint64_t entry = qore_rt_ref_foreach_get_entry(
-                    static_cast<uint64_t>(state_val.getAsBigInt()),
-                    index_val.getAsBigInt(), xsink);
+                uint64_t entry = qore_rt_ref_foreach_get_entry(ir_value_handle(state_val), index_val.getAsBigInt(),
+                    xsink);
                 if (xsink && *xsink) {
                     if (inst->exception_target) {
                         // in-frame landing pad: drain by scope so enclosing-scope temps
@@ -16821,9 +16857,7 @@ load_local_done:
             case QoreIROpcode::RefForeachRecord: {
                 QoreValue state_val = getIRValue(values, inst->operands[0]);
                 QoreValue value_val = getIRValue(values, inst->operands[1]);
-                qore_rt_ref_foreach_record(
-                    static_cast<uint64_t>(state_val.getAsBigInt()),
-                    toBits(value_val), xsink);
+                qore_rt_ref_foreach_record(ir_value_handle(state_val), toBits(value_val), xsink);
                 if (xsink && *xsink) {
                     unwindForException();
                     cleanupLocalCaches();
@@ -16835,9 +16869,7 @@ load_local_done:
             case QoreIROpcode::RefForeachFinalize: {
                 QoreValue state_val = getIRValue(values, inst->operands[0]);
                 QoreValue fill_val = getIRValue(values, inst->operands[1]);
-                qore_rt_ref_foreach_finalize(
-                    static_cast<uint64_t>(state_val.getAsBigInt()),
-                    fill_val.getAsBigInt(), xsink);
+                qore_rt_ref_foreach_finalize(ir_value_handle(state_val), fill_val.getAsBigInt(), xsink);
                 if (xsink && *xsink) {
                     // the write-back raised an exception (the lvalue refused the list, or a destructor of a value
                     // released): it goes to the handler of an enclosing try block (qore#6197)
@@ -16853,8 +16885,7 @@ load_local_done:
             }
             case QoreIROpcode::RefForeachCleanup: {
                 QoreValue state_val = getIRValue(values, inst->operands[0]);
-                qore_rt_ref_foreach_cleanup(
-                    static_cast<uint64_t>(state_val.getAsBigInt()), xsink);
+                qore_rt_ref_foreach_cleanup(ir_value_handle(state_val), xsink);
                 ++ip;
                 break;
             }
@@ -17146,8 +17177,8 @@ load_local_done:
                 // finds nothing (see design/temporary-lifetime.md)
                 uint32_t id = inst->operands.front().id;
                 if (inst->opcode == QoreIROpcode::IteratorRelease) {
-                    FunctionalOperatorInterface* iter = reinterpret_cast<FunctionalOperatorInterface*>(
-                        getIRValue(values, inst->operands.front()).getAsBigInt());
+                    FunctionalOperatorInterface* iter = ir_value_pointer<FunctionalOperatorInterface>(
+                        getIRValue(values, inst->operands.front()));
                     if (iter) {
                         setValueSlotDirect(values, id, QoreValue(static_cast<int64_t>(0)));
                         active_iterators.erase(iter);
@@ -21539,10 +21570,15 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
         case QoreIROpcode::ModAssignAny:
             return qore_compound_assign_value(LVCompoundOp::ModAssign, left, right, xsink);
         case QoreIROpcode::ModAssignInt: {
-            // the modulo-equals operator assigns 0 for a divisor of 0, as AST execution does
-            // (QoreModuloEqualsOperatorNode); only the modulo operator raises an exception
+            // a divisor of zero raises DIVISION-BY-ZERO, as for % (qore#1034)
             int64_t divisor = right.getAsBigInt();
-            return QoreValue(divisor ? qore_int_mod(left.getAsBigInt(), divisor) : 0ll);
+            if (!divisor) {
+                if (xsink) {
+                    qore_raise_modulo_by_zero(xsink);
+                }
+                return QoreValue();
+            }
+            return QoreValue(qore_int_mod(left.getAsBigInt(), divisor));
         }
         case QoreIROpcode::AndAssignInt:
             return QoreValue(left.getAsBigInt() & right.getAsBigInt());
@@ -23460,7 +23496,7 @@ static QoreValue evalDivideEquals(const QoreValue& lvalue, const QoreValue& righ
     }
 
     if (right.getType() == NT_NUMBER || v.getType() == NT_NUMBER) {
-        if (right.getAsFloat() == 0.0) {
+        if (qore_number_divisor_is_zero(right)) {
             xsink->raiseException("DIVISION-BY-ZERO",
                 "division by zero in arbitrary-precision numeric expression");
             return QoreValue();
@@ -23542,9 +23578,10 @@ QoreValue QoreIRInterpreter::evalLValueBinary(QoreIROpcode op, const QoreValue& 
             if (!v) {
                 return QoreValue();
             }
+            // a divisor of zero raises DIVISION-BY-ZERO, as for % (qore#1034)
             if (!val) {
-                v.assign(0ll, "<%= operator>");
-                return 0ll;
+                qore_raise_modulo_by_zero(xsink);
+                return QoreValue();
             }
             return v.modulaEqualsBigInt(val, "<%= operator>");
         }

@@ -1,0 +1,110 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - fork() while another thread is in a debugger callback, and the teardown in the child
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%allow-debugger
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class ForkDebugCallbackTest
+
+#! a debugger whose attach callback holds the thread that runs it, if a queue is set
+class Holder inherits DebugProgram {
+    public {
+        *Queue ready;
+        *Queue release;
+    }
+
+    onAttach(ProgramControl pgm, reference rs, reference rts) {
+        rs = DebugRun;
+        if (ready) {
+            Queue r = ready;
+            remove ready;
+            r.push(True);
+            release.get();
+        }
+    }
+    onDetach(ProgramControl pgm, reference rs, reference rts) {
+    }
+    onStep(ProgramControl pgm, int bid, *int sid, *int bkid, reference flow, reference rs, reference rts) {
+    }
+    onFunctionEnter(ProgramControl pgm, int sid, reference rs, reference rts) {
+    }
+    onFunctionExit(ProgramControl pgm, int sid, reference result, reference rs, reference rts) {
+    }
+    onException(ProgramControl pgm, int sid, hash<auto> ex, reference dismiss, reference rs, reference rts) {
+    }
+    onExit(ProgramControl pgm, int sid, reference result, reference rs, reference rts) {
+    }
+}
+
+#! A child process deletes a Program and its debugger while a thread of the parent was in a debugger callback (#6404)
+/** The counts of the debugger calls in progress (of the Program, and of the debug program) kept the calls of the
+    parent's threads, which do not exist in the child: the deletion of the Program, or of the debug program, waited
+    for them forever.  The child reports the deletions through a pipe; the parent waits for its report for a bounded
+    time and ends a child that hangs.
+*/
+class ForkDebugCallbackTest inherits QUnit::Test {
+    public {
+        const Timeout = 30s;
+    }
+
+    constructor() : QUnit::Test("ForkDebugCallbackTest", "1.0") {
+        addTestCase("fork() while another thread is in a debugger callback", \forkInCallbackTest());
+        set_return_value(main());
+    }
+
+    forkInCallbackTest() {
+        if (!Option::HAVE_FORK) {
+            testSkip("fork() is not available");
+        }
+        hash<PipeInfo> result = File::getPipe();
+        Program pgm(PO_NEW_STYLE | PO_ALLOW_DEBUGGER);
+        pgm.parse("int sub f() { return 1; }", "fork-debug-callback");
+        Holder d();
+        d.ready = new Queue();
+        d.release = new Queue();
+        Queue release = d.release;
+        Queue ready = d.ready;
+        d.addProgram(pgm.getProgram());
+        # a thread enters the Program, and the debugger's attach callback holds it
+        Counter running(1);
+        background sub () {
+            on_exit running.dec();
+            pgm.callFunction("f");
+        }();
+        assertTrue(ready.get(Timeout));
+        int pid = fork();
+        if (!pid) {
+            list<string> r;
+            try {
+                delete pgm;
+                r += "program deleted";
+                delete d;
+                r += "debugger deleted";
+            } catch (hash<ExceptionInfo> ex) {
+                r += ex.err;
+            }
+            result.write.write(r.join(","));
+            Qore::exit(0);
+        }
+        assertGt(0, pid);
+        result.write.close();
+        release.push(True);
+        assertEq(0, running.waitForZero(Timeout));
+        string child_result;
+        # a child that hangs is ended: the test reports the missing deletions
+        if (result.read.isDataAvailable(Timeout)) {
+            while (*binary data = result.read.readBinary(4096)) {
+                child_result += data.toString();
+            }
+        } else {
+            kill(pid, SIGKILL);
+        }
+        assertEq("program deleted,debugger deleted", child_result);
+        d.removeProgram(pgm.getProgram());
+    }
+}

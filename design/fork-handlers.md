@@ -31,6 +31,7 @@ Each handler belongs to one rank (the lock order below) and one mode:
 - `TRY` and `RESET` are for locks that can be held for a long time or across operations that wait for other threads
   (module loading, LLVM compilation, running compiled initializers): waiting for them before `fork()` could
   deadlock the parent, which before these handlers could always fork.
+- A leaf lock that a handled object owns and that its holders take only briefly, with no lock order of its own (a Program's parse option lock `po_mutex` and the condition of the copies of its external data, the parse option mask locks of the module manager and of each module, the debug lock of the thread list's records of cancellable waits), is initialized again in the child by the handler of its owner, which also drops the state of the parent's other threads (ex: their copies of a Program's external data in progress).
 - Conditions bound to a lock are initialized again in the child too: their waiters do not exist there, and a glibc
   condition variable with waiters that never return can block a later signal or broadcast.
 - A plain mutex (`std::mutex`, a non-recursive `QoreThreadLock`) that the forking thread acquired before `fork()` is
@@ -66,7 +67,7 @@ cannot deadlock with a thread that keeps to the order.
 | 500 | thread list (`thread_list.lck`) | ACQUIRE | condition waker, stack lock |
 | 510 | condition waker (`cond_waker.lck`) | ACQUIRE | — |
 | 520 | stack lock (`stack_lck`) | ACQUIRE | — (only `pthread_create()`) |
-| 1000 | leaf locks: caches and registries (among them the JIT caches and queue, the AOT pending constants, the AOT regex cache, the registry of the native fast entries of AOT modules, the content hashes of the sources of linked AOT modules, the DBI object registry, the sandbox watchdog's deadline map, the insertion into the value sets of the parse options of Programs (`qore_parse_options_values_mutex`, held only while a value is inserted: a Program's options lock is held across checks and parses and cannot be acquired before `fork()`), the stripe locks of the records of Programs that other threads change at run time (`program_thread_containers`: the containers that record the threads of Programs, the records of a thread's Programs and of its thread-local data, the records of Programs that change at run time and at module load, their breakpoints, and the Programs of debug programs; held only while one of them is changed, under the owner's lock: these locks are per object, and held across waits, user code or other locks, so they cannot be acquired before `fork()`), and the QUIC idle-close test hook of debug builds), and the leaf locks of modules (`QFR_MODULE_LEAF`: the i18n locale data fallbacks, the logger_bin event start time and id sequence, the ml ONNX provider list) | ACQUIRE | environment, debug output, allocation tracking |
+| 1000 | leaf locks: caches and registries (among them the JIT caches and queue, the AOT pending constants, the AOT regex cache, the registry of the native fast entries of AOT modules, the content hashes of the sources of linked AOT modules, the DBI object registry, the sandbox watchdog's deadline map, the insertion into the value sets of the parse options of Programs (`qore_parse_options_values_mutex`, held only while a value is inserted: a Program's options lock is held across checks and parses and cannot be acquired before `fork()`), the stripe locks of the records of Programs that other threads change at run time (`program_thread_containers`: the containers that record the threads of Programs, the records of a thread's Programs and of its thread-local data, the records of Programs that change at run time and at module load, their breakpoints, and the Programs of debug programs; held only while one of them is changed, under the owner's lock: these locks are per object, and held across waits, user code or other locks, so they cannot be acquired before `fork()`), the set of Programs left allocated at exit (`left_programs`), the count of thread data of debug builds (`tpd_live_count`), and the QUIC idle-close test hook of debug builds), and the leaf locks of modules (`QFR_MODULE_LEAF`: the i18n locale data fallbacks, the logger_bin event start time and id sequence, the ml ONNX provider list) | ACQUIRE | environment, debug output, allocation tracking |
 | 1100 | LLVM target initialization (`qore_llvm_initialize_targets()`): held while LLVM registers its targets, once per process | ACQUIRE | — |
 | 1500 | environment (`SystemEnvironment`) | ACQUIRE | debug output, allocation tracking |
 | 1900 | debug output (`printd()`) | ACQUIRE | allocation tracking |
@@ -285,9 +286,13 @@ Besides the locks:
   without its reference or one that refers to deleted data.  The entry of a thread in a Program being cleared stays,
   without data, while its data is deleted, and leaves the Program right before the references that it records are
   released; the clearing thread gets new data if it enters the Program again while destructors run.
-- **Debug programs**: each debug program's lock is initialized again, its count of calls in progress keeps only the
+- **Debug programs**: every debug program is registered (with the Program registry's lock) and made consistent once,
+  also one attached to no Program: its lock is initialized again, its count of calls in progress keeps only the
   forking thread's, and its Programs are consistent (they and each Program's debug program are changed together
-  under its stripe lock).
+  under its stripe lock).  Both counts of calls into a debug program (the Program's and the debug program's) change
+  only through `AutoQoreCounterDec`, which records the hold of the calling thread (`QoreForkCountedHold`, a list on the
+  thread's stack, which allocates nothing) when it increments the count, not when it is created: a caller that
+  increments it only once it has found a debug program (`getDebugProgram()`) is not counted before.
 - **Signal manager**: after a `fork()` other than Qore's (which stops the signal thread before and restarts it
   after), the signal thread does not exist in the child; its state is cleared, and the next signal handler starts a
   new one. A block set by another thread's Qore `fork()` is lifted.

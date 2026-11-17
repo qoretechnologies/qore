@@ -96,7 +96,8 @@ static void call_async_thread(ExceptionSink* xsink, void* arg) {
     // Set up program context for the call reference
     QoreProgram* pgm = params->code->getProgram();
     if (pgm) {
-        QoreExternalProgramContextHelper pch(xsink, pgm);
+        // an internal entry: a C++ exception of the entry is raised in xsink (issue #6255)
+        ProgramThreadCountContextHelper pch(xsink, pgm, true);
         if (!*xsink) {
             QoreValue rv = params->code->invoke(params->args, xsink);
             if (*xsink) {
@@ -1616,7 +1617,8 @@ static void parallel_exec_worker(ExceptionSink* xsink, void* arg) {
         return;
     }
 
-    QoreExternalProgramContextHelper pch(xsink, pgm);
+    // an internal entry: a C++ exception of the entry is raised in xsink (issue #6255)
+    ProgramThreadCountContextHelper pch(xsink, pgm, true);
     if (*xsink) {
         parallel_capture_exception(state, xsink);
         state->counter.dec(xsink);

@@ -2804,7 +2804,7 @@ const QoreProgramLocation* qore_aot_read_source_location(const QoreAOTBinaryRead
         QoreProgram* pgm) {
     int start_line = qore_aot_valid_line(qore_aot_read_line(reader, ptr));
     int end_line = qore_aot_valid_line(qore_aot_read_line(reader, ptr));
-    int64_t offset = QoreAOTBinaryReader::readI64(ptr);
+    int offset = qore_aot_valid_source_offset(QoreAOTBinaryReader::readI64(ptr));
     const char* file = reader.readStringRef(ptr);
     const char* source = reader.readStringRef(ptr);
     if (start_line <= 0 || !file || !*file || !pgm) {
@@ -2815,7 +2815,7 @@ const QoreProgramLocation* qore_aot_read_source_location(const QoreAOTBinaryRead
     qore_program_private* pp = qore_program_private::get(*pgm);
     const char* interned_file = pp->addString(file);
     const char* interned_source = source && *source ? pp->addString(source) : nullptr;
-    QoreProgramLocation tmp(interned_file, start_line, end_line, interned_source, static_cast<int>(offset));
+    QoreProgramLocation tmp(interned_file, start_line, end_line, interned_source, offset);
     return pp->getLocation(tmp, start_line, end_line);
 }
 
@@ -2944,7 +2944,7 @@ class ExprTreeDeserializer {
 
     std::string readStr() {
         uint16_t len = readU16();
-        if (len == 0 || ptr + len > end) {
+        if (len == 0 || end < ptr || len > static_cast<size_t>(end - ptr)) {
             if (len > 0) {
                 failed = true;
                 ptr = end; // mark exhausted
@@ -3451,6 +3451,14 @@ static QoreAOTContext* buildContextFromSlotMap(
     aot_slot_resolve_error.clear();
     aot_expr_read_error.clear();
 
+    // every read of the entry is checked against its end, or that of the section (qore#6265); the entry is read
+    // here and in the readers of the expressions and the closure IR that it holds, which read only the entry
+    const uint8_t* bound_end = entry_end ? entry_end : end;
+    std::optional<QoreAOTSectionBounds> bounds;
+    if (bound_end) {
+        bounds.emplace(ptr, bound_end > ptr ? static_cast<uint32_t>(bound_end - ptr) : 0);
+    }
+
     // Read the per-function slot map header
     // Format: name_ref(u32), num_locals(u16), num_globals(u16), num_exprs(u16),
     //         num_stmts(u16), num_regex_cases(u16), num_body_locals(u16), has_unsupported(u8),
@@ -3474,7 +3482,15 @@ static QoreAOTContext* buildContextFromSlotMap(
             setBuildError("slot map entry ends before its count of LValuePath instructions");
             return nullptr;
         }
-        num_lv_path_insts = static_cast<int>(QoreAOTBinaryReader::readU32(ptr));
+        uint32_t lv_path_count = QoreAOTBinaryReader::readU32(ptr);
+        // an instruction has 7 bytes at least: a count that the entry cannot hold is refused before the context
+        // allocates for it (qore#6265)
+        if (lv_path_count > static_cast<uint32_t>(INT_MAX) || (bounds && !bounds->fits(lv_path_count, 7, ptr))) {
+            setBuildError("truncated SLOT_MAPS entry: " + std::to_string(lv_path_count)
+                + " LValuePath instructions");
+            return nullptr;
+        }
+        num_lv_path_insts = static_cast<int>(lv_path_count);
     }
     int aot_num_regex_cases = qore_aot_func_num_regex_cases(aot_func);
     printd(5, "AOT buildCtx '%s': num_lv_path=%d (from binary)\n", name, num_lv_path_insts);
@@ -4480,8 +4496,9 @@ static QoreAOTContext* buildContextFromSlotMap(
                 ref1 = reader.readStringRef(ptr);   // class_path
                 ref2 = reader.readStringRef(ptr);   // method_name
                 const QoreMethod* method = nullptr;
+                const QoreClass* qc = nullptr;
                 if (ref1 && *ref1) {
-                    const QoreClass* qc = findAOTClassByPath(pgm, ref1, false);
+                    qc = findAOTClassByPath(pgm, ref1, false);
                     if (qc && ref2 && *ref2) {
                         method = findAOTStaticMethod(qc, ref2);
                         if (!method) {
@@ -4491,7 +4508,7 @@ static QoreAOTContext* buildContextFromSlotMap(
                 }
                 if (method) {
                     ctx->exprs[i] = toBitsNB(QoreValue(
-                        new LocalStaticMethodCallReferenceNode(&loc_builtin, method)));
+                        new LocalStaticMethodCallReferenceNode(&loc_builtin, method, qc)));
                 } else {
                     printd(0, "AOT v2: cannot resolve static method ref '%s::%s'\n",
                         ref1 ? ref1 : "", ref2 ? ref2 : "");
@@ -4704,7 +4721,10 @@ static QoreAOTContext* buildContextFromSlotMap(
                             if (ref3 && *ref3) {
                                 QoreAOTTypeResolver type_resolver(pgm);
                                 std::string type_error;
-                                receiver_type_info = type_resolver.resolve(ref3, type_error);
+                                // the receiver of a call in a generic function can have its type parameters
+                                // (B<U>::m() in sub f<U>()), which only the function's signature resolves (qore#6308)
+                                receiver_type_info = type_resolver.resolveForSignature(ref3, type_error,
+                                    qore_aot_get_type_param_owner());
                                 if (!receiver_type_info || !type_error.empty()) {
                                     if (trace_slot_reg) {
                                         fprintf(stderr, "[aot-slot-reg] '%s': expr[%d] STATIC_METHOD_CALL cannot "
@@ -5206,7 +5226,12 @@ static QoreAOTContext* buildContextFromSlotMap(
             }
             case AOTExprKind::IMPLICIT_ARG: {
                 int64_t offset = QoreAOTBinaryReader::readI64(ptr);
-                int ctor_offset = offset >= 0 ? static_cast<int>(offset + 1) : static_cast<int>(offset);
+                int ctor_offset;
+                if (!qore_aot_implicit_arg_ctor_offset(offset, ctor_offset)) {
+                    aot_slot_resolve_error = "invalid implicit argument offset " + std::to_string(offset);
+                    has_unsupported = true;
+                    continue;
+                }
                 ctx->exprs[i] = toBitsNB(QoreValue(
                     new QoreImplicitArgumentNode(&loc_builtin, ctor_offset)));
                 continue;
@@ -5897,6 +5922,11 @@ static QoreAOTContext* buildContextFromSlotMap(
                 const char* ctx_name = reader.readStringRef(ptr);
                 const char* member = reader.readStringRef(ptr);
                 int64_t stack_offset = QoreAOTBinaryReader::readI64(ptr);
+                if (!qore_aot_valid_context_stack_offset(stack_offset)) {
+                    aot_slot_resolve_error = "invalid context stack offset " + std::to_string(stack_offset);
+                    has_unsupported = true;
+                    continue;
+                }
 
                 std::string spec = ctx_name ? ctx_name : "";
                 spec += ":";
@@ -6947,7 +6977,7 @@ static QoreAOTContext* buildContextFromSlotMap(
             for (uint32_t i = 0; i < num_stmt_locs && ptr < loc_boundary; ++i) {
                 int start_line = qore_aot_valid_line(qore_aot_read_line(reader, ptr));
                 int end_line = qore_aot_valid_line(qore_aot_read_line(reader, ptr));
-                int64_t offset = QoreAOTBinaryReader::readI64(ptr);
+                int offset = qore_aot_valid_source_offset(QoreAOTBinaryReader::readI64(ptr));
                 const char* loc_file = reader.readStringRef(ptr);
                 const char* loc_source = reader.readStringRef(ptr);
                 // a non-positive start line carries no usable statement location
@@ -6959,11 +6989,11 @@ static QoreAOTContext* buildContextFromSlotMap(
                 const char* interned_source = loc_source && *loc_source
                     ? pp->addString(loc_source) : nullptr;
                 if (pp->findIndexedStatementForLocation(interned_file, interned_source,
-                        start_line, static_cast<int>(offset))) {
+                        start_line, offset)) {
                     continue;
                 }
                 QoreProgramLocation tmp(interned_file, start_line, end_line,
-                    interned_source, static_cast<int>(offset));
+                    interned_source, offset);
                 const QoreProgramLocation* loc = pp->getLocation(tmp, start_line, end_line);
                 StatementBlock* stmt = new StatementBlock(pp, loc);
                 qore_program_private::registerStatement(pgm, stmt, true);
@@ -7107,6 +7137,13 @@ static QoreAOTContext* buildContextFromSlotMap(
         }
         setBuildError((closure_ir_error.empty() ? std::string("closure IR missing") : closure_ir_error)
             + "; source fallback is disabled");
+        delete ctx;
+        return nullptr;
+    }
+
+    // a read past the end of the entry gave 0: the context is not used (qore#6265)
+    if (bounds && bounds->overrun()) {
+        setBuildError("truncated SLOT_MAPS entry");
         delete ctx;
         return nullptr;
     }
@@ -7293,6 +7330,9 @@ std::unique_ptr<QoreIRFunction> deserializeIRFunction(
         const std::unordered_map<uint32_t, LocalVar*>* container_slot_locals) {
     // the handler functions read in the IR of the function (#6087)
     QoreAOTSharedHandlerScope shared_handler_scope;
+    // every read of the IR, also by the readers of its instructions and expressions, which read the IR inline, is
+    // checked against its end (qore#6265)
+    QoreAOTSectionBounds ir_bounds(ptr, end > ptr ? static_cast<uint32_t>(end - ptr) : 0);
     const uint8_t* func_start = ptr;
     auto remaining = [&ptr, end]() -> size_t {
         return end >= ptr ? static_cast<size_t>(end - ptr) : 0;
@@ -7332,6 +7372,18 @@ std::unique_ptr<QoreIRFunction> deserializeIRFunction(
         return nullptr;
     }
     uint32_t max_local_slot_id = QoreAOTBinaryReader::readU32(ptr);
+    // the interpreter allocates its frames for the ids: an id that the IR cannot hold is refused (qore#6265)
+    {
+        size_t ir_size = end > func_start ? static_cast<size_t>(end - func_start) : 0;
+        if (max_value_id >= UINT32_MAX || max_value_id > ir_size) {
+            error = "invalid IR function maximum value id " + std::to_string(max_value_id);
+            return nullptr;
+        }
+        if (max_local_slot_id >= UINT32_MAX || max_local_slot_id > ir_size) {
+            error = "invalid IR function maximum local slot id " + std::to_string(max_local_slot_id);
+            return nullptr;
+        }
+    }
     if (!need(4, "num_guards")) {
         return nullptr;
     }
@@ -7501,6 +7553,14 @@ std::unique_ptr<QoreIRFunction> deserializeIRFunction(
         if (has_local_binding) {
             binding = static_cast<AOTIRLocalBinding>(QoreAOTBinaryReader::readU8(ptr));
             binding_index = QoreAOTBinaryReader::readU32(ptr);
+        }
+        // the frames and the closure locals are allocated for the maximum local slot id (qore#6265)
+        if (slot_id > max_local_slot_id) {
+            error = "malformed IR function '";
+            error += display_func_name;
+            error += "': local slot " + std::to_string(slot_id) + " is beyond the maximum local slot id "
+                + std::to_string(max_local_slot_id);
+            return nullptr;
         }
 
         if (!lname || !*lname) {
@@ -7862,6 +7922,23 @@ std::unique_ptr<QoreIRFunction> deserializeIRFunction(
                     + ": " + error;
                 return nullptr;
             }
+            // the interpreter indexes its frame by the value ids of the instruction; its frame holds the values up to
+            // the maximum value id, or 128 values if the IR gives none (QoreIRInterpreter) (qore#6265)
+            {
+                uint32_t max_id = func->max_value_id ? func->max_value_id : 127;
+                bool ids_ok = !inst->result.isValid() || inst->result.id <= max_id;
+                for (const QoreIRValue& op : inst->operands) {
+                    if (op.isValid() && op.id > max_id) {
+                        ids_ok = false;
+                        break;
+                    }
+                }
+                if (!ids_ok) {
+                    error = "instruction " + std::to_string(j) + " in block " + std::to_string(i)
+                        + " has a value id beyond the maximum value id " + std::to_string(max_id);
+                    return nullptr;
+                }
+            }
             if (const char* trace = disable_trace_cache
                     ? live_trace.emplace("QORE_AOT_TRACE_IR_DESER").c_str() : cached_trace) {
                 bool match = !*trace || (func->name.find(trace) != std::string::npos);
@@ -7876,6 +7953,11 @@ std::unique_ptr<QoreIRFunction> deserializeIRFunction(
         }
     }
 
+    // a read past the end of the IR gave 0: the function is not used (qore#6265)
+    if (ir_bounds.overrun()) {
+        error = "truncated IR function";
+        return nullptr;
+    }
     return func;
 }
 
@@ -8412,7 +8494,22 @@ static void registerAOTFunctionsFromSlotMaps(
     const uint8_t* slot_maps_start = ptr;
     const uint8_t* end = ptr + sec->size;
 
+    // every read of the section is checked against its end (qore#6265): an entry has at least its size and the
+    // reference of its name
+    if (sec->size < 4) {
+        if (registration_errors) {
+            registration_errors->push_back("truncated SLOT_MAPS section: no function count");
+        }
+        return;
+    }
     uint32_t num_funcs = QoreAOTBinaryReader::readU32(ptr);
+    if (num_funcs > static_cast<size_t>(end - ptr) / 8) {
+        if (registration_errors) {
+            registration_errors->push_back("truncated SLOT_MAPS section: " + std::to_string(num_funcs)
+                + " functions do not fit in the section");
+        }
+        return;
+    }
     const bool lazy_contexts = reader.getHeader().version >= QORE_AOT_LAZY_CONTEXT_FLAGS_VERSION
         && debug_metadata
         && !(pgm->getParseOptions() & PO_ALLOW_DEBUGGER)
@@ -8468,10 +8565,16 @@ static void registerAOTFunctionsFromSlotMaps(
 
     for (uint32_t f = 0; f < num_funcs; ++f) {
         const uint8_t* entry_start = ptr;
+        if (static_cast<size_t>(end - ptr) < 4) {
+            if (registration_errors) {
+                registration_errors->push_back("truncated SLOT_MAPS section: entry " + std::to_string(f)
+                    + " has no size");
+            }
+            return;
+        }
         // Read entry size prefix to know where next entry should end
         uint32_t entry_size = QoreAOTBinaryReader::readU32(ptr);
-        const uint8_t* entry_end = ptr + entry_size;
-        if (entry_end < ptr || entry_end > end) {
+        if (entry_size < 4 || entry_size > static_cast<size_t>(end - ptr)) {
             std::string msg = "malformed SLOT_MAPS entry ";
             msg += std::to_string(f);
             msg += ": size ";
@@ -8483,6 +8586,7 @@ static void registerAOTFunctionsFromSlotMaps(
             }
             return;
         }
+        const uint8_t* entry_end = ptr + entry_size;
 
         // Peek at function name (comes after size prefix)
         const char* func_name = reader.readStringRef(ptr);
@@ -9992,10 +10096,15 @@ extern "C" DLLEXPORT int qore_aot_run_v2(
                     if (sm_base) {
                         const uint8_t* sm_ptr = sm_base;
                         const uint8_t* sm_end = sm_ptr + sm_sec->size;
-                        uint32_t sm_count = QoreAOTBinaryReader::readU32(sm_ptr);
-                        for (uint32_t fi = 0; fi < sm_count; ++fi) {
+                        // every read of the scan is checked against the end of the section (qore#6265)
+                        uint32_t sm_count = sm_sec->size >= 4 ? QoreAOTBinaryReader::readU32(sm_ptr) : 0;
+                        for (uint32_t fi = 0; fi < sm_count && static_cast<size_t>(sm_end - sm_ptr) >= 8; ++fi) {
                             const uint8_t* entry_start = sm_ptr;
                             uint32_t entry_size = QoreAOTBinaryReader::readU32(sm_ptr);
+                            // an entry starts with the reference of its name and ends in the section
+                            if (entry_size < 4 || entry_size > static_cast<size_t>(sm_end - sm_ptr)) {
+                                break;
+                            }
                             const char* entry_name = deserializer.getReader().readStringRef(sm_ptr);
                             const uint8_t* entry_end = entry_start + 4 + entry_size;
                             sm_ptr = entry_start + 4;
@@ -10099,10 +10208,15 @@ extern "C" DLLEXPORT int qore_aot_run_v2(
                     if (sm_base) {
                         const uint8_t* sm_ptr = sm_base;
                         const uint8_t* sm_end = sm_ptr + sm_sec->size;
-                        uint32_t sm_count = QoreAOTBinaryReader::readU32(sm_ptr);
-                        for (uint32_t fi = 0; fi < sm_count; ++fi) {
+                        // every read of the scan is checked against the end of the section (qore#6265)
+                        uint32_t sm_count = sm_sec->size >= 4 ? QoreAOTBinaryReader::readU32(sm_ptr) : 0;
+                        for (uint32_t fi = 0; fi < sm_count && static_cast<size_t>(sm_end - sm_ptr) >= 8; ++fi) {
                             const uint8_t* entry_start = sm_ptr;
                             uint32_t entry_size = QoreAOTBinaryReader::readU32(sm_ptr);  // consume size prefix
+                            // an entry starts with the reference of its name and ends in the section
+                            if (entry_size < 4 || entry_size > static_cast<size_t>(sm_end - sm_ptr)) {
+                                break;
+                            }
                             const char* entry_name = deserializer.getReader().readStringRef(sm_ptr);  // peek at name
                             const uint8_t* entry_end = entry_start + 4 + entry_size;
                             sm_ptr = entry_start + 4;  // reset: after size prefix, before name
@@ -11902,10 +12016,15 @@ extern "C" DLLEXPORT int qore_aot_run_v3(
                     if (sm_base) {
                         const uint8_t* sm_ptr = sm_base;
                         const uint8_t* sm_end = sm_ptr + sm_sec->size;
-                        uint32_t sm_count = QoreAOTBinaryReader::readU32(sm_ptr);
-                        for (uint32_t fi = 0; fi < sm_count; ++fi) {
+                        // every read of the scan is checked against the end of the section (qore#6265)
+                        uint32_t sm_count = sm_sec->size >= 4 ? QoreAOTBinaryReader::readU32(sm_ptr) : 0;
+                        for (uint32_t fi = 0; fi < sm_count && static_cast<size_t>(sm_end - sm_ptr) >= 8; ++fi) {
                             const uint8_t* entry_start = sm_ptr;
                             uint32_t entry_size = QoreAOTBinaryReader::readU32(sm_ptr);
+                            // an entry starts with the reference of its name and ends in the section
+                            if (entry_size < 4 || entry_size > static_cast<size_t>(sm_end - sm_ptr)) {
+                                break;
+                            }
                             const char* entry_name = deserializer.getReader().readStringRef(sm_ptr);
                             const uint8_t* entry_end = entry_start + 4 + entry_size;
                             sm_ptr = entry_start + 4;
@@ -12009,10 +12128,15 @@ extern "C" DLLEXPORT int qore_aot_run_v3(
                     if (sm_base) {
                         const uint8_t* sm_ptr = sm_base;
                         const uint8_t* sm_end = sm_ptr + sm_sec->size;
-                        uint32_t sm_count = QoreAOTBinaryReader::readU32(sm_ptr);
-                        for (uint32_t fi = 0; fi < sm_count; ++fi) {
+                        // every read of the scan is checked against the end of the section (qore#6265)
+                        uint32_t sm_count = sm_sec->size >= 4 ? QoreAOTBinaryReader::readU32(sm_ptr) : 0;
+                        for (uint32_t fi = 0; fi < sm_count && static_cast<size_t>(sm_end - sm_ptr) >= 8; ++fi) {
                             const uint8_t* entry_start = sm_ptr;
                             uint32_t entry_size = QoreAOTBinaryReader::readU32(sm_ptr);  // consume size prefix
+                            // an entry starts with the reference of its name and ends in the section
+                            if (entry_size < 4 || entry_size > static_cast<size_t>(sm_end - sm_ptr)) {
+                                break;
+                            }
                             const char* entry_name = deserializer.getReader().readStringRef(sm_ptr);  // peek at name
                             const uint8_t* entry_end = entry_start + 4 + entry_size;
                             sm_ptr = entry_start + 4;  // reset: after size prefix, before name

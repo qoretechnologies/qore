@@ -39,6 +39,7 @@
 #include "qore/QoreSSLPrivateKey.h"
 #include "qore/intern/QC_Queue.h"
 #include "qore/intern/QoreAsyncIoLogger.h"
+#include "qore/intern/ql_debug.h"
 
 #include <exception>
 
@@ -110,9 +111,16 @@ void Http3ServerPollOperationPriv::cleanup(ExceptionSink* xsink) {
         cached_request->deref(xsink);
         cached_request = nullptr;
     }
-    if (error_info) {
-        error_info->deref(xsink);
+    // the recorded error is taken under the lock that its readers hold, and released after it
+    QoreHashNode* old_error_info;
+    {
+        AutoLocker al(error_lock);
+        old_error_info = error_info;
         error_info = nullptr;
+        has_error.store(false, std::memory_order_release);
+    }
+    if (old_error_info) {
+        old_error_info->deref(xsink);
     }
     if (sock_obj) {
         sock_obj->deref(xsink);
@@ -463,12 +471,35 @@ QoreHashNode* Http3ServerPollOperationPriv::handleDraining(ExceptionSink* xsink)
 
 void Http3ServerPollOperationPriv::setError(const char* err, const char* desc,
         ExceptionSink* xsink) {
-    if (!error_info) {
-        error_info = new QoreHashNode(autoTypeInfo);
-        error_info->setKeyValue("err", new QoreStringNode(err), xsink);
-        error_info->setKeyValue("desc", new QoreStringNode(desc), xsink);
+    {
+        AutoLocker al(error_lock);
+        if (!error_info) {
+            // the hash is complete before it is recorded
+            ReferenceHolder<QoreHashNode> info(new QoreHashNode(autoTypeInfo), xsink);
+            info->setKeyValue("err", new QoreStringNode(err), xsink);
+            info->setKeyValue("desc", new QoreStringNode(desc), xsink);
+#ifdef DEBUG
+            // a test holds the thread here, in the critical section, to read the error from another thread
+            qore_dbg_http_hold(QoreDbgHttpHoldPoint::ErrorRecord, *self);
+#endif
+            error_info = info.release();
+            has_error.store(true, std::memory_order_release);
+        }
     }
     h3_state.store(H3State::CLOSED, std::memory_order_release);
+}
+
+bool Http3ServerPollOperationPriv::hasError() const {
+    return has_error.load(std::memory_order_acquire);
+}
+
+QoreHashNode* Http3ServerPollOperationPriv::getErrorInfo() const {
+    // a read that finds the lock taken releases a thread that a test holds while it records the error
+    QoreRecordedValueReadLocker al(error_lock, *self);
+    if (error_info) {
+        error_info->ref();
+    }
+    return error_info;
 }
 
 void Http3ServerPollOperationPriv::abort(ExceptionSink* xsink) {
@@ -1447,14 +1478,15 @@ nothing Http3ServerPollOperation::registerStreamListener(int session_id, int str
     // Mirror the registration in the priv so the I/O thread can queue a close
     // wakeup for this stream when its QUIC session dies (the QoreObject member
     // hash above is not reachable from closeSessionStreams()).
-    priv->registerStreamCloseNotify(skey);
+    priv->registerStreamCloseNotify(session_id, skey);
 
     // Replay a notification this listener was not yet registered to receive: either data
     // arrived / is queued (consumePendingOrQueueReady()), or the peer already reset the
-    // stream.  The reset case is not covered by the pending flag — a reset is a one-shot
-    // transport event with no further wakeups, so a listener registering afterwards would
-    // never hear about it; deliverSessionLifecycleEvents() records the reset for exactly
-    // this check.  Mirrors Http2PollOperation::registerStreamListener().
+    // stream, or its QUIC session closed.  The reset case is not covered by the pending flag — a
+    // reset is a one-shot transport event with no further wakeups, so a listener registering
+    // afterwards would never hear about it; deliverSessionLifecycleEvents() records the reset for
+    // exactly this check, and registerStreamCloseNotify() records a session that closed before the
+    // listener registered (qore#6202).  Mirrors Http2PollOperation::registerStreamListener().
     if (!*xsink && listener_obj
             && (priv->consumePendingOrQueueReady(skey) || priv->isStreamPeerClosed(skey))) {
         ASYNC_IO_TRACE("Http3ServerPollOperation::registerStreamListener REPLAY skey='%s' listener=%p\n",

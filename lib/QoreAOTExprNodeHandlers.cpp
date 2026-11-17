@@ -344,6 +344,11 @@ static QoreValue read_node_EN_COMPLEX_CONTEXT_REF(AOTExprNodeReadCtx& ctx) {
     std::string member = readStr(ctx.ptr, ctx.end);
     uint32_t stack_offset = readU32(ctx.ptr, ctx.end);
     readU16(ctx.ptr, ctx.end);
+    if (!qore_aot_valid_context_stack_offset(stack_offset)) {
+        printd(0, "AOT EXPR_TREE: invalid context stack offset %u\n", stack_offset);
+        ctx.failed = true;
+        return QoreValue();
+    }
 
     std::string spec = name + ":" + member;
     auto* node = new ComplexContextrefNode(&loc_builtin, strdup(spec.c_str()));
@@ -1902,7 +1907,7 @@ static QoreValue read_node_EN_STATIC_METH_REF(AOTExprNodeReadCtx& ctx) {
             m = qore_aot_find_loading_method(qc, method_name.c_str(), true);
         }
         if (m) {
-            return QoreValue(new LocalStaticMethodCallReferenceNode(&loc_builtin, m));
+            return QoreValue(new LocalStaticMethodCallReferenceNode(&loc_builtin, m, qc));
         }
     }
     printd(0, "AOT EXPR_TREE: cannot resolve static method ref '%s::%s'\n",
@@ -1987,7 +1992,12 @@ static QoreValue read_node_EN_IMPLICIT_ARG(AOTExprNodeReadCtx& ctx) {
     uint16_t raw = readU16(ctx.ptr, ctx.end);
     memcpy(&offset, &raw, sizeof(offset));
     readU16(ctx.ptr, ctx.end);  // 0 children
-    int ctor_offset = (offset >= 0) ? (offset + 1) : offset;
+    int ctor_offset;
+    if (!qore_aot_implicit_arg_ctor_offset(offset, ctor_offset)) {
+        printd(0, "AOT EXPR_TREE: invalid implicit argument offset %d\n", offset);
+        ctx.failed = true;
+        return QoreValue();
+    }
     return QoreValue(new QoreImplicitArgumentNode(&loc_builtin, ctor_offset));
 }
 

@@ -1,0 +1,89 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - the probes run in child processes that set their own execution mode or none, and in executables compiled with qcc
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires FsUtil
+%requires QUnit
+%requires ../../TestInterpreter.qm
+
+%exec-class PrivateInternalRedeclaredMemberTest
+
+#! The initializer of a private:internal member writes its own storage when a class two levels below declares the member again (qore#6393)
+/** A class that declares a member again that a base class declares as well takes the member's storage contexts from
+    the base class: when the base class declares the member again over a private:internal member of its own base
+    class, the private:internal member is stored separately.  These contexts were not taken, so in a class two or more
+    levels below the class with the private:internal member (or in a class that inherits the member from two base
+    classes), the member's initializer wrote the public member, and the methods of its class saw it unset.
+
+    A member can only be declared again without a type, which %modern code does not allow, so the probes
+    (private-internal-redeclared-member/probes.q, with old-style and new-style options) run with AST execution only:
+    they run in child processes in the default mode and with each execution mode, where IR, JIT and tiered execution
+    refuse the code (or must give the same result if they ever run it), and qcc refuses to compile it (or its
+    executable must give the same result).
+*/
+class PrivateInternalRedeclaredMemberTest inherits QUnit::Test {
+    public {
+        const ExecModes = ("ast", "ir", "jit", "tiered");
+
+        const Expected = "old B: a=null A=1
+old C: a=null A=1
+old C after setA(99): a=null A=99
+old D: a=null A=1
+old E: a=null A=1
+old F: a=5 A=1
+old PC: p=null PA=\"pa\"
+old IE: a=\"e\" IC=\"c\" A=1
+old XR: x=null XD2=\"d2\"
+new C: a=null A=1
+new M: a=null A=1 A2=\"a2\"
+new N: a=null A=1 A2=\"a2\"
+new NN: a=null A=1 A2=\"a2\"
+new PI: a=null A=1
+new G: a=null A=1
+";
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+        string probes;
+    }
+
+    constructor() : QUnit::Test("PrivateInternalRedeclaredMember", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = TestInterpreter::qcc_compiler() ?? "qcc";
+        probes = get_script_dir() + DirSep + "private-internal-redeclared-member" + DirSep + "probes.q";
+
+        addTestCase("private:internal members initialized in their own storage", \testModes());
+        set_return_value(main());
+    }
+
+    testModes() {
+        string env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s", libqore_dir, libqore_dir);
+        assertEq(Expected, backquote(sprintf("%s %s %s 2>&1", env, qore_bin, probes)), "default mode");
+        assertEq(Expected, backquote(sprintf("%s %s --exec-mode=ast %s 2>&1", env, qore_bin, probes)), "ast");
+        foreach string mode in (ExecModes[1..]) {
+            string out = backquote(sprintf("%s %s --exec-mode=%s %s 2>&1", env, qore_bin, mode, probes));
+            if (out =~ /EXEC-MODE-ERROR/) {
+                assertTrue(True, mode + " refuses the code");
+            } else {
+                assertEq(Expected, out, mode);
+            }
+        }
+
+        TmpDir tmp("qore-private-internal-redeclared-member-");
+        string exe = tmp.path + DirSep + "probes";
+        string out = backquote(sprintf("QORE_LIBDIR=%s %s -o %s %s 2>&1", libqore_dir, qcc_bin, exe, probes));
+        if (is_file(exe)) {
+            assertEq(Expected, backquote(sprintf("%s %s 2>&1", env, exe)), "qcc");
+        } else {
+            assertRegex("AOT compilation requires %modern", out, "qcc refuses the code");
+        }
+    }
+}

@@ -51,6 +51,8 @@ extern "C" {
 #include <mutex>
 #include <vector>
 
+#include "qore/intern/SyncParseOptions.h"
+
 // parse options set while parsing the module's header (init & del)
 #define MOD_HEADER_PO (PO_LOCKDOWN & ~(PO_NO_MODULES | PO_NO_REFLECTION))
 
@@ -137,7 +139,8 @@ enum ChildModuleStatus : unsigned char {
     CMS_PENDING = 0,    //!< the attach has not been attempted yet
     CMS_ATTACHED,       //!< the child was loaded, or its load was already in progress in this thread
     CMS_ABSENT,         //!< no module with this name could be found in the module path
-    CMS_SKIPPED,        //!< not attempted; module loading is not allowed in the parent module's Program
+    CMS_SKIPPED,        //!< not attempted; the child is blacklisted, or module loading is not allowed in the parent
+                        //!< module's Program
     CMS_FAILED,         //!< the child is present but could not be loaded; the parent is loaded without it
 };
 
@@ -377,6 +380,11 @@ public:
     DLLLOCAL void addParseOptionMask(const QoreModuleParseOptionMask& mask) {
         std::lock_guard<std::mutex> lck(po_mask_lock);
         po_mask |= mask;
+    }
+
+    //! initializes the lock of the parse option mask again in the child of fork(), where its holder may not exist
+    DLLLOCAL void reinitParseOptionMaskLockAfterFork() {
+        new (&po_mask_lock) std::mutex();
     }
 
     //! returns the Program of a user module (source or AOT), or nullptr for a binary module
@@ -1753,7 +1761,10 @@ protected:
     const char* old_path;
 
     qore_program_private* pgm;
-    QoreParseOptions po;
+    //! the restrictions that the header adds for its own code, which the code before it does not have
+    QoreParseOptions header_po;
+    //! the scoped options of the header's code, which end with the header (see close())
+    ParseOptionsOverlayFrame header_frame{ParseOptionsOverlayFrame::MODULE_HEADER};
 
     ExceptionSink& xsink;
     bool dup;

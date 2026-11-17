@@ -70,6 +70,8 @@ class DebugRecordsForkTest inherits QUnit::Test {
         const SiteBreakpoints = 5;
         #! after a Program being cleared has deleted the data of a thread in it (QPRS_THREAD_DATA_DELETED)
         const SiteThreadDataDeleted = 9;
+        #! a call into a debug program, before it is counted (QPRS_DEBUG_CALL_UNCOUNTED)
+        const SiteDebugCallUncounted = 10;
 
         #! the code of the Programs that the test debugs
         const ProgramCode = "
@@ -83,6 +85,7 @@ int sub add(int a, int b) {
         addTestCase("the child does not wait for the debugger calls of the parent's other threads",
             \otherThreadCallbackTest());
         addTestCase("the child keeps the debugger calls of the thread that called fork()", \ownCallbackTest());
+        addTestCase("the child does not count a debugger call that was not counted yet", \uncountedCallbackTest());
         addTestCase("fork() waits for a change of the Programs of a debug program", \debugProgramsTest());
         addTestCase("fork() waits for a change of the breakpoints of a Program", \breakpointsTest());
         addTestCase("a debugger attached to a Program being cleared does not reach the deleted data of a thread",
@@ -167,6 +170,46 @@ int sub add(int a, int b) {
         done.waitForZero();
 
         assertEq(0, dp.in_callback_result, "the child kept the call of the thread that called fork()");
+        assertEq(0, dp.getInterruptedCount());
+        dp.removeProgram(control(p));
+    }
+
+    #! another thread is about to call into the debug program, but has not counted the call yet
+    /** The calls into a debug program are counted when the debug program is found; the child keeps no share of a call
+        that was not counted, and deletes the Program and the debug program without waiting for it
+    */
+    uncountedCallbackTest() {
+        checkAvailable();
+        Program p(PO_NEW_STYLE);
+        p.parse(ProgramCode, "debug-uncounted-callback");
+        ParkingDebugProgram dp();
+        dp.addProgram(control(p));
+
+        call_function("dbg_hold_program_record_change", SiteDebugCallUncounted, p);
+        on_exit call_function("dbg_hold_program_record_change_clear");
+
+        Counter done(1);
+        int result;
+        background sub () {
+            on_exit done.dec();
+            result = p.callFunction("add", 20, 22);
+        }();
+
+        hash<auto> r = call_function("dbg_fork_while_program_record_held", NOTHING, int sub () {
+            if (dp.getInterruptedCount()) {
+                return 1;
+            }
+            dp.removeProgram(control(p));
+            # waits for the calls in progress into the debug program
+            delete p;
+            delete dp;
+            return 0;
+        });
+        call_function("dbg_hold_program_record_change_clear");
+        done.waitForZero();
+
+        assertEq(0, r.status, "the child deleted the Program and the debug program");
+        assertEq(42, result);
         assertEq(0, dp.getInterruptedCount());
         dp.removeProgram(control(p));
     }

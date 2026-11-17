@@ -598,6 +598,11 @@ public:
     //! Waits until the given thread has a registered cancellable wait; returns false on timeout
     DLLLOCAL bool dbgWaitForWait(int tid, int64 timeout_ms);
 
+    //! Returns the lock of dbgNoteWait(), for dbg_fork_while_thread_wait_lock_held() (debug builds)
+    DLLLOCAL QoreThreadLock& dbgGetWaitLock() {
+        return dbg_wait_lck;
+    }
+
     //! Requests the cancellation of the given thread while it is blocked in a registered cancellable wait
     /** Returns false if the thread has no registered wait in \a timeout_ms or the request cannot be made
     */
