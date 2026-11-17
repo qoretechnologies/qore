@@ -157,6 +157,18 @@ rest (class domain, builtins) is checked as before.
     and the creation chain check; a module that is not library code has its loader's restrictions and is calling code
   - restricted code could run any qualifying closure that it obtained: `call_module_init_closure()` requires a library
     module caller
+  - third review: stopping the walk at a module that is not library code laundered the options of the Program that
+    loaded it first (such a module is one Program shared by every Program that loads it): the walk adds the
+    restrictions of the modules that are not library code and goes on to the nearest Program that is not a module's;
+    `call_module_init_closure()` ends the process as out of memory (`ExceptionSink::outOfMemory()`, fail-closed)
+    if it cannot record its own barrier
+  - **open design question (third review, reported to prof for David):** under a module initialization barrier, code
+    that runs only in library module Programs is not checked against the code that loaded the module, so state that
+    restricted code put into a library registry before (a call reference to a method of a library object, a library
+    object whose destructor runs then) runs with the exemption when a later library initialization fires it; no qlib
+    chain was found (the catalog listeners are objects of the caller's classes, which are checked), and work handed
+    to a thread is the documented equivalent; a fix would record the restrictions in effect when such state enters a
+    registry, as `thread_caller_restrictions` does for threads
 - qlib internal paths for restricted callers (qore#6337): `ProviderIndexUtil::loadIndexModule()` (the index lookups;
   `tryLoadModule()` keeps PROCESS_CONTROL), `DataProviderModuleLoader` (not public: `loadKnownFactories()` for DPQL,
   `tryLoad()`/`loadModule()` for the module's loads; `registerKnownFactories*()` keep their domain),

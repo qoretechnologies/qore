@@ -477,6 +477,8 @@ public class ConnectionSchemeCache {
         # a closure that the initialization of its library module created runs as deferred module initialization when
         # a lookup runs it, also for code restricted from the domains of what it registers (qore#6337); the
         # qualification is tested now and again when it runs
+        # the wrapper is library code, so it can run the closure as deferred module initialization: it is kept only
+        # in the cache's private state and must never be returned to other code
         initmap{scheme} = is_module_init_closure(init)
             ? auto sub () { return call_module_init_closure(init); }
             : init;

@@ -1112,6 +1112,11 @@ auto call_module_init_closure(code c) {
     // the closure runs as the initialization of its module: the barrier of a library module's initialization, which
     // names the module's Program, so that the closures that it creates qualify too
     QoreModuleInitSandboxBarrierHelper barrier(true);
+    // without its own barrier, the program would be set on an outer one (qore#6337)
+    if (!barrier.recorded()) {
+        xsink->outOfMemory();
+        return QoreValue();
+    }
     qore_module_init_set_program(qore_call_reference_code_program(c));
     ProgramCallContextHelper pch(c->getProgram());
     return c->invoke(nullptr, xsink);

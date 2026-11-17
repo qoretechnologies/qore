@@ -454,6 +454,31 @@ list<string> sub run(*string arg) {
 }",
     },
 
+    # a module loaded by its path (outside the module path, given as the argument) is one Program that every Program
+    # that loads it shares, parsed with the options of the first: its code is checked against the restrictions of
+    # each calling Program
+    "path-shared": {
+        "trusted_first": "%requires @ARG@
+list<string> sub run(*string arg) {
+    return (\"unrestricted first: \" + RcSharedPath::wrapper(\"first\"),);
+}",
+        "restricted": "%requires @ARG@
+list<string> sub run(*string arg) {
+    list<string> l = ();
+    l += \"wrapper: \" + attempt(auto sub () { return call_function(\"RcSharedPath::wrapper\", \"restricted\"); });
+    l += \"declared: \" + attempt(auto sub () { return call_function(\"RcSharedPath::declared\", \"restricted\"); });
+    l += \"library proxy: \" + attempt(auto sub () { return call_function(\"RcSharedPath::proxy\"); });
+    return l;
+}",
+        "trusted_post": "%requires @ARG@
+list<string> sub run(*string arg) {
+    list<string> l = ();
+    l += \"unrestricted wrapper: \" + RcSharedPath::wrapper(\"after\");
+    l += \"unrestricted library proxy: \" + RcSharedPath::proxy();
+    return l;
+}",
+    },
+
     # restricted code cannot write the data provider index, which names the modules that lookups load
     "index-write": {
         "restricted": "%requires DataProvider
@@ -494,6 +519,14 @@ if (!c) {
     exit(1);
 }
 
+# an unrestricted Program that runs before the restricted Program is created; "@ARG@" in it is the case argument
+*Program tfirst;
+if (c.trusted_first) {
+    tfirst = new Program(PO_NEW_STYLE);
+    tfirst.parse(replace(Common + c.trusted_first, "@ARG@", arg ?? ""), "trusted-first");
+    print_lines(tfirst.callFunction("run", arg));
+}
+
 *Program rp;
 SandboxManager mgr();
 if (c.restricted) {
@@ -515,7 +548,7 @@ if (c.restricted) {
 *Program tpre;
 if (c.trusted_pre) {
     tpre = new Program(PO_NEW_STYLE);
-    tpre.parse(Common + c.trusted_pre, "trusted-pre");
+    tpre.parse(replace(Common + c.trusted_pre, "@ARG@", arg ?? ""), "trusted-pre");
     print_lines(tpre.callFunction("run", arg));
 }
 
@@ -526,7 +559,7 @@ if (rp) {
 *Program tpost;
 if (c.trusted_post) {
     tpost = new Program(PO_NEW_STYLE);
-    tpost.parse(Common + c.trusted_post, "trusted-post");
+    tpost.parse(replace(Common + c.trusted_post, "@ARG@", arg ?? ""), "trusted-post");
     print_lines(tpost.callFunction("run", arg));
 }
 

@@ -746,6 +746,11 @@ public:
         return failed_lift;
     }
 
+    //! returns true if the helper recorded a barrier or a lift (it is restored when the helper is destroyed)
+    DLLLOCAL bool recorded() const {
+        return pushed;
+    }
+
 private:
     bool pushed = false;
     bool failed_lift = false;

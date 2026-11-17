@@ -36,7 +36,8 @@
       module's code creates for code of another Program that runs while a deferred initialization runs (a catalog
       change listener) does not qualify; only the code of a library module can run a qualifying closure
       (call_module_init_closure()); the code of a module that a restricted Program loads by its path is the calling
-      code, not module code
+      code, not module code; a module loaded by its path is one Program that every Program that loads it shares,
+      and its code is checked against the restrictions of the Program that calls it
     - restricted code cannot run the rollback closures of other module loads on its thread
       (ImplicitModuleTransaction::savepoint(), rollback(), commit()), nor load a module through DataProvider's own
       loader; a failed module load that a lookup makes rolls back only that load's registrations
@@ -196,6 +197,15 @@ kept closure run: MODULE-INIT-CLOSURE-ERROR
 kept closure called: INVALID-FUNCTION-ACCESS
 ";
 
+        #! the output of the case of a module loaded by its path by an unrestricted and a restricted Program
+        const ExpectedPathShared = "unrestricted first: declared: first
+wrapper: INVALID-FUNCTION-ACCESS
+declared: INVALID-FUNCTION-ACCESS
+library proxy: INVALID-FUNCTION-ACCESS
+unrestricted wrapper: declared: after
+unrestricted library proxy: tagged ran
+";
+
         #! the output of the case of writing the data provider index
         const ExpectedIndexWrite = "write: INVALID-FUNCTION-ACCESS
 write by app: INVALID-FUNCTION-ACCESS
@@ -243,6 +253,8 @@ direct call: PARSE-EXCEPTION: functional domain: PROCESS_CONTROL
             \testSqlIdentity());
         addTestCase("the code of a module loaded by its path is the calling code", \testPathModule());
         addTestCase("restricted code cannot write the data provider index", \testIndexWrite());
+        addTestCase("the code of a module loaded by its path is checked against each calling Program",
+            \testPathShared());
 
         set_return_value(main());
     }
@@ -391,18 +403,35 @@ direct call: PARSE-EXCEPTION: functional domain: PROCESS_CONTROL
         }
     }
 
-    testPathModule() {
-        # the module is loaded from a directory outside the module path, as a file under a directory of the module
-        # path is library code however it is loaded; a SandboxManager's default policy does not allow it to be read
+    #! copies a module of the cases to a directory outside the module path and returns its path there
+    /** A file under a directory of the module path is library code however it is loaded
+    */
+    private string copyPathModule(string name) {
         string dir = tmp.path + "/by-path";
-        mkdir(dir);
-        string path = dir + "/RcPathUser.qm";
+        if (!is_dir(dir)) {
+            mkdir(dir);
+        }
+        string path = dir + "/" + name + ".qm";
         File f();
         f.open2(path, O_CREAT | O_TRUNC | O_WRONLY);
-        f.write(ReadOnlyFile::readTextFile(case_dir + "/by-path/RcPathUser.qm"));
+        f.write(ReadOnlyFile::readTextFile(case_dir + "/by-path/" + name + ".qm"));
         f.close();
+        return path;
+    }
+
+    testPathModule() {
+        # a SandboxManager's default policy does not allow the module to be read
+        string path = copyPathModule("RcPathUser");
         foreach string mode in (Modes) {
             checkCase(ExpectedPathModule, "path-module", mode, False, path);
+        }
+    }
+
+    testPathShared() {
+        # an unrestricted Program loads the module first, then the restricted Program loads it by the same path
+        string path = copyPathModule("RcSharedPath");
+        foreach string mode in (Modes) {
+            checkCase(ExpectedPathShared, "path-shared", mode, False, path);
         }
     }
 

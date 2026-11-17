@@ -1321,7 +1321,9 @@ static bool SandboxManager::isSandboxed() [flags=RET_VALUE_ONLY] {
     the calling code of the module code that started the thread.  The @ref parse_options "parse options" of that
     %Program decide (for example
     @ref Qore::PO_NO_DATABASE "PO_NO_DATABASE" for @ref Qore::DOM_DATABASE "DOM_DATABASE"), as do the restrictions
-    of a sandboxed caller that the module code runs with; the options of the module's own %Program do not, and neither
+    of a sandboxed caller that the module code runs with, and those of the modules on the way that are not library code
+    (a module loaded by its path, which has the restrictions of the %Program that loaded it first); the options of a
+    library module's own %Program do not, and neither
     does a sandbox that governs the code without restricting the domain (unlike isSandboxed()).
 
     It reveals only whether the calling code is restricted, so it is not restricted itself.

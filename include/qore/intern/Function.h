@@ -2233,8 +2233,10 @@ public:
             return false;
         }
         // a module's variant that declares a functional domain checks the restrictions of the calling code when it
-        // is entered (checkCallerDomain()), which the fast-call, inline and summary paths would skip (qore#6337)
-        if (declared_domain && qore_program_is_module(pgm)) {
+        // is entered (checkCallerDomain()), which the fast-call, inline and summary paths would skip (qore#6337); any
+        // variant that declares one is excluded, so that this predicate, which the JIT runtime evaluates for each fast
+        // method call, stays small enough to be inlined there
+        if (declared_domain) {
             return false;
         }
         if (!allow_type_parameters && signature.hasTypeParameters()) {

@@ -6448,6 +6448,8 @@ DataProviderActionCatalog::checkSandboxAccess(app_name, True);
         # also for a reader restricted from the domains of what it registers (qore#6337); the qualification is
         # tested now and again when it runs
         if (is_module_init_closure(init)) {
+            # library code, so it can run the closure as deferred module initialization: it is kept only in the
+            # catalog's private state and must never be returned to other code
             return auto sub () { return call_module_init_closure(init); };
         }
         return init;

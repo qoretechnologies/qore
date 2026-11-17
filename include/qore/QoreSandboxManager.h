@@ -1126,7 +1126,8 @@ DLLEXPORT bool qore_sandbox_allows_uncontrolled_apis(QoreSandboxManagerHelper::P
     number of calls between modules; on a thread that module code started, where no such Program is on the stack,
     the calling code of the module code that started the thread.  The parse options of that Program decide (for example
     \c PO_NO_DATABASE for \c QDOM_DATABASE), as do the restrictions of a sandboxed caller that the module code runs
-    with; the options of the module's own Program do not.
+    with, and those of the modules on the way that are not library code (a module loaded by its path, which has the
+    restrictions of the Program that loaded it first); the options of a library module's own Program do not.
 
     It reveals only whether the calling code is restricted, so it is not restricted itself.
 

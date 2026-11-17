@@ -5938,32 +5938,50 @@ static QoreParseOptions qore_restricting_domain_options() {
 */
 static QoreParseOptions qore_get_caller_domain_restrictions(ThreadData* td,
         const ThreadData::ModuleInitBarrier* mib = nullptr) {
-    // the calling code is the nearest Program on the call stack that is not a library module's: a library module's own
-    // options are those of the Program that loaded it first, which say nothing about the code that calls it now; a
-    // module that is not library code has the restrictions of the Program that loaded it and is calling code
-    // (qore#6337)
+    // the calling code is the nearest Program on the call stack that is not a module's: a library module's own options
+    // are those of the Program that loaded it first, which say nothing about the code that calls it now; a module that
+    // is not library code (one loaded by its path) has the restrictions of the Program that loaded it, but it is
+    // shared by every Program that loads it and has the options of the first one: its restrictions are added, and the
+    // walk goes on to the code that called it (qore#6337)
+    const QoreParseOptions restricting = qore_restricting_domain_options();
+    QoreParseOptions rv;
     const QoreProgram* pgm = td->current_pgm;
-    if (pgm && !qore_program_is_library_module(pgm)
-            && (!mib || td->current_pgm_ctx != mib->ctx || pgm != mib->pgm)) {
-        return qore_program_private::getParseOptions(*pgm) & qore_restricting_domain_options();
+    if (pgm && (!mib || td->current_pgm_ctx != mib->ctx || pgm != mib->pgm)) {
+        if (!qore_program_is_module_inline(pgm)) {
+            return qore_program_private::getParseOptions(*pgm) & restricting;
+        }
+        if (!qore_program_is_library_module(pgm)) {
+            rv |= qore_program_private::getParseOptions(*pgm) & restricting;
+        }
     }
     for (const ProgramThreadCountContextHelper* ch = td->current_pgm_ctx; ch; ch = ch->getOldContext()) {
         if (mib && (ch == mib->ctx || ch->getOldContext() == mib->ctx)) {
-            return QoreParseOptions();
+            return rv;
         }
         const QoreProgram* old_pgm = ch->getOldProgram();
-        if (old_pgm && !qore_program_is_library_module(old_pgm)) {
-            return qore_program_private::getParseOptions(*old_pgm) & qore_restricting_domain_options();
+        if (!old_pgm) {
+            continue;
+        }
+        if (!qore_program_is_module_inline(old_pgm)) {
+            return rv | (qore_program_private::getParseOptions(*old_pgm) & restricting);
+        }
+        if (!qore_program_is_library_module(old_pgm)) {
+            rv |= qore_program_private::getParseOptions(*old_pgm) & restricting;
         }
     }
     // a builtin call of a module function made for another Program (QoreProgram::callFunction()): the Program of the
     // call
-    if (!mib && td->call_program_context && !qore_program_is_library_module(td->call_program_context)) {
-        return qore_program_private::getParseOptions(*td->call_program_context) & qore_restricting_domain_options();
+    if (!mib && td->call_program_context) {
+        if (!qore_program_is_module_inline(td->call_program_context)) {
+            return rv | (qore_program_private::getParseOptions(*td->call_program_context) & restricting);
+        }
+        if (!qore_program_is_library_module(td->call_program_context)) {
+            rv |= qore_program_private::getParseOptions(*td->call_program_context) & restricting;
+        }
     }
     // no code of a Program that is not a module's is on the stack: the code that started the thread, if module code
     // started it (qore#6337), or the embedding application calls the module code
-    return mib ? QoreParseOptions() : td->thread_caller_restrictions;
+    return mib ? rv : (rv | td->thread_caller_restrictions);
 }
 
 bool qore_caller_restricts_domain(int64 domain) {
