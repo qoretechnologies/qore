@@ -6071,6 +6071,10 @@ public:
     DLLLOCAL void onException(const AbstractStatement* statement, DebugRunStateEnum& rs, const AbstractStatement*& rts, ExceptionSink* xsink);
     DLLLOCAL void onExit(const StatementBlock* statement, QoreValue& returnValue, DebugRunStateEnum& rs, const AbstractStatement*& rts, ExceptionSink* xsink);
 
+    //! raises the debugger's exit event of Program::run() with the value it returns, which the debugger can replace;
+    //! called in the Program's context, after its top-level code or exec class has run (#3401)
+    DLLLOCAL void dbgRunExit(QoreValue& rv, ExceptionSink* xsink);
+
     //! Returns the threads that run the code of the Program, also those that run other code that its code called, as
     //! the code of a module or of a debugger callback
     DLLLOCAL std::set<int> getThreadsInProgram() const {
