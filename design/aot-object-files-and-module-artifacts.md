@@ -311,6 +311,10 @@ metadata (compressed, when it is compressed) is followed by its XXH64 checksum
 (`qore_aot_seal_metadata()`; the compression of the metadata recomputes it over
 the new encoding), and `QoreAOTBinaryReader::open()` checks it before it reads
 anything else, for the module loader and for qcc's reads of object data alike.
+The checksum of a module's metadata is computed once per load: the metadata
+that `QoreAOTDebugMetadata` keeps for lazy and debug IR (or its copy of it) is
+opened again with `verify_checksum` false, as the reader of the module checked
+it.
 Metadata that does not match is refused as a whole ("the AOT metadata does not
 match its checksum"), and its module is not loaded, as a module whose metadata
 cannot be read: the source module is loaded instead when there is one. The

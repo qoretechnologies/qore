@@ -4479,7 +4479,7 @@ bool QoreAOTBinaryWriter::finalize(const QoreAOTBinaryHeader& in_header, std::ve
 
 // ---- QoreAOTBinaryReader ----
 
-bool QoreAOTBinaryReader::open(const uint8_t* in_data, uint32_t in_size, std::string& error) {
+bool QoreAOTBinaryReader::open(const uint8_t* in_data, uint32_t in_size, std::string& error, bool verify_checksum) {
     section_stored_sizes.clear();
     decompressed_sections.clear();
     decompressed_string_pool.clear();
@@ -4565,7 +4565,7 @@ bool QoreAOTBinaryReader::open(const uint8_t* in_data, uint32_t in_size, std::st
         for (unsigned i = 0; i < QORE_AOT_METADATA_CHECKSUM_SIZE; ++i) {
             stored |= static_cast<uint64_t>(in_data[in_size + i]) << (i * 8);
         }
-        if (stored != qore_aot_metadata_checksum(in_data, in_size)) {
+        if (verify_checksum && stored != qore_aot_metadata_checksum(in_data, in_size)) {
             error = "the AOT metadata does not match its checksum: it was changed after it was written";
             checksum_mismatch = true;
             return false;

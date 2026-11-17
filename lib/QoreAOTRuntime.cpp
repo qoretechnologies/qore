@@ -3170,7 +3170,8 @@ struct QoreAOTDebugMetadata {
 
         auto retained_reader = std::make_unique<QoreAOTBinaryReader>();
         std::string open_error;
-        if (retained_reader->open(metadata.data(), static_cast<uint32_t>(metadata.size()), open_error)) {
+        // the copy is made from metadata that the reader of the module checked against its checksum (qore#6451)
+        if (retained_reader->open(metadata.data(), static_cast<uint32_t>(metadata.size()), open_error, false)) {
             this->reader = std::move(retained_reader);
         }
     }
@@ -3181,8 +3182,10 @@ struct QoreAOTDebugMetadata {
             return reader.get();
         }
         auto retained_reader = std::make_unique<QoreAOTBinaryReader>();
+        // the metadata, or a copy of it, was checked against its checksum by the reader of the module, whose
+        // load it belongs to (qore#6451)
         if (!retained_reader->open(borrowed_data ? borrowed_data : metadata.data(),
-                borrowed_data ? borrowed_size : static_cast<uint32_t>(metadata.size()), error)) {
+                borrowed_data ? borrowed_size : static_cast<uint32_t>(metadata.size()), error, false)) {
             return nullptr;
         }
         // Force retained sections to decode before publishing the reader for

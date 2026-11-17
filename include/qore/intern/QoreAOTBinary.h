@@ -560,7 +560,7 @@ constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 //!        change with a SetCodeParseOptions instruction (QoreIROpcode::SetCodeParseOptions, 439: the options as four
 //!        32-bit ConstInt words), whose native code calls qore_rt_set_code_parse_options(); the AOT runtime identity
 //!        changes with the runtime entry (qore#6293)
-//! v43 (batch AB; one format version for the format changes of the batch, one line each):
+//! v43 (batch AC; one format version for the format changes of the batch, one line each):
 //!      - the encoded metadata is followed by the XXH64 checksum (seed 0, u64 little-endian) of all of its bytes,
 //!        and the header flags have QORE_AOT_FLAG_METADATA_CHECKSUM; the reader checks it before it reads anything
 //!        else, so that metadata corrupted after it was written is refused (qore#6451)
@@ -1783,9 +1783,13 @@ public:
     /** @param data pointer to the binary data
         @param size size of the binary data
         @param error receives error message on failure
+        @param verify_checksum false for metadata that a reader of the same load has already checked against its
+        checksum (QORE_AOT_METADATA_CHECKSUM_VERSION): the metadata that QoreAOTDebugMetadata keeps from the reader of
+        the module, or a copy of it that it makes; the checksum is then not computed again, but the metadata must
+        still have one (qore#6451)
         @return true on success, false on failure
     */
-    bool open(const uint8_t* data, uint32_t size, std::string& error);
+    bool open(const uint8_t* data, uint32_t size, std::string& error, bool verify_checksum = true);
 
     //! Get the parsed binary header
     const QoreAOTBinaryHeader& getHeader() const { return header; }
