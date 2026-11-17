@@ -237,11 +237,15 @@ public class AbstractDataStreamRequestHandler inherits RestHandler::AbstractRest
             !connect_mode && isMultiplexedTransport();
         effective_encoding = suppress_ds_v1_content_encoding
             ? NOTHING : cx.encoding;
-        @debug(printf("AbstractDataStreamRequestHandler::constructor() "
-            "encoding=%y effective_encoding=%y connect_mode=%y "
-            "suppress_ds_v1_content_encoding=%y\n",
-            cx.encoding, effective_encoding, connect_mode,
-            suppress_ds_v1_content_encoding));
+        @debug {
+            if (!(get_parse_options() & PO_NO_TERMINAL_IO)) {
+                stdout.printf("AbstractDataStreamRequestHandler::constructor() "
+                    "encoding=%y effective_encoding=%y connect_mode=%y "
+                    "suppress_ds_v1_content_encoding=%y\n",
+                    cx.encoding, effective_encoding, connect_mode,
+                    suppress_ds_v1_content_encoding);
+            }
+        }
         if (connect_mode) {
             recv_callback = connect_get_recv(\recvData(), \recvDataDone());
             scb = connect_get_send(\sendData(), ds_get_content_encode(cx.encoding));
@@ -402,7 +406,11 @@ public class AbstractDataStreamRequestHandler inherits RestHandler::AbstractRest
         @since updated in DataStreamRequestHandler 1.3 to handle pre-deserialized bodies
     */
     nothing recvImpl(hash v) {
-        @debug(printf("AbstractDataStreamRequestHandler::recvImpl() data_size=%d\n", v.data.size()));
+        @debug {
+            if (!(get_parse_options() & PO_NO_TERMINAL_IO)) {
+                stdout.printf("AbstractDataStreamRequestHandler::recvImpl() data_size=%d\n", v.data.size());
+            }
+        }
         if (v.deserialized && exists v.data) {
             # Pre-deserialized body from the REST framework (non-chunked request).
             # The data may be truly deserialized (hash/list from REST validator), raw YAML
@@ -457,7 +465,11 @@ public class AbstractDataStreamRequestHandler inherits RestHandler::AbstractRest
         per inbound operation without prematurely closing the stream.
     */
     auto sendImpl() {
-        @debug(printf("AbstractDataStreamRequestHandler::sendImpl()\n"));
+        @debug {
+            if (!(get_parse_options() & PO_NO_TERMINAL_IO)) {
+                stdout.printf("AbstractDataStreamRequestHandler::sendImpl()\n");
+            }
+        }
         if (wantsInteractiveStreaming()) {
             if (!interactive_scb) {
                 interactive_scb = connect_get_send_interactive(\sendData(),

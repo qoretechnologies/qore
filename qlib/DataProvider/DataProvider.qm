@@ -1750,6 +1750,9 @@ auto v = limit.acceptsValue(NOTHING);  # NOTHING, not 20
 
 
     @section dataprovider_v3_12 DataProvider v3.12
+    - the errors of data provider modules that are written to @ref Qore::stderr "stderr" without a logger are left out
+      when the module's code has no terminal I/O (@ref Qore::PO_NO_TERMINAL_IO "PO_NO_TERMINAL_IO") instead of raising
+      an exception (<a href="https://github.com/qoretechnologies/qore/issues/6438">issue 6438</a>)
     - a caller counts as sandboxed for the \c external_io rule only when a sandbox that refuses uncontrolled APIs
       governs it (@ref Qore::SandboxManager::isRestricted() "SandboxManager::isRestricted()"); code that a host governs
       with a sandbox only for its limits or interrupts, and that it allows uncontrolled APIs, may use the

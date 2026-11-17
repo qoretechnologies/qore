@@ -89,7 +89,7 @@ public class UpdateOptionsInterface inherits Qore::Serializable {
             } catch (hash<ExceptionInfo> ex) {
                 if (logger) {
                     logger.error("Error updating options: %s", get_exception_string(ex));
-                } else {
+                } else if (!(get_parse_options() & PO_NO_TERMINAL_IO)) {
                     stderr.printf("Error updating options: %s", get_exception_string(ex));
                 }
             }
