@@ -9309,11 +9309,11 @@
         },
         "app.TWlzdHJhbEFp.action.cmVwcm9jZXNzLWxpYnJhcnktZG9jdW1lbnQ.display_name": {
           "source": "Reprocess Library Document",
-          "message": "Reprocesar documento de la biblioteca. Gestionar bibliotecas de documentos utilizadas para fundamentar respuestas de asistentes.\n\n**Vista previa pública:** La disponibilidad depende de su cuenta y permisos."
+          "message": "Reprocesar documento de la biblioteca"
         },
         "app.TWlzdHJhbEFp.action.cmVwcm9jZXNzLWxpYnJhcnktZG9jdW1lbnQ.short_desc": {
           "source": "Reprocess Library Document",
-          "message": "Reprocesar documento de la biblioteca. Gestionar bibliotecas de documentos utilizadas para fundamentar respuestas de asistentes.\n\n**Vista previa pública:** La disponibilidad depende de su cuenta y permisos."
+          "message": "Reprocesar documento de la biblioteca"
         },
         "app.TWlzdHJhbEFp.action.cmVwcm9jZXNzLWxpYnJhcnktZG9jdW1lbnQ.desc": {
           "source": "Reprocess a document. Manage document libraries used to ground assistant answers.\n\n**Public preview:** Availability depends on your account and permissions.",
@@ -15718,6 +15718,1754 @@
         "app.TWlzdHJhbEFp.action.dXBkYXRlLWNvbm5lY3Rvcg.option.cHJvdG9jb2w.allowed-value.c3RyaW5nOmh0dHA.display_name": {
           "source": "http",
           "message": "http"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLWxvZ3M.option.b3JkZXI.display_name": {
+          "source": "Order",
+          "message": "Orden"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLWxvZ3M.option.b3JkZXI.allowed-value.c3RyaW5nOmFzYw.display_name": {
+          "source": "asc",
+          "message": "ascendente"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLWxvZ3M.option.b3JkZXI.allowed-value.c3RyaW5nOmRlc2M.display_name": {
+          "source": "desc",
+          "message": "descendente"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLWxvZ3M.option.cGFnZV9zaXpl.display_name": {
+          "source": "Page Size",
+          "message": "Tamaño de página"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLWxvZ3M.option.Y3Vyc29y.display_name": {
+          "source": "Cursor",
+          "message": "Cursor"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXRyYWNlcw.option.cGFnZV9zaXpl.display_name": {
+          "source": "Page Size",
+          "message": "Tamaño de página"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXRyYWNlcw.option.Y3Vyc29y.display_name": {
+          "source": "Cursor",
+          "message": "Cursor"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXRyYWNlcw.option.dGltZV9kaW1lbnNpb24.field.Z3JhbnVsYXJpdHk.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "auto",
+          "message": "automático"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXRyYWNlcw.option.b3JkZXJfYnk.display_name": {
+          "source": "Order By",
+          "message": "Ordenar por"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXRyYWNlcw.option.b3JkZXJfYnk.field.ZGlyZWN0aW9u.allowed-value.c3RyaW5nOmFzYw.display_name": {
+          "source": "asc",
+          "message": "ascendente"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXRyYWNlcw.option.b3JkZXJfYnk.field.ZGlyZWN0aW9u.allowed-value.c3RyaW5nOmRlc2M.display_name": {
+          "source": "desc",
+          "message": "descendente"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXRyYWNlcw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Límite"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC10cmFjZS1zcGFucw.option.cGFnZV9zaXpl.display_name": {
+          "source": "Page Size",
+          "message": "Tamaño de página"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC10cmFjZS1zcGFucw.option.Y3Vyc29y.display_name": {
+          "source": "Cursor",
+          "message": "Cursor"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXNwYW5z.option.cGFnZV9zaXpl.display_name": {
+          "source": "Page Size",
+          "message": "Tamaño de página"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXNwYW5z.option.Y3Vyc29y.display_name": {
+          "source": "Cursor",
+          "message": "Cursor"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW5z.option.dGltZV9kaW1lbnNpb24.field.Z3JhbnVsYXJpdHk.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "auto",
+          "message": "automático"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW5z.option.b3JkZXJfYnk.display_name": {
+          "source": "Order By",
+          "message": "Ordenar por"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW5z.option.b3JkZXJfYnk.field.ZGlyZWN0aW9u.allowed-value.c3RyaW5nOmFzYw.display_name": {
+          "source": "asc",
+          "message": "ascendente"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW5z.option.b3JkZXJfYnk.field.ZGlyZWN0aW9u.allowed-value.c3RyaW5nOmRlc2M.display_name": {
+          "source": "desc",
+          "message": "descendente"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW5z.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Límite"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXNwYW4tZXZhbHVhdGlvbnM.option.cGFnZV9zaXpl.display_name": {
+          "source": "Page Size",
+          "message": "Tamaño de página"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXNwYW4tZXZhbHVhdGlvbnM.option.Y3Vyc29y.display_name": {
+          "source": "Cursor",
+          "message": "Cursor"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLWxhdGVzdC1zcGFuLWV2YWx1YXRpb25z.option.cGFnZV9zaXpl.display_name": {
+          "source": "Page Size",
+          "message": "Tamaño de página"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLWxhdGVzdC1zcGFuLWV2YWx1YXRpb25z.option.Y3Vyc29y.display_name": {
+          "source": "Cursor",
+          "message": "Cursor"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW4tZXZhbHVhdGlvbnM.option.dGltZV9kaW1lbnNpb24.field.Z3JhbnVsYXJpdHk.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "auto",
+          "message": "automático"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW4tZXZhbHVhdGlvbnM.option.b3JkZXJfYnk.display_name": {
+          "source": "Order By",
+          "message": "Ordenar por"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW4tZXZhbHVhdGlvbnM.option.b3JkZXJfYnk.field.ZGlyZWN0aW9u.allowed-value.c3RyaW5nOmFzYw.display_name": {
+          "source": "asc",
+          "message": "ascendente"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW4tZXZhbHVhdGlvbnM.option.b3JkZXJfYnk.field.ZGlyZWN0aW9u.allowed-value.c3RyaW5nOmRlc2M.display_name": {
+          "source": "desc",
+          "message": "descendente"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW4tZXZhbHVhdGlvbnM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Límite"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1waXBlbGluZXM.option.cGFnZV9zaXpl.display_name": {
+          "source": "Page Size",
+          "message": "Tamaño de página"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1waXBlbGluZXM.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "Página"
+        },
+        "app.TWlzdHJhbEFp.action.Y3JlYXRlLXBpcGVsaW5l.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Nombre"
+        },
+        "app.TWlzdHJhbEFp.action.Y3JlYXRlLXBpcGVsaW5l.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Descripción"
+        },
+        "app.TWlzdHJhbEFp.type.YWN0aW9uOlkzSmxZWFJsTFhCcGNHVnNhVzVsOipQcm9iYWJpbGlzdGljU2FtcGxpbmcjYzk3YmU3YmE2MWE1OTdmMDMzMTcxYjgyOGRiYjBlMjQ2MGYxZmNjNTFiMjY2ODNlNzRmMmY1MmY2Y2E0NTA5OQ.field.dHlwZQ.display_name": {
+          "source": "Type",
+          "message": "Tipo"
+        },
+        "app.TWlzdHJhbEFp.type.YWN0aW9uOlkzSmxZWFJsTFhCcGNHVnNhVzVsOipBdHRyaWJ1dGVIYXNoU2FtcGxpbmcjZDg5NmQ2ZDg1YjY0NTUzNWMyOTgzYTFkY2QzMzlmZTAwN2Y1MjY0N2EyOTBmMmJjM2RlZTU5YzBkNjU0ZDU4NQ.field.dHlwZQ.display_name": {
+          "source": "Type",
+          "message": "Tipo"
+        },
+        "app.TWlzdHJhbEFp.action.dXBkYXRlLXBpcGVsaW5l.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Nombre"
+        },
+        "app.TWlzdHJhbEFp.action.dXBkYXRlLXBpcGVsaW5l.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Descripción"
+        },
+        "app.TWlzdHJhbEFp.type.YWN0aW9uOmRYQmtZWFJsTFhCcGNHVnNhVzVsOipQcm9iYWJpbGlzdGljU2FtcGxpbmcjYzk3YmU3YmE2MWE1OTdmMDMzMTcxYjgyOGRiYjBlMjQ2MGYxZmNjNTFiMjY2ODNlNzRmMmY1MmY2Y2E0NTA5OQ.field.dHlwZQ.display_name": {
+          "source": "Type",
+          "message": "Tipo"
+        },
+        "app.TWlzdHJhbEFp.type.YWN0aW9uOmRYQmtZWFJsTFhCcGNHVnNhVzVsOipBdHRyaWJ1dGVIYXNoU2FtcGxpbmcjZDg5NmQ2ZDg1YjY0NTUzNWMyOTgzYTFkY2QzMzlmZTAwN2Y1MjY0N2EyOTBmMmJjM2RlZTU5YzBkNjU0ZDU4NQ.field.dHlwZQ.display_name": {
+          "source": "Type",
+          "message": "Tipo"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXBpcGVsaW5lLXJlc3VsdHM.option.cGFnZV9zaXpl.display_name": {
+          "source": "Page Size",
+          "message": "Tamaño de página"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXBpcGVsaW5lLXJlc3VsdHM.option.Y3Vyc29y.display_name": {
+          "source": "Cursor",
+          "message": "Cursor"
+        },
+        "app.TWlzdHJhbEFp.action.aW1wb3J0LWRhdGFzZXQtZnJvbS1zcGFucw.option.ZGF0YXNldF9pZA.display_name": {
+          "source": "Dataset ID",
+          "message": "ID del Conjunto de Datos"
+        },
+        "app.TWlzdHJhbEFp.action.aW1wb3J0LWRhdGFzZXQtZnJvbS1zcGFucw.option.bWFwcGluZ19jb250cmFjdA.field.dmVyc2lvbg.display_name": {
+          "source": "Version",
+          "message": "Versión"
+        },
+        "app.TWlzdHJhbEFp.action.aW1wb3J0LWRhdGFzZXQtZnJvbS1zcGFucw.option.bWFwcGluZ19jb250cmFjdA.field.dmVyc2lvbg.allowed-value.aW50OjE.display_name": {
+          "source": "1",
+          "message": "1"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLWxvZ3M.display_name": {
+          "source": "Search Logs",
+          "message": "Buscar Registros"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLWxvZ3M.short_desc": {
+          "source": "Search the logs of your AI activity",
+          "message": "Buscar en los registros de su actividad de IA"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLWxvZ3M.desc": {
+          "source": "Search the OpenTelemetry logs recorded for your AI activity with a search expression, in the order you choose. Results are returned one page at a time; pass the returned `cursor` to read the next page. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
+          "message": "Buscar en los registros de OpenTelemetry grabados para su actividad de IA con una expresión de búsqueda, en el orden que elija. Los resultados se devuelven página por página; pase el `cursor` devuelto para leer la página siguiente. Inspeccionar actividad de IA y evaluar calidad de respuestas.\n\n**Vista previa pública:** La disponibilidad depende de su cuenta y permisos."
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLWxvZ3M.option.c2VhcmNoX2V4cHJlc3Npb24.display_name": {
+          "source": "Search Expression",
+          "message": "Expresión de Búsqueda"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLWxvZ3M.option.ZnJvbQ.display_name": {
+          "source": "From",
+          "message": "Desde"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLWxvZ3M.option.ZnJvbQ.short_desc": {
+          "source": "Start of the time range",
+          "message": "Inicio del intervalo de tiempo"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLWxvZ3M.option.ZnJvbQ.desc": {
+          "source": "The start of the time range.",
+          "message": "El inicio del intervalo de tiempo."
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLWxvZ3M.option.dG8.display_name": {
+          "source": "To",
+          "message": "Hasta"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLWxvZ3M.option.dG8.short_desc": {
+          "source": "End of the time range",
+          "message": "Fin del intervalo de tiempo"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLWxvZ3M.option.dG8.desc": {
+          "source": "The end of the time range.",
+          "message": "El fin del intervalo de tiempo."
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLWxvZ3M.option.cGFnZV9zaXpl.short_desc": {
+          "source": "Maximum number of results per page",
+          "message": "Número máximo de resultados por página"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLWxvZ3M.option.cGFnZV9zaXpl.desc": {
+          "source": "The maximum number of results to return in one page.",
+          "message": "El número máximo de resultados que se devolverán en una página."
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLWxvZ3M.option.Y3Vyc29y.short_desc": {
+          "source": "Cursor of the page to return",
+          "message": "Cursor de la página que se devolverá"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLWxvZ3M.option.Y3Vyc29y.desc": {
+          "source": "The `cursor` returned with the previous page; leave it out for the first page.",
+          "message": "El `cursor` devuelto con la página anterior; omítalo para la primera página."
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1sb2ctZmllbGRz.display_name": {
+          "source": "List Log Fields",
+          "message": "Listar Campos de Registro"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1sb2ctZmllbGRz.short_desc": {
+          "source": "List the fields that log searches can use",
+          "message": "Listar los campos que pueden usar las búsquedas de registros"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1sb2ctZmllbGRz.desc": {
+          "source": "List the fields that log search expressions can refer to, with their labels and types. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
+          "message": "Listar los campos a los que pueden hacer referencia las expresiones de búsqueda de registros, con sus etiquetas y tipos. Inspeccionar actividad de IA y evaluar calidad de respuestas.\n\n**Vista previa pública:** La disponibilidad depende de su cuenta y permisos."
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1sb2ctZmllbGQtb3B0aW9ucw.display_name": {
+          "source": "List Log Field Options",
+          "message": "Listar Opciones de Campos de Registro"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1sb2ctZmllbGQtb3B0aW9ucw.short_desc": {
+          "source": "List the values recorded for a log field",
+          "message": "Listar los valores registrados para un campo de registro"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1sb2ctZmllbGQtb3B0aW9ucw.desc": {
+          "source": "List the values recorded for a log field in a time range, for building log search expressions. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
+          "message": "Listar los valores registrados para un campo de registro en un intervalo de tiempo, para construir expresiones de búsqueda de registros. Inspeccionar actividad de IA y evaluar calidad de respuestas.\n\n**Vista previa pública:** La disponibilidad depende de su cuenta y permisos."
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1sb2ctZmllbGQtb3B0aW9ucw.option.ZmllbGRfbmFtZQ.display_name": {
+          "source": "Field Name",
+          "message": "Nombre del Campo"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1sb2ctZmllbGQtb3B0aW9ucw.option.ZmllbGRfbmFtZQ.short_desc": {
+          "source": "Name of the field",
+          "message": "Nombre del campo"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1sb2ctZmllbGQtb3B0aW9ucw.option.ZmllbGRfbmFtZQ.desc": {
+          "source": "The name of the field, as listed by the field listing action.",
+          "message": "El nombre del campo, tal como lo indica la acción de listado de campos."
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1sb2ctZmllbGQtb3B0aW9ucw.option.ZnJvbQ.display_name": {
+          "source": "From",
+          "message": "Desde"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1sb2ctZmllbGQtb3B0aW9ucw.option.ZnJvbQ.short_desc": {
+          "source": "Start of the time range",
+          "message": "Inicio del intervalo de tiempo"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1sb2ctZmllbGQtb3B0aW9ucw.option.ZnJvbQ.desc": {
+          "source": "The start of the time range.",
+          "message": "El inicio del intervalo de tiempo."
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1sb2ctZmllbGQtb3B0aW9ucw.option.dG8.display_name": {
+          "source": "To",
+          "message": "Hasta"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1sb2ctZmllbGQtb3B0aW9ucw.option.dG8.short_desc": {
+          "source": "End of the time range",
+          "message": "Fin del intervalo de tiempo"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1sb2ctZmllbGQtb3B0aW9ucw.option.dG8.desc": {
+          "source": "The end of the time range.",
+          "message": "El fin del intervalo de tiempo."
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXRyYWNlcw.display_name": {
+          "source": "Search Traces",
+          "message": "Buscar Trazas"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXRyYWNlcw.short_desc": {
+          "source": "Search the traces of your AI activity",
+          "message": "Buscar en las trazas de su actividad de IA"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXRyYWNlcw.desc": {
+          "source": "Search the OpenTelemetry traces recorded for your AI activity with a search expression. Results are returned one page at a time; pass the returned `cursor` to read the next page. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
+          "message": "Buscar en las trazas de OpenTelemetry registradas para su actividad de IA con una expresión de búsqueda. Los resultados se devuelven página por página; pase el `cursor` devuelto para leer la página siguiente. Inspeccionar actividad de IA y evaluar calidad de respuestas.\n\n**Vista previa pública:** La disponibilidad depende de su cuenta y permisos."
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXRyYWNlcw.option.c2VhcmNoX2V4cHJlc3Npb24.display_name": {
+          "source": "Search Expression",
+          "message": "Expresión de Búsqueda"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXRyYWNlcw.option.c2VhcmNoX2V4cHJlc3Npb24.short_desc": {
+          "source": "Filter expression",
+          "message": "Expresión de filtro"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXRyYWNlcw.option.c2VhcmNoX2V4cHJlc3Npb24.desc": {
+          "source": "Filter expression. Trace fields (e.g. `service_name`, `error_count`, `models_used`) are evaluated on the aggregated trace. Span attribute fields (e.g. `temporalWorkflowID`, `wf.type`, `gen_ai.provider.name`) are evaluated on the spans of the trace: a trace matches when one of its spans matches. Span attribute conditions combined with AND must hold on the same span, e.g. `temporalWorkflowID = 'wf-1' AND wf.type = 'activity'` only matches traces with a span carrying both attributes. Results are always one row per trace.",
+          "message": "Expresión de filtro. Los campos de traza (p. ej., `service_name`, `error_count`, `models_used`) se evalúan sobre la traza agregada. Los campos de atributos de span (p. ej., `temporalWorkflowID`, `wf.type`, `gen_ai.provider.name`) se evalúan sobre los spans de la traza: una traza coincide cuando coincide uno de sus spans. Las condiciones sobre atributos de span combinadas con AND deben cumplirse en el mismo span; p. ej., `temporalWorkflowID = 'wf-1' AND wf.type = 'activity'` solo coincide con trazas que tengan un span con ambos atributos. Los resultados siempre tienen una fila por traza."
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXRyYWNlcw.option.ZnJvbQ.display_name": {
+          "source": "From",
+          "message": "Desde"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXRyYWNlcw.option.ZnJvbQ.short_desc": {
+          "source": "Start of the time range",
+          "message": "Inicio del intervalo de tiempo"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXRyYWNlcw.option.ZnJvbQ.desc": {
+          "source": "The start of the time range.",
+          "message": "El inicio del intervalo de tiempo."
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXRyYWNlcw.option.dG8.display_name": {
+          "source": "To",
+          "message": "Hasta"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXRyYWNlcw.option.dG8.short_desc": {
+          "source": "End of the time range",
+          "message": "Fin del intervalo de tiempo"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXRyYWNlcw.option.dG8.desc": {
+          "source": "The end of the time range.",
+          "message": "El fin del intervalo de tiempo."
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXRyYWNlcw.option.cGFnZV9zaXpl.short_desc": {
+          "source": "Maximum number of results per page",
+          "message": "Número máximo de resultados por página"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXRyYWNlcw.option.cGFnZV9zaXpl.desc": {
+          "source": "The maximum number of results to return in one page.",
+          "message": "El número máximo de resultados que se devolverán en una página."
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXRyYWNlcw.option.Y3Vyc29y.short_desc": {
+          "source": "Cursor of the page to return",
+          "message": "Cursor de la página que se devolverá"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXRyYWNlcw.option.Y3Vyc29y.desc": {
+          "source": "The `cursor` returned with the previous page; leave it out for the first page.",
+          "message": "El `cursor` devuelto con la página anterior; omítalo para la primera página."
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXRyYWNlcw.display_name": {
+          "source": "Aggregate Traces",
+          "message": "Agregar Trazas"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXRyYWNlcw.short_desc": {
+          "source": "Aggregate trace metrics over time",
+          "message": "Agregar métricas de trazas a lo largo del tiempo"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXRyYWNlcw.desc": {
+          "source": "Compute a metric over the traces that match a search expression, grouped by the dimensions you choose and optionally by time. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
+          "message": "Calcular una métrica sobre las trazas que coinciden con una expresión de búsqueda, agrupadas por las dimensiones que elija y, opcionalmente, por tiempo. Inspeccionar actividad de IA y evaluar calidad de respuestas.\n\n**Vista previa pública:** La disponibilidad depende de su cuenta y permisos."
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXRyYWNlcw.option.bWV0cmlj.display_name": {
+          "source": "Metric",
+          "message": "Métrica"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXRyYWNlcw.option.bWV0cmlj.field.YWdncmVnYXRpb24.display_name": {
+          "source": "Aggregation",
+          "message": "Agregación"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXRyYWNlcw.option.bWV0cmlj.field.YWdncmVnYXRpb24.allowed-value.c3RyaW5nOmNvdW50.display_name": {
+          "source": "count",
+          "message": "recuento"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXRyYWNlcw.option.bWV0cmlj.field.YWdncmVnYXRpb24.allowed-value.c3RyaW5nOmNvdW50X2Rpc3RpbmN0.display_name": {
+          "source": "count_distinct",
+          "message": "count_distinct"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXRyYWNlcw.option.bWV0cmlj.field.YWdncmVnYXRpb24.allowed-value.c3RyaW5nOnN1bQ.display_name": {
+          "source": "sum",
+          "message": "suma"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXRyYWNlcw.option.bWV0cmlj.field.YWdncmVnYXRpb24.allowed-value.c3RyaW5nOmF2Zw.display_name": {
+          "source": "avg",
+          "message": "promedio"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXRyYWNlcw.option.bWV0cmlj.field.YWdncmVnYXRpb24.allowed-value.c3RyaW5nOm1pbg.display_name": {
+          "source": "min",
+          "message": "mínimo"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXRyYWNlcw.option.bWV0cmlj.field.YWdncmVnYXRpb24.allowed-value.c3RyaW5nOm1heA.display_name": {
+          "source": "max",
+          "message": "máximo"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXRyYWNlcw.option.bWV0cmlj.field.YWdncmVnYXRpb24.allowed-value.c3RyaW5nOnA1MA.display_name": {
+          "source": "p50",
+          "message": "p50"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXRyYWNlcw.option.bWV0cmlj.field.YWdncmVnYXRpb24.allowed-value.c3RyaW5nOnA5MA.display_name": {
+          "source": "p90",
+          "message": "p90"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXRyYWNlcw.option.bWV0cmlj.field.YWdncmVnYXRpb24.allowed-value.c3RyaW5nOnA5NQ.display_name": {
+          "source": "p95",
+          "message": "p95"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXRyYWNlcw.option.bWV0cmlj.field.YWdncmVnYXRpb24.allowed-value.c3RyaW5nOnA5OQ.display_name": {
+          "source": "p99",
+          "message": "p99"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXRyYWNlcw.option.bWV0cmlj.field.bWVhc3VyZQ.display_name": {
+          "source": "Measure",
+          "message": "Medida"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXRyYWNlcw.option.ZGltZW5zaW9ucw.display_name": {
+          "source": "Dimensions",
+          "message": "Dimensiones"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXRyYWNlcw.option.dGltZV9kaW1lbnNpb24.display_name": {
+          "source": "Time Dimension",
+          "message": "Dimensión Temporal"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXRyYWNlcw.option.dGltZV9kaW1lbnNpb24.field.Z3JhbnVsYXJpdHk.display_name": {
+          "source": "Granularity",
+          "message": "Granularidad"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXRyYWNlcw.option.dGltZV9kaW1lbnNpb24.field.Z3JhbnVsYXJpdHk.allowed-value.c3RyaW5nOnNlY29uZA.display_name": {
+          "source": "second",
+          "message": "segundo"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXRyYWNlcw.option.dGltZV9kaW1lbnNpb24.field.Z3JhbnVsYXJpdHk.allowed-value.c3RyaW5nOm1pbnV0ZQ.display_name": {
+          "source": "minute",
+          "message": "minuto"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXRyYWNlcw.option.dGltZV9kaW1lbnNpb24.field.Z3JhbnVsYXJpdHk.allowed-value.c3RyaW5nOmhvdXI.display_name": {
+          "source": "hour",
+          "message": "hora"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXRyYWNlcw.option.dGltZV9kaW1lbnNpb24.field.Z3JhbnVsYXJpdHk.allowed-value.c3RyaW5nOmRheQ.display_name": {
+          "source": "day",
+          "message": "día"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXRyYWNlcw.option.dGltZV9kaW1lbnNpb24.field.Z3JhbnVsYXJpdHk.allowed-value.c3RyaW5nOndlZWs.display_name": {
+          "source": "week",
+          "message": "semana"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXRyYWNlcw.option.dGltZV9kaW1lbnNpb24.field.Z3JhbnVsYXJpdHk.allowed-value.c3RyaW5nOm1vbnRo.display_name": {
+          "source": "month",
+          "message": "mes"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXRyYWNlcw.option.c2VhcmNoX2V4cHJlc3Npb24.display_name": {
+          "source": "Search Expression",
+          "message": "Expresión de Búsqueda"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXRyYWNlcw.option.b3JkZXJfYnk.field.ZGlyZWN0aW9u.display_name": {
+          "source": "Direction",
+          "message": "Dirección"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXRyYWNlcw.option.b3JkZXJfYnk.field.ZmllbGQ.display_name": {
+          "source": "Field",
+          "message": "Campo"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXRyYWNlcw.option.ZnJvbQ.display_name": {
+          "source": "From",
+          "message": "Desde"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXRyYWNlcw.option.ZnJvbQ.short_desc": {
+          "source": "Start of the time range",
+          "message": "Inicio del intervalo de tiempo"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXRyYWNlcw.option.ZnJvbQ.desc": {
+          "source": "The start of the time range.",
+          "message": "El inicio del intervalo de tiempo."
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXRyYWNlcw.option.dG8.display_name": {
+          "source": "To",
+          "message": "Hasta"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXRyYWNlcw.option.dG8.short_desc": {
+          "source": "End of the time range",
+          "message": "Fin del intervalo de tiempo"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXRyYWNlcw.option.dG8.desc": {
+          "source": "The end of the time range.",
+          "message": "El fin del intervalo de tiempo."
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC10cmFjZS1maWVsZHM.display_name": {
+          "source": "List Trace Fields",
+          "message": "Listar Campos de Traza"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC10cmFjZS1maWVsZHM.short_desc": {
+          "source": "List the fields that trace searches can use",
+          "message": "Listar los campos que pueden usar las búsquedas de trazas"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC10cmFjZS1maWVsZHM.desc": {
+          "source": "List the fields that trace search expressions and aggregations can refer to, with their labels and types. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
+          "message": "Listar los campos a los que pueden hacer referencia las expresiones de búsqueda y las agregaciones de trazas, con sus etiquetas y tipos. Inspeccionar actividad de IA y evaluar calidad de respuestas.\n\n**Vista previa pública:** La disponibilidad depende de su cuenta y permisos."
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC10cmFjZS1maWVsZC1vcHRpb25z.display_name": {
+          "source": "List Trace Field Options",
+          "message": "Listar Opciones de Campos de Traza"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC10cmFjZS1maWVsZC1vcHRpb25z.short_desc": {
+          "source": "List the values recorded for a trace field",
+          "message": "Listar los valores registrados para un campo de traza"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC10cmFjZS1maWVsZC1vcHRpb25z.desc": {
+          "source": "List the values recorded for a trace field in a time range, for building trace search expressions. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
+          "message": "Listar los valores registrados para un campo de traza en un intervalo de tiempo, para construir expresiones de búsqueda de trazas. Inspeccionar actividad de IA y evaluar calidad de respuestas.\n\n**Vista previa pública:** La disponibilidad depende de su cuenta y permisos."
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC10cmFjZS1maWVsZC1vcHRpb25z.option.ZmllbGRfbmFtZQ.display_name": {
+          "source": "Field Name",
+          "message": "Nombre del Campo"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC10cmFjZS1maWVsZC1vcHRpb25z.option.ZmllbGRfbmFtZQ.short_desc": {
+          "source": "Name of the field",
+          "message": "Nombre del campo"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC10cmFjZS1maWVsZC1vcHRpb25z.option.ZmllbGRfbmFtZQ.desc": {
+          "source": "The name of the field, as listed by the field listing action.",
+          "message": "El nombre del campo, tal como lo indica la acción de listado de campos."
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC10cmFjZS1maWVsZC1vcHRpb25z.option.ZnJvbQ.display_name": {
+          "source": "From",
+          "message": "Desde"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC10cmFjZS1maWVsZC1vcHRpb25z.option.ZnJvbQ.short_desc": {
+          "source": "Start of the time range",
+          "message": "Inicio del intervalo de tiempo"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC10cmFjZS1maWVsZC1vcHRpb25z.option.ZnJvbQ.desc": {
+          "source": "The start of the time range.",
+          "message": "El inicio del intervalo de tiempo."
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC10cmFjZS1maWVsZC1vcHRpb25z.option.dG8.display_name": {
+          "source": "To",
+          "message": "Hasta"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC10cmFjZS1maWVsZC1vcHRpb25z.option.dG8.short_desc": {
+          "source": "End of the time range",
+          "message": "Fin del intervalo de tiempo"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC10cmFjZS1maWVsZC1vcHRpb25z.option.dG8.desc": {
+          "source": "The end of the time range.",
+          "message": "El fin del intervalo de tiempo."
+        },
+        "app.TWlzdHJhbEFp.action.Z2V0LXRyYWNl.display_name": {
+          "source": "Get Trace",
+          "message": "Obtener Traza"
+        },
+        "app.TWlzdHJhbEFp.action.Z2V0LXRyYWNl.short_desc": {
+          "source": "Get a trace by its ID",
+          "message": "Obtener una traza por su ID"
+        },
+        "app.TWlzdHJhbEFp.action.Z2V0LXRyYWNl.desc": {
+          "source": "Get a trace by its ID, with its timing, token usage, counts of spans, model calls and tool calls, and its first and last messages. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
+          "message": "Obtener una traza por su ID, con su temporización, uso de tokens, recuentos de spans, llamadas a modelos y llamadas a herramientas, y sus primeros y últimos mensajes. Inspeccionar actividad de IA y evaluar calidad de respuestas.\n\n**Vista previa pública:** La disponibilidad depende de su cuenta y permisos."
+        },
+        "app.TWlzdHJhbEFp.action.Z2V0LXRyYWNl.option.dHJhY2VfaWQ.display_name": {
+          "source": "Trace ID",
+          "message": "ID de Traza"
+        },
+        "app.TWlzdHJhbEFp.action.Z2V0LXRyYWNl.option.dHJhY2VfaWQ.short_desc": {
+          "source": "ID of the trace",
+          "message": "ID de la traza"
+        },
+        "app.TWlzdHJhbEFp.action.Z2V0LXRyYWNl.option.dHJhY2VfaWQ.desc": {
+          "source": "The 32-digit hexadecimal ID of the trace.",
+          "message": "El ID hexadecimal de 32 dígitos de la traza."
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC10cmFjZS1zcGFucw.display_name": {
+          "source": "List Trace Spans",
+          "message": "Listar Spans de Traza"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC10cmFjZS1zcGFucw.short_desc": {
+          "source": "List the spans of a trace",
+          "message": "Listar los spans de una traza"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC10cmFjZS1zcGFucw.desc": {
+          "source": "List the spans of a trace, to follow each step of an AI request. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
+          "message": "Listar los spans de una traza, para seguir cada paso de una solicitud de IA. Inspeccionar actividad de IA y evaluar calidad de respuestas.\n\n**Vista previa pública:** La disponibilidad depende de su cuenta y permisos."
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC10cmFjZS1zcGFucw.option.dHJhY2VfaWQ.display_name": {
+          "source": "Trace ID",
+          "message": "ID de Traza"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC10cmFjZS1zcGFucw.option.dHJhY2VfaWQ.short_desc": {
+          "source": "ID of the trace",
+          "message": "ID de la traza"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC10cmFjZS1zcGFucw.option.dHJhY2VfaWQ.desc": {
+          "source": "The 32-digit hexadecimal ID of the trace.",
+          "message": "El ID hexadecimal de 32 dígitos de la traza."
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC10cmFjZS1zcGFucw.option.ZnJvbQ.display_name": {
+          "source": "From",
+          "message": "Desde"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC10cmFjZS1zcGFucw.option.ZnJvbQ.short_desc": {
+          "source": "Start of the time range",
+          "message": "Inicio del intervalo de tiempo"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC10cmFjZS1zcGFucw.option.ZnJvbQ.desc": {
+          "source": "The start of the time range.",
+          "message": "El inicio del intervalo de tiempo."
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC10cmFjZS1zcGFucw.option.dG8.display_name": {
+          "source": "To",
+          "message": "Hasta"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC10cmFjZS1zcGFucw.option.dG8.short_desc": {
+          "source": "End of the time range",
+          "message": "Fin del intervalo de tiempo"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC10cmFjZS1zcGFucw.option.dG8.desc": {
+          "source": "The end of the time range.",
+          "message": "El fin del intervalo de tiempo."
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC10cmFjZS1zcGFucw.option.cGFnZV9zaXpl.short_desc": {
+          "source": "Maximum number of results per page",
+          "message": "Número máximo de resultados por página"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC10cmFjZS1zcGFucw.option.cGFnZV9zaXpl.desc": {
+          "source": "The maximum number of results to return in one page.",
+          "message": "El número máximo de resultados que se devolverán en una página."
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC10cmFjZS1zcGFucw.option.Y3Vyc29y.short_desc": {
+          "source": "Cursor of the page to return",
+          "message": "Cursor de la página que se devolverá"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC10cmFjZS1zcGFucw.option.Y3Vyc29y.desc": {
+          "source": "The `cursor` returned with the previous page; leave it out for the first page.",
+          "message": "El `cursor` devuelto con la página anterior; omítalo para la primera página."
+        },
+        "app.TWlzdHJhbEFp.action.Z2V0LXRyYWNlLXNwYW4.display_name": {
+          "source": "Get Trace Span",
+          "message": "Obtener Span de Traza"
+        },
+        "app.TWlzdHJhbEFp.action.Z2V0LXRyYWNlLXNwYW4.short_desc": {
+          "source": "Get a span of a trace",
+          "message": "Obtener un span de una traza"
+        },
+        "app.TWlzdHJhbEFp.action.Z2V0LXRyYWNlLXNwYW4.desc": {
+          "source": "Get one span of a trace by its trace ID and span ID, with its timing, model request settings, messages, tool call and attributes. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
+          "message": "Obtener un span de una traza por su ID de traza e ID de span, con su temporización, configuración de la solicitud al modelo, mensajes, llamada a herramienta y atributos. Inspeccionar actividad de IA y evaluar calidad de respuestas.\n\n**Vista previa pública:** La disponibilidad depende de su cuenta y permisos."
+        },
+        "app.TWlzdHJhbEFp.action.Z2V0LXRyYWNlLXNwYW4.option.dHJhY2VfaWQ.display_name": {
+          "source": "Trace ID",
+          "message": "ID de Traza"
+        },
+        "app.TWlzdHJhbEFp.action.Z2V0LXRyYWNlLXNwYW4.option.dHJhY2VfaWQ.short_desc": {
+          "source": "ID of the trace",
+          "message": "ID de la traza"
+        },
+        "app.TWlzdHJhbEFp.action.Z2V0LXRyYWNlLXNwYW4.option.dHJhY2VfaWQ.desc": {
+          "source": "The 32-digit hexadecimal ID of the trace.",
+          "message": "El ID hexadecimal de 32 dígitos de la traza."
+        },
+        "app.TWlzdHJhbEFp.action.Z2V0LXRyYWNlLXNwYW4.option.c3Bhbl9pZA.display_name": {
+          "source": "Span ID",
+          "message": "ID del Span"
+        },
+        "app.TWlzdHJhbEFp.action.Z2V0LXRyYWNlLXNwYW4.option.c3Bhbl9pZA.short_desc": {
+          "source": "ID of the span",
+          "message": "ID del span"
+        },
+        "app.TWlzdHJhbEFp.action.Z2V0LXRyYWNlLXNwYW4.option.c3Bhbl9pZA.desc": {
+          "source": "The 16-digit hexadecimal ID of the span.",
+          "message": "El ID hexadecimal de 16 dígitos del span."
+        },
+        "app.TWlzdHJhbEFp.action.Z2V0LXRyYWNlLXNwYW4.option.ZnJvbQ.display_name": {
+          "source": "From",
+          "message": "Desde"
+        },
+        "app.TWlzdHJhbEFp.action.Z2V0LXRyYWNlLXNwYW4.option.ZnJvbQ.short_desc": {
+          "source": "Start of the time range",
+          "message": "Inicio del intervalo de tiempo"
+        },
+        "app.TWlzdHJhbEFp.action.Z2V0LXRyYWNlLXNwYW4.option.ZnJvbQ.desc": {
+          "source": "The start of the time range.",
+          "message": "El inicio del intervalo de tiempo."
+        },
+        "app.TWlzdHJhbEFp.action.Z2V0LXRyYWNlLXNwYW4.option.dG8.display_name": {
+          "source": "To",
+          "message": "Hasta"
+        },
+        "app.TWlzdHJhbEFp.action.Z2V0LXRyYWNlLXNwYW4.option.dG8.short_desc": {
+          "source": "End of the time range",
+          "message": "Fin del intervalo de tiempo"
+        },
+        "app.TWlzdHJhbEFp.action.Z2V0LXRyYWNlLXNwYW4.option.dG8.desc": {
+          "source": "The end of the time range.",
+          "message": "El fin del intervalo de tiempo."
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXNwYW5z.display_name": {
+          "source": "Search Spans",
+          "message": "Buscar Spans"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXNwYW5z.short_desc": {
+          "source": "Search the spans of your AI activity",
+          "message": "Buscar en los spans de su actividad de IA"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXNwYW5z.desc": {
+          "source": "Search the OpenTelemetry spans recorded for your AI activity with a search expression. Results are returned one page at a time; pass the returned `cursor` to read the next page. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
+          "message": "Buscar en los spans de OpenTelemetry registrados para su actividad de IA con una expresión de búsqueda. Los resultados se devuelven página por página; pase el `cursor` devuelto para leer la página siguiente. Inspeccionar actividad de IA y evaluar calidad de respuestas.\n\n**Vista previa pública:** La disponibilidad depende de su cuenta y permisos."
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXNwYW5z.option.c2VhcmNoX2V4cHJlc3Npb24.display_name": {
+          "source": "Search Expression",
+          "message": "Expresión de Búsqueda"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXNwYW5z.option.ZnJvbQ.display_name": {
+          "source": "From",
+          "message": "Desde"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXNwYW5z.option.ZnJvbQ.short_desc": {
+          "source": "Start of the time range",
+          "message": "Inicio del intervalo de tiempo"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXNwYW5z.option.ZnJvbQ.desc": {
+          "source": "The start of the time range.",
+          "message": "El inicio del intervalo de tiempo."
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXNwYW5z.option.dG8.display_name": {
+          "source": "To",
+          "message": "Hasta"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXNwYW5z.option.dG8.short_desc": {
+          "source": "End of the time range",
+          "message": "Fin del intervalo de tiempo"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXNwYW5z.option.dG8.desc": {
+          "source": "The end of the time range.",
+          "message": "El fin del intervalo de tiempo."
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXNwYW5z.option.cGFnZV9zaXpl.short_desc": {
+          "source": "Maximum number of results per page",
+          "message": "Número máximo de resultados por página"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXNwYW5z.option.cGFnZV9zaXpl.desc": {
+          "source": "The maximum number of results to return in one page.",
+          "message": "El número máximo de resultados que se devolverán en una página."
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXNwYW5z.option.Y3Vyc29y.short_desc": {
+          "source": "Cursor of the page to return",
+          "message": "Cursor de la página que se devolverá"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXNwYW5z.option.Y3Vyc29y.desc": {
+          "source": "The `cursor` returned with the previous page; leave it out for the first page.",
+          "message": "El `cursor` devuelto con la página anterior; omítalo para la primera página."
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW5z.display_name": {
+          "source": "Aggregate Spans",
+          "message": "Agregar Spans"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW5z.short_desc": {
+          "source": "Aggregate span metrics over time",
+          "message": "Agregar métricas de spans a lo largo del tiempo"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW5z.desc": {
+          "source": "Compute a metric over the spans that match a search expression, grouped by the dimensions you choose and optionally by time. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
+          "message": "Calcular una métrica sobre los spans que coinciden con una expresión de búsqueda, agrupados por las dimensiones que elija y, opcionalmente, por tiempo. Inspeccionar actividad de IA y evaluar calidad de respuestas.\n\n**Vista previa pública:** La disponibilidad depende de su cuenta y permisos."
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW5z.option.bWV0cmlj.display_name": {
+          "source": "Metric",
+          "message": "Métrica"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW5z.option.bWV0cmlj.field.YWdncmVnYXRpb24.display_name": {
+          "source": "Aggregation",
+          "message": "Agregación"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW5z.option.bWV0cmlj.field.YWdncmVnYXRpb24.allowed-value.c3RyaW5nOmNvdW50.display_name": {
+          "source": "count",
+          "message": "recuento"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW5z.option.bWV0cmlj.field.YWdncmVnYXRpb24.allowed-value.c3RyaW5nOmNvdW50X2Rpc3RpbmN0.display_name": {
+          "source": "count_distinct",
+          "message": "count_distinct"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW5z.option.bWV0cmlj.field.YWdncmVnYXRpb24.allowed-value.c3RyaW5nOnN1bQ.display_name": {
+          "source": "sum",
+          "message": "suma"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW5z.option.bWV0cmlj.field.YWdncmVnYXRpb24.allowed-value.c3RyaW5nOmF2Zw.display_name": {
+          "source": "avg",
+          "message": "promedio"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW5z.option.bWV0cmlj.field.YWdncmVnYXRpb24.allowed-value.c3RyaW5nOm1pbg.display_name": {
+          "source": "min",
+          "message": "mínimo"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW5z.option.bWV0cmlj.field.YWdncmVnYXRpb24.allowed-value.c3RyaW5nOm1heA.display_name": {
+          "source": "max",
+          "message": "máximo"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW5z.option.bWV0cmlj.field.YWdncmVnYXRpb24.allowed-value.c3RyaW5nOnA1MA.display_name": {
+          "source": "p50",
+          "message": "p50"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW5z.option.bWV0cmlj.field.YWdncmVnYXRpb24.allowed-value.c3RyaW5nOnA5MA.display_name": {
+          "source": "p90",
+          "message": "p90"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW5z.option.bWV0cmlj.field.YWdncmVnYXRpb24.allowed-value.c3RyaW5nOnA5NQ.display_name": {
+          "source": "p95",
+          "message": "p95"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW5z.option.bWV0cmlj.field.YWdncmVnYXRpb24.allowed-value.c3RyaW5nOnA5OQ.display_name": {
+          "source": "p99",
+          "message": "p99"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW5z.option.bWV0cmlj.field.bWVhc3VyZQ.display_name": {
+          "source": "Measure",
+          "message": "Medida"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW5z.option.ZGltZW5zaW9ucw.display_name": {
+          "source": "Dimensions",
+          "message": "Dimensiones"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW5z.option.dGltZV9kaW1lbnNpb24.display_name": {
+          "source": "Time Dimension",
+          "message": "Dimensión Temporal"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW5z.option.dGltZV9kaW1lbnNpb24.field.Z3JhbnVsYXJpdHk.display_name": {
+          "source": "Granularity",
+          "message": "Granularidad"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW5z.option.dGltZV9kaW1lbnNpb24.field.Z3JhbnVsYXJpdHk.allowed-value.c3RyaW5nOnNlY29uZA.display_name": {
+          "source": "second",
+          "message": "segundo"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW5z.option.dGltZV9kaW1lbnNpb24.field.Z3JhbnVsYXJpdHk.allowed-value.c3RyaW5nOm1pbnV0ZQ.display_name": {
+          "source": "minute",
+          "message": "minuto"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW5z.option.dGltZV9kaW1lbnNpb24.field.Z3JhbnVsYXJpdHk.allowed-value.c3RyaW5nOmhvdXI.display_name": {
+          "source": "hour",
+          "message": "hora"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW5z.option.dGltZV9kaW1lbnNpb24.field.Z3JhbnVsYXJpdHk.allowed-value.c3RyaW5nOmRheQ.display_name": {
+          "source": "day",
+          "message": "día"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW5z.option.dGltZV9kaW1lbnNpb24.field.Z3JhbnVsYXJpdHk.allowed-value.c3RyaW5nOndlZWs.display_name": {
+          "source": "week",
+          "message": "semana"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW5z.option.dGltZV9kaW1lbnNpb24.field.Z3JhbnVsYXJpdHk.allowed-value.c3RyaW5nOm1vbnRo.display_name": {
+          "source": "month",
+          "message": "mes"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW5z.option.c2VhcmNoX2V4cHJlc3Npb24.display_name": {
+          "source": "Search Expression",
+          "message": "Expresión de Búsqueda"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW5z.option.b3JkZXJfYnk.field.ZGlyZWN0aW9u.display_name": {
+          "source": "Direction",
+          "message": "Dirección"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW5z.option.b3JkZXJfYnk.field.ZmllbGQ.display_name": {
+          "source": "Field",
+          "message": "Campo"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW5z.option.ZnJvbQ.display_name": {
+          "source": "From",
+          "message": "Desde"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW5z.option.ZnJvbQ.short_desc": {
+          "source": "Start of the time range",
+          "message": "Inicio del intervalo de tiempo"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW5z.option.ZnJvbQ.desc": {
+          "source": "The start of the time range.",
+          "message": "El inicio del intervalo de tiempo."
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW5z.option.dG8.display_name": {
+          "source": "To",
+          "message": "Hasta"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW5z.option.dG8.short_desc": {
+          "source": "End of the time range",
+          "message": "Fin del intervalo de tiempo"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW5z.option.dG8.desc": {
+          "source": "The end of the time range.",
+          "message": "El fin del intervalo de tiempo."
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1zcGFuLWZpZWxkcw.display_name": {
+          "source": "List Span Fields",
+          "message": "Listar Campos de Span"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1zcGFuLWZpZWxkcw.short_desc": {
+          "source": "List the fields that span searches can use",
+          "message": "Listar los campos que pueden usar las búsquedas de spans"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1zcGFuLWZpZWxkcw.desc": {
+          "source": "List the fields that span search expressions and aggregations can refer to, with their labels and types. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
+          "message": "Listar los campos a los que pueden hacer referencia las expresiones de búsqueda y las agregaciones de spans, con sus etiquetas y tipos. Inspeccionar actividad de IA y evaluar calidad de respuestas.\n\n**Vista previa pública:** La disponibilidad depende de su cuenta y permisos."
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1zcGFuLWZpZWxkLW9wdGlvbnM.display_name": {
+          "source": "List Span Field Options",
+          "message": "Listar Opciones de Campos de Span"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1zcGFuLWZpZWxkLW9wdGlvbnM.short_desc": {
+          "source": "List the values recorded for a span field",
+          "message": "Listar los valores registrados para un campo de span"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1zcGFuLWZpZWxkLW9wdGlvbnM.desc": {
+          "source": "List the values recorded for a span field in a time range, for building span search expressions. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
+          "message": "Listar los valores registrados para un campo de span en un intervalo de tiempo, para construir expresiones de búsqueda de spans. Inspeccionar actividad de IA y evaluar calidad de respuestas.\n\n**Vista previa pública:** La disponibilidad depende de su cuenta y permisos."
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1zcGFuLWZpZWxkLW9wdGlvbnM.option.ZmllbGRfbmFtZQ.display_name": {
+          "source": "Field Name",
+          "message": "Nombre del Campo"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1zcGFuLWZpZWxkLW9wdGlvbnM.option.ZmllbGRfbmFtZQ.short_desc": {
+          "source": "Name of the field",
+          "message": "Nombre del campo"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1zcGFuLWZpZWxkLW9wdGlvbnM.option.ZmllbGRfbmFtZQ.desc": {
+          "source": "The name of the field, as listed by the field listing action.",
+          "message": "El nombre del campo, tal como lo indica la acción de listado de campos."
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1zcGFuLWZpZWxkLW9wdGlvbnM.option.ZnJvbQ.display_name": {
+          "source": "From",
+          "message": "Desde"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1zcGFuLWZpZWxkLW9wdGlvbnM.option.ZnJvbQ.short_desc": {
+          "source": "Start of the time range",
+          "message": "Inicio del intervalo de tiempo"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1zcGFuLWZpZWxkLW9wdGlvbnM.option.ZnJvbQ.desc": {
+          "source": "The start of the time range.",
+          "message": "El inicio del intervalo de tiempo."
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1zcGFuLWZpZWxkLW9wdGlvbnM.option.dG8.display_name": {
+          "source": "To",
+          "message": "Hasta"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1zcGFuLWZpZWxkLW9wdGlvbnM.option.dG8.short_desc": {
+          "source": "End of the time range",
+          "message": "Fin del intervalo de tiempo"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1zcGFuLWZpZWxkLW9wdGlvbnM.option.dG8.desc": {
+          "source": "The end of the time range.",
+          "message": "El fin del intervalo de tiempo."
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXNwYW4tZXZhbHVhdGlvbnM.display_name": {
+          "source": "Search Span Evaluations",
+          "message": "Buscar Evaluaciones de Spans"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXNwYW4tZXZhbHVhdGlvbnM.short_desc": {
+          "source": "Search the evaluations of spans",
+          "message": "Buscar en las evaluaciones de spans"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXNwYW4tZXZhbHVhdGlvbnM.desc": {
+          "source": "Search the evaluation results recorded for spans with a search expression. Results are returned one page at a time; pass the returned `cursor` to read the next page. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
+          "message": "Buscar en los resultados de evaluación registrados para spans con una expresión de búsqueda. Los resultados se devuelven página por página; pase el `cursor` devuelto para leer la página siguiente. Inspeccionar actividad de IA y evaluar calidad de respuestas.\n\n**Vista previa pública:** La disponibilidad depende de su cuenta y permisos."
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXNwYW4tZXZhbHVhdGlvbnM.option.c2VhcmNoX2V4cHJlc3Npb24.display_name": {
+          "source": "Search Expression",
+          "message": "Expresión de Búsqueda"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXNwYW4tZXZhbHVhdGlvbnM.option.ZnJvbQ.display_name": {
+          "source": "From",
+          "message": "Desde"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXNwYW4tZXZhbHVhdGlvbnM.option.ZnJvbQ.short_desc": {
+          "source": "Start of the time range",
+          "message": "Inicio del intervalo de tiempo"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXNwYW4tZXZhbHVhdGlvbnM.option.ZnJvbQ.desc": {
+          "source": "The start of the time range.",
+          "message": "El inicio del intervalo de tiempo."
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXNwYW4tZXZhbHVhdGlvbnM.option.dG8.display_name": {
+          "source": "To",
+          "message": "Hasta"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXNwYW4tZXZhbHVhdGlvbnM.option.dG8.short_desc": {
+          "source": "End of the time range",
+          "message": "Fin del intervalo de tiempo"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXNwYW4tZXZhbHVhdGlvbnM.option.dG8.desc": {
+          "source": "The end of the time range.",
+          "message": "El fin del intervalo de tiempo."
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXNwYW4tZXZhbHVhdGlvbnM.option.cGFnZV9zaXpl.short_desc": {
+          "source": "Maximum number of results per page",
+          "message": "Número máximo de resultados por página"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXNwYW4tZXZhbHVhdGlvbnM.option.cGFnZV9zaXpl.desc": {
+          "source": "The maximum number of results to return in one page.",
+          "message": "El número máximo de resultados que se devolverán en una página."
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXNwYW4tZXZhbHVhdGlvbnM.option.Y3Vyc29y.short_desc": {
+          "source": "Cursor of the page to return",
+          "message": "Cursor de la página que se devolverá"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXNwYW4tZXZhbHVhdGlvbnM.option.Y3Vyc29y.desc": {
+          "source": "The `cursor` returned with the previous page; leave it out for the first page.",
+          "message": "El `cursor` devuelto con la página anterior; omítalo para la primera página."
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLWxhdGVzdC1zcGFuLWV2YWx1YXRpb25z.display_name": {
+          "source": "Search Latest Span Evaluations",
+          "message": "Buscar Últimas Evaluaciones de Spans"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLWxhdGVzdC1zcGFuLWV2YWx1YXRpb25z.desc": {
+          "source": "Search the evaluation results recorded for spans with a search expression, returning only the latest results. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
+          "message": "Buscar en los resultados de evaluación registrados para spans con una expresión de búsqueda, devolviendo solo los resultados más recientes. Inspeccionar actividad de IA y evaluar calidad de respuestas.\n\n**Vista previa pública:** La disponibilidad depende de su cuenta y permisos."
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLWxhdGVzdC1zcGFuLWV2YWx1YXRpb25z.option.c2VhcmNoX2V4cHJlc3Npb24.display_name": {
+          "source": "Search Expression",
+          "message": "Expresión de Búsqueda"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLWxhdGVzdC1zcGFuLWV2YWx1YXRpb25z.option.ZnJvbQ.display_name": {
+          "source": "From",
+          "message": "Desde"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLWxhdGVzdC1zcGFuLWV2YWx1YXRpb25z.option.ZnJvbQ.short_desc": {
+          "source": "Start of the time range",
+          "message": "Inicio del intervalo de tiempo"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLWxhdGVzdC1zcGFuLWV2YWx1YXRpb25z.option.ZnJvbQ.desc": {
+          "source": "The start of the time range.",
+          "message": "El inicio del intervalo de tiempo."
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLWxhdGVzdC1zcGFuLWV2YWx1YXRpb25z.option.dG8.display_name": {
+          "source": "To",
+          "message": "Hasta"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLWxhdGVzdC1zcGFuLWV2YWx1YXRpb25z.option.dG8.short_desc": {
+          "source": "End of the time range",
+          "message": "Fin del intervalo de tiempo"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLWxhdGVzdC1zcGFuLWV2YWx1YXRpb25z.option.dG8.desc": {
+          "source": "The end of the time range.",
+          "message": "El fin del intervalo de tiempo."
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLWxhdGVzdC1zcGFuLWV2YWx1YXRpb25z.option.cGFnZV9zaXpl.short_desc": {
+          "source": "Maximum number of results per page",
+          "message": "Número máximo de resultados por página"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLWxhdGVzdC1zcGFuLWV2YWx1YXRpb25z.option.cGFnZV9zaXpl.desc": {
+          "source": "The maximum number of results to return in one page.",
+          "message": "El número máximo de resultados que se devolverán en una página."
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLWxhdGVzdC1zcGFuLWV2YWx1YXRpb25z.option.Y3Vyc29y.short_desc": {
+          "source": "Cursor of the page to return",
+          "message": "Cursor de la página que se devolverá"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLWxhdGVzdC1zcGFuLWV2YWx1YXRpb25z.option.Y3Vyc29y.desc": {
+          "source": "The `cursor` returned with the previous page; leave it out for the first page.",
+          "message": "El `cursor` devuelto con la página anterior; omítalo para la primera página."
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW4tZXZhbHVhdGlvbnM.display_name": {
+          "source": "Aggregate Span Evaluations",
+          "message": "Agregar Evaluaciones de Spans"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW4tZXZhbHVhdGlvbnM.short_desc": {
+          "source": "Aggregate span evaluation results over time",
+          "message": "Agregar resultados de evaluación de spans a lo largo del tiempo"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW4tZXZhbHVhdGlvbnM.desc": {
+          "source": "Compute a metric over the span evaluation results that match a search expression, grouped by the dimensions you choose and optionally by time. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
+          "message": "Calcular una métrica sobre los resultados de evaluación de spans que coinciden con una expresión de búsqueda, agrupados por las dimensiones que elija y, opcionalmente, por tiempo. Inspeccionar actividad de IA y evaluar calidad de respuestas.\n\n**Vista previa pública:** La disponibilidad depende de su cuenta y permisos."
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW4tZXZhbHVhdGlvbnM.option.bWV0cmlj.display_name": {
+          "source": "Metric",
+          "message": "Métrica"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW4tZXZhbHVhdGlvbnM.option.bWV0cmlj.field.YWdncmVnYXRpb24.display_name": {
+          "source": "Aggregation",
+          "message": "Agregación"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW4tZXZhbHVhdGlvbnM.option.bWV0cmlj.field.YWdncmVnYXRpb24.allowed-value.c3RyaW5nOmNvdW50.display_name": {
+          "source": "count",
+          "message": "recuento"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW4tZXZhbHVhdGlvbnM.option.bWV0cmlj.field.YWdncmVnYXRpb24.allowed-value.c3RyaW5nOmNvdW50X2Rpc3RpbmN0.display_name": {
+          "source": "count_distinct",
+          "message": "count_distinct"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW4tZXZhbHVhdGlvbnM.option.bWV0cmlj.field.YWdncmVnYXRpb24.allowed-value.c3RyaW5nOnN1bQ.display_name": {
+          "source": "sum",
+          "message": "suma"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW4tZXZhbHVhdGlvbnM.option.bWV0cmlj.field.YWdncmVnYXRpb24.allowed-value.c3RyaW5nOmF2Zw.display_name": {
+          "source": "avg",
+          "message": "promedio"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW4tZXZhbHVhdGlvbnM.option.bWV0cmlj.field.YWdncmVnYXRpb24.allowed-value.c3RyaW5nOm1pbg.display_name": {
+          "source": "min",
+          "message": "mínimo"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW4tZXZhbHVhdGlvbnM.option.bWV0cmlj.field.YWdncmVnYXRpb24.allowed-value.c3RyaW5nOm1heA.display_name": {
+          "source": "max",
+          "message": "máximo"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW4tZXZhbHVhdGlvbnM.option.bWV0cmlj.field.YWdncmVnYXRpb24.allowed-value.c3RyaW5nOnA1MA.display_name": {
+          "source": "p50",
+          "message": "p50"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW4tZXZhbHVhdGlvbnM.option.bWV0cmlj.field.YWdncmVnYXRpb24.allowed-value.c3RyaW5nOnA5MA.display_name": {
+          "source": "p90",
+          "message": "p90"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW4tZXZhbHVhdGlvbnM.option.bWV0cmlj.field.YWdncmVnYXRpb24.allowed-value.c3RyaW5nOnA5NQ.display_name": {
+          "source": "p95",
+          "message": "p95"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW4tZXZhbHVhdGlvbnM.option.bWV0cmlj.field.YWdncmVnYXRpb24.allowed-value.c3RyaW5nOnA5OQ.display_name": {
+          "source": "p99",
+          "message": "p99"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW4tZXZhbHVhdGlvbnM.option.bWV0cmlj.field.bWVhc3VyZQ.display_name": {
+          "source": "Measure",
+          "message": "Medida"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW4tZXZhbHVhdGlvbnM.option.ZGltZW5zaW9ucw.display_name": {
+          "source": "Dimensions",
+          "message": "Dimensiones"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW4tZXZhbHVhdGlvbnM.option.dGltZV9kaW1lbnNpb24.display_name": {
+          "source": "Time Dimension",
+          "message": "Dimensión Temporal"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW4tZXZhbHVhdGlvbnM.option.dGltZV9kaW1lbnNpb24.field.Z3JhbnVsYXJpdHk.display_name": {
+          "source": "Granularity",
+          "message": "Granularidad"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW4tZXZhbHVhdGlvbnM.option.dGltZV9kaW1lbnNpb24.field.Z3JhbnVsYXJpdHk.allowed-value.c3RyaW5nOnNlY29uZA.display_name": {
+          "source": "second",
+          "message": "segundo"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW4tZXZhbHVhdGlvbnM.option.dGltZV9kaW1lbnNpb24.field.Z3JhbnVsYXJpdHk.allowed-value.c3RyaW5nOm1pbnV0ZQ.display_name": {
+          "source": "minute",
+          "message": "minuto"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW4tZXZhbHVhdGlvbnM.option.dGltZV9kaW1lbnNpb24.field.Z3JhbnVsYXJpdHk.allowed-value.c3RyaW5nOmhvdXI.display_name": {
+          "source": "hour",
+          "message": "hora"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW4tZXZhbHVhdGlvbnM.option.dGltZV9kaW1lbnNpb24.field.Z3JhbnVsYXJpdHk.allowed-value.c3RyaW5nOmRheQ.display_name": {
+          "source": "day",
+          "message": "día"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW4tZXZhbHVhdGlvbnM.option.dGltZV9kaW1lbnNpb24.field.Z3JhbnVsYXJpdHk.allowed-value.c3RyaW5nOndlZWs.display_name": {
+          "source": "week",
+          "message": "semana"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW4tZXZhbHVhdGlvbnM.option.dGltZV9kaW1lbnNpb24.field.Z3JhbnVsYXJpdHk.allowed-value.c3RyaW5nOm1vbnRo.display_name": {
+          "source": "month",
+          "message": "mes"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW4tZXZhbHVhdGlvbnM.option.c2VhcmNoX2V4cHJlc3Npb24.display_name": {
+          "source": "Search Expression",
+          "message": "Expresión de Búsqueda"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW4tZXZhbHVhdGlvbnM.option.b3JkZXJfYnk.field.ZGlyZWN0aW9u.display_name": {
+          "source": "Direction",
+          "message": "Dirección"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW4tZXZhbHVhdGlvbnM.option.b3JkZXJfYnk.field.ZmllbGQ.display_name": {
+          "source": "Field",
+          "message": "Campo"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW4tZXZhbHVhdGlvbnM.option.ZnJvbQ.display_name": {
+          "source": "From",
+          "message": "Desde"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW4tZXZhbHVhdGlvbnM.option.ZnJvbQ.short_desc": {
+          "source": "Start of the time range",
+          "message": "Inicio del intervalo de tiempo"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW4tZXZhbHVhdGlvbnM.option.ZnJvbQ.desc": {
+          "source": "The start of the time range.",
+          "message": "El inicio del intervalo de tiempo."
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW4tZXZhbHVhdGlvbnM.option.dG8.display_name": {
+          "source": "To",
+          "message": "Hasta"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW4tZXZhbHVhdGlvbnM.option.dG8.short_desc": {
+          "source": "End of the time range",
+          "message": "Fin del intervalo de tiempo"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW4tZXZhbHVhdGlvbnM.option.dG8.desc": {
+          "source": "The end of the time range.",
+          "message": "El fin del intervalo de tiempo."
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1zcGFuLWV2YWx1YXRpb24tZmllbGRz.display_name": {
+          "source": "List Span Evaluation Fields",
+          "message": "Listar Campos de Evaluación de Spans"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1zcGFuLWV2YWx1YXRpb24tZmllbGRz.short_desc": {
+          "source": "List the fields that evaluation searches can use",
+          "message": "Listar los campos que pueden usar las búsquedas de evaluaciones"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1zcGFuLWV2YWx1YXRpb24tZmllbGRz.desc": {
+          "source": "List the fields that span evaluation search expressions and aggregations can refer to, with their labels and types. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
+          "message": "Listar los campos a los que pueden hacer referencia las expresiones de búsqueda y las agregaciones de evaluaciones de spans, con sus etiquetas y tipos. Inspeccionar actividad de IA y evaluar calidad de respuestas.\n\n**Vista previa pública:** La disponibilidad depende de su cuenta y permisos."
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1zcGFuLWV2YWx1YXRpb24tZmllbGQtb3B0aW9ucw.display_name": {
+          "source": "List Span Evaluation Field Options",
+          "message": "Listar Opciones de Campos de Evaluación de Spans"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1zcGFuLWV2YWx1YXRpb24tZmllbGQtb3B0aW9ucw.short_desc": {
+          "source": "List the values recorded for an evaluation field",
+          "message": "Listar los valores registrados para un campo de evaluación"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1zcGFuLWV2YWx1YXRpb24tZmllbGQtb3B0aW9ucw.desc": {
+          "source": "List the values recorded for a span evaluation field in a time range, for building evaluation search expressions. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
+          "message": "Listar los valores registrados para un campo de evaluación de spans en un intervalo de tiempo, para construir expresiones de búsqueda de evaluaciones. Inspeccionar actividad de IA y evaluar calidad de respuestas.\n\n**Vista previa pública:** La disponibilidad depende de su cuenta y permisos."
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1zcGFuLWV2YWx1YXRpb24tZmllbGQtb3B0aW9ucw.option.ZmllbGRfbmFtZQ.display_name": {
+          "source": "Field Name",
+          "message": "Nombre del Campo"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1zcGFuLWV2YWx1YXRpb24tZmllbGQtb3B0aW9ucw.option.ZmllbGRfbmFtZQ.short_desc": {
+          "source": "Name of the field",
+          "message": "Nombre del campo"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1zcGFuLWV2YWx1YXRpb24tZmllbGQtb3B0aW9ucw.option.ZmllbGRfbmFtZQ.desc": {
+          "source": "The name of the field, as listed by the field listing action.",
+          "message": "El nombre del campo, tal como lo indica la acción de listado de campos."
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1zcGFuLWV2YWx1YXRpb24tZmllbGQtb3B0aW9ucw.option.ZnJvbQ.display_name": {
+          "source": "From",
+          "message": "Desde"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1zcGFuLWV2YWx1YXRpb24tZmllbGQtb3B0aW9ucw.option.ZnJvbQ.short_desc": {
+          "source": "Start of the time range",
+          "message": "Inicio del intervalo de tiempo"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1zcGFuLWV2YWx1YXRpb24tZmllbGQtb3B0aW9ucw.option.ZnJvbQ.desc": {
+          "source": "The start of the time range.",
+          "message": "El inicio del intervalo de tiempo."
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1zcGFuLWV2YWx1YXRpb24tZmllbGQtb3B0aW9ucw.option.dG8.display_name": {
+          "source": "To",
+          "message": "Hasta"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1zcGFuLWV2YWx1YXRpb24tZmllbGQtb3B0aW9ucw.option.dG8.short_desc": {
+          "source": "End of the time range",
+          "message": "Fin del intervalo de tiempo"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1zcGFuLWV2YWx1YXRpb24tZmllbGQtb3B0aW9ucw.option.dG8.desc": {
+          "source": "The end of the time range.",
+          "message": "El fin del intervalo de tiempo."
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1waXBlbGluZXM.display_name": {
+          "source": "List Pipelines",
+          "message": "Listar Pipelines"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1waXBlbGluZXM.short_desc": {
+          "source": "List evaluation pipelines",
+          "message": "Listar pipelines de evaluación"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1waXBlbGluZXM.desc": {
+          "source": "List the evaluation pipelines that score your AI activity automatically. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
+          "message": "Listar los pipelines de evaluación que puntúan automáticamente su actividad de IA. Inspeccionar actividad de IA y evaluar calidad de respuestas.\n\n**Vista previa pública:** La disponibilidad depende de su cuenta y permisos."
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1waXBlbGluZXM.option.ZW5hYmxlZA.display_name": {
+          "source": "Enabled",
+          "message": "Habilitado"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1waXBlbGluZXM.option.ZW5hYmxlZA.short_desc": {
+          "source": "Return only enabled or disabled pipelines",
+          "message": "Devolver solo pipelines habilitados o deshabilitados"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1waXBlbGluZXM.option.ZW5hYmxlZA.desc": {
+          "source": "When set, return only the pipelines whose enabled state matches.",
+          "message": "Si se establece, devolver solo los pipelines cuyo estado de habilitación coincide."
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1waXBlbGluZXM.option.ZnJvbQ.display_name": {
+          "source": "From",
+          "message": "Desde"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1waXBlbGluZXM.option.ZnJvbQ.short_desc": {
+          "source": "Start of the time range",
+          "message": "Inicio del intervalo de tiempo"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1waXBlbGluZXM.option.ZnJvbQ.desc": {
+          "source": "The start of the time range.",
+          "message": "El inicio del intervalo de tiempo."
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1waXBlbGluZXM.option.dG8.display_name": {
+          "source": "To",
+          "message": "Hasta"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1waXBlbGluZXM.option.dG8.short_desc": {
+          "source": "End of the time range",
+          "message": "Fin del intervalo de tiempo"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1waXBlbGluZXM.option.dG8.desc": {
+          "source": "The end of the time range.",
+          "message": "El fin del intervalo de tiempo."
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1waXBlbGluZXM.option.cGFnZV9zaXpl.short_desc": {
+          "source": "Maximum number of results per page",
+          "message": "Número máximo de resultados por página"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1waXBlbGluZXM.option.cGFnZV9zaXpl.desc": {
+          "source": "The maximum number of results to return in one page.",
+          "message": "El número máximo de resultados que se devolverán en una página."
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1waXBlbGluZXM.option.cGFnZQ.short_desc": {
+          "source": "Page number to return",
+          "message": "Número de la página que se devolverá"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1waXBlbGluZXM.option.cGFnZQ.desc": {
+          "source": "The number of the page to return, starting at 1.",
+          "message": "El número de la página que se devolverá, empezando por 1."
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1waXBlbGluZXM.option.cQ.display_name": {
+          "source": "Search Text",
+          "message": "Texto de Búsqueda"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1waXBlbGluZXM.option.cQ.short_desc": {
+          "source": "Text to filter by",
+          "message": "Texto por el que filtrar"
+        },
+        "app.TWlzdHJhbEFp.action.Y3JlYXRlLXBpcGVsaW5l.display_name": {
+          "source": "Create Pipeline",
+          "message": "Crear Pipeline"
+        },
+        "app.TWlzdHJhbEFp.action.Y3JlYXRlLXBpcGVsaW5l.short_desc": {
+          "source": "Create an evaluation pipeline",
+          "message": "Crear un pipeline de evaluación"
+        },
+        "app.TWlzdHJhbEFp.action.Y3JlYXRlLXBpcGVsaW5l.option.c2VsZWN0b3Jz.display_name": {
+          "source": "Selectors",
+          "message": "Selectores"
+        },
+        "app.TWlzdHJhbEFp.action.Y3JlYXRlLXBpcGVsaW5l.option.c2VsZWN0b3Jz.field.ZmlsdGVy.display_name": {
+          "source": "Filter",
+          "message": "Filtro"
+        },
+        "app.TWlzdHJhbEFp.action.Y3JlYXRlLXBpcGVsaW5l.option.c2VsZWN0b3Jz.field.c291cmNlX2tpbmQ.display_name": {
+          "source": "Source Kind",
+          "message": "Tipo de Origen"
+        },
+        "app.TWlzdHJhbEFp.action.Y3JlYXRlLXBpcGVsaW5l.option.c2VsZWN0b3Jz.field.c291cmNlX2tpbmQ.allowed-value.c3RyaW5nOnNwYW4.display_name": {
+          "source": "span",
+          "message": "span"
+        },
+        "app.TWlzdHJhbEFp.action.Y3JlYXRlLXBpcGVsaW5l.option.c2VsZWN0b3Jz.field.c291cmNlX2tpbmQ.allowed-value.c3RyaW5nOmxvZw.display_name": {
+          "source": "log",
+          "message": "registro"
+        },
+        "app.TWlzdHJhbEFp.action.Y3JlYXRlLXBpcGVsaW5l.option.c2VsZWN0b3Jz.field.c291cmNlX2tpbmQ.allowed-value.c3RyaW5nOm1ldHJpYw.display_name": {
+          "source": "metric",
+          "message": "métrica"
+        },
+        "app.TWlzdHJhbEFp.action.Y3JlYXRlLXBpcGVsaW5l.option.ZGVmaW5pdGlvbnM.display_name": {
+          "source": "Definitions",
+          "message": "Definiciones"
+        },
+        "app.TWlzdHJhbEFp.action.Y3JlYXRlLXBpcGVsaW5l.option.ZGVmaW5pdGlvbnM.field.bWFwcGluZw.display_name": {
+          "source": "Mapping",
+          "message": "Mapeo"
+        },
+        "app.TWlzdHJhbEFp.action.Y3JlYXRlLXBpcGVsaW5l.option.ZGVmaW5pdGlvbnM.field.c2FtcGxpbmc.display_name": {
+          "source": "Sampling",
+          "message": "Muestreo"
+        },
+        "app.TWlzdHJhbEFp.type.YWN0aW9uOlkzSmxZWFJsTFhCcGNHVnNhVzVsOipQcm9iYWJpbGlzdGljU2FtcGxpbmcjYzk3YmU3YmE2MWE1OTdmMDMzMTcxYjgyOGRiYjBlMjQ2MGYxZmNjNTFiMjY2ODNlNzRmMmY1MmY2Y2E0NTA5OQ.field.cGVyY2VudGFnZQ.display_name": {
+          "source": "Percentage",
+          "message": "Porcentaje"
+        },
+        "app.TWlzdHJhbEFp.type.YWN0aW9uOlkzSmxZWFJsTFhCcGNHVnNhVzVsOipQcm9iYWJpbGlzdGljU2FtcGxpbmcjYzk3YmU3YmE2MWE1OTdmMDMzMTcxYjgyOGRiYjBlMjQ2MGYxZmNjNTFiMjY2ODNlNzRmMmY1MmY2Y2E0NTA5OQ.field.dHlwZQ.allowed-value.c3RyaW5nOnByb2JhYmlsaXN0aWM.display_name": {
+          "source": "probabilistic",
+          "message": "probabilístico"
+        },
+        "app.TWlzdHJhbEFp.type.YWN0aW9uOlkzSmxZWFJsTFhCcGNHVnNhVzVsOipBdHRyaWJ1dGVIYXNoU2FtcGxpbmcjZDg5NmQ2ZDg1YjY0NTUzNWMyOTgzYTFkY2QzMzlmZTAwN2Y1MjY0N2EyOTBmMmJjM2RlZTU5YzBkNjU0ZDU4NQ.field.YXR0cmlidXRl.display_name": {
+          "source": "Attribute",
+          "message": "Atributo"
+        },
+        "app.TWlzdHJhbEFp.type.YWN0aW9uOlkzSmxZWFJsTFhCcGNHVnNhVzVsOipBdHRyaWJ1dGVIYXNoU2FtcGxpbmcjZDg5NmQ2ZDg1YjY0NTUzNWMyOTgzYTFkY2QzMzlmZTAwN2Y1MjY0N2EyOTBmMmJjM2RlZTU5YzBkNjU0ZDU4NQ.field.cGVyY2VudGFnZQ.display_name": {
+          "source": "Percentage",
+          "message": "Porcentaje"
+        },
+        "app.TWlzdHJhbEFp.type.YWN0aW9uOlkzSmxZWFJsTFhCcGNHVnNhVzVsOipBdHRyaWJ1dGVIYXNoU2FtcGxpbmcjZDg5NmQ2ZDg1YjY0NTUzNWMyOTgzYTFkY2QzMzlmZTAwN2Y1MjY0N2EyOTBmMmJjM2RlZTU5YzBkNjU0ZDU4NQ.field.dHlwZQ.allowed-value.c3RyaW5nOmF0dHJpYnV0ZV9oYXNo.display_name": {
+          "source": "attribute_hash",
+          "message": "attribute_hash"
+        },
+        "app.TWlzdHJhbEFp.action.Y3JlYXRlLXBpcGVsaW5l.option.ZGVmaW5pdGlvbnM.field.c2x1Zw.display_name": {
+          "source": "Slug",
+          "message": "Slug"
+        },
+        "app.TWlzdHJhbEFp.action.Y3JlYXRlLXBpcGVsaW5l.option.ZW5hYmxlZA.display_name": {
+          "source": "Enabled",
+          "message": "Habilitado"
+        },
+        "app.TWlzdHJhbEFp.action.Z2V0LXBpcGVsaW5l.display_name": {
+          "source": "Get Pipeline",
+          "message": "Obtener Pipeline"
+        },
+        "app.TWlzdHJhbEFp.action.Z2V0LXBpcGVsaW5l.short_desc": {
+          "source": "Get an evaluation pipeline",
+          "message": "Obtener un pipeline de evaluación"
+        },
+        "app.TWlzdHJhbEFp.action.Z2V0LXBpcGVsaW5l.desc": {
+          "source": "Get an evaluation pipeline with its selectors and judge definitions. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
+          "message": "Obtener un pipeline de evaluación con sus selectores y definiciones de jueces. Inspeccionar actividad de IA y evaluar calidad de respuestas.\n\n**Vista previa pública:** La disponibilidad depende de su cuenta y permisos."
+        },
+        "app.TWlzdHJhbEFp.action.Z2V0LXBpcGVsaW5l.option.cGlwZWxpbmVfaWQ.display_name": {
+          "source": "Pipeline ID",
+          "message": "ID del Pipeline"
+        },
+        "app.TWlzdHJhbEFp.action.Z2V0LXBpcGVsaW5l.option.cGlwZWxpbmVfaWQ.short_desc": {
+          "source": "Evaluation pipeline",
+          "message": "Pipeline de evaluación"
+        },
+        "app.TWlzdHJhbEFp.action.Z2V0LXBpcGVsaW5l.option.cGlwZWxpbmVfaWQ.desc": {
+          "source": "The ID of the evaluation pipeline.",
+          "message": "El ID del pipeline de evaluación."
+        },
+        "app.TWlzdHJhbEFp.action.dXBkYXRlLXBpcGVsaW5l.display_name": {
+          "source": "Update Pipeline",
+          "message": "Actualizar Pipeline"
+        },
+        "app.TWlzdHJhbEFp.action.dXBkYXRlLXBpcGVsaW5l.short_desc": {
+          "source": "Update an evaluation pipeline",
+          "message": "Actualizar un pipeline de evaluación"
+        },
+        "app.TWlzdHJhbEFp.action.dXBkYXRlLXBpcGVsaW5l.desc": {
+          "source": "Update the name, description, selectors, judge definitions or enabled state of an evaluation pipeline. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
+          "message": "Actualizar el nombre, la descripción, los selectores, las definiciones de jueces o el estado de habilitación de un pipeline de evaluación. Inspeccionar actividad de IA y evaluar calidad de respuestas.\n\n**Vista previa pública:** La disponibilidad depende de su cuenta y permisos."
+        },
+        "app.TWlzdHJhbEFp.action.dXBkYXRlLXBpcGVsaW5l.option.cGlwZWxpbmVfaWQ.display_name": {
+          "source": "Pipeline ID",
+          "message": "ID del Pipeline"
+        },
+        "app.TWlzdHJhbEFp.action.dXBkYXRlLXBpcGVsaW5l.option.cGlwZWxpbmVfaWQ.short_desc": {
+          "source": "Evaluation pipeline",
+          "message": "Pipeline de evaluación"
+        },
+        "app.TWlzdHJhbEFp.action.dXBkYXRlLXBpcGVsaW5l.option.cGlwZWxpbmVfaWQ.desc": {
+          "source": "The ID of the evaluation pipeline.",
+          "message": "El ID del pipeline de evaluación."
+        },
+        "app.TWlzdHJhbEFp.action.dXBkYXRlLXBpcGVsaW5l.option.c2VsZWN0b3Jz.display_name": {
+          "source": "Selectors",
+          "message": "Selectores"
+        },
+        "app.TWlzdHJhbEFp.action.dXBkYXRlLXBpcGVsaW5l.option.c2VsZWN0b3Jz.field.ZmlsdGVy.display_name": {
+          "source": "Filter",
+          "message": "Filtro"
+        },
+        "app.TWlzdHJhbEFp.action.dXBkYXRlLXBpcGVsaW5l.option.c2VsZWN0b3Jz.field.c291cmNlX2tpbmQ.display_name": {
+          "source": "Source Kind",
+          "message": "Tipo de Origen"
+        },
+        "app.TWlzdHJhbEFp.action.dXBkYXRlLXBpcGVsaW5l.option.c2VsZWN0b3Jz.field.c291cmNlX2tpbmQ.allowed-value.c3RyaW5nOnNwYW4.display_name": {
+          "source": "span",
+          "message": "span"
+        },
+        "app.TWlzdHJhbEFp.action.dXBkYXRlLXBpcGVsaW5l.option.c2VsZWN0b3Jz.field.c291cmNlX2tpbmQ.allowed-value.c3RyaW5nOmxvZw.display_name": {
+          "source": "log",
+          "message": "registro"
+        },
+        "app.TWlzdHJhbEFp.action.dXBkYXRlLXBpcGVsaW5l.option.c2VsZWN0b3Jz.field.c291cmNlX2tpbmQ.allowed-value.c3RyaW5nOm1ldHJpYw.display_name": {
+          "source": "metric",
+          "message": "métrica"
+        },
+        "app.TWlzdHJhbEFp.action.dXBkYXRlLXBpcGVsaW5l.option.ZGVmaW5pdGlvbnM.display_name": {
+          "source": "Definitions",
+          "message": "Definiciones"
+        },
+        "app.TWlzdHJhbEFp.action.dXBkYXRlLXBpcGVsaW5l.option.ZGVmaW5pdGlvbnM.field.bWFwcGluZw.display_name": {
+          "source": "Mapping",
+          "message": "Mapeo"
+        },
+        "app.TWlzdHJhbEFp.action.dXBkYXRlLXBpcGVsaW5l.option.ZGVmaW5pdGlvbnM.field.c2FtcGxpbmc.display_name": {
+          "source": "Sampling",
+          "message": "Muestreo"
+        },
+        "app.TWlzdHJhbEFp.type.YWN0aW9uOmRYQmtZWFJsTFhCcGNHVnNhVzVsOipQcm9iYWJpbGlzdGljU2FtcGxpbmcjYzk3YmU3YmE2MWE1OTdmMDMzMTcxYjgyOGRiYjBlMjQ2MGYxZmNjNTFiMjY2ODNlNzRmMmY1MmY2Y2E0NTA5OQ.field.cGVyY2VudGFnZQ.display_name": {
+          "source": "Percentage",
+          "message": "Porcentaje"
+        },
+        "app.TWlzdHJhbEFp.type.YWN0aW9uOmRYQmtZWFJsTFhCcGNHVnNhVzVsOipQcm9iYWJpbGlzdGljU2FtcGxpbmcjYzk3YmU3YmE2MWE1OTdmMDMzMTcxYjgyOGRiYjBlMjQ2MGYxZmNjNTFiMjY2ODNlNzRmMmY1MmY2Y2E0NTA5OQ.field.dHlwZQ.allowed-value.c3RyaW5nOnByb2JhYmlsaXN0aWM.display_name": {
+          "source": "probabilistic",
+          "message": "probabilístico"
+        },
+        "app.TWlzdHJhbEFp.type.YWN0aW9uOmRYQmtZWFJsTFhCcGNHVnNhVzVsOipBdHRyaWJ1dGVIYXNoU2FtcGxpbmcjZDg5NmQ2ZDg1YjY0NTUzNWMyOTgzYTFkY2QzMzlmZTAwN2Y1MjY0N2EyOTBmMmJjM2RlZTU5YzBkNjU0ZDU4NQ.field.YXR0cmlidXRl.display_name": {
+          "source": "Attribute",
+          "message": "Atributo"
+        },
+        "app.TWlzdHJhbEFp.type.YWN0aW9uOmRYQmtZWFJsTFhCcGNHVnNhVzVsOipBdHRyaWJ1dGVIYXNoU2FtcGxpbmcjZDg5NmQ2ZDg1YjY0NTUzNWMyOTgzYTFkY2QzMzlmZTAwN2Y1MjY0N2EyOTBmMmJjM2RlZTU5YzBkNjU0ZDU4NQ.field.cGVyY2VudGFnZQ.display_name": {
+          "source": "Percentage",
+          "message": "Porcentaje"
+        },
+        "app.TWlzdHJhbEFp.type.YWN0aW9uOmRYQmtZWFJsTFhCcGNHVnNhVzVsOipBdHRyaWJ1dGVIYXNoU2FtcGxpbmcjZDg5NmQ2ZDg1YjY0NTUzNWMyOTgzYTFkY2QzMzlmZTAwN2Y1MjY0N2EyOTBmMmJjM2RlZTU5YzBkNjU0ZDU4NQ.field.dHlwZQ.allowed-value.c3RyaW5nOmF0dHJpYnV0ZV9oYXNo.display_name": {
+          "source": "attribute_hash",
+          "message": "attribute_hash"
+        },
+        "app.TWlzdHJhbEFp.action.dXBkYXRlLXBpcGVsaW5l.option.ZGVmaW5pdGlvbnM.field.c2x1Zw.display_name": {
+          "source": "Slug",
+          "message": "Slug"
+        },
+        "app.TWlzdHJhbEFp.action.dXBkYXRlLXBpcGVsaW5l.option.ZW5hYmxlZA.display_name": {
+          "source": "Enabled",
+          "message": "Habilitado"
+        },
+        "app.TWlzdHJhbEFp.action.ZGVsZXRlLXBpcGVsaW5l.display_name": {
+          "source": "Delete Pipeline",
+          "message": "Eliminar Pipeline"
+        },
+        "app.TWlzdHJhbEFp.action.ZGVsZXRlLXBpcGVsaW5l.short_desc": {
+          "source": "Delete an evaluation pipeline",
+          "message": "Eliminar un pipeline de evaluación"
+        },
+        "app.TWlzdHJhbEFp.action.ZGVsZXRlLXBpcGVsaW5l.option.cGlwZWxpbmVfaWQ.display_name": {
+          "source": "Pipeline ID",
+          "message": "ID del Pipeline"
+        },
+        "app.TWlzdHJhbEFp.action.ZGVsZXRlLXBpcGVsaW5l.option.cGlwZWxpbmVfaWQ.short_desc": {
+          "source": "Evaluation pipeline",
+          "message": "Pipeline de evaluación"
+        },
+        "app.TWlzdHJhbEFp.action.ZGVsZXRlLXBpcGVsaW5l.option.cGlwZWxpbmVfaWQ.desc": {
+          "source": "The ID of the evaluation pipeline.",
+          "message": "El ID del pipeline de evaluación."
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1waXBlbGluZS1yZXN1bHQtZmllbGRz.display_name": {
+          "source": "List Pipeline Result Fields",
+          "message": "Listar Campos de Resultados del Pipeline"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1waXBlbGluZS1yZXN1bHQtZmllbGRz.short_desc": {
+          "source": "List the result fields of a pipeline",
+          "message": "Listar los campos de resultados de un pipeline"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1waXBlbGluZS1yZXN1bHQtZmllbGRz.desc": {
+          "source": "List the fields of the results that an evaluation pipeline records, for searching its results. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
+          "message": "Listar los campos de los resultados que registra un pipeline de evaluación, para buscar en sus resultados. Inspeccionar actividad de IA y evaluar calidad de respuestas.\n\n**Vista previa pública:** La disponibilidad depende de su cuenta y permisos."
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1waXBlbGluZS1yZXN1bHQtZmllbGRz.option.cGlwZWxpbmVfaWQ.display_name": {
+          "source": "Pipeline ID",
+          "message": "ID del Pipeline"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1waXBlbGluZS1yZXN1bHQtZmllbGRz.option.cGlwZWxpbmVfaWQ.short_desc": {
+          "source": "Evaluation pipeline",
+          "message": "Pipeline de evaluación"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1waXBlbGluZS1yZXN1bHQtZmllbGRz.option.cGlwZWxpbmVfaWQ.desc": {
+          "source": "The ID of the evaluation pipeline.",
+          "message": "El ID del pipeline de evaluación."
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXBpcGVsaW5lLXJlc3VsdHM.display_name": {
+          "source": "Search Pipeline Results",
+          "message": "Buscar Resultados del Pipeline"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXBpcGVsaW5lLXJlc3VsdHM.short_desc": {
+          "source": "Search the results of evaluation pipelines",
+          "message": "Buscar en los resultados de los pipelines de evaluación"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXBpcGVsaW5lLXJlc3VsdHM.option.cGlwZWxpbmVfY29uZmlnX3NsdWdz.display_name": {
+          "source": "Pipeline Config Slugs",
+          "message": "Slugs de Configuración del Pipeline"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXBpcGVsaW5lLXJlc3VsdHM.option.c2VhcmNoX2V4cHJlc3Npb24.display_name": {
+          "source": "Search Expression",
+          "message": "Expresión de Búsqueda"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXBpcGVsaW5lLXJlc3VsdHM.option.ZnJvbQ.display_name": {
+          "source": "From",
+          "message": "Desde"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXBpcGVsaW5lLXJlc3VsdHM.option.ZnJvbQ.short_desc": {
+          "source": "Start of the time range",
+          "message": "Inicio del intervalo de tiempo"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXBpcGVsaW5lLXJlc3VsdHM.option.ZnJvbQ.desc": {
+          "source": "The start of the time range.",
+          "message": "El inicio del intervalo de tiempo."
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXBpcGVsaW5lLXJlc3VsdHM.option.dG8.display_name": {
+          "source": "To",
+          "message": "Hasta"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXBpcGVsaW5lLXJlc3VsdHM.option.dG8.short_desc": {
+          "source": "End of the time range",
+          "message": "Fin del intervalo de tiempo"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXBpcGVsaW5lLXJlc3VsdHM.option.dG8.desc": {
+          "source": "The end of the time range.",
+          "message": "El fin del intervalo de tiempo."
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXBpcGVsaW5lLXJlc3VsdHM.option.cGFnZV9zaXpl.short_desc": {
+          "source": "Maximum number of results per page",
+          "message": "Número máximo de resultados por página"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXBpcGVsaW5lLXJlc3VsdHM.option.cGFnZV9zaXpl.desc": {
+          "source": "The maximum number of results to return in one page.",
+          "message": "El número máximo de resultados que se devolverán en una página."
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXBpcGVsaW5lLXJlc3VsdHM.option.Y3Vyc29y.short_desc": {
+          "source": "Cursor of the page to return",
+          "message": "Cursor de la página que se devolverá"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXBpcGVsaW5lLXJlc3VsdHM.option.Y3Vyc29y.desc": {
+          "source": "The `cursor` returned with the previous page; leave it out for the first page.",
+          "message": "El `cursor` devuelto con la página anterior; omítalo para la primera página."
+        },
+        "app.TWlzdHJhbEFp.action.aW1wb3J0LWRhdGFzZXQtZnJvbS1zcGFucw.display_name": {
+          "source": "Import Dataset From Spans",
+          "message": "Importar Conjunto de Datos desde Spans"
+        },
+        "app.TWlzdHJhbEFp.action.aW1wb3J0LWRhdGFzZXQtZnJvbS1zcGFucw.short_desc": {
+          "source": "Import spans into a dataset",
+          "message": "Importar spans en un conjunto de datos"
+        },
+        "app.TWlzdHJhbEFp.action.aW1wb3J0LWRhdGFzZXQtZnJvbS1zcGFucw.desc": {
+          "source": "Populate the dataset with records made from up to 500 spans, mapping span or resource attributes to record payload keys. The import runs as a dataset task; unavailable spans are skipped. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
+          "message": "Rellenar el conjunto de datos con registros creados a partir de hasta 500 spans, asignando atributos de span o de recurso a claves de la carga útil del registro. La importación se ejecuta como una tarea del conjunto de datos; los spans no disponibles se omiten. Inspeccionar actividad de IA y evaluar calidad de respuestas.\n\n**Vista previa pública:** La disponibilidad depende de su cuenta y permisos."
+        },
+        "app.TWlzdHJhbEFp.action.aW1wb3J0LWRhdGFzZXQtZnJvbS1zcGFucw.option.ZGF0YXNldF9pZA.short_desc": {
+          "source": "Dataset to import into",
+          "message": "Conjunto de datos en el que importar"
+        },
+        "app.TWlzdHJhbEFp.action.aW1wb3J0LWRhdGFzZXQtZnJvbS1zcGFucw.option.ZGF0YXNldF9pZA.desc": {
+          "source": "The ID or workspace-scoped slug of the dataset.",
+          "message": "El ID o el slug del conjunto de datos dentro del espacio de trabajo."
+        },
+        "app.TWlzdHJhbEFp.action.aW1wb3J0LWRhdGFzZXQtZnJvbS1zcGFucw.option.c3Bhbl9yZWZlcmVuY2Vz.display_name": {
+          "source": "Span References",
+          "message": "Referencias de Spans"
+        },
+        "app.TWlzdHJhbEFp.action.aW1wb3J0LWRhdGFzZXQtZnJvbS1zcGFucw.option.c3Bhbl9yZWZlcmVuY2Vz.short_desc": {
+          "source": "Spans to attempt to import",
+          "message": "Spans que se intentarán importar"
+        },
+        "app.TWlzdHJhbEFp.action.aW1wb3J0LWRhdGFzZXQtZnJvbS1zcGFucw.option.c3Bhbl9yZWZlcmVuY2Vz.desc": {
+          "source": "Spans to attempt to import; unavailable references are skipped, and trace and span IDs are attached as record properties automatically.",
+          "message": "Spans que se intentarán importar; las referencias no disponibles se omiten y los ID de traza y de span se adjuntan automáticamente como propiedades del registro."
+        },
+        "app.TWlzdHJhbEFp.action.aW1wb3J0LWRhdGFzZXQtZnJvbS1zcGFucw.option.c3Bhbl9yZWZlcmVuY2Vz.field.c3Bhbl9pZA.display_name": {
+          "source": "Span ID",
+          "message": "ID del Span"
+        },
+        "app.TWlzdHJhbEFp.action.aW1wb3J0LWRhdGFzZXQtZnJvbS1zcGFucw.option.c3Bhbl9yZWZlcmVuY2Vz.field.dHJhY2VfaWQ.display_name": {
+          "source": "Trace ID",
+          "message": "ID de Traza"
+        },
+        "app.TWlzdHJhbEFp.action.aW1wb3J0LWRhdGFzZXQtZnJvbS1zcGFucw.option.bWFwcGluZ19jb250cmFjdA.display_name": {
+          "source": "Mapping Contract",
+          "message": "Contrato de Mapeo"
+        },
+        "app.TWlzdHJhbEFp.action.aW1wb3J0LWRhdGFzZXQtZnJvbS1zcGFucw.option.bWFwcGluZ19jb250cmFjdA.short_desc": {
+          "source": "Mapping rules applied independently to every requested telemetry span",
+          "message": "Reglas de mapeo aplicadas de forma independiente a cada span de telemetría solicitado"
+        },
+        "app.TWlzdHJhbEFp.action.aW1wb3J0LWRhdGFzZXQtZnJvbS1zcGFucw.option.bWFwcGluZ19jb250cmFjdA.desc": {
+          "source": "Mapping rules applied independently to every requested telemetry span.\n\nVersion 1 mappings are optional per span: a missing, null, blank-string, or empty-array\nsource omits the target key. JSON object and array strings become structured values;\nscalar-looking and malformed JSON strings remain strings.",
+          "message": "Reglas de mapeo aplicadas de forma independiente a cada span de telemetría solicitado.\n\nLos mapeos de la versión 1 son opcionales por span: un origen ausente, null, de cadena vacía o de array vacío\nomite la clave de destino. Las cadenas de objetos y arrays JSON se convierten en valores estructurados;\nlas cadenas JSON con aspecto escalar y las mal formadas siguen siendo cadenas."
+        },
+        "app.TWlzdHJhbEFp.action.aW1wb3J0LWRhdGFzZXQtZnJvbS1zcGFucw.option.bWFwcGluZ19jb250cmFjdA.field.bWFwcGluZ3M.display_name": {
+          "source": "Mappings",
+          "message": "Mapeos"
+        },
+        "app.TWlzdHJhbEFp.type.YWN0aW9uOmFXMXdiM0owTFdSaGRHRnpaWFF0Wm5KdmJTMXpjR0Z1Y3c6U3BhbkRhdGFzZXRNYXBwaW5nI2ZiYWI5ZWU0N2I2ZDY5ZDgyZDQ5YTY0YzE1OTdkYjA2MGMzMGQ3OGM3ZGZlMmRjYmY4ZDg5ZDllMWI3MThmODI.field.c291cmNlX2ZpZWxk.display_name": {
+          "source": "Source Field",
+          "message": "Campo de Origen"
+        },
+        "app.TWlzdHJhbEFp.type.YWN0aW9uOmFXMXdiM0owTFdSaGRHRnpaWFF0Wm5KdmJTMXpjR0Z1Y3c6U3BhbkRhdGFzZXRTb3VyY2VSZWZlcmVuY2UjNDNlMGU5MTkzNGZhM2I5NDU0MTFmYjlkOTFlN2U3N2MzNDBjYzFiNDI0ZjMwZWViNzgyNTA1NjU5ZjFhZmY0ZQ.field.a2V5.display_name": {
+          "source": "Key",
+          "message": "Clave"
+        },
+        "app.TWlzdHJhbEFp.type.YWN0aW9uOmFXMXdiM0owTFdSaGRHRnpaWFF0Wm5KdmJTMXpjR0Z1Y3c6U3BhbkRhdGFzZXRTb3VyY2VSZWZlcmVuY2UjNDNlMGU5MTkzNGZhM2I5NDU0MTFmYjlkOTFlN2U3N2MzNDBjYzFiNDI0ZjMwZWViNzgyNTA1NjU5ZjFhZmY0ZQ.field.a2V5.short_desc": {
+          "source": "Literal attribute dictionary key",
+          "message": "Clave literal del diccionario de atributos"
+        },
+        "app.TWlzdHJhbEFp.type.YWN0aW9uOmFXMXdiM0owTFdSaGRHRnpaWFF0Wm5KdmJTMXpjR0Z1Y3c6U3BhbkRhdGFzZXRTb3VyY2VSZWZlcmVuY2UjNDNlMGU5MTkzNGZhM2I5NDU0MTFmYjlkOTFlN2U3N2MzNDBjYzFiNDI0ZjMwZWViNzgyNTA1NjU5ZjFhZmY0ZQ.field.a2V5.desc": {
+          "source": "Literal attribute dictionary key; dots do not denote a nested path.",
+          "message": "Clave literal del diccionario de atributos; los puntos no indican una ruta anidada."
+        },
+        "app.TWlzdHJhbEFp.type.YWN0aW9uOmFXMXdiM0owTFdSaGRHRnpaWFF0Wm5KdmJTMXpjR0Z1Y3c6U3BhbkRhdGFzZXRTb3VyY2VSZWZlcmVuY2UjNDNlMGU5MTkzNGZhM2I5NDU0MTFmYjlkOTFlN2U3N2MzNDBjYzFiNDI0ZjMwZWViNzgyNTA1NjU5ZjFhZmY0ZQ.field.bmFtZXNwYWNl.display_name": {
+          "source": "Namespace",
+          "message": "Espacio de nombres"
+        },
+        "app.TWlzdHJhbEFp.type.YWN0aW9uOmFXMXdiM0owTFdSaGRHRnpaWFF0Wm5KdmJTMXpjR0Z1Y3c6U3BhbkRhdGFzZXRTb3VyY2VSZWZlcmVuY2UjNDNlMGU5MTkzNGZhM2I5NDU0MTFmYjlkOTFlN2U3N2MzNDBjYzFiNDI0ZjMwZWViNzgyNTA1NjU5ZjFhZmY0ZQ.field.bmFtZXNwYWNl.short_desc": {
+          "source": "Attribute maps that may supply dataset payload values",
+          "message": "Mapas de atributos que pueden aportar valores a la carga útil del conjunto de datos"
+        },
+        "app.TWlzdHJhbEFp.type.YWN0aW9uOmFXMXdiM0owTFdSaGRHRnpaWFF0Wm5KdmJTMXpjR0Z1Y3c6U3BhbkRhdGFzZXRTb3VyY2VSZWZlcmVuY2UjNDNlMGU5MTkzNGZhM2I5NDU0MTFmYjlkOTFlN2U3N2MzNDBjYzFiNDI0ZjMwZWViNzgyNTA1NjU5ZjFhZmY0ZQ.field.bmFtZXNwYWNl.desc": {
+          "source": "Attribute maps that may supply dataset payload values.",
+          "message": "Mapas de atributos que pueden aportar valores a la carga útil del conjunto de datos."
+        },
+        "app.TWlzdHJhbEFp.type.YWN0aW9uOmFXMXdiM0owTFdSaGRHRnpaWFF0Wm5KdmJTMXpjR0Z1Y3c6U3BhbkRhdGFzZXRTb3VyY2VSZWZlcmVuY2UjNDNlMGU5MTkzNGZhM2I5NDU0MTFmYjlkOTFlN2U3N2MzNDBjYzFiNDI0ZjMwZWViNzgyNTA1NjU5ZjFhZmY0ZQ.field.bmFtZXNwYWNl.allowed-value.c3RyaW5nOnNwYW5fYXR0cmlidXRlcw.display_name": {
+          "source": "span_attributes",
+          "message": "span_attributes"
+        },
+        "app.TWlzdHJhbEFp.type.YWN0aW9uOmFXMXdiM0owTFdSaGRHRnpaWFF0Wm5KdmJTMXpjR0Z1Y3c6U3BhbkRhdGFzZXRTb3VyY2VSZWZlcmVuY2UjNDNlMGU5MTkzNGZhM2I5NDU0MTFmYjlkOTFlN2U3N2MzNDBjYzFiNDI0ZjMwZWViNzgyNTA1NjU5ZjFhZmY0ZQ.field.bmFtZXNwYWNl.allowed-value.c3RyaW5nOnJlc291cmNlX2F0dHJpYnV0ZXM.display_name": {
+          "source": "resource_attributes",
+          "message": "resource_attributes"
+        },
+        "app.TWlzdHJhbEFp.type.YWN0aW9uOmFXMXdiM0owTFdSaGRHRnpaWFF0Wm5KdmJTMXpjR0Z1Y3c6U3BhbkRhdGFzZXRNYXBwaW5nI2ZiYWI5ZWU0N2I2ZDY5ZDgyZDQ5YTY0YzE1OTdkYjA2MGMzMGQ3OGM3ZGZlMmRjYmY4ZDg5ZDllMWI3MThmODI.field.dGFyZ2V0X2ZpZWxk.display_name": {
+          "source": "Target Field",
+          "message": "Campo de Destino"
+        },
+        "app.TWlzdHJhbEFp.type.YWN0aW9uOmFXMXdiM0owTFdSaGRHRnpaWFF0Wm5KdmJTMXpjR0Z1Y3c6U3BhbkRhdGFzZXRNYXBwaW5nI2ZiYWI5ZWU0N2I2ZDY5ZDgyZDQ5YTY0YzE1OTdkYjA2MGMzMGQ3OGM3ZGZlMmRjYmY4ZDg5ZDllMWI3MThmODI.field.dGFyZ2V0X2ZpZWxk.short_desc": {
+          "source": "Literal top-level key to create in the dataset record payload",
+          "message": "Clave literal de nivel superior que se creará en la carga útil del registro del conjunto de datos"
+        },
+        "app.TWlzdHJhbEFp.type.YWN0aW9uOmFXMXdiM0owTFdSaGRHRnpaWFF0Wm5KdmJTMXpjR0Z1Y3c6U3BhbkRhdGFzZXRNYXBwaW5nI2ZiYWI5ZWU0N2I2ZDY5ZDgyZDQ5YTY0YzE1OTdkYjA2MGMzMGQ3OGM3ZGZlMmRjYmY4ZDg5ZDllMWI3MThmODI.field.dGFyZ2V0X2ZpZWxk.desc": {
+          "source": "Literal top-level key to create in the dataset record payload.",
+          "message": "Clave literal de nivel superior que se creará en la carga útil del registro del conjunto de datos."
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLWxhdGVzdC1zcGFuLWV2YWx1YXRpb25z.short_desc": {
+          "source": "Search the latest span evaluation results",
+          "message": "Buscar los resultados más recientes de evaluación de spans"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1waXBlbGluZXM.option.cQ.desc": {
+          "source": "Text to filter the listed pipelines by.",
+          "message": "Texto por el que filtrar los pipelines listados."
+        },
+        "app.TWlzdHJhbEFp.action.Y3JlYXRlLXBpcGVsaW5l.desc": {
+          "source": "Create an evaluation pipeline: its selectors choose the telemetry to evaluate (spans, logs or metrics) and its definitions name the judges that score it. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
+          "message": "Crear un pipeline de evaluación: sus selectores eligen la telemetría que se evaluará (spans, registros o métricas) y sus definiciones nombran a los jueces que la puntúan. Inspeccionar actividad de IA y evaluar calidad de respuestas.\n\n**Vista previa pública:** La disponibilidad depende de su cuenta y permisos."
+        },
+        "app.TWlzdHJhbEFp.action.ZGVsZXRlLXBpcGVsaW5l.desc": {
+          "source": "Delete an evaluation pipeline. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.\n\n**Deletion:** This operation can permanently remove the selected resource or access.",
+          "message": "Eliminar un pipeline de evaluación. Inspeccionar actividad de IA y evaluar calidad de respuestas.\n\n**Vista previa pública:** La disponibilidad depende de su cuenta y permisos.\n\n**Eliminación:** Esta operación puede eliminar permanentemente el recurso o acceso seleccionado."
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXBpcGVsaW5lLXJlc3VsdHM.desc": {
+          "source": "Search the results that evaluation pipelines recorded for the pipeline configurations you name by slug. Results are returned one page at a time. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
+          "message": "Buscar en los resultados que registraron los pipelines de evaluación para las configuraciones de pipeline que indique por slug. Los resultados se devuelven página por página. Inspeccionar actividad de IA y evaluar calidad de respuestas.\n\n**Vista previa pública:** La disponibilidad depende de su cuenta y permisos."
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXBpcGVsaW5lLXJlc3VsdHM.option.cGlwZWxpbmVfY29uZmlnX3NsdWdz.short_desc": {
+          "source": "Slugs of the pipeline configurations to search",
+          "message": "Slugs de las configuraciones de pipeline en las que buscar"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXBpcGVsaW5lLXJlc3VsdHM.option.cGlwZWxpbmVfY29uZmlnX3NsdWdz.desc": {
+          "source": "The slugs of the pipeline configurations whose results to search, as listed under `pipeline_configs` of a pipeline; at least one is required.",
+          "message": "Los slugs de las configuraciones de pipeline cuyos resultados se buscarán, tal como figuran en `pipeline_configs` de un pipeline; se requiere al menos uno."
         }
       }
     }

@@ -9309,11 +9309,11 @@
         },
         "app.TWlzdHJhbEFp.action.cmVwcm9jZXNzLWxpYnJhcnktZG9jdW1lbnQ.display_name": {
           "source": "Reprocess Library Document",
-          "message": "문서 재처리. 어시스턴트 답변을 기반으로 하는 문서 라이브러리 관리.\n\n**공개 미리보기:** 이용 가능 여부는 계정 및 권한에 따라 다릅니다."
+          "message": "문서 재처리"
         },
         "app.TWlzdHJhbEFp.action.cmVwcm9jZXNzLWxpYnJhcnktZG9jdW1lbnQ.short_desc": {
           "source": "Reprocess Library Document",
-          "message": "문서 재처리. 어시스턴트 답변을 기반으로 하는 문서 라이브러리 관리.\n\n**공개 미리보기:** 이용 가능 여부는 계정 및 권한에 따라 다릅니다."
+          "message": "문서 재처리"
         },
         "app.TWlzdHJhbEFp.action.cmVwcm9jZXNzLWxpYnJhcnktZG9jdW1lbnQ.desc": {
           "source": "Reprocess a document. Manage document libraries used to ground assistant answers.\n\n**Public preview:** Availability depends on your account and permissions.",
@@ -10501,11 +10501,11 @@
         },
         "app.TWlzdHJhbEFp.action.cmVzZXQtd29ya2Zsb3c.display_name": {
           "source": "Reset Workflow",
-          "message": "워크플로 재설정. 워크플로 자동화 관리 및 실행 검사.\n\n**공개 미리보기:** 이용 가능 여부는 계정 및 권한에 따라 다릅니다."
+          "message": "워크플로 재설정"
         },
         "app.TWlzdHJhbEFp.action.cmVzZXQtd29ya2Zsb3c.short_desc": {
           "source": "Reset Workflow",
-          "message": "워크플로 재설정. 워크플로 자동화 관리 및 실행 검사.\n\n**공개 미리보기:** 이용 가능 여부는 계정 및 권한에 따라 다릅니다."
+          "message": "워크플로 재설정"
         },
         "app.TWlzdHJhbEFp.action.cmVzZXQtd29ya2Zsb3c.desc": {
           "source": "Reset Workflow. Manage automated workflows and inspect their execution.\n\n**Public preview:** Availability depends on your account and permissions.",
@@ -11401,7 +11401,7 @@
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXdvcmtmbG93LWV2ZW50cw.option.Y3Vyc29y.display_name": {
           "source": "Cursor",
-          "message": "__CODE_N__"
+          "message": "커서"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXdvcmtmbG93LWV2ZW50cw.option.Y3Vyc29y.short_desc": {
           "source": "Cursor for pagination.",
@@ -11589,7 +11589,7 @@
         },
         "app.TWlzdHJhbEFp.action.bGlzdC13b3JrZmxvdy1yZWdpc3RyYXRpb25z.option.Y3Vyc29y.display_name": {
           "source": "Cursor",
-          "message": "__CODE_N__"
+          "message": "커서"
         },
         "app.TWlzdHJhbEFp.action.bGlzdC13b3JrZmxvdy1yZWdpc3RyYXRpb25z.option.Y3Vyc29y.short_desc": {
           "source": "The cursor for pagination",
@@ -12109,11 +12109,11 @@
         },
         "app.TWlzdHJhbEFp.action.bGlzdC1jb25uZWN0b3Jz.option.Y3Vyc29y.display_name": {
           "source": "Cursor",
-          "message": "__CODE_N__"
+          "message": "커서"
         },
         "app.TWlzdHJhbEFp.action.bGlzdC1jb25uZWN0b3Jz.option.Y3Vyc29y.short_desc": {
           "source": "Cursor",
-          "message": "__CODE_N__"
+          "message": "커서"
         },
         "app.TWlzdHJhbEFp.action.bGlzdC1jb25uZWN0b3Jz.option.Y3Vyc29y.desc": {
           "source": "The `cursor` value for this operation.",
@@ -13265,7 +13265,7 @@
         },
         "app.TWlzdHJhbEFp.action.bGlzdC13b3JrZmxvdy1kZXBsb3ltZW50cw.option.Y3Vyc29y.display_name": {
           "source": "Cursor",
-          "message": "__CODE_N__"
+          "message": "커서"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXdvcmtmbG93LWRlcGxveW1lbnQ.option.d29ya2Zsb3dfbmFtZQ.display_name": {
           "source": "Workflow Name",
@@ -15718,6 +15718,1754 @@
         "app.TWlzdHJhbEFp.action.dXBkYXRlLWNvbm5lY3Rvcg.option.cHJvdG9jb2w.allowed-value.c3RyaW5nOmh0dHA.display_name": {
           "source": "http",
           "message": "http"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLWxvZ3M.option.b3JkZXI.display_name": {
+          "source": "Order",
+          "message": "순서"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLWxvZ3M.option.b3JkZXI.allowed-value.c3RyaW5nOmFzYw.display_name": {
+          "source": "asc",
+          "message": "오름차순"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLWxvZ3M.option.b3JkZXI.allowed-value.c3RyaW5nOmRlc2M.display_name": {
+          "source": "desc",
+          "message": "내림차순"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLWxvZ3M.option.cGFnZV9zaXpl.display_name": {
+          "source": "Page Size",
+          "message": "페이지 크기"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLWxvZ3M.option.Y3Vyc29y.display_name": {
+          "source": "Cursor",
+          "message": "커서"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXRyYWNlcw.option.cGFnZV9zaXpl.display_name": {
+          "source": "Page Size",
+          "message": "페이지 크기"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXRyYWNlcw.option.Y3Vyc29y.display_name": {
+          "source": "Cursor",
+          "message": "커서"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXRyYWNlcw.option.dGltZV9kaW1lbnNpb24.field.Z3JhbnVsYXJpdHk.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "auto",
+          "message": "자동"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXRyYWNlcw.option.b3JkZXJfYnk.display_name": {
+          "source": "Order By",
+          "message": "정렬 기준"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXRyYWNlcw.option.b3JkZXJfYnk.field.ZGlyZWN0aW9u.allowed-value.c3RyaW5nOmFzYw.display_name": {
+          "source": "asc",
+          "message": "오름차순"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXRyYWNlcw.option.b3JkZXJfYnk.field.ZGlyZWN0aW9u.allowed-value.c3RyaW5nOmRlc2M.display_name": {
+          "source": "desc",
+          "message": "내림차순"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXRyYWNlcw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "제한"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC10cmFjZS1zcGFucw.option.cGFnZV9zaXpl.display_name": {
+          "source": "Page Size",
+          "message": "페이지 크기"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC10cmFjZS1zcGFucw.option.Y3Vyc29y.display_name": {
+          "source": "Cursor",
+          "message": "커서"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXNwYW5z.option.cGFnZV9zaXpl.display_name": {
+          "source": "Page Size",
+          "message": "페이지 크기"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXNwYW5z.option.Y3Vyc29y.display_name": {
+          "source": "Cursor",
+          "message": "커서"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW5z.option.dGltZV9kaW1lbnNpb24.field.Z3JhbnVsYXJpdHk.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "auto",
+          "message": "자동"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW5z.option.b3JkZXJfYnk.display_name": {
+          "source": "Order By",
+          "message": "정렬 기준"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW5z.option.b3JkZXJfYnk.field.ZGlyZWN0aW9u.allowed-value.c3RyaW5nOmFzYw.display_name": {
+          "source": "asc",
+          "message": "오름차순"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW5z.option.b3JkZXJfYnk.field.ZGlyZWN0aW9u.allowed-value.c3RyaW5nOmRlc2M.display_name": {
+          "source": "desc",
+          "message": "내림차순"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW5z.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "제한"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXNwYW4tZXZhbHVhdGlvbnM.option.cGFnZV9zaXpl.display_name": {
+          "source": "Page Size",
+          "message": "페이지 크기"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXNwYW4tZXZhbHVhdGlvbnM.option.Y3Vyc29y.display_name": {
+          "source": "Cursor",
+          "message": "커서"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLWxhdGVzdC1zcGFuLWV2YWx1YXRpb25z.option.cGFnZV9zaXpl.display_name": {
+          "source": "Page Size",
+          "message": "페이지 크기"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLWxhdGVzdC1zcGFuLWV2YWx1YXRpb25z.option.Y3Vyc29y.display_name": {
+          "source": "Cursor",
+          "message": "커서"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW4tZXZhbHVhdGlvbnM.option.dGltZV9kaW1lbnNpb24.field.Z3JhbnVsYXJpdHk.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "auto",
+          "message": "자동"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW4tZXZhbHVhdGlvbnM.option.b3JkZXJfYnk.display_name": {
+          "source": "Order By",
+          "message": "정렬 기준"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW4tZXZhbHVhdGlvbnM.option.b3JkZXJfYnk.field.ZGlyZWN0aW9u.allowed-value.c3RyaW5nOmFzYw.display_name": {
+          "source": "asc",
+          "message": "오름차순"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW4tZXZhbHVhdGlvbnM.option.b3JkZXJfYnk.field.ZGlyZWN0aW9u.allowed-value.c3RyaW5nOmRlc2M.display_name": {
+          "source": "desc",
+          "message": "내림차순"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW4tZXZhbHVhdGlvbnM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "제한"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1waXBlbGluZXM.option.cGFnZV9zaXpl.display_name": {
+          "source": "Page Size",
+          "message": "페이지 크기"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1waXBlbGluZXM.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "페이지"
+        },
+        "app.TWlzdHJhbEFp.action.Y3JlYXRlLXBpcGVsaW5l.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "이름"
+        },
+        "app.TWlzdHJhbEFp.action.Y3JlYXRlLXBpcGVsaW5l.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "설명"
+        },
+        "app.TWlzdHJhbEFp.type.YWN0aW9uOlkzSmxZWFJsTFhCcGNHVnNhVzVsOipQcm9iYWJpbGlzdGljU2FtcGxpbmcjYzk3YmU3YmE2MWE1OTdmMDMzMTcxYjgyOGRiYjBlMjQ2MGYxZmNjNTFiMjY2ODNlNzRmMmY1MmY2Y2E0NTA5OQ.field.dHlwZQ.display_name": {
+          "source": "Type",
+          "message": "유형"
+        },
+        "app.TWlzdHJhbEFp.type.YWN0aW9uOlkzSmxZWFJsTFhCcGNHVnNhVzVsOipBdHRyaWJ1dGVIYXNoU2FtcGxpbmcjZDg5NmQ2ZDg1YjY0NTUzNWMyOTgzYTFkY2QzMzlmZTAwN2Y1MjY0N2EyOTBmMmJjM2RlZTU5YzBkNjU0ZDU4NQ.field.dHlwZQ.display_name": {
+          "source": "Type",
+          "message": "유형"
+        },
+        "app.TWlzdHJhbEFp.action.dXBkYXRlLXBpcGVsaW5l.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "이름"
+        },
+        "app.TWlzdHJhbEFp.action.dXBkYXRlLXBpcGVsaW5l.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "설명"
+        },
+        "app.TWlzdHJhbEFp.type.YWN0aW9uOmRYQmtZWFJsTFhCcGNHVnNhVzVsOipQcm9iYWJpbGlzdGljU2FtcGxpbmcjYzk3YmU3YmE2MWE1OTdmMDMzMTcxYjgyOGRiYjBlMjQ2MGYxZmNjNTFiMjY2ODNlNzRmMmY1MmY2Y2E0NTA5OQ.field.dHlwZQ.display_name": {
+          "source": "Type",
+          "message": "유형"
+        },
+        "app.TWlzdHJhbEFp.type.YWN0aW9uOmRYQmtZWFJsTFhCcGNHVnNhVzVsOipBdHRyaWJ1dGVIYXNoU2FtcGxpbmcjZDg5NmQ2ZDg1YjY0NTUzNWMyOTgzYTFkY2QzMzlmZTAwN2Y1MjY0N2EyOTBmMmJjM2RlZTU5YzBkNjU0ZDU4NQ.field.dHlwZQ.display_name": {
+          "source": "Type",
+          "message": "유형"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXBpcGVsaW5lLXJlc3VsdHM.option.cGFnZV9zaXpl.display_name": {
+          "source": "Page Size",
+          "message": "페이지 크기"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXBpcGVsaW5lLXJlc3VsdHM.option.Y3Vyc29y.display_name": {
+          "source": "Cursor",
+          "message": "커서"
+        },
+        "app.TWlzdHJhbEFp.action.aW1wb3J0LWRhdGFzZXQtZnJvbS1zcGFucw.option.ZGF0YXNldF9pZA.display_name": {
+          "source": "Dataset ID",
+          "message": "데이터셋 ID"
+        },
+        "app.TWlzdHJhbEFp.action.aW1wb3J0LWRhdGFzZXQtZnJvbS1zcGFucw.option.bWFwcGluZ19jb250cmFjdA.field.dmVyc2lvbg.display_name": {
+          "source": "Version",
+          "message": "버전"
+        },
+        "app.TWlzdHJhbEFp.action.aW1wb3J0LWRhdGFzZXQtZnJvbS1zcGFucw.option.bWFwcGluZ19jb250cmFjdA.field.dmVyc2lvbg.allowed-value.aW50OjE.display_name": {
+          "source": "1",
+          "message": "1"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLWxvZ3M.display_name": {
+          "source": "Search Logs",
+          "message": "로그 검색"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLWxvZ3M.short_desc": {
+          "source": "Search the logs of your AI activity",
+          "message": "AI 활동의 로그 검색"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLWxvZ3M.desc": {
+          "source": "Search the OpenTelemetry logs recorded for your AI activity with a search expression, in the order you choose. Results are returned one page at a time; pass the returned `cursor` to read the next page. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
+          "message": "검색 식으로 AI 활동에 대해 기록된 OpenTelemetry 로그를 선택한 순서대로 검색합니다. 결과는 한 번에 한 페이지씩 반환되며, 다음 페이지를 읽으려면 반환된 `cursor`를 전달하세요. AI 활동을 검사하고 응답 품질을 평가합니다.\n\n**공개 미리보기:** 이용 가능 여부는 계정 및 권한에 따라 다릅니다."
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLWxvZ3M.option.c2VhcmNoX2V4cHJlc3Npb24.display_name": {
+          "source": "Search Expression",
+          "message": "검색 식"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLWxvZ3M.option.ZnJvbQ.display_name": {
+          "source": "From",
+          "message": "시작"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLWxvZ3M.option.ZnJvbQ.short_desc": {
+          "source": "Start of the time range",
+          "message": "시간 범위의 시작"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLWxvZ3M.option.ZnJvbQ.desc": {
+          "source": "The start of the time range.",
+          "message": "시간 범위의 시작입니다."
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLWxvZ3M.option.dG8.display_name": {
+          "source": "To",
+          "message": "끝"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLWxvZ3M.option.dG8.short_desc": {
+          "source": "End of the time range",
+          "message": "시간 범위의 끝"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLWxvZ3M.option.dG8.desc": {
+          "source": "The end of the time range.",
+          "message": "시간 범위의 끝입니다."
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLWxvZ3M.option.cGFnZV9zaXpl.short_desc": {
+          "source": "Maximum number of results per page",
+          "message": "페이지당 최대 결과 수"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLWxvZ3M.option.cGFnZV9zaXpl.desc": {
+          "source": "The maximum number of results to return in one page.",
+          "message": "한 페이지에 반환할 최대 결과 수입니다."
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLWxvZ3M.option.Y3Vyc29y.short_desc": {
+          "source": "Cursor of the page to return",
+          "message": "반환할 페이지의 커서"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLWxvZ3M.option.Y3Vyc29y.desc": {
+          "source": "The `cursor` returned with the previous page; leave it out for the first page.",
+          "message": "이전 페이지와 함께 반환된 `cursor`입니다. 첫 페이지에서는 생략하세요."
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1sb2ctZmllbGRz.display_name": {
+          "source": "List Log Fields",
+          "message": "로그 필드 목록"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1sb2ctZmllbGRz.short_desc": {
+          "source": "List the fields that log searches can use",
+          "message": "로그 검색에서 사용할 수 있는 필드 나열"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1sb2ctZmllbGRz.desc": {
+          "source": "List the fields that log search expressions can refer to, with their labels and types. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
+          "message": "로그 검색 식에서 참조할 수 있는 필드를 레이블 및 유형과 함께 나열합니다. AI 활동을 검사하고 응답 품질을 평가합니다.\n\n**공개 미리보기:** 이용 가능 여부는 계정 및 권한에 따라 다릅니다."
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1sb2ctZmllbGQtb3B0aW9ucw.display_name": {
+          "source": "List Log Field Options",
+          "message": "로그 필드 옵션 목록"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1sb2ctZmllbGQtb3B0aW9ucw.short_desc": {
+          "source": "List the values recorded for a log field",
+          "message": "로그 필드에 기록된 값 나열"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1sb2ctZmllbGQtb3B0aW9ucw.desc": {
+          "source": "List the values recorded for a log field in a time range, for building log search expressions. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
+          "message": "시간 범위 내에서 로그 필드에 기록된 값을 나열합니다. 로그 검색 식을 작성할 때 사용합니다. AI 활동을 검사하고 응답 품질을 평가합니다.\n\n**공개 미리보기:** 이용 가능 여부는 계정 및 권한에 따라 다릅니다."
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1sb2ctZmllbGQtb3B0aW9ucw.option.ZmllbGRfbmFtZQ.display_name": {
+          "source": "Field Name",
+          "message": "필드 이름"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1sb2ctZmllbGQtb3B0aW9ucw.option.ZmllbGRfbmFtZQ.short_desc": {
+          "source": "Name of the field",
+          "message": "필드의 이름"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1sb2ctZmllbGQtb3B0aW9ucw.option.ZmllbGRfbmFtZQ.desc": {
+          "source": "The name of the field, as listed by the field listing action.",
+          "message": "필드 목록 작업에서 나열된 필드 이름입니다."
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1sb2ctZmllbGQtb3B0aW9ucw.option.ZnJvbQ.display_name": {
+          "source": "From",
+          "message": "시작"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1sb2ctZmllbGQtb3B0aW9ucw.option.ZnJvbQ.short_desc": {
+          "source": "Start of the time range",
+          "message": "시간 범위의 시작"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1sb2ctZmllbGQtb3B0aW9ucw.option.ZnJvbQ.desc": {
+          "source": "The start of the time range.",
+          "message": "시간 범위의 시작입니다."
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1sb2ctZmllbGQtb3B0aW9ucw.option.dG8.display_name": {
+          "source": "To",
+          "message": "끝"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1sb2ctZmllbGQtb3B0aW9ucw.option.dG8.short_desc": {
+          "source": "End of the time range",
+          "message": "시간 범위의 끝"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1sb2ctZmllbGQtb3B0aW9ucw.option.dG8.desc": {
+          "source": "The end of the time range.",
+          "message": "시간 범위의 끝입니다."
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXRyYWNlcw.display_name": {
+          "source": "Search Traces",
+          "message": "추적 검색"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXRyYWNlcw.short_desc": {
+          "source": "Search the traces of your AI activity",
+          "message": "AI 활동의 추적 검색"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXRyYWNlcw.desc": {
+          "source": "Search the OpenTelemetry traces recorded for your AI activity with a search expression. Results are returned one page at a time; pass the returned `cursor` to read the next page. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
+          "message": "검색 식으로 AI 활동에 대해 기록된 OpenTelemetry 추적을 검색합니다. 결과는 한 번에 한 페이지씩 반환되며, 다음 페이지를 읽으려면 반환된 `cursor`를 전달하세요. AI 활동을 검사하고 응답 품질을 평가합니다.\n\n**공개 미리보기:** 이용 가능 여부는 계정 및 권한에 따라 다릅니다."
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXRyYWNlcw.option.c2VhcmNoX2V4cHJlc3Npb24.display_name": {
+          "source": "Search Expression",
+          "message": "검색 식"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXRyYWNlcw.option.c2VhcmNoX2V4cHJlc3Npb24.short_desc": {
+          "source": "Filter expression",
+          "message": "필터 식"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXRyYWNlcw.option.c2VhcmNoX2V4cHJlc3Npb24.desc": {
+          "source": "Filter expression. Trace fields (e.g. `service_name`, `error_count`, `models_used`) are evaluated on the aggregated trace. Span attribute fields (e.g. `temporalWorkflowID`, `wf.type`, `gen_ai.provider.name`) are evaluated on the spans of the trace: a trace matches when one of its spans matches. Span attribute conditions combined with AND must hold on the same span, e.g. `temporalWorkflowID = 'wf-1' AND wf.type = 'activity'` only matches traces with a span carrying both attributes. Results are always one row per trace.",
+          "message": "필터 식입니다. 추적 필드(예: `service_name`, `error_count`, `models_used`)는 집계된 추적에 대해 평가됩니다. 스팬 속성 필드(예: `temporalWorkflowID`, `wf.type`, `gen_ai.provider.name`)는 추적의 스팬에 대해 평가되며, 추적의 스팬 중 하나가 일치하면 해당 추적이 일치합니다. AND로 결합된 스팬 속성 조건은 동일한 스팬에서 모두 충족되어야 합니다. 예를 들어 `temporalWorkflowID = 'wf-1' AND wf.type = 'activity'`는 두 속성을 모두 가진 스팬이 있는 추적과만 일치합니다. 결과는 항상 추적당 한 행입니다."
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXRyYWNlcw.option.ZnJvbQ.display_name": {
+          "source": "From",
+          "message": "시작"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXRyYWNlcw.option.ZnJvbQ.short_desc": {
+          "source": "Start of the time range",
+          "message": "시간 범위의 시작"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXRyYWNlcw.option.ZnJvbQ.desc": {
+          "source": "The start of the time range.",
+          "message": "시간 범위의 시작입니다."
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXRyYWNlcw.option.dG8.display_name": {
+          "source": "To",
+          "message": "끝"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXRyYWNlcw.option.dG8.short_desc": {
+          "source": "End of the time range",
+          "message": "시간 범위의 끝"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXRyYWNlcw.option.dG8.desc": {
+          "source": "The end of the time range.",
+          "message": "시간 범위의 끝입니다."
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXRyYWNlcw.option.cGFnZV9zaXpl.short_desc": {
+          "source": "Maximum number of results per page",
+          "message": "페이지당 최대 결과 수"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXRyYWNlcw.option.cGFnZV9zaXpl.desc": {
+          "source": "The maximum number of results to return in one page.",
+          "message": "한 페이지에 반환할 최대 결과 수입니다."
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXRyYWNlcw.option.Y3Vyc29y.short_desc": {
+          "source": "Cursor of the page to return",
+          "message": "반환할 페이지의 커서"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXRyYWNlcw.option.Y3Vyc29y.desc": {
+          "source": "The `cursor` returned with the previous page; leave it out for the first page.",
+          "message": "이전 페이지와 함께 반환된 `cursor`입니다. 첫 페이지에서는 생략하세요."
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXRyYWNlcw.display_name": {
+          "source": "Aggregate Traces",
+          "message": "추적 집계"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXRyYWNlcw.short_desc": {
+          "source": "Aggregate trace metrics over time",
+          "message": "시간 경과에 따른 추적 메트릭 집계"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXRyYWNlcw.desc": {
+          "source": "Compute a metric over the traces that match a search expression, grouped by the dimensions you choose and optionally by time. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
+          "message": "검색 식과 일치하는 추적에 대해 선택한 차원별로, 필요한 경우 시간별로도 그룹화하여 메트릭을 계산합니다. AI 활동을 검사하고 응답 품질을 평가합니다.\n\n**공개 미리보기:** 이용 가능 여부는 계정 및 권한에 따라 다릅니다."
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXRyYWNlcw.option.bWV0cmlj.display_name": {
+          "source": "Metric",
+          "message": "메트릭"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXRyYWNlcw.option.bWV0cmlj.field.YWdncmVnYXRpb24.display_name": {
+          "source": "Aggregation",
+          "message": "집계"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXRyYWNlcw.option.bWV0cmlj.field.YWdncmVnYXRpb24.allowed-value.c3RyaW5nOmNvdW50.display_name": {
+          "source": "count",
+          "message": "개수"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXRyYWNlcw.option.bWV0cmlj.field.YWdncmVnYXRpb24.allowed-value.c3RyaW5nOmNvdW50X2Rpc3RpbmN0.display_name": {
+          "source": "count_distinct",
+          "message": "count_distinct"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXRyYWNlcw.option.bWV0cmlj.field.YWdncmVnYXRpb24.allowed-value.c3RyaW5nOnN1bQ.display_name": {
+          "source": "sum",
+          "message": "합계"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXRyYWNlcw.option.bWV0cmlj.field.YWdncmVnYXRpb24.allowed-value.c3RyaW5nOmF2Zw.display_name": {
+          "source": "avg",
+          "message": "평균"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXRyYWNlcw.option.bWV0cmlj.field.YWdncmVnYXRpb24.allowed-value.c3RyaW5nOm1pbg.display_name": {
+          "source": "min",
+          "message": "최소"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXRyYWNlcw.option.bWV0cmlj.field.YWdncmVnYXRpb24.allowed-value.c3RyaW5nOm1heA.display_name": {
+          "source": "max",
+          "message": "최대"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXRyYWNlcw.option.bWV0cmlj.field.YWdncmVnYXRpb24.allowed-value.c3RyaW5nOnA1MA.display_name": {
+          "source": "p50",
+          "message": "p50"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXRyYWNlcw.option.bWV0cmlj.field.YWdncmVnYXRpb24.allowed-value.c3RyaW5nOnA5MA.display_name": {
+          "source": "p90",
+          "message": "p90"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXRyYWNlcw.option.bWV0cmlj.field.YWdncmVnYXRpb24.allowed-value.c3RyaW5nOnA5NQ.display_name": {
+          "source": "p95",
+          "message": "p95"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXRyYWNlcw.option.bWV0cmlj.field.YWdncmVnYXRpb24.allowed-value.c3RyaW5nOnA5OQ.display_name": {
+          "source": "p99",
+          "message": "p99"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXRyYWNlcw.option.bWV0cmlj.field.bWVhc3VyZQ.display_name": {
+          "source": "Measure",
+          "message": "측정 항목"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXRyYWNlcw.option.ZGltZW5zaW9ucw.display_name": {
+          "source": "Dimensions",
+          "message": "차원"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXRyYWNlcw.option.dGltZV9kaW1lbnNpb24.display_name": {
+          "source": "Time Dimension",
+          "message": "시간 차원"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXRyYWNlcw.option.dGltZV9kaW1lbnNpb24.field.Z3JhbnVsYXJpdHk.display_name": {
+          "source": "Granularity",
+          "message": "세분성"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXRyYWNlcw.option.dGltZV9kaW1lbnNpb24.field.Z3JhbnVsYXJpdHk.allowed-value.c3RyaW5nOnNlY29uZA.display_name": {
+          "source": "second",
+          "message": "초"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXRyYWNlcw.option.dGltZV9kaW1lbnNpb24.field.Z3JhbnVsYXJpdHk.allowed-value.c3RyaW5nOm1pbnV0ZQ.display_name": {
+          "source": "minute",
+          "message": "분"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXRyYWNlcw.option.dGltZV9kaW1lbnNpb24.field.Z3JhbnVsYXJpdHk.allowed-value.c3RyaW5nOmhvdXI.display_name": {
+          "source": "hour",
+          "message": "시간"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXRyYWNlcw.option.dGltZV9kaW1lbnNpb24.field.Z3JhbnVsYXJpdHk.allowed-value.c3RyaW5nOmRheQ.display_name": {
+          "source": "day",
+          "message": "일"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXRyYWNlcw.option.dGltZV9kaW1lbnNpb24.field.Z3JhbnVsYXJpdHk.allowed-value.c3RyaW5nOndlZWs.display_name": {
+          "source": "week",
+          "message": "주"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXRyYWNlcw.option.dGltZV9kaW1lbnNpb24.field.Z3JhbnVsYXJpdHk.allowed-value.c3RyaW5nOm1vbnRo.display_name": {
+          "source": "month",
+          "message": "월"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXRyYWNlcw.option.c2VhcmNoX2V4cHJlc3Npb24.display_name": {
+          "source": "Search Expression",
+          "message": "검색 식"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXRyYWNlcw.option.b3JkZXJfYnk.field.ZGlyZWN0aW9u.display_name": {
+          "source": "Direction",
+          "message": "방향"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXRyYWNlcw.option.b3JkZXJfYnk.field.ZmllbGQ.display_name": {
+          "source": "Field",
+          "message": "필드"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXRyYWNlcw.option.ZnJvbQ.display_name": {
+          "source": "From",
+          "message": "시작"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXRyYWNlcw.option.ZnJvbQ.short_desc": {
+          "source": "Start of the time range",
+          "message": "시간 범위의 시작"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXRyYWNlcw.option.ZnJvbQ.desc": {
+          "source": "The start of the time range.",
+          "message": "시간 범위의 시작입니다."
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXRyYWNlcw.option.dG8.display_name": {
+          "source": "To",
+          "message": "끝"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXRyYWNlcw.option.dG8.short_desc": {
+          "source": "End of the time range",
+          "message": "시간 범위의 끝"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXRyYWNlcw.option.dG8.desc": {
+          "source": "The end of the time range.",
+          "message": "시간 범위의 끝입니다."
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC10cmFjZS1maWVsZHM.display_name": {
+          "source": "List Trace Fields",
+          "message": "추적 필드 목록"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC10cmFjZS1maWVsZHM.short_desc": {
+          "source": "List the fields that trace searches can use",
+          "message": "추적 검색에서 사용할 수 있는 필드 나열"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC10cmFjZS1maWVsZHM.desc": {
+          "source": "List the fields that trace search expressions and aggregations can refer to, with their labels and types. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
+          "message": "추적 검색 식 및 집계에서 참조할 수 있는 필드를 레이블 및 유형과 함께 나열합니다. AI 활동을 검사하고 응답 품질을 평가합니다.\n\n**공개 미리보기:** 이용 가능 여부는 계정 및 권한에 따라 다릅니다."
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC10cmFjZS1maWVsZC1vcHRpb25z.display_name": {
+          "source": "List Trace Field Options",
+          "message": "추적 필드 옵션 목록"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC10cmFjZS1maWVsZC1vcHRpb25z.short_desc": {
+          "source": "List the values recorded for a trace field",
+          "message": "추적 필드에 기록된 값 나열"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC10cmFjZS1maWVsZC1vcHRpb25z.desc": {
+          "source": "List the values recorded for a trace field in a time range, for building trace search expressions. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
+          "message": "시간 범위 내에서 추적 필드에 기록된 값을 나열합니다. 추적 검색 식을 작성할 때 사용합니다. AI 활동을 검사하고 응답 품질을 평가합니다.\n\n**공개 미리보기:** 이용 가능 여부는 계정 및 권한에 따라 다릅니다."
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC10cmFjZS1maWVsZC1vcHRpb25z.option.ZmllbGRfbmFtZQ.display_name": {
+          "source": "Field Name",
+          "message": "필드 이름"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC10cmFjZS1maWVsZC1vcHRpb25z.option.ZmllbGRfbmFtZQ.short_desc": {
+          "source": "Name of the field",
+          "message": "필드의 이름"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC10cmFjZS1maWVsZC1vcHRpb25z.option.ZmllbGRfbmFtZQ.desc": {
+          "source": "The name of the field, as listed by the field listing action.",
+          "message": "필드 목록 작업에서 나열된 필드 이름입니다."
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC10cmFjZS1maWVsZC1vcHRpb25z.option.ZnJvbQ.display_name": {
+          "source": "From",
+          "message": "시작"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC10cmFjZS1maWVsZC1vcHRpb25z.option.ZnJvbQ.short_desc": {
+          "source": "Start of the time range",
+          "message": "시간 범위의 시작"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC10cmFjZS1maWVsZC1vcHRpb25z.option.ZnJvbQ.desc": {
+          "source": "The start of the time range.",
+          "message": "시간 범위의 시작입니다."
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC10cmFjZS1maWVsZC1vcHRpb25z.option.dG8.display_name": {
+          "source": "To",
+          "message": "끝"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC10cmFjZS1maWVsZC1vcHRpb25z.option.dG8.short_desc": {
+          "source": "End of the time range",
+          "message": "시간 범위의 끝"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC10cmFjZS1maWVsZC1vcHRpb25z.option.dG8.desc": {
+          "source": "The end of the time range.",
+          "message": "시간 범위의 끝입니다."
+        },
+        "app.TWlzdHJhbEFp.action.Z2V0LXRyYWNl.display_name": {
+          "source": "Get Trace",
+          "message": "추적 가져오기"
+        },
+        "app.TWlzdHJhbEFp.action.Z2V0LXRyYWNl.short_desc": {
+          "source": "Get a trace by its ID",
+          "message": "ID로 추적 가져오기"
+        },
+        "app.TWlzdHJhbEFp.action.Z2V0LXRyYWNl.desc": {
+          "source": "Get a trace by its ID, with its timing, token usage, counts of spans, model calls and tool calls, and its first and last messages. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
+          "message": "ID로 추적을 가져옵니다. 타이밍, 토큰 사용량, 스팬·모델 호출·도구 호출 수, 첫 번째 및 마지막 메시지가 포함됩니다. AI 활동을 검사하고 응답 품질을 평가합니다.\n\n**공개 미리보기:** 이용 가능 여부는 계정 및 권한에 따라 다릅니다."
+        },
+        "app.TWlzdHJhbEFp.action.Z2V0LXRyYWNl.option.dHJhY2VfaWQ.display_name": {
+          "source": "Trace ID",
+          "message": "추적 ID"
+        },
+        "app.TWlzdHJhbEFp.action.Z2V0LXRyYWNl.option.dHJhY2VfaWQ.short_desc": {
+          "source": "ID of the trace",
+          "message": "추적의 ID"
+        },
+        "app.TWlzdHJhbEFp.action.Z2V0LXRyYWNl.option.dHJhY2VfaWQ.desc": {
+          "source": "The 32-digit hexadecimal ID of the trace.",
+          "message": "추적의 32자리 16진수 ID입니다."
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC10cmFjZS1zcGFucw.display_name": {
+          "source": "List Trace Spans",
+          "message": "추적 스팬 목록"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC10cmFjZS1zcGFucw.short_desc": {
+          "source": "List the spans of a trace",
+          "message": "추적의 스팬 나열"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC10cmFjZS1zcGFucw.desc": {
+          "source": "List the spans of a trace, to follow each step of an AI request. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
+          "message": "추적의 스팬을 나열하여 AI 요청의 각 단계를 따라갑니다. AI 활동을 검사하고 응답 품질을 평가합니다.\n\n**공개 미리보기:** 이용 가능 여부는 계정 및 권한에 따라 다릅니다."
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC10cmFjZS1zcGFucw.option.dHJhY2VfaWQ.display_name": {
+          "source": "Trace ID",
+          "message": "추적 ID"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC10cmFjZS1zcGFucw.option.dHJhY2VfaWQ.short_desc": {
+          "source": "ID of the trace",
+          "message": "추적의 ID"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC10cmFjZS1zcGFucw.option.dHJhY2VfaWQ.desc": {
+          "source": "The 32-digit hexadecimal ID of the trace.",
+          "message": "추적의 32자리 16진수 ID입니다."
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC10cmFjZS1zcGFucw.option.ZnJvbQ.display_name": {
+          "source": "From",
+          "message": "시작"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC10cmFjZS1zcGFucw.option.ZnJvbQ.short_desc": {
+          "source": "Start of the time range",
+          "message": "시간 범위의 시작"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC10cmFjZS1zcGFucw.option.ZnJvbQ.desc": {
+          "source": "The start of the time range.",
+          "message": "시간 범위의 시작입니다."
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC10cmFjZS1zcGFucw.option.dG8.display_name": {
+          "source": "To",
+          "message": "끝"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC10cmFjZS1zcGFucw.option.dG8.short_desc": {
+          "source": "End of the time range",
+          "message": "시간 범위의 끝"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC10cmFjZS1zcGFucw.option.dG8.desc": {
+          "source": "The end of the time range.",
+          "message": "시간 범위의 끝입니다."
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC10cmFjZS1zcGFucw.option.cGFnZV9zaXpl.short_desc": {
+          "source": "Maximum number of results per page",
+          "message": "페이지당 최대 결과 수"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC10cmFjZS1zcGFucw.option.cGFnZV9zaXpl.desc": {
+          "source": "The maximum number of results to return in one page.",
+          "message": "한 페이지에 반환할 최대 결과 수입니다."
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC10cmFjZS1zcGFucw.option.Y3Vyc29y.short_desc": {
+          "source": "Cursor of the page to return",
+          "message": "반환할 페이지의 커서"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC10cmFjZS1zcGFucw.option.Y3Vyc29y.desc": {
+          "source": "The `cursor` returned with the previous page; leave it out for the first page.",
+          "message": "이전 페이지와 함께 반환된 `cursor`입니다. 첫 페이지에서는 생략하세요."
+        },
+        "app.TWlzdHJhbEFp.action.Z2V0LXRyYWNlLXNwYW4.display_name": {
+          "source": "Get Trace Span",
+          "message": "추적 스팬 가져오기"
+        },
+        "app.TWlzdHJhbEFp.action.Z2V0LXRyYWNlLXNwYW4.short_desc": {
+          "source": "Get a span of a trace",
+          "message": "추적의 스팬 가져오기"
+        },
+        "app.TWlzdHJhbEFp.action.Z2V0LXRyYWNlLXNwYW4.desc": {
+          "source": "Get one span of a trace by its trace ID and span ID, with its timing, model request settings, messages, tool call and attributes. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
+          "message": "추적 ID와 스팬 ID로 추적의 스팬 하나를 가져옵니다. 타이밍, 모델 요청 설정, 메시지, 도구 호출 및 속성이 포함됩니다. AI 활동을 검사하고 응답 품질을 평가합니다.\n\n**공개 미리보기:** 이용 가능 여부는 계정 및 권한에 따라 다릅니다."
+        },
+        "app.TWlzdHJhbEFp.action.Z2V0LXRyYWNlLXNwYW4.option.dHJhY2VfaWQ.display_name": {
+          "source": "Trace ID",
+          "message": "추적 ID"
+        },
+        "app.TWlzdHJhbEFp.action.Z2V0LXRyYWNlLXNwYW4.option.dHJhY2VfaWQ.short_desc": {
+          "source": "ID of the trace",
+          "message": "추적의 ID"
+        },
+        "app.TWlzdHJhbEFp.action.Z2V0LXRyYWNlLXNwYW4.option.dHJhY2VfaWQ.desc": {
+          "source": "The 32-digit hexadecimal ID of the trace.",
+          "message": "추적의 32자리 16진수 ID입니다."
+        },
+        "app.TWlzdHJhbEFp.action.Z2V0LXRyYWNlLXNwYW4.option.c3Bhbl9pZA.display_name": {
+          "source": "Span ID",
+          "message": "스팬 ID"
+        },
+        "app.TWlzdHJhbEFp.action.Z2V0LXRyYWNlLXNwYW4.option.c3Bhbl9pZA.short_desc": {
+          "source": "ID of the span",
+          "message": "스팬의 ID"
+        },
+        "app.TWlzdHJhbEFp.action.Z2V0LXRyYWNlLXNwYW4.option.c3Bhbl9pZA.desc": {
+          "source": "The 16-digit hexadecimal ID of the span.",
+          "message": "스팬의 16자리 16진수 ID입니다."
+        },
+        "app.TWlzdHJhbEFp.action.Z2V0LXRyYWNlLXNwYW4.option.ZnJvbQ.display_name": {
+          "source": "From",
+          "message": "시작"
+        },
+        "app.TWlzdHJhbEFp.action.Z2V0LXRyYWNlLXNwYW4.option.ZnJvbQ.short_desc": {
+          "source": "Start of the time range",
+          "message": "시간 범위의 시작"
+        },
+        "app.TWlzdHJhbEFp.action.Z2V0LXRyYWNlLXNwYW4.option.ZnJvbQ.desc": {
+          "source": "The start of the time range.",
+          "message": "시간 범위의 시작입니다."
+        },
+        "app.TWlzdHJhbEFp.action.Z2V0LXRyYWNlLXNwYW4.option.dG8.display_name": {
+          "source": "To",
+          "message": "끝"
+        },
+        "app.TWlzdHJhbEFp.action.Z2V0LXRyYWNlLXNwYW4.option.dG8.short_desc": {
+          "source": "End of the time range",
+          "message": "시간 범위의 끝"
+        },
+        "app.TWlzdHJhbEFp.action.Z2V0LXRyYWNlLXNwYW4.option.dG8.desc": {
+          "source": "The end of the time range.",
+          "message": "시간 범위의 끝입니다."
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXNwYW5z.display_name": {
+          "source": "Search Spans",
+          "message": "스팬 검색"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXNwYW5z.short_desc": {
+          "source": "Search the spans of your AI activity",
+          "message": "AI 활동의 스팬 검색"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXNwYW5z.desc": {
+          "source": "Search the OpenTelemetry spans recorded for your AI activity with a search expression. Results are returned one page at a time; pass the returned `cursor` to read the next page. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
+          "message": "검색 식으로 AI 활동에 대해 기록된 OpenTelemetry 스팬을 검색합니다. 결과는 한 번에 한 페이지씩 반환되며, 다음 페이지를 읽으려면 반환된 `cursor`를 전달하세요. AI 활동을 검사하고 응답 품질을 평가합니다.\n\n**공개 미리보기:** 이용 가능 여부는 계정 및 권한에 따라 다릅니다."
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXNwYW5z.option.c2VhcmNoX2V4cHJlc3Npb24.display_name": {
+          "source": "Search Expression",
+          "message": "검색 식"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXNwYW5z.option.ZnJvbQ.display_name": {
+          "source": "From",
+          "message": "시작"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXNwYW5z.option.ZnJvbQ.short_desc": {
+          "source": "Start of the time range",
+          "message": "시간 범위의 시작"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXNwYW5z.option.ZnJvbQ.desc": {
+          "source": "The start of the time range.",
+          "message": "시간 범위의 시작입니다."
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXNwYW5z.option.dG8.display_name": {
+          "source": "To",
+          "message": "끝"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXNwYW5z.option.dG8.short_desc": {
+          "source": "End of the time range",
+          "message": "시간 범위의 끝"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXNwYW5z.option.dG8.desc": {
+          "source": "The end of the time range.",
+          "message": "시간 범위의 끝입니다."
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXNwYW5z.option.cGFnZV9zaXpl.short_desc": {
+          "source": "Maximum number of results per page",
+          "message": "페이지당 최대 결과 수"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXNwYW5z.option.cGFnZV9zaXpl.desc": {
+          "source": "The maximum number of results to return in one page.",
+          "message": "한 페이지에 반환할 최대 결과 수입니다."
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXNwYW5z.option.Y3Vyc29y.short_desc": {
+          "source": "Cursor of the page to return",
+          "message": "반환할 페이지의 커서"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXNwYW5z.option.Y3Vyc29y.desc": {
+          "source": "The `cursor` returned with the previous page; leave it out for the first page.",
+          "message": "이전 페이지와 함께 반환된 `cursor`입니다. 첫 페이지에서는 생략하세요."
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW5z.display_name": {
+          "source": "Aggregate Spans",
+          "message": "스팬 집계"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW5z.short_desc": {
+          "source": "Aggregate span metrics over time",
+          "message": "시간 경과에 따른 스팬 메트릭 집계"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW5z.desc": {
+          "source": "Compute a metric over the spans that match a search expression, grouped by the dimensions you choose and optionally by time. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
+          "message": "검색 식과 일치하는 스팬에 대해 선택한 차원별로, 필요한 경우 시간별로도 그룹화하여 메트릭을 계산합니다. AI 활동을 검사하고 응답 품질을 평가합니다.\n\n**공개 미리보기:** 이용 가능 여부는 계정 및 권한에 따라 다릅니다."
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW5z.option.bWV0cmlj.display_name": {
+          "source": "Metric",
+          "message": "메트릭"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW5z.option.bWV0cmlj.field.YWdncmVnYXRpb24.display_name": {
+          "source": "Aggregation",
+          "message": "집계"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW5z.option.bWV0cmlj.field.YWdncmVnYXRpb24.allowed-value.c3RyaW5nOmNvdW50.display_name": {
+          "source": "count",
+          "message": "개수"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW5z.option.bWV0cmlj.field.YWdncmVnYXRpb24.allowed-value.c3RyaW5nOmNvdW50X2Rpc3RpbmN0.display_name": {
+          "source": "count_distinct",
+          "message": "count_distinct"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW5z.option.bWV0cmlj.field.YWdncmVnYXRpb24.allowed-value.c3RyaW5nOnN1bQ.display_name": {
+          "source": "sum",
+          "message": "합계"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW5z.option.bWV0cmlj.field.YWdncmVnYXRpb24.allowed-value.c3RyaW5nOmF2Zw.display_name": {
+          "source": "avg",
+          "message": "평균"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW5z.option.bWV0cmlj.field.YWdncmVnYXRpb24.allowed-value.c3RyaW5nOm1pbg.display_name": {
+          "source": "min",
+          "message": "최소"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW5z.option.bWV0cmlj.field.YWdncmVnYXRpb24.allowed-value.c3RyaW5nOm1heA.display_name": {
+          "source": "max",
+          "message": "최대"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW5z.option.bWV0cmlj.field.YWdncmVnYXRpb24.allowed-value.c3RyaW5nOnA1MA.display_name": {
+          "source": "p50",
+          "message": "p50"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW5z.option.bWV0cmlj.field.YWdncmVnYXRpb24.allowed-value.c3RyaW5nOnA5MA.display_name": {
+          "source": "p90",
+          "message": "p90"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW5z.option.bWV0cmlj.field.YWdncmVnYXRpb24.allowed-value.c3RyaW5nOnA5NQ.display_name": {
+          "source": "p95",
+          "message": "p95"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW5z.option.bWV0cmlj.field.YWdncmVnYXRpb24.allowed-value.c3RyaW5nOnA5OQ.display_name": {
+          "source": "p99",
+          "message": "p99"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW5z.option.bWV0cmlj.field.bWVhc3VyZQ.display_name": {
+          "source": "Measure",
+          "message": "측정 항목"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW5z.option.ZGltZW5zaW9ucw.display_name": {
+          "source": "Dimensions",
+          "message": "차원"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW5z.option.dGltZV9kaW1lbnNpb24.display_name": {
+          "source": "Time Dimension",
+          "message": "시간 차원"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW5z.option.dGltZV9kaW1lbnNpb24.field.Z3JhbnVsYXJpdHk.display_name": {
+          "source": "Granularity",
+          "message": "세분성"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW5z.option.dGltZV9kaW1lbnNpb24.field.Z3JhbnVsYXJpdHk.allowed-value.c3RyaW5nOnNlY29uZA.display_name": {
+          "source": "second",
+          "message": "초"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW5z.option.dGltZV9kaW1lbnNpb24.field.Z3JhbnVsYXJpdHk.allowed-value.c3RyaW5nOm1pbnV0ZQ.display_name": {
+          "source": "minute",
+          "message": "분"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW5z.option.dGltZV9kaW1lbnNpb24.field.Z3JhbnVsYXJpdHk.allowed-value.c3RyaW5nOmhvdXI.display_name": {
+          "source": "hour",
+          "message": "시간"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW5z.option.dGltZV9kaW1lbnNpb24.field.Z3JhbnVsYXJpdHk.allowed-value.c3RyaW5nOmRheQ.display_name": {
+          "source": "day",
+          "message": "일"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW5z.option.dGltZV9kaW1lbnNpb24.field.Z3JhbnVsYXJpdHk.allowed-value.c3RyaW5nOndlZWs.display_name": {
+          "source": "week",
+          "message": "주"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW5z.option.dGltZV9kaW1lbnNpb24.field.Z3JhbnVsYXJpdHk.allowed-value.c3RyaW5nOm1vbnRo.display_name": {
+          "source": "month",
+          "message": "월"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW5z.option.c2VhcmNoX2V4cHJlc3Npb24.display_name": {
+          "source": "Search Expression",
+          "message": "검색 식"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW5z.option.b3JkZXJfYnk.field.ZGlyZWN0aW9u.display_name": {
+          "source": "Direction",
+          "message": "방향"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW5z.option.b3JkZXJfYnk.field.ZmllbGQ.display_name": {
+          "source": "Field",
+          "message": "필드"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW5z.option.ZnJvbQ.display_name": {
+          "source": "From",
+          "message": "시작"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW5z.option.ZnJvbQ.short_desc": {
+          "source": "Start of the time range",
+          "message": "시간 범위의 시작"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW5z.option.ZnJvbQ.desc": {
+          "source": "The start of the time range.",
+          "message": "시간 범위의 시작입니다."
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW5z.option.dG8.display_name": {
+          "source": "To",
+          "message": "끝"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW5z.option.dG8.short_desc": {
+          "source": "End of the time range",
+          "message": "시간 범위의 끝"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW5z.option.dG8.desc": {
+          "source": "The end of the time range.",
+          "message": "시간 범위의 끝입니다."
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1zcGFuLWZpZWxkcw.display_name": {
+          "source": "List Span Fields",
+          "message": "스팬 필드 목록"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1zcGFuLWZpZWxkcw.short_desc": {
+          "source": "List the fields that span searches can use",
+          "message": "스팬 검색에서 사용할 수 있는 필드 나열"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1zcGFuLWZpZWxkcw.desc": {
+          "source": "List the fields that span search expressions and aggregations can refer to, with their labels and types. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
+          "message": "스팬 검색 식 및 집계에서 참조할 수 있는 필드를 레이블 및 유형과 함께 나열합니다. AI 활동을 검사하고 응답 품질을 평가합니다.\n\n**공개 미리보기:** 이용 가능 여부는 계정 및 권한에 따라 다릅니다."
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1zcGFuLWZpZWxkLW9wdGlvbnM.display_name": {
+          "source": "List Span Field Options",
+          "message": "스팬 필드 옵션 목록"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1zcGFuLWZpZWxkLW9wdGlvbnM.short_desc": {
+          "source": "List the values recorded for a span field",
+          "message": "스팬 필드에 기록된 값 나열"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1zcGFuLWZpZWxkLW9wdGlvbnM.desc": {
+          "source": "List the values recorded for a span field in a time range, for building span search expressions. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
+          "message": "시간 범위 내에서 스팬 필드에 기록된 값을 나열합니다. 스팬 검색 식을 작성할 때 사용합니다. AI 활동을 검사하고 응답 품질을 평가합니다.\n\n**공개 미리보기:** 이용 가능 여부는 계정 및 권한에 따라 다릅니다."
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1zcGFuLWZpZWxkLW9wdGlvbnM.option.ZmllbGRfbmFtZQ.display_name": {
+          "source": "Field Name",
+          "message": "필드 이름"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1zcGFuLWZpZWxkLW9wdGlvbnM.option.ZmllbGRfbmFtZQ.short_desc": {
+          "source": "Name of the field",
+          "message": "필드의 이름"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1zcGFuLWZpZWxkLW9wdGlvbnM.option.ZmllbGRfbmFtZQ.desc": {
+          "source": "The name of the field, as listed by the field listing action.",
+          "message": "필드 목록 작업에서 나열된 필드 이름입니다."
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1zcGFuLWZpZWxkLW9wdGlvbnM.option.ZnJvbQ.display_name": {
+          "source": "From",
+          "message": "시작"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1zcGFuLWZpZWxkLW9wdGlvbnM.option.ZnJvbQ.short_desc": {
+          "source": "Start of the time range",
+          "message": "시간 범위의 시작"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1zcGFuLWZpZWxkLW9wdGlvbnM.option.ZnJvbQ.desc": {
+          "source": "The start of the time range.",
+          "message": "시간 범위의 시작입니다."
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1zcGFuLWZpZWxkLW9wdGlvbnM.option.dG8.display_name": {
+          "source": "To",
+          "message": "끝"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1zcGFuLWZpZWxkLW9wdGlvbnM.option.dG8.short_desc": {
+          "source": "End of the time range",
+          "message": "시간 범위의 끝"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1zcGFuLWZpZWxkLW9wdGlvbnM.option.dG8.desc": {
+          "source": "The end of the time range.",
+          "message": "시간 범위의 끝입니다."
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXNwYW4tZXZhbHVhdGlvbnM.display_name": {
+          "source": "Search Span Evaluations",
+          "message": "스팬 평가 검색"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXNwYW4tZXZhbHVhdGlvbnM.short_desc": {
+          "source": "Search the evaluations of spans",
+          "message": "스팬의 평가 검색"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXNwYW4tZXZhbHVhdGlvbnM.desc": {
+          "source": "Search the evaluation results recorded for spans with a search expression. Results are returned one page at a time; pass the returned `cursor` to read the next page. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
+          "message": "검색 식으로 스팬에 대해 기록된 평가 결과를 검색합니다. 결과는 한 번에 한 페이지씩 반환되며, 다음 페이지를 읽으려면 반환된 `cursor`를 전달하세요. AI 활동을 검사하고 응답 품질을 평가합니다.\n\n**공개 미리보기:** 이용 가능 여부는 계정 및 권한에 따라 다릅니다."
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXNwYW4tZXZhbHVhdGlvbnM.option.c2VhcmNoX2V4cHJlc3Npb24.display_name": {
+          "source": "Search Expression",
+          "message": "검색 식"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXNwYW4tZXZhbHVhdGlvbnM.option.ZnJvbQ.display_name": {
+          "source": "From",
+          "message": "시작"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXNwYW4tZXZhbHVhdGlvbnM.option.ZnJvbQ.short_desc": {
+          "source": "Start of the time range",
+          "message": "시간 범위의 시작"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXNwYW4tZXZhbHVhdGlvbnM.option.ZnJvbQ.desc": {
+          "source": "The start of the time range.",
+          "message": "시간 범위의 시작입니다."
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXNwYW4tZXZhbHVhdGlvbnM.option.dG8.display_name": {
+          "source": "To",
+          "message": "끝"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXNwYW4tZXZhbHVhdGlvbnM.option.dG8.short_desc": {
+          "source": "End of the time range",
+          "message": "시간 범위의 끝"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXNwYW4tZXZhbHVhdGlvbnM.option.dG8.desc": {
+          "source": "The end of the time range.",
+          "message": "시간 범위의 끝입니다."
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXNwYW4tZXZhbHVhdGlvbnM.option.cGFnZV9zaXpl.short_desc": {
+          "source": "Maximum number of results per page",
+          "message": "페이지당 최대 결과 수"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXNwYW4tZXZhbHVhdGlvbnM.option.cGFnZV9zaXpl.desc": {
+          "source": "The maximum number of results to return in one page.",
+          "message": "한 페이지에 반환할 최대 결과 수입니다."
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXNwYW4tZXZhbHVhdGlvbnM.option.Y3Vyc29y.short_desc": {
+          "source": "Cursor of the page to return",
+          "message": "반환할 페이지의 커서"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXNwYW4tZXZhbHVhdGlvbnM.option.Y3Vyc29y.desc": {
+          "source": "The `cursor` returned with the previous page; leave it out for the first page.",
+          "message": "이전 페이지와 함께 반환된 `cursor`입니다. 첫 페이지에서는 생략하세요."
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLWxhdGVzdC1zcGFuLWV2YWx1YXRpb25z.display_name": {
+          "source": "Search Latest Span Evaluations",
+          "message": "최신 스팬 평가 검색"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLWxhdGVzdC1zcGFuLWV2YWx1YXRpb25z.desc": {
+          "source": "Search the evaluation results recorded for spans with a search expression, returning only the latest results. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
+          "message": "검색 식으로 스팬에 대해 기록된 평가 결과를 검색하며, 최신 결과만 반환합니다. AI 활동을 검사하고 응답 품질을 평가합니다.\n\n**공개 미리보기:** 이용 가능 여부는 계정 및 권한에 따라 다릅니다."
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLWxhdGVzdC1zcGFuLWV2YWx1YXRpb25z.option.c2VhcmNoX2V4cHJlc3Npb24.display_name": {
+          "source": "Search Expression",
+          "message": "검색 식"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLWxhdGVzdC1zcGFuLWV2YWx1YXRpb25z.option.ZnJvbQ.display_name": {
+          "source": "From",
+          "message": "시작"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLWxhdGVzdC1zcGFuLWV2YWx1YXRpb25z.option.ZnJvbQ.short_desc": {
+          "source": "Start of the time range",
+          "message": "시간 범위의 시작"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLWxhdGVzdC1zcGFuLWV2YWx1YXRpb25z.option.ZnJvbQ.desc": {
+          "source": "The start of the time range.",
+          "message": "시간 범위의 시작입니다."
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLWxhdGVzdC1zcGFuLWV2YWx1YXRpb25z.option.dG8.display_name": {
+          "source": "To",
+          "message": "끝"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLWxhdGVzdC1zcGFuLWV2YWx1YXRpb25z.option.dG8.short_desc": {
+          "source": "End of the time range",
+          "message": "시간 범위의 끝"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLWxhdGVzdC1zcGFuLWV2YWx1YXRpb25z.option.dG8.desc": {
+          "source": "The end of the time range.",
+          "message": "시간 범위의 끝입니다."
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLWxhdGVzdC1zcGFuLWV2YWx1YXRpb25z.option.cGFnZV9zaXpl.short_desc": {
+          "source": "Maximum number of results per page",
+          "message": "페이지당 최대 결과 수"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLWxhdGVzdC1zcGFuLWV2YWx1YXRpb25z.option.cGFnZV9zaXpl.desc": {
+          "source": "The maximum number of results to return in one page.",
+          "message": "한 페이지에 반환할 최대 결과 수입니다."
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLWxhdGVzdC1zcGFuLWV2YWx1YXRpb25z.option.Y3Vyc29y.short_desc": {
+          "source": "Cursor of the page to return",
+          "message": "반환할 페이지의 커서"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLWxhdGVzdC1zcGFuLWV2YWx1YXRpb25z.option.Y3Vyc29y.desc": {
+          "source": "The `cursor` returned with the previous page; leave it out for the first page.",
+          "message": "이전 페이지와 함께 반환된 `cursor`입니다. 첫 페이지에서는 생략하세요."
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW4tZXZhbHVhdGlvbnM.display_name": {
+          "source": "Aggregate Span Evaluations",
+          "message": "스팬 평가 집계"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW4tZXZhbHVhdGlvbnM.short_desc": {
+          "source": "Aggregate span evaluation results over time",
+          "message": "시간 경과에 따른 스팬 평가 결과 집계"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW4tZXZhbHVhdGlvbnM.desc": {
+          "source": "Compute a metric over the span evaluation results that match a search expression, grouped by the dimensions you choose and optionally by time. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
+          "message": "검색 식과 일치하는 스팬 평가 결과에 대해 선택한 차원별로, 필요한 경우 시간별로도 그룹화하여 메트릭을 계산합니다. AI 활동을 검사하고 응답 품질을 평가합니다.\n\n**공개 미리보기:** 이용 가능 여부는 계정 및 권한에 따라 다릅니다."
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW4tZXZhbHVhdGlvbnM.option.bWV0cmlj.display_name": {
+          "source": "Metric",
+          "message": "메트릭"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW4tZXZhbHVhdGlvbnM.option.bWV0cmlj.field.YWdncmVnYXRpb24.display_name": {
+          "source": "Aggregation",
+          "message": "집계"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW4tZXZhbHVhdGlvbnM.option.bWV0cmlj.field.YWdncmVnYXRpb24.allowed-value.c3RyaW5nOmNvdW50.display_name": {
+          "source": "count",
+          "message": "개수"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW4tZXZhbHVhdGlvbnM.option.bWV0cmlj.field.YWdncmVnYXRpb24.allowed-value.c3RyaW5nOmNvdW50X2Rpc3RpbmN0.display_name": {
+          "source": "count_distinct",
+          "message": "count_distinct"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW4tZXZhbHVhdGlvbnM.option.bWV0cmlj.field.YWdncmVnYXRpb24.allowed-value.c3RyaW5nOnN1bQ.display_name": {
+          "source": "sum",
+          "message": "합계"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW4tZXZhbHVhdGlvbnM.option.bWV0cmlj.field.YWdncmVnYXRpb24.allowed-value.c3RyaW5nOmF2Zw.display_name": {
+          "source": "avg",
+          "message": "평균"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW4tZXZhbHVhdGlvbnM.option.bWV0cmlj.field.YWdncmVnYXRpb24.allowed-value.c3RyaW5nOm1pbg.display_name": {
+          "source": "min",
+          "message": "최소"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW4tZXZhbHVhdGlvbnM.option.bWV0cmlj.field.YWdncmVnYXRpb24.allowed-value.c3RyaW5nOm1heA.display_name": {
+          "source": "max",
+          "message": "최대"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW4tZXZhbHVhdGlvbnM.option.bWV0cmlj.field.YWdncmVnYXRpb24.allowed-value.c3RyaW5nOnA1MA.display_name": {
+          "source": "p50",
+          "message": "p50"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW4tZXZhbHVhdGlvbnM.option.bWV0cmlj.field.YWdncmVnYXRpb24.allowed-value.c3RyaW5nOnA5MA.display_name": {
+          "source": "p90",
+          "message": "p90"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW4tZXZhbHVhdGlvbnM.option.bWV0cmlj.field.YWdncmVnYXRpb24.allowed-value.c3RyaW5nOnA5NQ.display_name": {
+          "source": "p95",
+          "message": "p95"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW4tZXZhbHVhdGlvbnM.option.bWV0cmlj.field.YWdncmVnYXRpb24.allowed-value.c3RyaW5nOnA5OQ.display_name": {
+          "source": "p99",
+          "message": "p99"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW4tZXZhbHVhdGlvbnM.option.bWV0cmlj.field.bWVhc3VyZQ.display_name": {
+          "source": "Measure",
+          "message": "측정 항목"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW4tZXZhbHVhdGlvbnM.option.ZGltZW5zaW9ucw.display_name": {
+          "source": "Dimensions",
+          "message": "차원"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW4tZXZhbHVhdGlvbnM.option.dGltZV9kaW1lbnNpb24.display_name": {
+          "source": "Time Dimension",
+          "message": "시간 차원"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW4tZXZhbHVhdGlvbnM.option.dGltZV9kaW1lbnNpb24.field.Z3JhbnVsYXJpdHk.display_name": {
+          "source": "Granularity",
+          "message": "세분성"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW4tZXZhbHVhdGlvbnM.option.dGltZV9kaW1lbnNpb24.field.Z3JhbnVsYXJpdHk.allowed-value.c3RyaW5nOnNlY29uZA.display_name": {
+          "source": "second",
+          "message": "초"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW4tZXZhbHVhdGlvbnM.option.dGltZV9kaW1lbnNpb24.field.Z3JhbnVsYXJpdHk.allowed-value.c3RyaW5nOm1pbnV0ZQ.display_name": {
+          "source": "minute",
+          "message": "분"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW4tZXZhbHVhdGlvbnM.option.dGltZV9kaW1lbnNpb24.field.Z3JhbnVsYXJpdHk.allowed-value.c3RyaW5nOmhvdXI.display_name": {
+          "source": "hour",
+          "message": "시간"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW4tZXZhbHVhdGlvbnM.option.dGltZV9kaW1lbnNpb24.field.Z3JhbnVsYXJpdHk.allowed-value.c3RyaW5nOmRheQ.display_name": {
+          "source": "day",
+          "message": "일"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW4tZXZhbHVhdGlvbnM.option.dGltZV9kaW1lbnNpb24.field.Z3JhbnVsYXJpdHk.allowed-value.c3RyaW5nOndlZWs.display_name": {
+          "source": "week",
+          "message": "주"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW4tZXZhbHVhdGlvbnM.option.dGltZV9kaW1lbnNpb24.field.Z3JhbnVsYXJpdHk.allowed-value.c3RyaW5nOm1vbnRo.display_name": {
+          "source": "month",
+          "message": "월"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW4tZXZhbHVhdGlvbnM.option.c2VhcmNoX2V4cHJlc3Npb24.display_name": {
+          "source": "Search Expression",
+          "message": "검색 식"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW4tZXZhbHVhdGlvbnM.option.b3JkZXJfYnk.field.ZGlyZWN0aW9u.display_name": {
+          "source": "Direction",
+          "message": "방향"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW4tZXZhbHVhdGlvbnM.option.b3JkZXJfYnk.field.ZmllbGQ.display_name": {
+          "source": "Field",
+          "message": "필드"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW4tZXZhbHVhdGlvbnM.option.ZnJvbQ.display_name": {
+          "source": "From",
+          "message": "시작"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW4tZXZhbHVhdGlvbnM.option.ZnJvbQ.short_desc": {
+          "source": "Start of the time range",
+          "message": "시간 범위의 시작"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW4tZXZhbHVhdGlvbnM.option.ZnJvbQ.desc": {
+          "source": "The start of the time range.",
+          "message": "시간 범위의 시작입니다."
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW4tZXZhbHVhdGlvbnM.option.dG8.display_name": {
+          "source": "To",
+          "message": "끝"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW4tZXZhbHVhdGlvbnM.option.dG8.short_desc": {
+          "source": "End of the time range",
+          "message": "시간 범위의 끝"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW4tZXZhbHVhdGlvbnM.option.dG8.desc": {
+          "source": "The end of the time range.",
+          "message": "시간 범위의 끝입니다."
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1zcGFuLWV2YWx1YXRpb24tZmllbGRz.display_name": {
+          "source": "List Span Evaluation Fields",
+          "message": "스팬 평가 필드 목록"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1zcGFuLWV2YWx1YXRpb24tZmllbGRz.short_desc": {
+          "source": "List the fields that evaluation searches can use",
+          "message": "평가 검색에서 사용할 수 있는 필드 나열"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1zcGFuLWV2YWx1YXRpb24tZmllbGRz.desc": {
+          "source": "List the fields that span evaluation search expressions and aggregations can refer to, with their labels and types. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
+          "message": "스팬 평가 검색 식 및 집계에서 참조할 수 있는 필드를 레이블 및 유형과 함께 나열합니다. AI 활동을 검사하고 응답 품질을 평가합니다.\n\n**공개 미리보기:** 이용 가능 여부는 계정 및 권한에 따라 다릅니다."
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1zcGFuLWV2YWx1YXRpb24tZmllbGQtb3B0aW9ucw.display_name": {
+          "source": "List Span Evaluation Field Options",
+          "message": "스팬 평가 필드 옵션 목록"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1zcGFuLWV2YWx1YXRpb24tZmllbGQtb3B0aW9ucw.short_desc": {
+          "source": "List the values recorded for an evaluation field",
+          "message": "평가 필드에 기록된 값 나열"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1zcGFuLWV2YWx1YXRpb24tZmllbGQtb3B0aW9ucw.desc": {
+          "source": "List the values recorded for a span evaluation field in a time range, for building evaluation search expressions. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
+          "message": "시간 범위 내에서 스팬 평가 필드에 기록된 값을 나열합니다. 평가 검색 식을 작성할 때 사용합니다. AI 활동을 검사하고 응답 품질을 평가합니다.\n\n**공개 미리보기:** 이용 가능 여부는 계정 및 권한에 따라 다릅니다."
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1zcGFuLWV2YWx1YXRpb24tZmllbGQtb3B0aW9ucw.option.ZmllbGRfbmFtZQ.display_name": {
+          "source": "Field Name",
+          "message": "필드 이름"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1zcGFuLWV2YWx1YXRpb24tZmllbGQtb3B0aW9ucw.option.ZmllbGRfbmFtZQ.short_desc": {
+          "source": "Name of the field",
+          "message": "필드의 이름"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1zcGFuLWV2YWx1YXRpb24tZmllbGQtb3B0aW9ucw.option.ZmllbGRfbmFtZQ.desc": {
+          "source": "The name of the field, as listed by the field listing action.",
+          "message": "필드 목록 작업에서 나열된 필드 이름입니다."
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1zcGFuLWV2YWx1YXRpb24tZmllbGQtb3B0aW9ucw.option.ZnJvbQ.display_name": {
+          "source": "From",
+          "message": "시작"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1zcGFuLWV2YWx1YXRpb24tZmllbGQtb3B0aW9ucw.option.ZnJvbQ.short_desc": {
+          "source": "Start of the time range",
+          "message": "시간 범위의 시작"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1zcGFuLWV2YWx1YXRpb24tZmllbGQtb3B0aW9ucw.option.ZnJvbQ.desc": {
+          "source": "The start of the time range.",
+          "message": "시간 범위의 시작입니다."
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1zcGFuLWV2YWx1YXRpb24tZmllbGQtb3B0aW9ucw.option.dG8.display_name": {
+          "source": "To",
+          "message": "끝"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1zcGFuLWV2YWx1YXRpb24tZmllbGQtb3B0aW9ucw.option.dG8.short_desc": {
+          "source": "End of the time range",
+          "message": "시간 범위의 끝"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1zcGFuLWV2YWx1YXRpb24tZmllbGQtb3B0aW9ucw.option.dG8.desc": {
+          "source": "The end of the time range.",
+          "message": "시간 범위의 끝입니다."
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1waXBlbGluZXM.display_name": {
+          "source": "List Pipelines",
+          "message": "파이프라인 목록"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1waXBlbGluZXM.short_desc": {
+          "source": "List evaluation pipelines",
+          "message": "평가 파이프라인 목록"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1waXBlbGluZXM.desc": {
+          "source": "List the evaluation pipelines that score your AI activity automatically. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
+          "message": "AI 활동에 자동으로 점수를 매기는 평가 파이프라인을 나열합니다. AI 활동을 검사하고 응답 품질을 평가합니다.\n\n**공개 미리보기:** 이용 가능 여부는 계정 및 권한에 따라 다릅니다."
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1waXBlbGluZXM.option.ZW5hYmxlZA.display_name": {
+          "source": "Enabled",
+          "message": "활성화됨"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1waXBlbGluZXM.option.ZW5hYmxlZA.short_desc": {
+          "source": "Return only enabled or disabled pipelines",
+          "message": "활성화 또는 비활성화된 파이프라인만 반환"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1waXBlbGluZXM.option.ZW5hYmxlZA.desc": {
+          "source": "When set, return only the pipelines whose enabled state matches.",
+          "message": "설정하면 활성화 상태가 일치하는 파이프라인만 반환합니다."
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1waXBlbGluZXM.option.ZnJvbQ.display_name": {
+          "source": "From",
+          "message": "시작"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1waXBlbGluZXM.option.ZnJvbQ.short_desc": {
+          "source": "Start of the time range",
+          "message": "시간 범위의 시작"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1waXBlbGluZXM.option.ZnJvbQ.desc": {
+          "source": "The start of the time range.",
+          "message": "시간 범위의 시작입니다."
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1waXBlbGluZXM.option.dG8.display_name": {
+          "source": "To",
+          "message": "끝"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1waXBlbGluZXM.option.dG8.short_desc": {
+          "source": "End of the time range",
+          "message": "시간 범위의 끝"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1waXBlbGluZXM.option.dG8.desc": {
+          "source": "The end of the time range.",
+          "message": "시간 범위의 끝입니다."
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1waXBlbGluZXM.option.cGFnZV9zaXpl.short_desc": {
+          "source": "Maximum number of results per page",
+          "message": "페이지당 최대 결과 수"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1waXBlbGluZXM.option.cGFnZV9zaXpl.desc": {
+          "source": "The maximum number of results to return in one page.",
+          "message": "한 페이지에 반환할 최대 결과 수입니다."
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1waXBlbGluZXM.option.cGFnZQ.short_desc": {
+          "source": "Page number to return",
+          "message": "반환할 페이지 번호"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1waXBlbGluZXM.option.cGFnZQ.desc": {
+          "source": "The number of the page to return, starting at 1.",
+          "message": "반환할 페이지 번호이며, 1부터 시작합니다."
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1waXBlbGluZXM.option.cQ.display_name": {
+          "source": "Search Text",
+          "message": "검색 텍스트"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1waXBlbGluZXM.option.cQ.short_desc": {
+          "source": "Text to filter by",
+          "message": "필터링할 텍스트"
+        },
+        "app.TWlzdHJhbEFp.action.Y3JlYXRlLXBpcGVsaW5l.display_name": {
+          "source": "Create Pipeline",
+          "message": "파이프라인 생성"
+        },
+        "app.TWlzdHJhbEFp.action.Y3JlYXRlLXBpcGVsaW5l.short_desc": {
+          "source": "Create an evaluation pipeline",
+          "message": "평가 파이프라인 생성"
+        },
+        "app.TWlzdHJhbEFp.action.Y3JlYXRlLXBpcGVsaW5l.option.c2VsZWN0b3Jz.display_name": {
+          "source": "Selectors",
+          "message": "선택기"
+        },
+        "app.TWlzdHJhbEFp.action.Y3JlYXRlLXBpcGVsaW5l.option.c2VsZWN0b3Jz.field.ZmlsdGVy.display_name": {
+          "source": "Filter",
+          "message": "필터"
+        },
+        "app.TWlzdHJhbEFp.action.Y3JlYXRlLXBpcGVsaW5l.option.c2VsZWN0b3Jz.field.c291cmNlX2tpbmQ.display_name": {
+          "source": "Source Kind",
+          "message": "소스 종류"
+        },
+        "app.TWlzdHJhbEFp.action.Y3JlYXRlLXBpcGVsaW5l.option.c2VsZWN0b3Jz.field.c291cmNlX2tpbmQ.allowed-value.c3RyaW5nOnNwYW4.display_name": {
+          "source": "span",
+          "message": "스팬"
+        },
+        "app.TWlzdHJhbEFp.action.Y3JlYXRlLXBpcGVsaW5l.option.c2VsZWN0b3Jz.field.c291cmNlX2tpbmQ.allowed-value.c3RyaW5nOmxvZw.display_name": {
+          "source": "log",
+          "message": "로그"
+        },
+        "app.TWlzdHJhbEFp.action.Y3JlYXRlLXBpcGVsaW5l.option.c2VsZWN0b3Jz.field.c291cmNlX2tpbmQ.allowed-value.c3RyaW5nOm1ldHJpYw.display_name": {
+          "source": "metric",
+          "message": "메트릭"
+        },
+        "app.TWlzdHJhbEFp.action.Y3JlYXRlLXBpcGVsaW5l.option.ZGVmaW5pdGlvbnM.display_name": {
+          "source": "Definitions",
+          "message": "정의"
+        },
+        "app.TWlzdHJhbEFp.action.Y3JlYXRlLXBpcGVsaW5l.option.ZGVmaW5pdGlvbnM.field.bWFwcGluZw.display_name": {
+          "source": "Mapping",
+          "message": "매핑"
+        },
+        "app.TWlzdHJhbEFp.action.Y3JlYXRlLXBpcGVsaW5l.option.ZGVmaW5pdGlvbnM.field.c2FtcGxpbmc.display_name": {
+          "source": "Sampling",
+          "message": "샘플링"
+        },
+        "app.TWlzdHJhbEFp.type.YWN0aW9uOlkzSmxZWFJsTFhCcGNHVnNhVzVsOipQcm9iYWJpbGlzdGljU2FtcGxpbmcjYzk3YmU3YmE2MWE1OTdmMDMzMTcxYjgyOGRiYjBlMjQ2MGYxZmNjNTFiMjY2ODNlNzRmMmY1MmY2Y2E0NTA5OQ.field.cGVyY2VudGFnZQ.display_name": {
+          "source": "Percentage",
+          "message": "백분율"
+        },
+        "app.TWlzdHJhbEFp.type.YWN0aW9uOlkzSmxZWFJsTFhCcGNHVnNhVzVsOipQcm9iYWJpbGlzdGljU2FtcGxpbmcjYzk3YmU3YmE2MWE1OTdmMDMzMTcxYjgyOGRiYjBlMjQ2MGYxZmNjNTFiMjY2ODNlNzRmMmY1MmY2Y2E0NTA5OQ.field.dHlwZQ.allowed-value.c3RyaW5nOnByb2JhYmlsaXN0aWM.display_name": {
+          "source": "probabilistic",
+          "message": "확률적"
+        },
+        "app.TWlzdHJhbEFp.type.YWN0aW9uOlkzSmxZWFJsTFhCcGNHVnNhVzVsOipBdHRyaWJ1dGVIYXNoU2FtcGxpbmcjZDg5NmQ2ZDg1YjY0NTUzNWMyOTgzYTFkY2QzMzlmZTAwN2Y1MjY0N2EyOTBmMmJjM2RlZTU5YzBkNjU0ZDU4NQ.field.YXR0cmlidXRl.display_name": {
+          "source": "Attribute",
+          "message": "속성"
+        },
+        "app.TWlzdHJhbEFp.type.YWN0aW9uOlkzSmxZWFJsTFhCcGNHVnNhVzVsOipBdHRyaWJ1dGVIYXNoU2FtcGxpbmcjZDg5NmQ2ZDg1YjY0NTUzNWMyOTgzYTFkY2QzMzlmZTAwN2Y1MjY0N2EyOTBmMmJjM2RlZTU5YzBkNjU0ZDU4NQ.field.cGVyY2VudGFnZQ.display_name": {
+          "source": "Percentage",
+          "message": "백분율"
+        },
+        "app.TWlzdHJhbEFp.type.YWN0aW9uOlkzSmxZWFJsTFhCcGNHVnNhVzVsOipBdHRyaWJ1dGVIYXNoU2FtcGxpbmcjZDg5NmQ2ZDg1YjY0NTUzNWMyOTgzYTFkY2QzMzlmZTAwN2Y1MjY0N2EyOTBmMmJjM2RlZTU5YzBkNjU0ZDU4NQ.field.dHlwZQ.allowed-value.c3RyaW5nOmF0dHJpYnV0ZV9oYXNo.display_name": {
+          "source": "attribute_hash",
+          "message": "attribute_hash"
+        },
+        "app.TWlzdHJhbEFp.action.Y3JlYXRlLXBpcGVsaW5l.option.ZGVmaW5pdGlvbnM.field.c2x1Zw.display_name": {
+          "source": "Slug",
+          "message": "슬러그"
+        },
+        "app.TWlzdHJhbEFp.action.Y3JlYXRlLXBpcGVsaW5l.option.ZW5hYmxlZA.display_name": {
+          "source": "Enabled",
+          "message": "활성화됨"
+        },
+        "app.TWlzdHJhbEFp.action.Z2V0LXBpcGVsaW5l.display_name": {
+          "source": "Get Pipeline",
+          "message": "파이프라인 가져오기"
+        },
+        "app.TWlzdHJhbEFp.action.Z2V0LXBpcGVsaW5l.short_desc": {
+          "source": "Get an evaluation pipeline",
+          "message": "평가 파이프라인 가져오기"
+        },
+        "app.TWlzdHJhbEFp.action.Z2V0LXBpcGVsaW5l.desc": {
+          "source": "Get an evaluation pipeline with its selectors and judge definitions. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
+          "message": "선택기 및 평가자(judge) 정의와 함께 평가 파이프라인을 가져옵니다. AI 활동을 검사하고 응답 품질을 평가합니다.\n\n**공개 미리보기:** 이용 가능 여부는 계정 및 권한에 따라 다릅니다."
+        },
+        "app.TWlzdHJhbEFp.action.Z2V0LXBpcGVsaW5l.option.cGlwZWxpbmVfaWQ.display_name": {
+          "source": "Pipeline ID",
+          "message": "파이프라인 ID"
+        },
+        "app.TWlzdHJhbEFp.action.Z2V0LXBpcGVsaW5l.option.cGlwZWxpbmVfaWQ.short_desc": {
+          "source": "Evaluation pipeline",
+          "message": "평가 파이프라인"
+        },
+        "app.TWlzdHJhbEFp.action.Z2V0LXBpcGVsaW5l.option.cGlwZWxpbmVfaWQ.desc": {
+          "source": "The ID of the evaluation pipeline.",
+          "message": "평가 파이프라인의 ID입니다."
+        },
+        "app.TWlzdHJhbEFp.action.dXBkYXRlLXBpcGVsaW5l.display_name": {
+          "source": "Update Pipeline",
+          "message": "파이프라인 업데이트"
+        },
+        "app.TWlzdHJhbEFp.action.dXBkYXRlLXBpcGVsaW5l.short_desc": {
+          "source": "Update an evaluation pipeline",
+          "message": "평가 파이프라인 업데이트"
+        },
+        "app.TWlzdHJhbEFp.action.dXBkYXRlLXBpcGVsaW5l.desc": {
+          "source": "Update the name, description, selectors, judge definitions or enabled state of an evaluation pipeline. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
+          "message": "평가 파이프라인의 이름, 설명, 선택기, 평가자(judge) 정의 또는 활성화 상태를 업데이트합니다. AI 활동을 검사하고 응답 품질을 평가합니다.\n\n**공개 미리보기:** 이용 가능 여부는 계정 및 권한에 따라 다릅니다."
+        },
+        "app.TWlzdHJhbEFp.action.dXBkYXRlLXBpcGVsaW5l.option.cGlwZWxpbmVfaWQ.display_name": {
+          "source": "Pipeline ID",
+          "message": "파이프라인 ID"
+        },
+        "app.TWlzdHJhbEFp.action.dXBkYXRlLXBpcGVsaW5l.option.cGlwZWxpbmVfaWQ.short_desc": {
+          "source": "Evaluation pipeline",
+          "message": "평가 파이프라인"
+        },
+        "app.TWlzdHJhbEFp.action.dXBkYXRlLXBpcGVsaW5l.option.cGlwZWxpbmVfaWQ.desc": {
+          "source": "The ID of the evaluation pipeline.",
+          "message": "평가 파이프라인의 ID입니다."
+        },
+        "app.TWlzdHJhbEFp.action.dXBkYXRlLXBpcGVsaW5l.option.c2VsZWN0b3Jz.display_name": {
+          "source": "Selectors",
+          "message": "선택기"
+        },
+        "app.TWlzdHJhbEFp.action.dXBkYXRlLXBpcGVsaW5l.option.c2VsZWN0b3Jz.field.ZmlsdGVy.display_name": {
+          "source": "Filter",
+          "message": "필터"
+        },
+        "app.TWlzdHJhbEFp.action.dXBkYXRlLXBpcGVsaW5l.option.c2VsZWN0b3Jz.field.c291cmNlX2tpbmQ.display_name": {
+          "source": "Source Kind",
+          "message": "소스 종류"
+        },
+        "app.TWlzdHJhbEFp.action.dXBkYXRlLXBpcGVsaW5l.option.c2VsZWN0b3Jz.field.c291cmNlX2tpbmQ.allowed-value.c3RyaW5nOnNwYW4.display_name": {
+          "source": "span",
+          "message": "스팬"
+        },
+        "app.TWlzdHJhbEFp.action.dXBkYXRlLXBpcGVsaW5l.option.c2VsZWN0b3Jz.field.c291cmNlX2tpbmQ.allowed-value.c3RyaW5nOmxvZw.display_name": {
+          "source": "log",
+          "message": "로그"
+        },
+        "app.TWlzdHJhbEFp.action.dXBkYXRlLXBpcGVsaW5l.option.c2VsZWN0b3Jz.field.c291cmNlX2tpbmQ.allowed-value.c3RyaW5nOm1ldHJpYw.display_name": {
+          "source": "metric",
+          "message": "메트릭"
+        },
+        "app.TWlzdHJhbEFp.action.dXBkYXRlLXBpcGVsaW5l.option.ZGVmaW5pdGlvbnM.display_name": {
+          "source": "Definitions",
+          "message": "정의"
+        },
+        "app.TWlzdHJhbEFp.action.dXBkYXRlLXBpcGVsaW5l.option.ZGVmaW5pdGlvbnM.field.bWFwcGluZw.display_name": {
+          "source": "Mapping",
+          "message": "매핑"
+        },
+        "app.TWlzdHJhbEFp.action.dXBkYXRlLXBpcGVsaW5l.option.ZGVmaW5pdGlvbnM.field.c2FtcGxpbmc.display_name": {
+          "source": "Sampling",
+          "message": "샘플링"
+        },
+        "app.TWlzdHJhbEFp.type.YWN0aW9uOmRYQmtZWFJsTFhCcGNHVnNhVzVsOipQcm9iYWJpbGlzdGljU2FtcGxpbmcjYzk3YmU3YmE2MWE1OTdmMDMzMTcxYjgyOGRiYjBlMjQ2MGYxZmNjNTFiMjY2ODNlNzRmMmY1MmY2Y2E0NTA5OQ.field.cGVyY2VudGFnZQ.display_name": {
+          "source": "Percentage",
+          "message": "백분율"
+        },
+        "app.TWlzdHJhbEFp.type.YWN0aW9uOmRYQmtZWFJsTFhCcGNHVnNhVzVsOipQcm9iYWJpbGlzdGljU2FtcGxpbmcjYzk3YmU3YmE2MWE1OTdmMDMzMTcxYjgyOGRiYjBlMjQ2MGYxZmNjNTFiMjY2ODNlNzRmMmY1MmY2Y2E0NTA5OQ.field.dHlwZQ.allowed-value.c3RyaW5nOnByb2JhYmlsaXN0aWM.display_name": {
+          "source": "probabilistic",
+          "message": "확률적"
+        },
+        "app.TWlzdHJhbEFp.type.YWN0aW9uOmRYQmtZWFJsTFhCcGNHVnNhVzVsOipBdHRyaWJ1dGVIYXNoU2FtcGxpbmcjZDg5NmQ2ZDg1YjY0NTUzNWMyOTgzYTFkY2QzMzlmZTAwN2Y1MjY0N2EyOTBmMmJjM2RlZTU5YzBkNjU0ZDU4NQ.field.YXR0cmlidXRl.display_name": {
+          "source": "Attribute",
+          "message": "속성"
+        },
+        "app.TWlzdHJhbEFp.type.YWN0aW9uOmRYQmtZWFJsTFhCcGNHVnNhVzVsOipBdHRyaWJ1dGVIYXNoU2FtcGxpbmcjZDg5NmQ2ZDg1YjY0NTUzNWMyOTgzYTFkY2QzMzlmZTAwN2Y1MjY0N2EyOTBmMmJjM2RlZTU5YzBkNjU0ZDU4NQ.field.cGVyY2VudGFnZQ.display_name": {
+          "source": "Percentage",
+          "message": "백분율"
+        },
+        "app.TWlzdHJhbEFp.type.YWN0aW9uOmRYQmtZWFJsTFhCcGNHVnNhVzVsOipBdHRyaWJ1dGVIYXNoU2FtcGxpbmcjZDg5NmQ2ZDg1YjY0NTUzNWMyOTgzYTFkY2QzMzlmZTAwN2Y1MjY0N2EyOTBmMmJjM2RlZTU5YzBkNjU0ZDU4NQ.field.dHlwZQ.allowed-value.c3RyaW5nOmF0dHJpYnV0ZV9oYXNo.display_name": {
+          "source": "attribute_hash",
+          "message": "attribute_hash"
+        },
+        "app.TWlzdHJhbEFp.action.dXBkYXRlLXBpcGVsaW5l.option.ZGVmaW5pdGlvbnM.field.c2x1Zw.display_name": {
+          "source": "Slug",
+          "message": "슬러그"
+        },
+        "app.TWlzdHJhbEFp.action.dXBkYXRlLXBpcGVsaW5l.option.ZW5hYmxlZA.display_name": {
+          "source": "Enabled",
+          "message": "활성화됨"
+        },
+        "app.TWlzdHJhbEFp.action.ZGVsZXRlLXBpcGVsaW5l.display_name": {
+          "source": "Delete Pipeline",
+          "message": "파이프라인 삭제"
+        },
+        "app.TWlzdHJhbEFp.action.ZGVsZXRlLXBpcGVsaW5l.short_desc": {
+          "source": "Delete an evaluation pipeline",
+          "message": "평가 파이프라인 삭제"
+        },
+        "app.TWlzdHJhbEFp.action.ZGVsZXRlLXBpcGVsaW5l.option.cGlwZWxpbmVfaWQ.display_name": {
+          "source": "Pipeline ID",
+          "message": "파이프라인 ID"
+        },
+        "app.TWlzdHJhbEFp.action.ZGVsZXRlLXBpcGVsaW5l.option.cGlwZWxpbmVfaWQ.short_desc": {
+          "source": "Evaluation pipeline",
+          "message": "평가 파이프라인"
+        },
+        "app.TWlzdHJhbEFp.action.ZGVsZXRlLXBpcGVsaW5l.option.cGlwZWxpbmVfaWQ.desc": {
+          "source": "The ID of the evaluation pipeline.",
+          "message": "평가 파이프라인의 ID입니다."
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1waXBlbGluZS1yZXN1bHQtZmllbGRz.display_name": {
+          "source": "List Pipeline Result Fields",
+          "message": "파이프라인 결과 필드 목록"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1waXBlbGluZS1yZXN1bHQtZmllbGRz.short_desc": {
+          "source": "List the result fields of a pipeline",
+          "message": "파이프라인의 결과 필드 나열"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1waXBlbGluZS1yZXN1bHQtZmllbGRz.desc": {
+          "source": "List the fields of the results that an evaluation pipeline records, for searching its results. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
+          "message": "평가 파이프라인이 기록하는 결과의 필드를 나열합니다. 해당 결과를 검색할 때 사용합니다. AI 활동을 검사하고 응답 품질을 평가합니다.\n\n**공개 미리보기:** 이용 가능 여부는 계정 및 권한에 따라 다릅니다."
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1waXBlbGluZS1yZXN1bHQtZmllbGRz.option.cGlwZWxpbmVfaWQ.display_name": {
+          "source": "Pipeline ID",
+          "message": "파이프라인 ID"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1waXBlbGluZS1yZXN1bHQtZmllbGRz.option.cGlwZWxpbmVfaWQ.short_desc": {
+          "source": "Evaluation pipeline",
+          "message": "평가 파이프라인"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1waXBlbGluZS1yZXN1bHQtZmllbGRz.option.cGlwZWxpbmVfaWQ.desc": {
+          "source": "The ID of the evaluation pipeline.",
+          "message": "평가 파이프라인의 ID입니다."
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXBpcGVsaW5lLXJlc3VsdHM.display_name": {
+          "source": "Search Pipeline Results",
+          "message": "파이프라인 결과 검색"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXBpcGVsaW5lLXJlc3VsdHM.short_desc": {
+          "source": "Search the results of evaluation pipelines",
+          "message": "평가 파이프라인의 결과 검색"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXBpcGVsaW5lLXJlc3VsdHM.option.cGlwZWxpbmVfY29uZmlnX3NsdWdz.display_name": {
+          "source": "Pipeline Config Slugs",
+          "message": "파이프라인 구성 슬러그"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXBpcGVsaW5lLXJlc3VsdHM.option.c2VhcmNoX2V4cHJlc3Npb24.display_name": {
+          "source": "Search Expression",
+          "message": "검색 식"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXBpcGVsaW5lLXJlc3VsdHM.option.ZnJvbQ.display_name": {
+          "source": "From",
+          "message": "시작"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXBpcGVsaW5lLXJlc3VsdHM.option.ZnJvbQ.short_desc": {
+          "source": "Start of the time range",
+          "message": "시간 범위의 시작"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXBpcGVsaW5lLXJlc3VsdHM.option.ZnJvbQ.desc": {
+          "source": "The start of the time range.",
+          "message": "시간 범위의 시작입니다."
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXBpcGVsaW5lLXJlc3VsdHM.option.dG8.display_name": {
+          "source": "To",
+          "message": "끝"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXBpcGVsaW5lLXJlc3VsdHM.option.dG8.short_desc": {
+          "source": "End of the time range",
+          "message": "시간 범위의 끝"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXBpcGVsaW5lLXJlc3VsdHM.option.dG8.desc": {
+          "source": "The end of the time range.",
+          "message": "시간 범위의 끝입니다."
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXBpcGVsaW5lLXJlc3VsdHM.option.cGFnZV9zaXpl.short_desc": {
+          "source": "Maximum number of results per page",
+          "message": "페이지당 최대 결과 수"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXBpcGVsaW5lLXJlc3VsdHM.option.cGFnZV9zaXpl.desc": {
+          "source": "The maximum number of results to return in one page.",
+          "message": "한 페이지에 반환할 최대 결과 수입니다."
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXBpcGVsaW5lLXJlc3VsdHM.option.Y3Vyc29y.short_desc": {
+          "source": "Cursor of the page to return",
+          "message": "반환할 페이지의 커서"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXBpcGVsaW5lLXJlc3VsdHM.option.Y3Vyc29y.desc": {
+          "source": "The `cursor` returned with the previous page; leave it out for the first page.",
+          "message": "이전 페이지와 함께 반환된 `cursor`입니다. 첫 페이지에서는 생략하세요."
+        },
+        "app.TWlzdHJhbEFp.action.aW1wb3J0LWRhdGFzZXQtZnJvbS1zcGFucw.display_name": {
+          "source": "Import Dataset From Spans",
+          "message": "스팬에서 데이터셋 가져오기"
+        },
+        "app.TWlzdHJhbEFp.action.aW1wb3J0LWRhdGFzZXQtZnJvbS1zcGFucw.short_desc": {
+          "source": "Import spans into a dataset",
+          "message": "데이터셋으로 스팬 가져오기"
+        },
+        "app.TWlzdHJhbEFp.action.aW1wb3J0LWRhdGFzZXQtZnJvbS1zcGFucw.desc": {
+          "source": "Populate the dataset with records made from up to 500 spans, mapping span or resource attributes to record payload keys. The import runs as a dataset task; unavailable spans are skipped. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
+          "message": "최대 500개의 스팬으로 만든 레코드로 데이터셋을 채우며, 스팬 또는 리소스 속성을 레코드 페이로드 키에 매핑합니다. 가져오기는 데이터셋 작업으로 실행되며, 사용할 수 없는 스팬은 건너뜁니다. AI 활동을 검사하고 응답 품질을 평가합니다.\n\n**공개 미리보기:** 이용 가능 여부는 계정 및 권한에 따라 다릅니다."
+        },
+        "app.TWlzdHJhbEFp.action.aW1wb3J0LWRhdGFzZXQtZnJvbS1zcGFucw.option.ZGF0YXNldF9pZA.short_desc": {
+          "source": "Dataset to import into",
+          "message": "가져올 대상 데이터셋"
+        },
+        "app.TWlzdHJhbEFp.action.aW1wb3J0LWRhdGFzZXQtZnJvbS1zcGFucw.option.ZGF0YXNldF9pZA.desc": {
+          "source": "The ID or workspace-scoped slug of the dataset.",
+          "message": "데이터셋의 ID 또는 워크스페이스 범위 슬러그입니다."
+        },
+        "app.TWlzdHJhbEFp.action.aW1wb3J0LWRhdGFzZXQtZnJvbS1zcGFucw.option.c3Bhbl9yZWZlcmVuY2Vz.display_name": {
+          "source": "Span References",
+          "message": "스팬 참조"
+        },
+        "app.TWlzdHJhbEFp.action.aW1wb3J0LWRhdGFzZXQtZnJvbS1zcGFucw.option.c3Bhbl9yZWZlcmVuY2Vz.short_desc": {
+          "source": "Spans to attempt to import",
+          "message": "가져오기를 시도할 스팬"
+        },
+        "app.TWlzdHJhbEFp.action.aW1wb3J0LWRhdGFzZXQtZnJvbS1zcGFucw.option.c3Bhbl9yZWZlcmVuY2Vz.desc": {
+          "source": "Spans to attempt to import; unavailable references are skipped, and trace and span IDs are attached as record properties automatically.",
+          "message": "가져오기를 시도할 스팬입니다. 사용할 수 없는 참조는 건너뛰며, 추적 ID와 스팬 ID는 레코드 속성으로 자동 첨부됩니다."
+        },
+        "app.TWlzdHJhbEFp.action.aW1wb3J0LWRhdGFzZXQtZnJvbS1zcGFucw.option.c3Bhbl9yZWZlcmVuY2Vz.field.c3Bhbl9pZA.display_name": {
+          "source": "Span ID",
+          "message": "스팬 ID"
+        },
+        "app.TWlzdHJhbEFp.action.aW1wb3J0LWRhdGFzZXQtZnJvbS1zcGFucw.option.c3Bhbl9yZWZlcmVuY2Vz.field.dHJhY2VfaWQ.display_name": {
+          "source": "Trace ID",
+          "message": "추적 ID"
+        },
+        "app.TWlzdHJhbEFp.action.aW1wb3J0LWRhdGFzZXQtZnJvbS1zcGFucw.option.bWFwcGluZ19jb250cmFjdA.display_name": {
+          "source": "Mapping Contract",
+          "message": "매핑 계약"
+        },
+        "app.TWlzdHJhbEFp.action.aW1wb3J0LWRhdGFzZXQtZnJvbS1zcGFucw.option.bWFwcGluZ19jb250cmFjdA.short_desc": {
+          "source": "Mapping rules applied independently to every requested telemetry span",
+          "message": "요청된 모든 텔레메트리 스팬에 독립적으로 적용되는 매핑 규칙"
+        },
+        "app.TWlzdHJhbEFp.action.aW1wb3J0LWRhdGFzZXQtZnJvbS1zcGFucw.option.bWFwcGluZ19jb250cmFjdA.desc": {
+          "source": "Mapping rules applied independently to every requested telemetry span.\n\nVersion 1 mappings are optional per span: a missing, null, blank-string, or empty-array\nsource omits the target key. JSON object and array strings become structured values;\nscalar-looking and malformed JSON strings remain strings.",
+          "message": "요청된 모든 텔레메트리 스팬에 독립적으로 적용되는 매핑 규칙입니다.\n\n버전 1 매핑은 스팬별로 선택 사항입니다. 소스가 없거나 null, 빈 문자열 또는 빈 배열이면\n대상 키가 생략됩니다. JSON 객체 및 배열 문자열은 구조화된 값이 되며,\n스칼라처럼 보이는 문자열과 잘못된 형식의 JSON 문자열은 문자열로 유지됩니다."
+        },
+        "app.TWlzdHJhbEFp.action.aW1wb3J0LWRhdGFzZXQtZnJvbS1zcGFucw.option.bWFwcGluZ19jb250cmFjdA.field.bWFwcGluZ3M.display_name": {
+          "source": "Mappings",
+          "message": "매핑 목록"
+        },
+        "app.TWlzdHJhbEFp.type.YWN0aW9uOmFXMXdiM0owTFdSaGRHRnpaWFF0Wm5KdmJTMXpjR0Z1Y3c6U3BhbkRhdGFzZXRNYXBwaW5nI2ZiYWI5ZWU0N2I2ZDY5ZDgyZDQ5YTY0YzE1OTdkYjA2MGMzMGQ3OGM3ZGZlMmRjYmY4ZDg5ZDllMWI3MThmODI.field.c291cmNlX2ZpZWxk.display_name": {
+          "source": "Source Field",
+          "message": "소스 필드"
+        },
+        "app.TWlzdHJhbEFp.type.YWN0aW9uOmFXMXdiM0owTFdSaGRHRnpaWFF0Wm5KdmJTMXpjR0Z1Y3c6U3BhbkRhdGFzZXRTb3VyY2VSZWZlcmVuY2UjNDNlMGU5MTkzNGZhM2I5NDU0MTFmYjlkOTFlN2U3N2MzNDBjYzFiNDI0ZjMwZWViNzgyNTA1NjU5ZjFhZmY0ZQ.field.a2V5.display_name": {
+          "source": "Key",
+          "message": "키"
+        },
+        "app.TWlzdHJhbEFp.type.YWN0aW9uOmFXMXdiM0owTFdSaGRHRnpaWFF0Wm5KdmJTMXpjR0Z1Y3c6U3BhbkRhdGFzZXRTb3VyY2VSZWZlcmVuY2UjNDNlMGU5MTkzNGZhM2I5NDU0MTFmYjlkOTFlN2U3N2MzNDBjYzFiNDI0ZjMwZWViNzgyNTA1NjU5ZjFhZmY0ZQ.field.a2V5.short_desc": {
+          "source": "Literal attribute dictionary key",
+          "message": "리터럴 속성 사전 키"
+        },
+        "app.TWlzdHJhbEFp.type.YWN0aW9uOmFXMXdiM0owTFdSaGRHRnpaWFF0Wm5KdmJTMXpjR0Z1Y3c6U3BhbkRhdGFzZXRTb3VyY2VSZWZlcmVuY2UjNDNlMGU5MTkzNGZhM2I5NDU0MTFmYjlkOTFlN2U3N2MzNDBjYzFiNDI0ZjMwZWViNzgyNTA1NjU5ZjFhZmY0ZQ.field.a2V5.desc": {
+          "source": "Literal attribute dictionary key; dots do not denote a nested path.",
+          "message": "리터럴 속성 사전 키입니다. 점(.)은 중첩 경로를 나타내지 않습니다."
+        },
+        "app.TWlzdHJhbEFp.type.YWN0aW9uOmFXMXdiM0owTFdSaGRHRnpaWFF0Wm5KdmJTMXpjR0Z1Y3c6U3BhbkRhdGFzZXRTb3VyY2VSZWZlcmVuY2UjNDNlMGU5MTkzNGZhM2I5NDU0MTFmYjlkOTFlN2U3N2MzNDBjYzFiNDI0ZjMwZWViNzgyNTA1NjU5ZjFhZmY0ZQ.field.bmFtZXNwYWNl.display_name": {
+          "source": "Namespace",
+          "message": "네임스페이스"
+        },
+        "app.TWlzdHJhbEFp.type.YWN0aW9uOmFXMXdiM0owTFdSaGRHRnpaWFF0Wm5KdmJTMXpjR0Z1Y3c6U3BhbkRhdGFzZXRTb3VyY2VSZWZlcmVuY2UjNDNlMGU5MTkzNGZhM2I5NDU0MTFmYjlkOTFlN2U3N2MzNDBjYzFiNDI0ZjMwZWViNzgyNTA1NjU5ZjFhZmY0ZQ.field.bmFtZXNwYWNl.short_desc": {
+          "source": "Attribute maps that may supply dataset payload values",
+          "message": "데이터셋 페이로드 값을 제공할 수 있는 속성 맵"
+        },
+        "app.TWlzdHJhbEFp.type.YWN0aW9uOmFXMXdiM0owTFdSaGRHRnpaWFF0Wm5KdmJTMXpjR0Z1Y3c6U3BhbkRhdGFzZXRTb3VyY2VSZWZlcmVuY2UjNDNlMGU5MTkzNGZhM2I5NDU0MTFmYjlkOTFlN2U3N2MzNDBjYzFiNDI0ZjMwZWViNzgyNTA1NjU5ZjFhZmY0ZQ.field.bmFtZXNwYWNl.desc": {
+          "source": "Attribute maps that may supply dataset payload values.",
+          "message": "데이터셋 페이로드 값을 제공할 수 있는 속성 맵입니다."
+        },
+        "app.TWlzdHJhbEFp.type.YWN0aW9uOmFXMXdiM0owTFdSaGRHRnpaWFF0Wm5KdmJTMXpjR0Z1Y3c6U3BhbkRhdGFzZXRTb3VyY2VSZWZlcmVuY2UjNDNlMGU5MTkzNGZhM2I5NDU0MTFmYjlkOTFlN2U3N2MzNDBjYzFiNDI0ZjMwZWViNzgyNTA1NjU5ZjFhZmY0ZQ.field.bmFtZXNwYWNl.allowed-value.c3RyaW5nOnNwYW5fYXR0cmlidXRlcw.display_name": {
+          "source": "span_attributes",
+          "message": "span_attributes"
+        },
+        "app.TWlzdHJhbEFp.type.YWN0aW9uOmFXMXdiM0owTFdSaGRHRnpaWFF0Wm5KdmJTMXpjR0Z1Y3c6U3BhbkRhdGFzZXRTb3VyY2VSZWZlcmVuY2UjNDNlMGU5MTkzNGZhM2I5NDU0MTFmYjlkOTFlN2U3N2MzNDBjYzFiNDI0ZjMwZWViNzgyNTA1NjU5ZjFhZmY0ZQ.field.bmFtZXNwYWNl.allowed-value.c3RyaW5nOnJlc291cmNlX2F0dHJpYnV0ZXM.display_name": {
+          "source": "resource_attributes",
+          "message": "resource_attributes"
+        },
+        "app.TWlzdHJhbEFp.type.YWN0aW9uOmFXMXdiM0owTFdSaGRHRnpaWFF0Wm5KdmJTMXpjR0Z1Y3c6U3BhbkRhdGFzZXRNYXBwaW5nI2ZiYWI5ZWU0N2I2ZDY5ZDgyZDQ5YTY0YzE1OTdkYjA2MGMzMGQ3OGM3ZGZlMmRjYmY4ZDg5ZDllMWI3MThmODI.field.dGFyZ2V0X2ZpZWxk.display_name": {
+          "source": "Target Field",
+          "message": "대상 필드"
+        },
+        "app.TWlzdHJhbEFp.type.YWN0aW9uOmFXMXdiM0owTFdSaGRHRnpaWFF0Wm5KdmJTMXpjR0Z1Y3c6U3BhbkRhdGFzZXRNYXBwaW5nI2ZiYWI5ZWU0N2I2ZDY5ZDgyZDQ5YTY0YzE1OTdkYjA2MGMzMGQ3OGM3ZGZlMmRjYmY4ZDg5ZDllMWI3MThmODI.field.dGFyZ2V0X2ZpZWxk.short_desc": {
+          "source": "Literal top-level key to create in the dataset record payload",
+          "message": "데이터셋 레코드 페이로드에 생성할 리터럴 최상위 키"
+        },
+        "app.TWlzdHJhbEFp.type.YWN0aW9uOmFXMXdiM0owTFdSaGRHRnpaWFF0Wm5KdmJTMXpjR0Z1Y3c6U3BhbkRhdGFzZXRNYXBwaW5nI2ZiYWI5ZWU0N2I2ZDY5ZDgyZDQ5YTY0YzE1OTdkYjA2MGMzMGQ3OGM3ZGZlMmRjYmY4ZDg5ZDllMWI3MThmODI.field.dGFyZ2V0X2ZpZWxk.desc": {
+          "source": "Literal top-level key to create in the dataset record payload.",
+          "message": "데이터셋 레코드 페이로드에 생성할 리터럴 최상위 키입니다."
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLWxhdGVzdC1zcGFuLWV2YWx1YXRpb25z.short_desc": {
+          "source": "Search the latest span evaluation results",
+          "message": "최신 스팬 평가 결과 검색"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1waXBlbGluZXM.option.cQ.desc": {
+          "source": "Text to filter the listed pipelines by.",
+          "message": "나열된 파이프라인을 필터링할 텍스트입니다."
+        },
+        "app.TWlzdHJhbEFp.action.Y3JlYXRlLXBpcGVsaW5l.desc": {
+          "source": "Create an evaluation pipeline: its selectors choose the telemetry to evaluate (spans, logs or metrics) and its definitions name the judges that score it. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
+          "message": "평가 파이프라인을 생성합니다. 선택기는 평가할 텔레메트리(스팬, 로그 또는 메트릭)를 고르고, 정의는 이에 점수를 매기는 평가자(judge)를 지정합니다. AI 활동을 검사하고 응답 품질을 평가합니다.\n\n**공개 미리보기:** 이용 가능 여부는 계정 및 권한에 따라 다릅니다."
+        },
+        "app.TWlzdHJhbEFp.action.ZGVsZXRlLXBpcGVsaW5l.desc": {
+          "source": "Delete an evaluation pipeline. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.\n\n**Deletion:** This operation can permanently remove the selected resource or access.",
+          "message": "평가 파이프라인을 삭제합니다. AI 활동을 검사하고 응답 품질을 평가합니다.\n\n**공개 미리보기:** 이용 가능 여부는 계정 및 권한에 따라 다릅니다.\n\n**삭제:** 이 작업은 선택한 리소스 또는 접근 권한을 영구적으로 제거할 수 있습니다."
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXBpcGVsaW5lLXJlc3VsdHM.desc": {
+          "source": "Search the results that evaluation pipelines recorded for the pipeline configurations you name by slug. Results are returned one page at a time. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
+          "message": "슬러그로 지정한 파이프라인 구성에 대해 평가 파이프라인이 기록한 결과를 검색합니다. 결과는 한 번에 한 페이지씩 반환됩니다. AI 활동을 검사하고 응답 품질을 평가합니다.\n\n**공개 미리보기:** 이용 가능 여부는 계정 및 권한에 따라 다릅니다."
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXBpcGVsaW5lLXJlc3VsdHM.option.cGlwZWxpbmVfY29uZmlnX3NsdWdz.short_desc": {
+          "source": "Slugs of the pipeline configurations to search",
+          "message": "검색할 파이프라인 구성의 슬러그"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXBpcGVsaW5lLXJlc3VsdHM.option.cGlwZWxpbmVfY29uZmlnX3NsdWdz.desc": {
+          "source": "The slugs of the pipeline configurations whose results to search, as listed under `pipeline_configs` of a pipeline; at least one is required.",
+          "message": "결과를 검색할 파이프라인 구성의 슬러그로, 파이프라인의 `pipeline_configs`에 나열된 값입니다. 하나 이상 필요합니다."
         }
       }
     }

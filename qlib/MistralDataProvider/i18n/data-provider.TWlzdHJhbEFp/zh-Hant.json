@@ -9309,15 +9309,15 @@
         },
         "app.TWlzdHJhbEFp.action.cmVwcm9jZXNzLWxpYnJhcnktZG9jdW1lbnQ.display_name": {
           "source": "Reprocess Library Document",
-          "message": "重新處理檔案。管理用於為助手答案提供依據的檔案庫。\n\n**公共預覽版：** 可用性取決於您的帳戶及許可權。"
+          "message": "重新處理知識庫檔案"
         },
         "app.TWlzdHJhbEFp.action.cmVwcm9jZXNzLWxpYnJhcnktZG9jdW1lbnQ.short_desc": {
           "source": "Reprocess Library Document",
-          "message": "重新處理檔案。管理用於為助手答案提供依據的檔案庫。\n\n**公共預覽版：** 可用性取決於您的帳戶及許可權。"
+          "message": "重新處理知識庫檔案"
         },
         "app.TWlzdHJhbEFp.action.cmVwcm9jZXNzLWxpYnJhcnktZG9jdW1lbnQ.desc": {
           "source": "Reprocess a document. Manage document libraries used to ground assistant answers.\n\n**Public preview:** Availability depends on your account and permissions.",
-          "message": "重新處理檔案"
+          "message": "重新處理文件。管理用於為助手答案提供依據的檔案知識庫。\n\n**公共預覽**：可用性取決於您的帳戶及許可權。"
         },
         "app.TWlzdHJhbEFp.action.cmVwcm9jZXNzLWxpYnJhcnktZG9jdW1lbnQ.option.bGlicmFyeV9pZA.display_name": {
           "source": "Library ID",
@@ -11401,7 +11401,7 @@
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXdvcmtmbG93LWV2ZW50cw.option.Y3Vyc29y.display_name": {
           "source": "Cursor",
-          "message": "__CODE_N__"
+          "message": "游標"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXdvcmtmbG93LWV2ZW50cw.option.Y3Vyc29y.short_desc": {
           "source": "Cursor for pagination.",
@@ -11589,7 +11589,7 @@
         },
         "app.TWlzdHJhbEFp.action.bGlzdC13b3JrZmxvdy1yZWdpc3RyYXRpb25z.option.Y3Vyc29y.display_name": {
           "source": "Cursor",
-          "message": "__CODE_N__"
+          "message": "游標"
         },
         "app.TWlzdHJhbEFp.action.bGlzdC13b3JrZmxvdy1yZWdpc3RyYXRpb25z.option.Y3Vyc29y.short_desc": {
           "source": "The cursor for pagination",
@@ -12109,11 +12109,11 @@
         },
         "app.TWlzdHJhbEFp.action.bGlzdC1jb25uZWN0b3Jz.option.Y3Vyc29y.display_name": {
           "source": "Cursor",
-          "message": "__CODE_N__"
+          "message": "游標"
         },
         "app.TWlzdHJhbEFp.action.bGlzdC1jb25uZWN0b3Jz.option.Y3Vyc29y.short_desc": {
           "source": "Cursor",
-          "message": "__CODE_N__"
+          "message": "游標"
         },
         "app.TWlzdHJhbEFp.action.bGlzdC1jb25uZWN0b3Jz.option.Y3Vyc29y.desc": {
           "source": "The `cursor` value for this operation.",
@@ -13257,7 +13257,7 @@
         },
         "app.TWlzdHJhbEFp.action.bGlzdC13b3JrZmxvdy1kZXBsb3ltZW50cw.option.Y3Vyc29y.display_name": {
           "source": "Cursor",
-          "message": "__CODE_N__"
+          "message": "游標"
         },
         "app.TWlzdHJhbEFp.action.Z2V0LXdvcmtmbG93LWRlcGxveW1lbnQ.option.d29ya2Zsb3dfbmFtZQ.display_name": {
           "source": "Workflow Name",
@@ -15718,6 +15718,1754 @@
         "app.TWlzdHJhbEFp.action.dXBkYXRlLWNvbm5lY3Rvcg.option.cHJvdG9jb2w.allowed-value.c3RyaW5nOmh0dHA.display_name": {
           "source": "http",
           "message": "http"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLWxvZ3M.option.b3JkZXI.display_name": {
+          "source": "Order",
+          "message": "順序"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLWxvZ3M.option.b3JkZXI.allowed-value.c3RyaW5nOmFzYw.display_name": {
+          "source": "asc",
+          "message": "遞增"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLWxvZ3M.option.b3JkZXI.allowed-value.c3RyaW5nOmRlc2M.display_name": {
+          "source": "desc",
+          "message": "遞減"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLWxvZ3M.option.cGFnZV9zaXpl.display_name": {
+          "source": "Page Size",
+          "message": "頁面大小"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLWxvZ3M.option.Y3Vyc29y.display_name": {
+          "source": "Cursor",
+          "message": "游標"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXRyYWNlcw.option.cGFnZV9zaXpl.display_name": {
+          "source": "Page Size",
+          "message": "頁面大小"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXRyYWNlcw.option.Y3Vyc29y.display_name": {
+          "source": "Cursor",
+          "message": "游標"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXRyYWNlcw.option.dGltZV9kaW1lbnNpb24.field.Z3JhbnVsYXJpdHk.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "auto",
+          "message": "自動"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXRyYWNlcw.option.b3JkZXJfYnk.display_name": {
+          "source": "Order By",
+          "message": "排序依據"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXRyYWNlcw.option.b3JkZXJfYnk.field.ZGlyZWN0aW9u.allowed-value.c3RyaW5nOmFzYw.display_name": {
+          "source": "asc",
+          "message": "遞增"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXRyYWNlcw.option.b3JkZXJfYnk.field.ZGlyZWN0aW9u.allowed-value.c3RyaW5nOmRlc2M.display_name": {
+          "source": "desc",
+          "message": "遞減"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXRyYWNlcw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "限制"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC10cmFjZS1zcGFucw.option.cGFnZV9zaXpl.display_name": {
+          "source": "Page Size",
+          "message": "頁面大小"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC10cmFjZS1zcGFucw.option.Y3Vyc29y.display_name": {
+          "source": "Cursor",
+          "message": "游標"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXNwYW5z.option.cGFnZV9zaXpl.display_name": {
+          "source": "Page Size",
+          "message": "頁面大小"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXNwYW5z.option.Y3Vyc29y.display_name": {
+          "source": "Cursor",
+          "message": "游標"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW5z.option.dGltZV9kaW1lbnNpb24.field.Z3JhbnVsYXJpdHk.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "auto",
+          "message": "自動"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW5z.option.b3JkZXJfYnk.display_name": {
+          "source": "Order By",
+          "message": "排序依據"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW5z.option.b3JkZXJfYnk.field.ZGlyZWN0aW9u.allowed-value.c3RyaW5nOmFzYw.display_name": {
+          "source": "asc",
+          "message": "遞增"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW5z.option.b3JkZXJfYnk.field.ZGlyZWN0aW9u.allowed-value.c3RyaW5nOmRlc2M.display_name": {
+          "source": "desc",
+          "message": "遞減"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW5z.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "限制"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXNwYW4tZXZhbHVhdGlvbnM.option.cGFnZV9zaXpl.display_name": {
+          "source": "Page Size",
+          "message": "頁面大小"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXNwYW4tZXZhbHVhdGlvbnM.option.Y3Vyc29y.display_name": {
+          "source": "Cursor",
+          "message": "游標"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLWxhdGVzdC1zcGFuLWV2YWx1YXRpb25z.option.cGFnZV9zaXpl.display_name": {
+          "source": "Page Size",
+          "message": "頁面大小"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLWxhdGVzdC1zcGFuLWV2YWx1YXRpb25z.option.Y3Vyc29y.display_name": {
+          "source": "Cursor",
+          "message": "游標"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW4tZXZhbHVhdGlvbnM.option.dGltZV9kaW1lbnNpb24.field.Z3JhbnVsYXJpdHk.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "auto",
+          "message": "自動"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW4tZXZhbHVhdGlvbnM.option.b3JkZXJfYnk.display_name": {
+          "source": "Order By",
+          "message": "排序依據"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW4tZXZhbHVhdGlvbnM.option.b3JkZXJfYnk.field.ZGlyZWN0aW9u.allowed-value.c3RyaW5nOmFzYw.display_name": {
+          "source": "asc",
+          "message": "遞增"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW4tZXZhbHVhdGlvbnM.option.b3JkZXJfYnk.field.ZGlyZWN0aW9u.allowed-value.c3RyaW5nOmRlc2M.display_name": {
+          "source": "desc",
+          "message": "遞減"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW4tZXZhbHVhdGlvbnM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "限制"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1waXBlbGluZXM.option.cGFnZV9zaXpl.display_name": {
+          "source": "Page Size",
+          "message": "頁面大小"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1waXBlbGluZXM.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "頁面"
+        },
+        "app.TWlzdHJhbEFp.action.Y3JlYXRlLXBpcGVsaW5l.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名稱"
+        },
+        "app.TWlzdHJhbEFp.type.YWN0aW9uOlkzSmxZWFJsTFhCcGNHVnNhVzVsOipQcm9iYWJpbGlzdGljU2FtcGxpbmcjYzk3YmU3YmE2MWE1OTdmMDMzMTcxYjgyOGRiYjBlMjQ2MGYxZmNjNTFiMjY2ODNlNzRmMmY1MmY2Y2E0NTA5OQ.field.dHlwZQ.display_name": {
+          "source": "Type",
+          "message": "類型"
+        },
+        "app.TWlzdHJhbEFp.type.YWN0aW9uOlkzSmxZWFJsTFhCcGNHVnNhVzVsOipBdHRyaWJ1dGVIYXNoU2FtcGxpbmcjZDg5NmQ2ZDg1YjY0NTUzNWMyOTgzYTFkY2QzMzlmZTAwN2Y1MjY0N2EyOTBmMmJjM2RlZTU5YzBkNjU0ZDU4NQ.field.dHlwZQ.display_name": {
+          "source": "Type",
+          "message": "類型"
+        },
+        "app.TWlzdHJhbEFp.action.dXBkYXRlLXBpcGVsaW5l.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名稱"
+        },
+        "app.TWlzdHJhbEFp.type.YWN0aW9uOmRYQmtZWFJsTFhCcGNHVnNhVzVsOipQcm9iYWJpbGlzdGljU2FtcGxpbmcjYzk3YmU3YmE2MWE1OTdmMDMzMTcxYjgyOGRiYjBlMjQ2MGYxZmNjNTFiMjY2ODNlNzRmMmY1MmY2Y2E0NTA5OQ.field.dHlwZQ.display_name": {
+          "source": "Type",
+          "message": "類型"
+        },
+        "app.TWlzdHJhbEFp.type.YWN0aW9uOmRYQmtZWFJsTFhCcGNHVnNhVzVsOipBdHRyaWJ1dGVIYXNoU2FtcGxpbmcjZDg5NmQ2ZDg1YjY0NTUzNWMyOTgzYTFkY2QzMzlmZTAwN2Y1MjY0N2EyOTBmMmJjM2RlZTU5YzBkNjU0ZDU4NQ.field.dHlwZQ.display_name": {
+          "source": "Type",
+          "message": "類型"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXBpcGVsaW5lLXJlc3VsdHM.option.cGFnZV9zaXpl.display_name": {
+          "source": "Page Size",
+          "message": "頁面大小"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXBpcGVsaW5lLXJlc3VsdHM.option.Y3Vyc29y.display_name": {
+          "source": "Cursor",
+          "message": "游標"
+        },
+        "app.TWlzdHJhbEFp.action.aW1wb3J0LWRhdGFzZXQtZnJvbS1zcGFucw.option.ZGF0YXNldF9pZA.display_name": {
+          "source": "Dataset ID",
+          "message": "資料集 ID"
+        },
+        "app.TWlzdHJhbEFp.action.aW1wb3J0LWRhdGFzZXQtZnJvbS1zcGFucw.option.bWFwcGluZ19jb250cmFjdA.field.dmVyc2lvbg.display_name": {
+          "source": "Version",
+          "message": "版本"
+        },
+        "app.TWlzdHJhbEFp.action.aW1wb3J0LWRhdGFzZXQtZnJvbS1zcGFucw.option.bWFwcGluZ19jb250cmFjdA.field.dmVyc2lvbg.allowed-value.aW50OjE.display_name": {
+          "source": "1",
+          "message": "1"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLWxvZ3M.display_name": {
+          "source": "Search Logs",
+          "message": "搜尋日誌"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLWxvZ3M.short_desc": {
+          "source": "Search the logs of your AI activity",
+          "message": "搜尋您 AI 活動的日誌"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLWxvZ3M.desc": {
+          "source": "Search the OpenTelemetry logs recorded for your AI activity with a search expression, in the order you choose. Results are returned one page at a time; pass the returned `cursor` to read the next page. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
+          "message": "使用搜尋運算式，依您選擇的順序搜尋為您的 AI 活動記錄的 OpenTelemetry 日誌。結果一次傳回一頁；傳入傳回的 `cursor` 即可讀取下一頁。檢視 AI 活動並評估回應品質。\n\n**公共預覽版：** 可用性取決於您的帳戶及許可權。"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLWxvZ3M.option.c2VhcmNoX2V4cHJlc3Npb24.display_name": {
+          "source": "Search Expression",
+          "message": "搜尋運算式"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLWxvZ3M.option.ZnJvbQ.display_name": {
+          "source": "From",
+          "message": "起始"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLWxvZ3M.option.ZnJvbQ.short_desc": {
+          "source": "Start of the time range",
+          "message": "時間範圍的開始"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLWxvZ3M.option.ZnJvbQ.desc": {
+          "source": "The start of the time range.",
+          "message": "時間範圍的開始。"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLWxvZ3M.option.dG8.display_name": {
+          "source": "To",
+          "message": "結束"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLWxvZ3M.option.dG8.short_desc": {
+          "source": "End of the time range",
+          "message": "時間範圍的結束"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLWxvZ3M.option.dG8.desc": {
+          "source": "The end of the time range.",
+          "message": "時間範圍的結束。"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLWxvZ3M.option.cGFnZV9zaXpl.short_desc": {
+          "source": "Maximum number of results per page",
+          "message": "每頁最大結果數"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLWxvZ3M.option.cGFnZV9zaXpl.desc": {
+          "source": "The maximum number of results to return in one page.",
+          "message": "單頁傳回的最大結果數。"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLWxvZ3M.option.Y3Vyc29y.short_desc": {
+          "source": "Cursor of the page to return",
+          "message": "要傳回之頁面的游標"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLWxvZ3M.option.Y3Vyc29y.desc": {
+          "source": "The `cursor` returned with the previous page; leave it out for the first page.",
+          "message": "隨上一頁傳回的 `cursor`；第一頁請省略。"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1sb2ctZmllbGRz.display_name": {
+          "source": "List Log Fields",
+          "message": "列出日誌欄位"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1sb2ctZmllbGRz.short_desc": {
+          "source": "List the fields that log searches can use",
+          "message": "列出日誌搜尋可使用的欄位"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1sb2ctZmllbGRz.desc": {
+          "source": "List the fields that log search expressions can refer to, with their labels and types. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
+          "message": "列出日誌搜尋運算式可參照的欄位，以及其標籤與類型。檢視 AI 活動並評估回應品質。\n\n**公共預覽版：** 可用性取決於您的帳戶及許可權。"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1sb2ctZmllbGQtb3B0aW9ucw.display_name": {
+          "source": "List Log Field Options",
+          "message": "列出日誌欄位選項"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1sb2ctZmllbGQtb3B0aW9ucw.short_desc": {
+          "source": "List the values recorded for a log field",
+          "message": "列出日誌欄位記錄的值"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1sb2ctZmllbGQtb3B0aW9ucw.desc": {
+          "source": "List the values recorded for a log field in a time range, for building log search expressions. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
+          "message": "列出某時間範圍內日誌欄位記錄的值，以供建立日誌搜尋運算式。檢視 AI 活動並評估回應品質。\n\n**公共預覽版：** 可用性取決於您的帳戶及許可權。"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1sb2ctZmllbGQtb3B0aW9ucw.option.ZmllbGRfbmFtZQ.display_name": {
+          "source": "Field Name",
+          "message": "欄位名稱"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1sb2ctZmllbGQtb3B0aW9ucw.option.ZmllbGRfbmFtZQ.short_desc": {
+          "source": "Name of the field",
+          "message": "欄位的名稱"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1sb2ctZmllbGQtb3B0aW9ucw.option.ZmllbGRfbmFtZQ.desc": {
+          "source": "The name of the field, as listed by the field listing action.",
+          "message": "欄位的名稱，即欄位清單動作所列出的名稱。"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1sb2ctZmllbGQtb3B0aW9ucw.option.ZnJvbQ.display_name": {
+          "source": "From",
+          "message": "起始"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1sb2ctZmllbGQtb3B0aW9ucw.option.ZnJvbQ.short_desc": {
+          "source": "Start of the time range",
+          "message": "時間範圍的開始"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1sb2ctZmllbGQtb3B0aW9ucw.option.ZnJvbQ.desc": {
+          "source": "The start of the time range.",
+          "message": "時間範圍的開始。"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1sb2ctZmllbGQtb3B0aW9ucw.option.dG8.display_name": {
+          "source": "To",
+          "message": "結束"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1sb2ctZmllbGQtb3B0aW9ucw.option.dG8.short_desc": {
+          "source": "End of the time range",
+          "message": "時間範圍的結束"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1sb2ctZmllbGQtb3B0aW9ucw.option.dG8.desc": {
+          "source": "The end of the time range.",
+          "message": "時間範圍的結束。"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXRyYWNlcw.display_name": {
+          "source": "Search Traces",
+          "message": "搜尋追蹤"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXRyYWNlcw.short_desc": {
+          "source": "Search the traces of your AI activity",
+          "message": "搜尋您 AI 活動的追蹤"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXRyYWNlcw.desc": {
+          "source": "Search the OpenTelemetry traces recorded for your AI activity with a search expression. Results are returned one page at a time; pass the returned `cursor` to read the next page. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
+          "message": "使用搜尋運算式搜尋為您的 AI 活動記錄的 OpenTelemetry 追蹤。結果一次傳回一頁；傳入傳回的 `cursor` 即可讀取下一頁。檢視 AI 活動並評估回應品質。\n\n**公共預覽版：** 可用性取決於您的帳戶及許可權。"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXRyYWNlcw.option.c2VhcmNoX2V4cHJlc3Npb24.display_name": {
+          "source": "Search Expression",
+          "message": "搜尋運算式"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXRyYWNlcw.option.c2VhcmNoX2V4cHJlc3Npb24.short_desc": {
+          "source": "Filter expression",
+          "message": "篩選運算式"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXRyYWNlcw.option.c2VhcmNoX2V4cHJlc3Npb24.desc": {
+          "source": "Filter expression. Trace fields (e.g. `service_name`, `error_count`, `models_used`) are evaluated on the aggregated trace. Span attribute fields (e.g. `temporalWorkflowID`, `wf.type`, `gen_ai.provider.name`) are evaluated on the spans of the trace: a trace matches when one of its spans matches. Span attribute conditions combined with AND must hold on the same span, e.g. `temporalWorkflowID = 'wf-1' AND wf.type = 'activity'` only matches traces with a span carrying both attributes. Results are always one row per trace.",
+          "message": "篩選運算式。追蹤欄位（例如 `service_name`、`error_count`、`models_used`）會針對彙總後的追蹤進行評估。跨度屬性欄位（例如 `temporalWorkflowID`、`wf.type`、`gen_ai.provider.name`）會針對追蹤中的跨度進行評估：只要追蹤中有一個跨度符合，該追蹤即符合。以 AND 結合的跨度屬性條件必須在同一個跨度上成立，例如 `temporalWorkflowID = 'wf-1' AND wf.type = 'activity'` 只會符合含有同時帶有這兩個屬性之跨度的追蹤。結果一律為每個追蹤一列。"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXRyYWNlcw.option.ZnJvbQ.display_name": {
+          "source": "From",
+          "message": "起始"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXRyYWNlcw.option.ZnJvbQ.short_desc": {
+          "source": "Start of the time range",
+          "message": "時間範圍的開始"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXRyYWNlcw.option.ZnJvbQ.desc": {
+          "source": "The start of the time range.",
+          "message": "時間範圍的開始。"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXRyYWNlcw.option.dG8.display_name": {
+          "source": "To",
+          "message": "結束"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXRyYWNlcw.option.dG8.short_desc": {
+          "source": "End of the time range",
+          "message": "時間範圍的結束"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXRyYWNlcw.option.dG8.desc": {
+          "source": "The end of the time range.",
+          "message": "時間範圍的結束。"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXRyYWNlcw.option.cGFnZV9zaXpl.short_desc": {
+          "source": "Maximum number of results per page",
+          "message": "每頁最大結果數"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXRyYWNlcw.option.cGFnZV9zaXpl.desc": {
+          "source": "The maximum number of results to return in one page.",
+          "message": "單頁傳回的最大結果數。"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXRyYWNlcw.option.Y3Vyc29y.short_desc": {
+          "source": "Cursor of the page to return",
+          "message": "要傳回之頁面的游標"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXRyYWNlcw.option.Y3Vyc29y.desc": {
+          "source": "The `cursor` returned with the previous page; leave it out for the first page.",
+          "message": "隨上一頁傳回的 `cursor`；第一頁請省略。"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXRyYWNlcw.display_name": {
+          "source": "Aggregate Traces",
+          "message": "彙總追蹤"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXRyYWNlcw.short_desc": {
+          "source": "Aggregate trace metrics over time",
+          "message": "依時間彙總追蹤指標"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXRyYWNlcw.desc": {
+          "source": "Compute a metric over the traces that match a search expression, grouped by the dimensions you choose and optionally by time. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
+          "message": "針對符合搜尋運算式的追蹤計算指標，並依您選擇的維度（以及選擇性地依時間）分組。檢視 AI 活動並評估回應品質。\n\n**公共預覽版：** 可用性取決於您的帳戶及許可權。"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXRyYWNlcw.option.bWV0cmlj.display_name": {
+          "source": "Metric",
+          "message": "指標"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXRyYWNlcw.option.bWV0cmlj.field.YWdncmVnYXRpb24.display_name": {
+          "source": "Aggregation",
+          "message": "彙總"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXRyYWNlcw.option.bWV0cmlj.field.YWdncmVnYXRpb24.allowed-value.c3RyaW5nOmNvdW50.display_name": {
+          "source": "count",
+          "message": "計數"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXRyYWNlcw.option.bWV0cmlj.field.YWdncmVnYXRpb24.allowed-value.c3RyaW5nOmNvdW50X2Rpc3RpbmN0.display_name": {
+          "source": "count_distinct",
+          "message": "count_distinct"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXRyYWNlcw.option.bWV0cmlj.field.YWdncmVnYXRpb24.allowed-value.c3RyaW5nOnN1bQ.display_name": {
+          "source": "sum",
+          "message": "總和"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXRyYWNlcw.option.bWV0cmlj.field.YWdncmVnYXRpb24.allowed-value.c3RyaW5nOmF2Zw.display_name": {
+          "source": "avg",
+          "message": "平均"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXRyYWNlcw.option.bWV0cmlj.field.YWdncmVnYXRpb24.allowed-value.c3RyaW5nOm1pbg.display_name": {
+          "source": "min",
+          "message": "最小值"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXRyYWNlcw.option.bWV0cmlj.field.YWdncmVnYXRpb24.allowed-value.c3RyaW5nOm1heA.display_name": {
+          "source": "max",
+          "message": "最大值"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXRyYWNlcw.option.bWV0cmlj.field.YWdncmVnYXRpb24.allowed-value.c3RyaW5nOnA1MA.display_name": {
+          "source": "p50",
+          "message": "p50"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXRyYWNlcw.option.bWV0cmlj.field.YWdncmVnYXRpb24.allowed-value.c3RyaW5nOnA5MA.display_name": {
+          "source": "p90",
+          "message": "p90"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXRyYWNlcw.option.bWV0cmlj.field.YWdncmVnYXRpb24.allowed-value.c3RyaW5nOnA5NQ.display_name": {
+          "source": "p95",
+          "message": "p95"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXRyYWNlcw.option.bWV0cmlj.field.YWdncmVnYXRpb24.allowed-value.c3RyaW5nOnA5OQ.display_name": {
+          "source": "p99",
+          "message": "p99"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXRyYWNlcw.option.bWV0cmlj.field.bWVhc3VyZQ.display_name": {
+          "source": "Measure",
+          "message": "度量"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXRyYWNlcw.option.ZGltZW5zaW9ucw.display_name": {
+          "source": "Dimensions",
+          "message": "維度"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXRyYWNlcw.option.dGltZV9kaW1lbnNpb24.display_name": {
+          "source": "Time Dimension",
+          "message": "時間維度"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXRyYWNlcw.option.dGltZV9kaW1lbnNpb24.field.Z3JhbnVsYXJpdHk.display_name": {
+          "source": "Granularity",
+          "message": "細緻度"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXRyYWNlcw.option.dGltZV9kaW1lbnNpb24.field.Z3JhbnVsYXJpdHk.allowed-value.c3RyaW5nOnNlY29uZA.display_name": {
+          "source": "second",
+          "message": "秒"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXRyYWNlcw.option.dGltZV9kaW1lbnNpb24.field.Z3JhbnVsYXJpdHk.allowed-value.c3RyaW5nOm1pbnV0ZQ.display_name": {
+          "source": "minute",
+          "message": "分鐘"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXRyYWNlcw.option.dGltZV9kaW1lbnNpb24.field.Z3JhbnVsYXJpdHk.allowed-value.c3RyaW5nOmhvdXI.display_name": {
+          "source": "hour",
+          "message": "小時"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXRyYWNlcw.option.dGltZV9kaW1lbnNpb24.field.Z3JhbnVsYXJpdHk.allowed-value.c3RyaW5nOmRheQ.display_name": {
+          "source": "day",
+          "message": "日"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXRyYWNlcw.option.dGltZV9kaW1lbnNpb24.field.Z3JhbnVsYXJpdHk.allowed-value.c3RyaW5nOndlZWs.display_name": {
+          "source": "week",
+          "message": "週"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXRyYWNlcw.option.dGltZV9kaW1lbnNpb24.field.Z3JhbnVsYXJpdHk.allowed-value.c3RyaW5nOm1vbnRo.display_name": {
+          "source": "month",
+          "message": "月"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXRyYWNlcw.option.c2VhcmNoX2V4cHJlc3Npb24.display_name": {
+          "source": "Search Expression",
+          "message": "搜尋運算式"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXRyYWNlcw.option.b3JkZXJfYnk.field.ZGlyZWN0aW9u.display_name": {
+          "source": "Direction",
+          "message": "方向"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXRyYWNlcw.option.b3JkZXJfYnk.field.ZmllbGQ.display_name": {
+          "source": "Field",
+          "message": "欄位"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXRyYWNlcw.option.ZnJvbQ.display_name": {
+          "source": "From",
+          "message": "起始"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXRyYWNlcw.option.ZnJvbQ.short_desc": {
+          "source": "Start of the time range",
+          "message": "時間範圍的開始"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXRyYWNlcw.option.ZnJvbQ.desc": {
+          "source": "The start of the time range.",
+          "message": "時間範圍的開始。"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXRyYWNlcw.option.dG8.display_name": {
+          "source": "To",
+          "message": "結束"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXRyYWNlcw.option.dG8.short_desc": {
+          "source": "End of the time range",
+          "message": "時間範圍的結束"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXRyYWNlcw.option.dG8.desc": {
+          "source": "The end of the time range.",
+          "message": "時間範圍的結束。"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC10cmFjZS1maWVsZHM.display_name": {
+          "source": "List Trace Fields",
+          "message": "列出追蹤欄位"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC10cmFjZS1maWVsZHM.short_desc": {
+          "source": "List the fields that trace searches can use",
+          "message": "列出追蹤搜尋可使用的欄位"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC10cmFjZS1maWVsZHM.desc": {
+          "source": "List the fields that trace search expressions and aggregations can refer to, with their labels and types. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
+          "message": "列出追蹤搜尋運算式與彙總可參照的欄位，以及其標籤與類型。檢視 AI 活動並評估回應品質。\n\n**公共預覽版：** 可用性取決於您的帳戶及許可權。"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC10cmFjZS1maWVsZC1vcHRpb25z.display_name": {
+          "source": "List Trace Field Options",
+          "message": "列出追蹤欄位選項"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC10cmFjZS1maWVsZC1vcHRpb25z.short_desc": {
+          "source": "List the values recorded for a trace field",
+          "message": "列出追蹤欄位記錄的值"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC10cmFjZS1maWVsZC1vcHRpb25z.desc": {
+          "source": "List the values recorded for a trace field in a time range, for building trace search expressions. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
+          "message": "列出某時間範圍內追蹤欄位記錄的值，以供建立追蹤搜尋運算式。檢視 AI 活動並評估回應品質。\n\n**公共預覽版：** 可用性取決於您的帳戶及許可權。"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC10cmFjZS1maWVsZC1vcHRpb25z.option.ZmllbGRfbmFtZQ.display_name": {
+          "source": "Field Name",
+          "message": "欄位名稱"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC10cmFjZS1maWVsZC1vcHRpb25z.option.ZmllbGRfbmFtZQ.short_desc": {
+          "source": "Name of the field",
+          "message": "欄位的名稱"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC10cmFjZS1maWVsZC1vcHRpb25z.option.ZmllbGRfbmFtZQ.desc": {
+          "source": "The name of the field, as listed by the field listing action.",
+          "message": "欄位的名稱，即欄位清單動作所列出的名稱。"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC10cmFjZS1maWVsZC1vcHRpb25z.option.ZnJvbQ.display_name": {
+          "source": "From",
+          "message": "起始"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC10cmFjZS1maWVsZC1vcHRpb25z.option.ZnJvbQ.short_desc": {
+          "source": "Start of the time range",
+          "message": "時間範圍的開始"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC10cmFjZS1maWVsZC1vcHRpb25z.option.ZnJvbQ.desc": {
+          "source": "The start of the time range.",
+          "message": "時間範圍的開始。"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC10cmFjZS1maWVsZC1vcHRpb25z.option.dG8.display_name": {
+          "source": "To",
+          "message": "結束"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC10cmFjZS1maWVsZC1vcHRpb25z.option.dG8.short_desc": {
+          "source": "End of the time range",
+          "message": "時間範圍的結束"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC10cmFjZS1maWVsZC1vcHRpb25z.option.dG8.desc": {
+          "source": "The end of the time range.",
+          "message": "時間範圍的結束。"
+        },
+        "app.TWlzdHJhbEFp.action.Z2V0LXRyYWNl.display_name": {
+          "source": "Get Trace",
+          "message": "取得追蹤"
+        },
+        "app.TWlzdHJhbEFp.action.Z2V0LXRyYWNl.short_desc": {
+          "source": "Get a trace by its ID",
+          "message": "依 ID 取得追蹤"
+        },
+        "app.TWlzdHJhbEFp.action.Z2V0LXRyYWNl.desc": {
+          "source": "Get a trace by its ID, with its timing, token usage, counts of spans, model calls and tool calls, and its first and last messages. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
+          "message": "依 ID 取得追蹤，包括其時間資訊、Token 使用量、跨度、模型呼叫與工具呼叫的數量，以及第一則與最後一則訊息。檢視 AI 活動並評估回應品質。\n\n**公共預覽版：** 可用性取決於您的帳戶及許可權。"
+        },
+        "app.TWlzdHJhbEFp.action.Z2V0LXRyYWNl.option.dHJhY2VfaWQ.display_name": {
+          "source": "Trace ID",
+          "message": "追蹤 ID"
+        },
+        "app.TWlzdHJhbEFp.action.Z2V0LXRyYWNl.option.dHJhY2VfaWQ.short_desc": {
+          "source": "ID of the trace",
+          "message": "追蹤的 ID"
+        },
+        "app.TWlzdHJhbEFp.action.Z2V0LXRyYWNl.option.dHJhY2VfaWQ.desc": {
+          "source": "The 32-digit hexadecimal ID of the trace.",
+          "message": "追蹤的 32 位數十六進位 ID。"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC10cmFjZS1zcGFucw.display_name": {
+          "source": "List Trace Spans",
+          "message": "列出追蹤跨度"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC10cmFjZS1zcGFucw.short_desc": {
+          "source": "List the spans of a trace",
+          "message": "列出追蹤的跨度"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC10cmFjZS1zcGFucw.desc": {
+          "source": "List the spans of a trace, to follow each step of an AI request. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
+          "message": "列出追蹤的跨度，以逐步檢視 AI 請求的每個步驟。檢視 AI 活動並評估回應品質。\n\n**公共預覽版：** 可用性取決於您的帳戶及許可權。"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC10cmFjZS1zcGFucw.option.dHJhY2VfaWQ.display_name": {
+          "source": "Trace ID",
+          "message": "追蹤 ID"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC10cmFjZS1zcGFucw.option.dHJhY2VfaWQ.short_desc": {
+          "source": "ID of the trace",
+          "message": "追蹤的 ID"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC10cmFjZS1zcGFucw.option.dHJhY2VfaWQ.desc": {
+          "source": "The 32-digit hexadecimal ID of the trace.",
+          "message": "追蹤的 32 位數十六進位 ID。"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC10cmFjZS1zcGFucw.option.ZnJvbQ.display_name": {
+          "source": "From",
+          "message": "起始"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC10cmFjZS1zcGFucw.option.ZnJvbQ.short_desc": {
+          "source": "Start of the time range",
+          "message": "時間範圍的開始"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC10cmFjZS1zcGFucw.option.ZnJvbQ.desc": {
+          "source": "The start of the time range.",
+          "message": "時間範圍的開始。"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC10cmFjZS1zcGFucw.option.dG8.display_name": {
+          "source": "To",
+          "message": "結束"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC10cmFjZS1zcGFucw.option.dG8.short_desc": {
+          "source": "End of the time range",
+          "message": "時間範圍的結束"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC10cmFjZS1zcGFucw.option.dG8.desc": {
+          "source": "The end of the time range.",
+          "message": "時間範圍的結束。"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC10cmFjZS1zcGFucw.option.cGFnZV9zaXpl.short_desc": {
+          "source": "Maximum number of results per page",
+          "message": "每頁最大結果數"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC10cmFjZS1zcGFucw.option.cGFnZV9zaXpl.desc": {
+          "source": "The maximum number of results to return in one page.",
+          "message": "單頁傳回的最大結果數。"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC10cmFjZS1zcGFucw.option.Y3Vyc29y.short_desc": {
+          "source": "Cursor of the page to return",
+          "message": "要傳回之頁面的游標"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC10cmFjZS1zcGFucw.option.Y3Vyc29y.desc": {
+          "source": "The `cursor` returned with the previous page; leave it out for the first page.",
+          "message": "隨上一頁傳回的 `cursor`；第一頁請省略。"
+        },
+        "app.TWlzdHJhbEFp.action.Z2V0LXRyYWNlLXNwYW4.display_name": {
+          "source": "Get Trace Span",
+          "message": "取得追蹤跨度"
+        },
+        "app.TWlzdHJhbEFp.action.Z2V0LXRyYWNlLXNwYW4.short_desc": {
+          "source": "Get a span of a trace",
+          "message": "取得追蹤的跨度"
+        },
+        "app.TWlzdHJhbEFp.action.Z2V0LXRyYWNlLXNwYW4.desc": {
+          "source": "Get one span of a trace by its trace ID and span ID, with its timing, model request settings, messages, tool call and attributes. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
+          "message": "依追蹤 ID 與跨度 ID 取得追蹤中的一個跨度，包括其時間資訊、模型請求設定、訊息、工具呼叫與屬性。檢視 AI 活動並評估回應品質。\n\n**公共預覽版：** 可用性取決於您的帳戶及許可權。"
+        },
+        "app.TWlzdHJhbEFp.action.Z2V0LXRyYWNlLXNwYW4.option.dHJhY2VfaWQ.display_name": {
+          "source": "Trace ID",
+          "message": "追蹤 ID"
+        },
+        "app.TWlzdHJhbEFp.action.Z2V0LXRyYWNlLXNwYW4.option.dHJhY2VfaWQ.short_desc": {
+          "source": "ID of the trace",
+          "message": "追蹤的 ID"
+        },
+        "app.TWlzdHJhbEFp.action.Z2V0LXRyYWNlLXNwYW4.option.dHJhY2VfaWQ.desc": {
+          "source": "The 32-digit hexadecimal ID of the trace.",
+          "message": "追蹤的 32 位數十六進位 ID。"
+        },
+        "app.TWlzdHJhbEFp.action.Z2V0LXRyYWNlLXNwYW4.option.c3Bhbl9pZA.display_name": {
+          "source": "Span ID",
+          "message": "跨度 ID"
+        },
+        "app.TWlzdHJhbEFp.action.Z2V0LXRyYWNlLXNwYW4.option.c3Bhbl9pZA.short_desc": {
+          "source": "ID of the span",
+          "message": "跨度的 ID"
+        },
+        "app.TWlzdHJhbEFp.action.Z2V0LXRyYWNlLXNwYW4.option.c3Bhbl9pZA.desc": {
+          "source": "The 16-digit hexadecimal ID of the span.",
+          "message": "跨度的 16 位數十六進位 ID。"
+        },
+        "app.TWlzdHJhbEFp.action.Z2V0LXRyYWNlLXNwYW4.option.ZnJvbQ.display_name": {
+          "source": "From",
+          "message": "起始"
+        },
+        "app.TWlzdHJhbEFp.action.Z2V0LXRyYWNlLXNwYW4.option.ZnJvbQ.short_desc": {
+          "source": "Start of the time range",
+          "message": "時間範圍的開始"
+        },
+        "app.TWlzdHJhbEFp.action.Z2V0LXRyYWNlLXNwYW4.option.ZnJvbQ.desc": {
+          "source": "The start of the time range.",
+          "message": "時間範圍的開始。"
+        },
+        "app.TWlzdHJhbEFp.action.Z2V0LXRyYWNlLXNwYW4.option.dG8.display_name": {
+          "source": "To",
+          "message": "結束"
+        },
+        "app.TWlzdHJhbEFp.action.Z2V0LXRyYWNlLXNwYW4.option.dG8.short_desc": {
+          "source": "End of the time range",
+          "message": "時間範圍的結束"
+        },
+        "app.TWlzdHJhbEFp.action.Z2V0LXRyYWNlLXNwYW4.option.dG8.desc": {
+          "source": "The end of the time range.",
+          "message": "時間範圍的結束。"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXNwYW5z.display_name": {
+          "source": "Search Spans",
+          "message": "搜尋跨度"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXNwYW5z.short_desc": {
+          "source": "Search the spans of your AI activity",
+          "message": "搜尋您 AI 活動的跨度"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXNwYW5z.desc": {
+          "source": "Search the OpenTelemetry spans recorded for your AI activity with a search expression. Results are returned one page at a time; pass the returned `cursor` to read the next page. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
+          "message": "使用搜尋運算式搜尋為您的 AI 活動記錄的 OpenTelemetry 跨度。結果一次傳回一頁；傳入傳回的 `cursor` 即可讀取下一頁。檢視 AI 活動並評估回應品質。\n\n**公共預覽版：** 可用性取決於您的帳戶及許可權。"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXNwYW5z.option.c2VhcmNoX2V4cHJlc3Npb24.display_name": {
+          "source": "Search Expression",
+          "message": "搜尋運算式"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXNwYW5z.option.ZnJvbQ.display_name": {
+          "source": "From",
+          "message": "起始"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXNwYW5z.option.ZnJvbQ.short_desc": {
+          "source": "Start of the time range",
+          "message": "時間範圍的開始"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXNwYW5z.option.ZnJvbQ.desc": {
+          "source": "The start of the time range.",
+          "message": "時間範圍的開始。"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXNwYW5z.option.dG8.display_name": {
+          "source": "To",
+          "message": "結束"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXNwYW5z.option.dG8.short_desc": {
+          "source": "End of the time range",
+          "message": "時間範圍的結束"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXNwYW5z.option.dG8.desc": {
+          "source": "The end of the time range.",
+          "message": "時間範圍的結束。"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXNwYW5z.option.cGFnZV9zaXpl.short_desc": {
+          "source": "Maximum number of results per page",
+          "message": "每頁最大結果數"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXNwYW5z.option.cGFnZV9zaXpl.desc": {
+          "source": "The maximum number of results to return in one page.",
+          "message": "單頁傳回的最大結果數。"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXNwYW5z.option.Y3Vyc29y.short_desc": {
+          "source": "Cursor of the page to return",
+          "message": "要傳回之頁面的游標"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXNwYW5z.option.Y3Vyc29y.desc": {
+          "source": "The `cursor` returned with the previous page; leave it out for the first page.",
+          "message": "隨上一頁傳回的 `cursor`；第一頁請省略。"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW5z.display_name": {
+          "source": "Aggregate Spans",
+          "message": "彙總跨度"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW5z.short_desc": {
+          "source": "Aggregate span metrics over time",
+          "message": "依時間彙總跨度指標"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW5z.desc": {
+          "source": "Compute a metric over the spans that match a search expression, grouped by the dimensions you choose and optionally by time. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
+          "message": "針對符合搜尋運算式的跨度計算指標，並依您選擇的維度（以及選擇性地依時間）分組。檢視 AI 活動並評估回應品質。\n\n**公共預覽版：** 可用性取決於您的帳戶及許可權。"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW5z.option.bWV0cmlj.display_name": {
+          "source": "Metric",
+          "message": "指標"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW5z.option.bWV0cmlj.field.YWdncmVnYXRpb24.display_name": {
+          "source": "Aggregation",
+          "message": "彙總"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW5z.option.bWV0cmlj.field.YWdncmVnYXRpb24.allowed-value.c3RyaW5nOmNvdW50.display_name": {
+          "source": "count",
+          "message": "計數"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW5z.option.bWV0cmlj.field.YWdncmVnYXRpb24.allowed-value.c3RyaW5nOmNvdW50X2Rpc3RpbmN0.display_name": {
+          "source": "count_distinct",
+          "message": "count_distinct"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW5z.option.bWV0cmlj.field.YWdncmVnYXRpb24.allowed-value.c3RyaW5nOnN1bQ.display_name": {
+          "source": "sum",
+          "message": "總和"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW5z.option.bWV0cmlj.field.YWdncmVnYXRpb24.allowed-value.c3RyaW5nOmF2Zw.display_name": {
+          "source": "avg",
+          "message": "平均"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW5z.option.bWV0cmlj.field.YWdncmVnYXRpb24.allowed-value.c3RyaW5nOm1pbg.display_name": {
+          "source": "min",
+          "message": "最小值"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW5z.option.bWV0cmlj.field.YWdncmVnYXRpb24.allowed-value.c3RyaW5nOm1heA.display_name": {
+          "source": "max",
+          "message": "最大值"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW5z.option.bWV0cmlj.field.YWdncmVnYXRpb24.allowed-value.c3RyaW5nOnA1MA.display_name": {
+          "source": "p50",
+          "message": "p50"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW5z.option.bWV0cmlj.field.YWdncmVnYXRpb24.allowed-value.c3RyaW5nOnA5MA.display_name": {
+          "source": "p90",
+          "message": "p90"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW5z.option.bWV0cmlj.field.YWdncmVnYXRpb24.allowed-value.c3RyaW5nOnA5NQ.display_name": {
+          "source": "p95",
+          "message": "p95"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW5z.option.bWV0cmlj.field.YWdncmVnYXRpb24.allowed-value.c3RyaW5nOnA5OQ.display_name": {
+          "source": "p99",
+          "message": "p99"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW5z.option.bWV0cmlj.field.bWVhc3VyZQ.display_name": {
+          "source": "Measure",
+          "message": "度量"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW5z.option.ZGltZW5zaW9ucw.display_name": {
+          "source": "Dimensions",
+          "message": "維度"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW5z.option.dGltZV9kaW1lbnNpb24.display_name": {
+          "source": "Time Dimension",
+          "message": "時間維度"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW5z.option.dGltZV9kaW1lbnNpb24.field.Z3JhbnVsYXJpdHk.display_name": {
+          "source": "Granularity",
+          "message": "細緻度"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW5z.option.dGltZV9kaW1lbnNpb24.field.Z3JhbnVsYXJpdHk.allowed-value.c3RyaW5nOnNlY29uZA.display_name": {
+          "source": "second",
+          "message": "秒"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW5z.option.dGltZV9kaW1lbnNpb24.field.Z3JhbnVsYXJpdHk.allowed-value.c3RyaW5nOm1pbnV0ZQ.display_name": {
+          "source": "minute",
+          "message": "分鐘"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW5z.option.dGltZV9kaW1lbnNpb24.field.Z3JhbnVsYXJpdHk.allowed-value.c3RyaW5nOmhvdXI.display_name": {
+          "source": "hour",
+          "message": "小時"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW5z.option.dGltZV9kaW1lbnNpb24.field.Z3JhbnVsYXJpdHk.allowed-value.c3RyaW5nOmRheQ.display_name": {
+          "source": "day",
+          "message": "日"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW5z.option.dGltZV9kaW1lbnNpb24.field.Z3JhbnVsYXJpdHk.allowed-value.c3RyaW5nOndlZWs.display_name": {
+          "source": "week",
+          "message": "週"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW5z.option.dGltZV9kaW1lbnNpb24.field.Z3JhbnVsYXJpdHk.allowed-value.c3RyaW5nOm1vbnRo.display_name": {
+          "source": "month",
+          "message": "月"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW5z.option.c2VhcmNoX2V4cHJlc3Npb24.display_name": {
+          "source": "Search Expression",
+          "message": "搜尋運算式"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW5z.option.b3JkZXJfYnk.field.ZGlyZWN0aW9u.display_name": {
+          "source": "Direction",
+          "message": "方向"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW5z.option.b3JkZXJfYnk.field.ZmllbGQ.display_name": {
+          "source": "Field",
+          "message": "欄位"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW5z.option.ZnJvbQ.display_name": {
+          "source": "From",
+          "message": "起始"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW5z.option.ZnJvbQ.short_desc": {
+          "source": "Start of the time range",
+          "message": "時間範圍的開始"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW5z.option.ZnJvbQ.desc": {
+          "source": "The start of the time range.",
+          "message": "時間範圍的開始。"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW5z.option.dG8.display_name": {
+          "source": "To",
+          "message": "結束"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW5z.option.dG8.short_desc": {
+          "source": "End of the time range",
+          "message": "時間範圍的結束"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW5z.option.dG8.desc": {
+          "source": "The end of the time range.",
+          "message": "時間範圍的結束。"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1zcGFuLWZpZWxkcw.display_name": {
+          "source": "List Span Fields",
+          "message": "列出跨度欄位"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1zcGFuLWZpZWxkcw.short_desc": {
+          "source": "List the fields that span searches can use",
+          "message": "列出跨度搜尋可使用的欄位"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1zcGFuLWZpZWxkcw.desc": {
+          "source": "List the fields that span search expressions and aggregations can refer to, with their labels and types. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
+          "message": "列出跨度搜尋運算式與彙總可參照的欄位，以及其標籤與類型。檢視 AI 活動並評估回應品質。\n\n**公共預覽版：** 可用性取決於您的帳戶及許可權。"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1zcGFuLWZpZWxkLW9wdGlvbnM.display_name": {
+          "source": "List Span Field Options",
+          "message": "列出跨度欄位選項"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1zcGFuLWZpZWxkLW9wdGlvbnM.short_desc": {
+          "source": "List the values recorded for a span field",
+          "message": "列出跨度欄位記錄的值"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1zcGFuLWZpZWxkLW9wdGlvbnM.desc": {
+          "source": "List the values recorded for a span field in a time range, for building span search expressions. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
+          "message": "列出某時間範圍內跨度欄位記錄的值，以供建立跨度搜尋運算式。檢視 AI 活動並評估回應品質。\n\n**公共預覽版：** 可用性取決於您的帳戶及許可權。"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1zcGFuLWZpZWxkLW9wdGlvbnM.option.ZmllbGRfbmFtZQ.display_name": {
+          "source": "Field Name",
+          "message": "欄位名稱"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1zcGFuLWZpZWxkLW9wdGlvbnM.option.ZmllbGRfbmFtZQ.short_desc": {
+          "source": "Name of the field",
+          "message": "欄位的名稱"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1zcGFuLWZpZWxkLW9wdGlvbnM.option.ZmllbGRfbmFtZQ.desc": {
+          "source": "The name of the field, as listed by the field listing action.",
+          "message": "欄位的名稱，即欄位清單動作所列出的名稱。"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1zcGFuLWZpZWxkLW9wdGlvbnM.option.ZnJvbQ.display_name": {
+          "source": "From",
+          "message": "起始"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1zcGFuLWZpZWxkLW9wdGlvbnM.option.ZnJvbQ.short_desc": {
+          "source": "Start of the time range",
+          "message": "時間範圍的開始"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1zcGFuLWZpZWxkLW9wdGlvbnM.option.ZnJvbQ.desc": {
+          "source": "The start of the time range.",
+          "message": "時間範圍的開始。"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1zcGFuLWZpZWxkLW9wdGlvbnM.option.dG8.display_name": {
+          "source": "To",
+          "message": "結束"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1zcGFuLWZpZWxkLW9wdGlvbnM.option.dG8.short_desc": {
+          "source": "End of the time range",
+          "message": "時間範圍的結束"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1zcGFuLWZpZWxkLW9wdGlvbnM.option.dG8.desc": {
+          "source": "The end of the time range.",
+          "message": "時間範圍的結束。"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXNwYW4tZXZhbHVhdGlvbnM.display_name": {
+          "source": "Search Span Evaluations",
+          "message": "搜尋跨度評估"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXNwYW4tZXZhbHVhdGlvbnM.short_desc": {
+          "source": "Search the evaluations of spans",
+          "message": "搜尋跨度的評估"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXNwYW4tZXZhbHVhdGlvbnM.desc": {
+          "source": "Search the evaluation results recorded for spans with a search expression. Results are returned one page at a time; pass the returned `cursor` to read the next page. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
+          "message": "使用搜尋運算式搜尋為跨度記錄的評估結果。結果一次傳回一頁；傳入傳回的 `cursor` 即可讀取下一頁。檢視 AI 活動並評估回應品質。\n\n**公共預覽版：** 可用性取決於您的帳戶及許可權。"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXNwYW4tZXZhbHVhdGlvbnM.option.c2VhcmNoX2V4cHJlc3Npb24.display_name": {
+          "source": "Search Expression",
+          "message": "搜尋運算式"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXNwYW4tZXZhbHVhdGlvbnM.option.ZnJvbQ.display_name": {
+          "source": "From",
+          "message": "起始"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXNwYW4tZXZhbHVhdGlvbnM.option.ZnJvbQ.short_desc": {
+          "source": "Start of the time range",
+          "message": "時間範圍的開始"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXNwYW4tZXZhbHVhdGlvbnM.option.ZnJvbQ.desc": {
+          "source": "The start of the time range.",
+          "message": "時間範圍的開始。"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXNwYW4tZXZhbHVhdGlvbnM.option.dG8.display_name": {
+          "source": "To",
+          "message": "結束"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXNwYW4tZXZhbHVhdGlvbnM.option.dG8.short_desc": {
+          "source": "End of the time range",
+          "message": "時間範圍的結束"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXNwYW4tZXZhbHVhdGlvbnM.option.dG8.desc": {
+          "source": "The end of the time range.",
+          "message": "時間範圍的結束。"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXNwYW4tZXZhbHVhdGlvbnM.option.cGFnZV9zaXpl.short_desc": {
+          "source": "Maximum number of results per page",
+          "message": "每頁最大結果數"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXNwYW4tZXZhbHVhdGlvbnM.option.cGFnZV9zaXpl.desc": {
+          "source": "The maximum number of results to return in one page.",
+          "message": "單頁傳回的最大結果數。"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXNwYW4tZXZhbHVhdGlvbnM.option.Y3Vyc29y.short_desc": {
+          "source": "Cursor of the page to return",
+          "message": "要傳回之頁面的游標"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXNwYW4tZXZhbHVhdGlvbnM.option.Y3Vyc29y.desc": {
+          "source": "The `cursor` returned with the previous page; leave it out for the first page.",
+          "message": "隨上一頁傳回的 `cursor`；第一頁請省略。"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLWxhdGVzdC1zcGFuLWV2YWx1YXRpb25z.display_name": {
+          "source": "Search Latest Span Evaluations",
+          "message": "搜尋最新跨度評估"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLWxhdGVzdC1zcGFuLWV2YWx1YXRpb25z.desc": {
+          "source": "Search the evaluation results recorded for spans with a search expression, returning only the latest results. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
+          "message": "使用搜尋運算式搜尋為跨度記錄的評估結果，僅傳回最新的結果。檢視 AI 活動並評估回應品質。\n\n**公共預覽版：** 可用性取決於您的帳戶及許可權。"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLWxhdGVzdC1zcGFuLWV2YWx1YXRpb25z.option.c2VhcmNoX2V4cHJlc3Npb24.display_name": {
+          "source": "Search Expression",
+          "message": "搜尋運算式"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLWxhdGVzdC1zcGFuLWV2YWx1YXRpb25z.option.ZnJvbQ.display_name": {
+          "source": "From",
+          "message": "起始"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLWxhdGVzdC1zcGFuLWV2YWx1YXRpb25z.option.ZnJvbQ.short_desc": {
+          "source": "Start of the time range",
+          "message": "時間範圍的開始"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLWxhdGVzdC1zcGFuLWV2YWx1YXRpb25z.option.ZnJvbQ.desc": {
+          "source": "The start of the time range.",
+          "message": "時間範圍的開始。"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLWxhdGVzdC1zcGFuLWV2YWx1YXRpb25z.option.dG8.display_name": {
+          "source": "To",
+          "message": "結束"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLWxhdGVzdC1zcGFuLWV2YWx1YXRpb25z.option.dG8.short_desc": {
+          "source": "End of the time range",
+          "message": "時間範圍的結束"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLWxhdGVzdC1zcGFuLWV2YWx1YXRpb25z.option.dG8.desc": {
+          "source": "The end of the time range.",
+          "message": "時間範圍的結束。"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLWxhdGVzdC1zcGFuLWV2YWx1YXRpb25z.option.cGFnZV9zaXpl.short_desc": {
+          "source": "Maximum number of results per page",
+          "message": "每頁最大結果數"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLWxhdGVzdC1zcGFuLWV2YWx1YXRpb25z.option.cGFnZV9zaXpl.desc": {
+          "source": "The maximum number of results to return in one page.",
+          "message": "單頁傳回的最大結果數。"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLWxhdGVzdC1zcGFuLWV2YWx1YXRpb25z.option.Y3Vyc29y.short_desc": {
+          "source": "Cursor of the page to return",
+          "message": "要傳回之頁面的游標"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLWxhdGVzdC1zcGFuLWV2YWx1YXRpb25z.option.Y3Vyc29y.desc": {
+          "source": "The `cursor` returned with the previous page; leave it out for the first page.",
+          "message": "隨上一頁傳回的 `cursor`；第一頁請省略。"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW4tZXZhbHVhdGlvbnM.display_name": {
+          "source": "Aggregate Span Evaluations",
+          "message": "彙總跨度評估"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW4tZXZhbHVhdGlvbnM.short_desc": {
+          "source": "Aggregate span evaluation results over time",
+          "message": "依時間彙總跨度評估結果"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW4tZXZhbHVhdGlvbnM.desc": {
+          "source": "Compute a metric over the span evaluation results that match a search expression, grouped by the dimensions you choose and optionally by time. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
+          "message": "針對符合搜尋運算式的跨度評估結果計算指標，並依您選擇的維度（以及選擇性地依時間）分組。檢視 AI 活動並評估回應品質。\n\n**公共預覽版：** 可用性取決於您的帳戶及許可權。"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW4tZXZhbHVhdGlvbnM.option.bWV0cmlj.display_name": {
+          "source": "Metric",
+          "message": "指標"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW4tZXZhbHVhdGlvbnM.option.bWV0cmlj.field.YWdncmVnYXRpb24.display_name": {
+          "source": "Aggregation",
+          "message": "彙總"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW4tZXZhbHVhdGlvbnM.option.bWV0cmlj.field.YWdncmVnYXRpb24.allowed-value.c3RyaW5nOmNvdW50.display_name": {
+          "source": "count",
+          "message": "計數"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW4tZXZhbHVhdGlvbnM.option.bWV0cmlj.field.YWdncmVnYXRpb24.allowed-value.c3RyaW5nOmNvdW50X2Rpc3RpbmN0.display_name": {
+          "source": "count_distinct",
+          "message": "count_distinct"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW4tZXZhbHVhdGlvbnM.option.bWV0cmlj.field.YWdncmVnYXRpb24.allowed-value.c3RyaW5nOnN1bQ.display_name": {
+          "source": "sum",
+          "message": "總和"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW4tZXZhbHVhdGlvbnM.option.bWV0cmlj.field.YWdncmVnYXRpb24.allowed-value.c3RyaW5nOmF2Zw.display_name": {
+          "source": "avg",
+          "message": "平均"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW4tZXZhbHVhdGlvbnM.option.bWV0cmlj.field.YWdncmVnYXRpb24.allowed-value.c3RyaW5nOm1pbg.display_name": {
+          "source": "min",
+          "message": "最小值"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW4tZXZhbHVhdGlvbnM.option.bWV0cmlj.field.YWdncmVnYXRpb24.allowed-value.c3RyaW5nOm1heA.display_name": {
+          "source": "max",
+          "message": "最大值"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW4tZXZhbHVhdGlvbnM.option.bWV0cmlj.field.YWdncmVnYXRpb24.allowed-value.c3RyaW5nOnA1MA.display_name": {
+          "source": "p50",
+          "message": "p50"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW4tZXZhbHVhdGlvbnM.option.bWV0cmlj.field.YWdncmVnYXRpb24.allowed-value.c3RyaW5nOnA5MA.display_name": {
+          "source": "p90",
+          "message": "p90"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW4tZXZhbHVhdGlvbnM.option.bWV0cmlj.field.YWdncmVnYXRpb24.allowed-value.c3RyaW5nOnA5NQ.display_name": {
+          "source": "p95",
+          "message": "p95"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW4tZXZhbHVhdGlvbnM.option.bWV0cmlj.field.YWdncmVnYXRpb24.allowed-value.c3RyaW5nOnA5OQ.display_name": {
+          "source": "p99",
+          "message": "p99"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW4tZXZhbHVhdGlvbnM.option.bWV0cmlj.field.bWVhc3VyZQ.display_name": {
+          "source": "Measure",
+          "message": "度量"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW4tZXZhbHVhdGlvbnM.option.ZGltZW5zaW9ucw.display_name": {
+          "source": "Dimensions",
+          "message": "維度"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW4tZXZhbHVhdGlvbnM.option.dGltZV9kaW1lbnNpb24.display_name": {
+          "source": "Time Dimension",
+          "message": "時間維度"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW4tZXZhbHVhdGlvbnM.option.dGltZV9kaW1lbnNpb24.field.Z3JhbnVsYXJpdHk.display_name": {
+          "source": "Granularity",
+          "message": "細緻度"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW4tZXZhbHVhdGlvbnM.option.dGltZV9kaW1lbnNpb24.field.Z3JhbnVsYXJpdHk.allowed-value.c3RyaW5nOnNlY29uZA.display_name": {
+          "source": "second",
+          "message": "秒"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW4tZXZhbHVhdGlvbnM.option.dGltZV9kaW1lbnNpb24.field.Z3JhbnVsYXJpdHk.allowed-value.c3RyaW5nOm1pbnV0ZQ.display_name": {
+          "source": "minute",
+          "message": "分鐘"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW4tZXZhbHVhdGlvbnM.option.dGltZV9kaW1lbnNpb24.field.Z3JhbnVsYXJpdHk.allowed-value.c3RyaW5nOmhvdXI.display_name": {
+          "source": "hour",
+          "message": "小時"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW4tZXZhbHVhdGlvbnM.option.dGltZV9kaW1lbnNpb24.field.Z3JhbnVsYXJpdHk.allowed-value.c3RyaW5nOmRheQ.display_name": {
+          "source": "day",
+          "message": "日"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW4tZXZhbHVhdGlvbnM.option.dGltZV9kaW1lbnNpb24.field.Z3JhbnVsYXJpdHk.allowed-value.c3RyaW5nOndlZWs.display_name": {
+          "source": "week",
+          "message": "週"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW4tZXZhbHVhdGlvbnM.option.dGltZV9kaW1lbnNpb24.field.Z3JhbnVsYXJpdHk.allowed-value.c3RyaW5nOm1vbnRo.display_name": {
+          "source": "month",
+          "message": "月"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW4tZXZhbHVhdGlvbnM.option.c2VhcmNoX2V4cHJlc3Npb24.display_name": {
+          "source": "Search Expression",
+          "message": "搜尋運算式"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW4tZXZhbHVhdGlvbnM.option.b3JkZXJfYnk.field.ZGlyZWN0aW9u.display_name": {
+          "source": "Direction",
+          "message": "方向"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW4tZXZhbHVhdGlvbnM.option.b3JkZXJfYnk.field.ZmllbGQ.display_name": {
+          "source": "Field",
+          "message": "欄位"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW4tZXZhbHVhdGlvbnM.option.ZnJvbQ.display_name": {
+          "source": "From",
+          "message": "起始"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW4tZXZhbHVhdGlvbnM.option.ZnJvbQ.short_desc": {
+          "source": "Start of the time range",
+          "message": "時間範圍的開始"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW4tZXZhbHVhdGlvbnM.option.ZnJvbQ.desc": {
+          "source": "The start of the time range.",
+          "message": "時間範圍的開始。"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW4tZXZhbHVhdGlvbnM.option.dG8.display_name": {
+          "source": "To",
+          "message": "結束"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW4tZXZhbHVhdGlvbnM.option.dG8.short_desc": {
+          "source": "End of the time range",
+          "message": "時間範圍的結束"
+        },
+        "app.TWlzdHJhbEFp.action.YWdncmVnYXRlLXNwYW4tZXZhbHVhdGlvbnM.option.dG8.desc": {
+          "source": "The end of the time range.",
+          "message": "時間範圍的結束。"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1zcGFuLWV2YWx1YXRpb24tZmllbGRz.display_name": {
+          "source": "List Span Evaluation Fields",
+          "message": "列出跨度評估欄位"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1zcGFuLWV2YWx1YXRpb24tZmllbGRz.short_desc": {
+          "source": "List the fields that evaluation searches can use",
+          "message": "列出評估搜尋可使用的欄位"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1zcGFuLWV2YWx1YXRpb24tZmllbGRz.desc": {
+          "source": "List the fields that span evaluation search expressions and aggregations can refer to, with their labels and types. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
+          "message": "列出跨度評估搜尋運算式與彙總可參照的欄位，以及其標籤與類型。檢視 AI 活動並評估回應品質。\n\n**公共預覽版：** 可用性取決於您的帳戶及許可權。"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1zcGFuLWV2YWx1YXRpb24tZmllbGQtb3B0aW9ucw.display_name": {
+          "source": "List Span Evaluation Field Options",
+          "message": "列出跨度評估欄位選項"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1zcGFuLWV2YWx1YXRpb24tZmllbGQtb3B0aW9ucw.short_desc": {
+          "source": "List the values recorded for an evaluation field",
+          "message": "列出評估欄位記錄的值"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1zcGFuLWV2YWx1YXRpb24tZmllbGQtb3B0aW9ucw.desc": {
+          "source": "List the values recorded for a span evaluation field in a time range, for building evaluation search expressions. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
+          "message": "列出某時間範圍內跨度評估欄位記錄的值，以供建立評估搜尋運算式。檢視 AI 活動並評估回應品質。\n\n**公共預覽版：** 可用性取決於您的帳戶及許可權。"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1zcGFuLWV2YWx1YXRpb24tZmllbGQtb3B0aW9ucw.option.ZmllbGRfbmFtZQ.display_name": {
+          "source": "Field Name",
+          "message": "欄位名稱"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1zcGFuLWV2YWx1YXRpb24tZmllbGQtb3B0aW9ucw.option.ZmllbGRfbmFtZQ.short_desc": {
+          "source": "Name of the field",
+          "message": "欄位的名稱"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1zcGFuLWV2YWx1YXRpb24tZmllbGQtb3B0aW9ucw.option.ZmllbGRfbmFtZQ.desc": {
+          "source": "The name of the field, as listed by the field listing action.",
+          "message": "欄位的名稱，即欄位清單動作所列出的名稱。"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1zcGFuLWV2YWx1YXRpb24tZmllbGQtb3B0aW9ucw.option.ZnJvbQ.display_name": {
+          "source": "From",
+          "message": "起始"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1zcGFuLWV2YWx1YXRpb24tZmllbGQtb3B0aW9ucw.option.ZnJvbQ.short_desc": {
+          "source": "Start of the time range",
+          "message": "時間範圍的開始"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1zcGFuLWV2YWx1YXRpb24tZmllbGQtb3B0aW9ucw.option.ZnJvbQ.desc": {
+          "source": "The start of the time range.",
+          "message": "時間範圍的開始。"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1zcGFuLWV2YWx1YXRpb24tZmllbGQtb3B0aW9ucw.option.dG8.display_name": {
+          "source": "To",
+          "message": "結束"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1zcGFuLWV2YWx1YXRpb24tZmllbGQtb3B0aW9ucw.option.dG8.short_desc": {
+          "source": "End of the time range",
+          "message": "時間範圍的結束"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1zcGFuLWV2YWx1YXRpb24tZmllbGQtb3B0aW9ucw.option.dG8.desc": {
+          "source": "The end of the time range.",
+          "message": "時間範圍的結束。"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1waXBlbGluZXM.display_name": {
+          "source": "List Pipelines",
+          "message": "列出管線"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1waXBlbGluZXM.short_desc": {
+          "source": "List evaluation pipelines",
+          "message": "列出評估管線"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1waXBlbGluZXM.desc": {
+          "source": "List the evaluation pipelines that score your AI activity automatically. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
+          "message": "列出自動為您的 AI 活動評分的評估管線。檢視 AI 活動並評估回應品質。\n\n**公共預覽版：** 可用性取決於您的帳戶及許可權。"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1waXBlbGluZXM.option.ZW5hYmxlZA.display_name": {
+          "source": "Enabled",
+          "message": "已啟用"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1waXBlbGluZXM.option.ZW5hYmxlZA.short_desc": {
+          "source": "Return only enabled or disabled pipelines",
+          "message": "僅傳回已啟用或已停用的管線"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1waXBlbGluZXM.option.ZW5hYmxlZA.desc": {
+          "source": "When set, return only the pipelines whose enabled state matches.",
+          "message": "設定後，僅傳回啟用狀態相符的管線。"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1waXBlbGluZXM.option.ZnJvbQ.display_name": {
+          "source": "From",
+          "message": "起始"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1waXBlbGluZXM.option.ZnJvbQ.short_desc": {
+          "source": "Start of the time range",
+          "message": "時間範圍的開始"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1waXBlbGluZXM.option.ZnJvbQ.desc": {
+          "source": "The start of the time range.",
+          "message": "時間範圍的開始。"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1waXBlbGluZXM.option.dG8.display_name": {
+          "source": "To",
+          "message": "結束"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1waXBlbGluZXM.option.dG8.short_desc": {
+          "source": "End of the time range",
+          "message": "時間範圍的結束"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1waXBlbGluZXM.option.dG8.desc": {
+          "source": "The end of the time range.",
+          "message": "時間範圍的結束。"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1waXBlbGluZXM.option.cGFnZV9zaXpl.short_desc": {
+          "source": "Maximum number of results per page",
+          "message": "每頁最大結果數"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1waXBlbGluZXM.option.cGFnZV9zaXpl.desc": {
+          "source": "The maximum number of results to return in one page.",
+          "message": "單頁傳回的最大結果數。"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1waXBlbGluZXM.option.cGFnZQ.short_desc": {
+          "source": "Page number to return",
+          "message": "要傳回的頁碼"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1waXBlbGluZXM.option.cGFnZQ.desc": {
+          "source": "The number of the page to return, starting at 1.",
+          "message": "要傳回的頁碼，從 1 開始。"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1waXBlbGluZXM.option.cQ.display_name": {
+          "source": "Search Text",
+          "message": "搜尋文字"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1waXBlbGluZXM.option.cQ.short_desc": {
+          "source": "Text to filter by",
+          "message": "用於篩選的文字"
+        },
+        "app.TWlzdHJhbEFp.action.Y3JlYXRlLXBpcGVsaW5l.display_name": {
+          "source": "Create Pipeline",
+          "message": "建立管線"
+        },
+        "app.TWlzdHJhbEFp.action.Y3JlYXRlLXBpcGVsaW5l.short_desc": {
+          "source": "Create an evaluation pipeline",
+          "message": "建立評估管線"
+        },
+        "app.TWlzdHJhbEFp.action.Y3JlYXRlLXBpcGVsaW5l.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "描述"
+        },
+        "app.TWlzdHJhbEFp.action.Y3JlYXRlLXBpcGVsaW5l.option.c2VsZWN0b3Jz.display_name": {
+          "source": "Selectors",
+          "message": "選取器"
+        },
+        "app.TWlzdHJhbEFp.action.Y3JlYXRlLXBpcGVsaW5l.option.c2VsZWN0b3Jz.field.ZmlsdGVy.display_name": {
+          "source": "Filter",
+          "message": "篩選條件"
+        },
+        "app.TWlzdHJhbEFp.action.Y3JlYXRlLXBpcGVsaW5l.option.c2VsZWN0b3Jz.field.c291cmNlX2tpbmQ.display_name": {
+          "source": "Source Kind",
+          "message": "來源種類"
+        },
+        "app.TWlzdHJhbEFp.action.Y3JlYXRlLXBpcGVsaW5l.option.c2VsZWN0b3Jz.field.c291cmNlX2tpbmQ.allowed-value.c3RyaW5nOnNwYW4.display_name": {
+          "source": "span",
+          "message": "跨度"
+        },
+        "app.TWlzdHJhbEFp.action.Y3JlYXRlLXBpcGVsaW5l.option.c2VsZWN0b3Jz.field.c291cmNlX2tpbmQ.allowed-value.c3RyaW5nOmxvZw.display_name": {
+          "source": "log",
+          "message": "日誌"
+        },
+        "app.TWlzdHJhbEFp.action.Y3JlYXRlLXBpcGVsaW5l.option.c2VsZWN0b3Jz.field.c291cmNlX2tpbmQ.allowed-value.c3RyaW5nOm1ldHJpYw.display_name": {
+          "source": "metric",
+          "message": "指標"
+        },
+        "app.TWlzdHJhbEFp.action.Y3JlYXRlLXBpcGVsaW5l.option.ZGVmaW5pdGlvbnM.display_name": {
+          "source": "Definitions",
+          "message": "定義"
+        },
+        "app.TWlzdHJhbEFp.action.Y3JlYXRlLXBpcGVsaW5l.option.ZGVmaW5pdGlvbnM.field.bWFwcGluZw.display_name": {
+          "source": "Mapping",
+          "message": "對應"
+        },
+        "app.TWlzdHJhbEFp.action.Y3JlYXRlLXBpcGVsaW5l.option.ZGVmaW5pdGlvbnM.field.c2FtcGxpbmc.display_name": {
+          "source": "Sampling",
+          "message": "取樣"
+        },
+        "app.TWlzdHJhbEFp.type.YWN0aW9uOlkzSmxZWFJsTFhCcGNHVnNhVzVsOipQcm9iYWJpbGlzdGljU2FtcGxpbmcjYzk3YmU3YmE2MWE1OTdmMDMzMTcxYjgyOGRiYjBlMjQ2MGYxZmNjNTFiMjY2ODNlNzRmMmY1MmY2Y2E0NTA5OQ.field.cGVyY2VudGFnZQ.display_name": {
+          "source": "Percentage",
+          "message": "百分比"
+        },
+        "app.TWlzdHJhbEFp.type.YWN0aW9uOlkzSmxZWFJsTFhCcGNHVnNhVzVsOipQcm9iYWJpbGlzdGljU2FtcGxpbmcjYzk3YmU3YmE2MWE1OTdmMDMzMTcxYjgyOGRiYjBlMjQ2MGYxZmNjNTFiMjY2ODNlNzRmMmY1MmY2Y2E0NTA5OQ.field.dHlwZQ.allowed-value.c3RyaW5nOnByb2JhYmlsaXN0aWM.display_name": {
+          "source": "probabilistic",
+          "message": "機率式"
+        },
+        "app.TWlzdHJhbEFp.type.YWN0aW9uOlkzSmxZWFJsTFhCcGNHVnNhVzVsOipBdHRyaWJ1dGVIYXNoU2FtcGxpbmcjZDg5NmQ2ZDg1YjY0NTUzNWMyOTgzYTFkY2QzMzlmZTAwN2Y1MjY0N2EyOTBmMmJjM2RlZTU5YzBkNjU0ZDU4NQ.field.YXR0cmlidXRl.display_name": {
+          "source": "Attribute",
+          "message": "屬性"
+        },
+        "app.TWlzdHJhbEFp.type.YWN0aW9uOlkzSmxZWFJsTFhCcGNHVnNhVzVsOipBdHRyaWJ1dGVIYXNoU2FtcGxpbmcjZDg5NmQ2ZDg1YjY0NTUzNWMyOTgzYTFkY2QzMzlmZTAwN2Y1MjY0N2EyOTBmMmJjM2RlZTU5YzBkNjU0ZDU4NQ.field.cGVyY2VudGFnZQ.display_name": {
+          "source": "Percentage",
+          "message": "百分比"
+        },
+        "app.TWlzdHJhbEFp.type.YWN0aW9uOlkzSmxZWFJsTFhCcGNHVnNhVzVsOipBdHRyaWJ1dGVIYXNoU2FtcGxpbmcjZDg5NmQ2ZDg1YjY0NTUzNWMyOTgzYTFkY2QzMzlmZTAwN2Y1MjY0N2EyOTBmMmJjM2RlZTU5YzBkNjU0ZDU4NQ.field.dHlwZQ.allowed-value.c3RyaW5nOmF0dHJpYnV0ZV9oYXNo.display_name": {
+          "source": "attribute_hash",
+          "message": "attribute_hash"
+        },
+        "app.TWlzdHJhbEFp.action.Y3JlYXRlLXBpcGVsaW5l.option.ZGVmaW5pdGlvbnM.field.c2x1Zw.display_name": {
+          "source": "Slug",
+          "message": "Slug"
+        },
+        "app.TWlzdHJhbEFp.action.Y3JlYXRlLXBpcGVsaW5l.option.ZW5hYmxlZA.display_name": {
+          "source": "Enabled",
+          "message": "已啟用"
+        },
+        "app.TWlzdHJhbEFp.action.Z2V0LXBpcGVsaW5l.display_name": {
+          "source": "Get Pipeline",
+          "message": "取得管線"
+        },
+        "app.TWlzdHJhbEFp.action.Z2V0LXBpcGVsaW5l.short_desc": {
+          "source": "Get an evaluation pipeline",
+          "message": "取得評估管線"
+        },
+        "app.TWlzdHJhbEFp.action.Z2V0LXBpcGVsaW5l.desc": {
+          "source": "Get an evaluation pipeline with its selectors and judge definitions. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
+          "message": "取得評估管線及其選取器與評審定義。檢視 AI 活動並評估回應品質。\n\n**公共預覽版：** 可用性取決於您的帳戶及許可權。"
+        },
+        "app.TWlzdHJhbEFp.action.Z2V0LXBpcGVsaW5l.option.cGlwZWxpbmVfaWQ.display_name": {
+          "source": "Pipeline ID",
+          "message": "管線 ID"
+        },
+        "app.TWlzdHJhbEFp.action.Z2V0LXBpcGVsaW5l.option.cGlwZWxpbmVfaWQ.short_desc": {
+          "source": "Evaluation pipeline",
+          "message": "評估管線"
+        },
+        "app.TWlzdHJhbEFp.action.Z2V0LXBpcGVsaW5l.option.cGlwZWxpbmVfaWQ.desc": {
+          "source": "The ID of the evaluation pipeline.",
+          "message": "評估管線的 ID。"
+        },
+        "app.TWlzdHJhbEFp.action.dXBkYXRlLXBpcGVsaW5l.display_name": {
+          "source": "Update Pipeline",
+          "message": "更新管線"
+        },
+        "app.TWlzdHJhbEFp.action.dXBkYXRlLXBpcGVsaW5l.short_desc": {
+          "source": "Update an evaluation pipeline",
+          "message": "更新評估管線"
+        },
+        "app.TWlzdHJhbEFp.action.dXBkYXRlLXBpcGVsaW5l.desc": {
+          "source": "Update the name, description, selectors, judge definitions or enabled state of an evaluation pipeline. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
+          "message": "更新評估管線的名稱、描述、選取器、評審定義或啟用狀態。檢視 AI 活動並評估回應品質。\n\n**公共預覽版：** 可用性取決於您的帳戶及許可權。"
+        },
+        "app.TWlzdHJhbEFp.action.dXBkYXRlLXBpcGVsaW5l.option.cGlwZWxpbmVfaWQ.display_name": {
+          "source": "Pipeline ID",
+          "message": "管線 ID"
+        },
+        "app.TWlzdHJhbEFp.action.dXBkYXRlLXBpcGVsaW5l.option.cGlwZWxpbmVfaWQ.short_desc": {
+          "source": "Evaluation pipeline",
+          "message": "評估管線"
+        },
+        "app.TWlzdHJhbEFp.action.dXBkYXRlLXBpcGVsaW5l.option.cGlwZWxpbmVfaWQ.desc": {
+          "source": "The ID of the evaluation pipeline.",
+          "message": "評估管線的 ID。"
+        },
+        "app.TWlzdHJhbEFp.action.dXBkYXRlLXBpcGVsaW5l.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "描述"
+        },
+        "app.TWlzdHJhbEFp.action.dXBkYXRlLXBpcGVsaW5l.option.c2VsZWN0b3Jz.display_name": {
+          "source": "Selectors",
+          "message": "選取器"
+        },
+        "app.TWlzdHJhbEFp.action.dXBkYXRlLXBpcGVsaW5l.option.c2VsZWN0b3Jz.field.ZmlsdGVy.display_name": {
+          "source": "Filter",
+          "message": "篩選條件"
+        },
+        "app.TWlzdHJhbEFp.action.dXBkYXRlLXBpcGVsaW5l.option.c2VsZWN0b3Jz.field.c291cmNlX2tpbmQ.display_name": {
+          "source": "Source Kind",
+          "message": "來源種類"
+        },
+        "app.TWlzdHJhbEFp.action.dXBkYXRlLXBpcGVsaW5l.option.c2VsZWN0b3Jz.field.c291cmNlX2tpbmQ.allowed-value.c3RyaW5nOnNwYW4.display_name": {
+          "source": "span",
+          "message": "跨度"
+        },
+        "app.TWlzdHJhbEFp.action.dXBkYXRlLXBpcGVsaW5l.option.c2VsZWN0b3Jz.field.c291cmNlX2tpbmQ.allowed-value.c3RyaW5nOmxvZw.display_name": {
+          "source": "log",
+          "message": "日誌"
+        },
+        "app.TWlzdHJhbEFp.action.dXBkYXRlLXBpcGVsaW5l.option.c2VsZWN0b3Jz.field.c291cmNlX2tpbmQ.allowed-value.c3RyaW5nOm1ldHJpYw.display_name": {
+          "source": "metric",
+          "message": "指標"
+        },
+        "app.TWlzdHJhbEFp.action.dXBkYXRlLXBpcGVsaW5l.option.ZGVmaW5pdGlvbnM.display_name": {
+          "source": "Definitions",
+          "message": "定義"
+        },
+        "app.TWlzdHJhbEFp.action.dXBkYXRlLXBpcGVsaW5l.option.ZGVmaW5pdGlvbnM.field.bWFwcGluZw.display_name": {
+          "source": "Mapping",
+          "message": "對應"
+        },
+        "app.TWlzdHJhbEFp.action.dXBkYXRlLXBpcGVsaW5l.option.ZGVmaW5pdGlvbnM.field.c2FtcGxpbmc.display_name": {
+          "source": "Sampling",
+          "message": "取樣"
+        },
+        "app.TWlzdHJhbEFp.type.YWN0aW9uOmRYQmtZWFJsTFhCcGNHVnNhVzVsOipQcm9iYWJpbGlzdGljU2FtcGxpbmcjYzk3YmU3YmE2MWE1OTdmMDMzMTcxYjgyOGRiYjBlMjQ2MGYxZmNjNTFiMjY2ODNlNzRmMmY1MmY2Y2E0NTA5OQ.field.cGVyY2VudGFnZQ.display_name": {
+          "source": "Percentage",
+          "message": "百分比"
+        },
+        "app.TWlzdHJhbEFp.type.YWN0aW9uOmRYQmtZWFJsTFhCcGNHVnNhVzVsOipQcm9iYWJpbGlzdGljU2FtcGxpbmcjYzk3YmU3YmE2MWE1OTdmMDMzMTcxYjgyOGRiYjBlMjQ2MGYxZmNjNTFiMjY2ODNlNzRmMmY1MmY2Y2E0NTA5OQ.field.dHlwZQ.allowed-value.c3RyaW5nOnByb2JhYmlsaXN0aWM.display_name": {
+          "source": "probabilistic",
+          "message": "機率式"
+        },
+        "app.TWlzdHJhbEFp.type.YWN0aW9uOmRYQmtZWFJsTFhCcGNHVnNhVzVsOipBdHRyaWJ1dGVIYXNoU2FtcGxpbmcjZDg5NmQ2ZDg1YjY0NTUzNWMyOTgzYTFkY2QzMzlmZTAwN2Y1MjY0N2EyOTBmMmJjM2RlZTU5YzBkNjU0ZDU4NQ.field.YXR0cmlidXRl.display_name": {
+          "source": "Attribute",
+          "message": "屬性"
+        },
+        "app.TWlzdHJhbEFp.type.YWN0aW9uOmRYQmtZWFJsTFhCcGNHVnNhVzVsOipBdHRyaWJ1dGVIYXNoU2FtcGxpbmcjZDg5NmQ2ZDg1YjY0NTUzNWMyOTgzYTFkY2QzMzlmZTAwN2Y1MjY0N2EyOTBmMmJjM2RlZTU5YzBkNjU0ZDU4NQ.field.cGVyY2VudGFnZQ.display_name": {
+          "source": "Percentage",
+          "message": "百分比"
+        },
+        "app.TWlzdHJhbEFp.type.YWN0aW9uOmRYQmtZWFJsTFhCcGNHVnNhVzVsOipBdHRyaWJ1dGVIYXNoU2FtcGxpbmcjZDg5NmQ2ZDg1YjY0NTUzNWMyOTgzYTFkY2QzMzlmZTAwN2Y1MjY0N2EyOTBmMmJjM2RlZTU5YzBkNjU0ZDU4NQ.field.dHlwZQ.allowed-value.c3RyaW5nOmF0dHJpYnV0ZV9oYXNo.display_name": {
+          "source": "attribute_hash",
+          "message": "attribute_hash"
+        },
+        "app.TWlzdHJhbEFp.action.dXBkYXRlLXBpcGVsaW5l.option.ZGVmaW5pdGlvbnM.field.c2x1Zw.display_name": {
+          "source": "Slug",
+          "message": "Slug"
+        },
+        "app.TWlzdHJhbEFp.action.dXBkYXRlLXBpcGVsaW5l.option.ZW5hYmxlZA.display_name": {
+          "source": "Enabled",
+          "message": "已啟用"
+        },
+        "app.TWlzdHJhbEFp.action.ZGVsZXRlLXBpcGVsaW5l.display_name": {
+          "source": "Delete Pipeline",
+          "message": "刪除管線"
+        },
+        "app.TWlzdHJhbEFp.action.ZGVsZXRlLXBpcGVsaW5l.short_desc": {
+          "source": "Delete an evaluation pipeline",
+          "message": "刪除評估管線"
+        },
+        "app.TWlzdHJhbEFp.action.ZGVsZXRlLXBpcGVsaW5l.option.cGlwZWxpbmVfaWQ.display_name": {
+          "source": "Pipeline ID",
+          "message": "管線 ID"
+        },
+        "app.TWlzdHJhbEFp.action.ZGVsZXRlLXBpcGVsaW5l.option.cGlwZWxpbmVfaWQ.short_desc": {
+          "source": "Evaluation pipeline",
+          "message": "評估管線"
+        },
+        "app.TWlzdHJhbEFp.action.ZGVsZXRlLXBpcGVsaW5l.option.cGlwZWxpbmVfaWQ.desc": {
+          "source": "The ID of the evaluation pipeline.",
+          "message": "評估管線的 ID。"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1waXBlbGluZS1yZXN1bHQtZmllbGRz.display_name": {
+          "source": "List Pipeline Result Fields",
+          "message": "列出管線結果欄位"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1waXBlbGluZS1yZXN1bHQtZmllbGRz.short_desc": {
+          "source": "List the result fields of a pipeline",
+          "message": "列出管線的結果欄位"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1waXBlbGluZS1yZXN1bHQtZmllbGRz.desc": {
+          "source": "List the fields of the results that an evaluation pipeline records, for searching its results. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
+          "message": "列出評估管線所記錄結果的欄位，以供搜尋其結果。檢視 AI 活動並評估回應品質。\n\n**公共預覽版：** 可用性取決於您的帳戶及許可權。"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1waXBlbGluZS1yZXN1bHQtZmllbGRz.option.cGlwZWxpbmVfaWQ.display_name": {
+          "source": "Pipeline ID",
+          "message": "管線 ID"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1waXBlbGluZS1yZXN1bHQtZmllbGRz.option.cGlwZWxpbmVfaWQ.short_desc": {
+          "source": "Evaluation pipeline",
+          "message": "評估管線"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1waXBlbGluZS1yZXN1bHQtZmllbGRz.option.cGlwZWxpbmVfaWQ.desc": {
+          "source": "The ID of the evaluation pipeline.",
+          "message": "評估管線的 ID。"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXBpcGVsaW5lLXJlc3VsdHM.display_name": {
+          "source": "Search Pipeline Results",
+          "message": "搜尋管線結果"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXBpcGVsaW5lLXJlc3VsdHM.short_desc": {
+          "source": "Search the results of evaluation pipelines",
+          "message": "搜尋評估管線的結果"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXBpcGVsaW5lLXJlc3VsdHM.option.cGlwZWxpbmVfY29uZmlnX3NsdWdz.display_name": {
+          "source": "Pipeline Config Slugs",
+          "message": "管線設定 Slug"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXBpcGVsaW5lLXJlc3VsdHM.option.c2VhcmNoX2V4cHJlc3Npb24.display_name": {
+          "source": "Search Expression",
+          "message": "搜尋運算式"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXBpcGVsaW5lLXJlc3VsdHM.option.ZnJvbQ.display_name": {
+          "source": "From",
+          "message": "起始"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXBpcGVsaW5lLXJlc3VsdHM.option.ZnJvbQ.short_desc": {
+          "source": "Start of the time range",
+          "message": "時間範圍的開始"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXBpcGVsaW5lLXJlc3VsdHM.option.ZnJvbQ.desc": {
+          "source": "The start of the time range.",
+          "message": "時間範圍的開始。"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXBpcGVsaW5lLXJlc3VsdHM.option.dG8.display_name": {
+          "source": "To",
+          "message": "結束"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXBpcGVsaW5lLXJlc3VsdHM.option.dG8.short_desc": {
+          "source": "End of the time range",
+          "message": "時間範圍的結束"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXBpcGVsaW5lLXJlc3VsdHM.option.dG8.desc": {
+          "source": "The end of the time range.",
+          "message": "時間範圍的結束。"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXBpcGVsaW5lLXJlc3VsdHM.option.cGFnZV9zaXpl.short_desc": {
+          "source": "Maximum number of results per page",
+          "message": "每頁最大結果數"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXBpcGVsaW5lLXJlc3VsdHM.option.cGFnZV9zaXpl.desc": {
+          "source": "The maximum number of results to return in one page.",
+          "message": "單頁傳回的最大結果數。"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXBpcGVsaW5lLXJlc3VsdHM.option.Y3Vyc29y.short_desc": {
+          "source": "Cursor of the page to return",
+          "message": "要傳回之頁面的游標"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXBpcGVsaW5lLXJlc3VsdHM.option.Y3Vyc29y.desc": {
+          "source": "The `cursor` returned with the previous page; leave it out for the first page.",
+          "message": "隨上一頁傳回的 `cursor`；第一頁請省略。"
+        },
+        "app.TWlzdHJhbEFp.action.aW1wb3J0LWRhdGFzZXQtZnJvbS1zcGFucw.display_name": {
+          "source": "Import Dataset From Spans",
+          "message": "從跨度匯入資料集"
+        },
+        "app.TWlzdHJhbEFp.action.aW1wb3J0LWRhdGFzZXQtZnJvbS1zcGFucw.short_desc": {
+          "source": "Import spans into a dataset",
+          "message": "將跨度匯入資料集"
+        },
+        "app.TWlzdHJhbEFp.action.aW1wb3J0LWRhdGFzZXQtZnJvbS1zcGFucw.desc": {
+          "source": "Populate the dataset with records made from up to 500 spans, mapping span or resource attributes to record payload keys. The import runs as a dataset task; unavailable spans are skipped. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
+          "message": "使用最多 500 個跨度建立的記錄填充資料集，並將跨度或資源屬性對應至記錄承載資料鍵。匯入會以資料集任務執行；無法使用的跨度會略過。檢視 AI 活動並評估回應品質。\n\n**公共預覽版：** 可用性取決於您的帳戶及許可權。"
+        },
+        "app.TWlzdHJhbEFp.action.aW1wb3J0LWRhdGFzZXQtZnJvbS1zcGFucw.option.ZGF0YXNldF9pZA.short_desc": {
+          "source": "Dataset to import into",
+          "message": "要匯入的目標資料集"
+        },
+        "app.TWlzdHJhbEFp.action.aW1wb3J0LWRhdGFzZXQtZnJvbS1zcGFucw.option.ZGF0YXNldF9pZA.desc": {
+          "source": "The ID or workspace-scoped slug of the dataset.",
+          "message": "資料集的 ID 或工作區範圍內的 slug。"
+        },
+        "app.TWlzdHJhbEFp.action.aW1wb3J0LWRhdGFzZXQtZnJvbS1zcGFucw.option.c3Bhbl9yZWZlcmVuY2Vz.display_name": {
+          "source": "Span References",
+          "message": "跨度參照"
+        },
+        "app.TWlzdHJhbEFp.action.aW1wb3J0LWRhdGFzZXQtZnJvbS1zcGFucw.option.c3Bhbl9yZWZlcmVuY2Vz.short_desc": {
+          "source": "Spans to attempt to import",
+          "message": "要嘗試匯入的跨度"
+        },
+        "app.TWlzdHJhbEFp.action.aW1wb3J0LWRhdGFzZXQtZnJvbS1zcGFucw.option.c3Bhbl9yZWZlcmVuY2Vz.desc": {
+          "source": "Spans to attempt to import; unavailable references are skipped, and trace and span IDs are attached as record properties automatically.",
+          "message": "要嘗試匯入的跨度；無法使用的參照會略過，且追蹤 ID 與跨度 ID 會自動附加為記錄屬性。"
+        },
+        "app.TWlzdHJhbEFp.action.aW1wb3J0LWRhdGFzZXQtZnJvbS1zcGFucw.option.c3Bhbl9yZWZlcmVuY2Vz.field.c3Bhbl9pZA.display_name": {
+          "source": "Span ID",
+          "message": "跨度 ID"
+        },
+        "app.TWlzdHJhbEFp.action.aW1wb3J0LWRhdGFzZXQtZnJvbS1zcGFucw.option.c3Bhbl9yZWZlcmVuY2Vz.field.dHJhY2VfaWQ.display_name": {
+          "source": "Trace ID",
+          "message": "追蹤 ID"
+        },
+        "app.TWlzdHJhbEFp.action.aW1wb3J0LWRhdGFzZXQtZnJvbS1zcGFucw.option.bWFwcGluZ19jb250cmFjdA.display_name": {
+          "source": "Mapping Contract",
+          "message": "對應合約"
+        },
+        "app.TWlzdHJhbEFp.action.aW1wb3J0LWRhdGFzZXQtZnJvbS1zcGFucw.option.bWFwcGluZ19jb250cmFjdA.short_desc": {
+          "source": "Mapping rules applied independently to every requested telemetry span",
+          "message": "獨立套用至每個所請求遙測跨度的對應規則"
+        },
+        "app.TWlzdHJhbEFp.action.aW1wb3J0LWRhdGFzZXQtZnJvbS1zcGFucw.option.bWFwcGluZ19jb250cmFjdA.desc": {
+          "source": "Mapping rules applied independently to every requested telemetry span.\n\nVersion 1 mappings are optional per span: a missing, null, blank-string, or empty-array\nsource omits the target key. JSON object and array strings become structured values;\nscalar-looking and malformed JSON strings remain strings.",
+          "message": "獨立套用至每個所請求遙測跨度的對應規則。\n\n第 1 版對應對每個跨度皆為選用：若來源遺漏、為 null、空白字串或空陣列，\n則會省略目標鍵。JSON 物件與陣列字串會轉為結構化值；\n看似純量的字串及格式錯誤的 JSON 字串則維持為字串。"
+        },
+        "app.TWlzdHJhbEFp.action.aW1wb3J0LWRhdGFzZXQtZnJvbS1zcGFucw.option.bWFwcGluZ19jb250cmFjdA.field.bWFwcGluZ3M.display_name": {
+          "source": "Mappings",
+          "message": "對應清單"
+        },
+        "app.TWlzdHJhbEFp.type.YWN0aW9uOmFXMXdiM0owTFdSaGRHRnpaWFF0Wm5KdmJTMXpjR0Z1Y3c6U3BhbkRhdGFzZXRNYXBwaW5nI2ZiYWI5ZWU0N2I2ZDY5ZDgyZDQ5YTY0YzE1OTdkYjA2MGMzMGQ3OGM3ZGZlMmRjYmY4ZDg5ZDllMWI3MThmODI.field.c291cmNlX2ZpZWxk.display_name": {
+          "source": "Source Field",
+          "message": "來源欄位"
+        },
+        "app.TWlzdHJhbEFp.type.YWN0aW9uOmFXMXdiM0owTFdSaGRHRnpaWFF0Wm5KdmJTMXpjR0Z1Y3c6U3BhbkRhdGFzZXRTb3VyY2VSZWZlcmVuY2UjNDNlMGU5MTkzNGZhM2I5NDU0MTFmYjlkOTFlN2U3N2MzNDBjYzFiNDI0ZjMwZWViNzgyNTA1NjU5ZjFhZmY0ZQ.field.a2V5.display_name": {
+          "source": "Key",
+          "message": "鍵"
+        },
+        "app.TWlzdHJhbEFp.type.YWN0aW9uOmFXMXdiM0owTFdSaGRHRnpaWFF0Wm5KdmJTMXpjR0Z1Y3c6U3BhbkRhdGFzZXRTb3VyY2VSZWZlcmVuY2UjNDNlMGU5MTkzNGZhM2I5NDU0MTFmYjlkOTFlN2U3N2MzNDBjYzFiNDI0ZjMwZWViNzgyNTA1NjU5ZjFhZmY0ZQ.field.a2V5.short_desc": {
+          "source": "Literal attribute dictionary key",
+          "message": "字面屬性字典鍵"
+        },
+        "app.TWlzdHJhbEFp.type.YWN0aW9uOmFXMXdiM0owTFdSaGRHRnpaWFF0Wm5KdmJTMXpjR0Z1Y3c6U3BhbkRhdGFzZXRTb3VyY2VSZWZlcmVuY2UjNDNlMGU5MTkzNGZhM2I5NDU0MTFmYjlkOTFlN2U3N2MzNDBjYzFiNDI0ZjMwZWViNzgyNTA1NjU5ZjFhZmY0ZQ.field.a2V5.desc": {
+          "source": "Literal attribute dictionary key; dots do not denote a nested path.",
+          "message": "字面屬性字典鍵；點號不代表巢狀路徑。"
+        },
+        "app.TWlzdHJhbEFp.type.YWN0aW9uOmFXMXdiM0owTFdSaGRHRnpaWFF0Wm5KdmJTMXpjR0Z1Y3c6U3BhbkRhdGFzZXRTb3VyY2VSZWZlcmVuY2UjNDNlMGU5MTkzNGZhM2I5NDU0MTFmYjlkOTFlN2U3N2MzNDBjYzFiNDI0ZjMwZWViNzgyNTA1NjU5ZjFhZmY0ZQ.field.bmFtZXNwYWNl.display_name": {
+          "source": "Namespace",
+          "message": "命名空間"
+        },
+        "app.TWlzdHJhbEFp.type.YWN0aW9uOmFXMXdiM0owTFdSaGRHRnpaWFF0Wm5KdmJTMXpjR0Z1Y3c6U3BhbkRhdGFzZXRTb3VyY2VSZWZlcmVuY2UjNDNlMGU5MTkzNGZhM2I5NDU0MTFmYjlkOTFlN2U3N2MzNDBjYzFiNDI0ZjMwZWViNzgyNTA1NjU5ZjFhZmY0ZQ.field.bmFtZXNwYWNl.short_desc": {
+          "source": "Attribute maps that may supply dataset payload values",
+          "message": "可提供資料集承載資料值的屬性對應"
+        },
+        "app.TWlzdHJhbEFp.type.YWN0aW9uOmFXMXdiM0owTFdSaGRHRnpaWFF0Wm5KdmJTMXpjR0Z1Y3c6U3BhbkRhdGFzZXRTb3VyY2VSZWZlcmVuY2UjNDNlMGU5MTkzNGZhM2I5NDU0MTFmYjlkOTFlN2U3N2MzNDBjYzFiNDI0ZjMwZWViNzgyNTA1NjU5ZjFhZmY0ZQ.field.bmFtZXNwYWNl.desc": {
+          "source": "Attribute maps that may supply dataset payload values.",
+          "message": "可提供資料集承載資料值的屬性對應。"
+        },
+        "app.TWlzdHJhbEFp.type.YWN0aW9uOmFXMXdiM0owTFdSaGRHRnpaWFF0Wm5KdmJTMXpjR0Z1Y3c6U3BhbkRhdGFzZXRTb3VyY2VSZWZlcmVuY2UjNDNlMGU5MTkzNGZhM2I5NDU0MTFmYjlkOTFlN2U3N2MzNDBjYzFiNDI0ZjMwZWViNzgyNTA1NjU5ZjFhZmY0ZQ.field.bmFtZXNwYWNl.allowed-value.c3RyaW5nOnNwYW5fYXR0cmlidXRlcw.display_name": {
+          "source": "span_attributes",
+          "message": "span_attributes"
+        },
+        "app.TWlzdHJhbEFp.type.YWN0aW9uOmFXMXdiM0owTFdSaGRHRnpaWFF0Wm5KdmJTMXpjR0Z1Y3c6U3BhbkRhdGFzZXRTb3VyY2VSZWZlcmVuY2UjNDNlMGU5MTkzNGZhM2I5NDU0MTFmYjlkOTFlN2U3N2MzNDBjYzFiNDI0ZjMwZWViNzgyNTA1NjU5ZjFhZmY0ZQ.field.bmFtZXNwYWNl.allowed-value.c3RyaW5nOnJlc291cmNlX2F0dHJpYnV0ZXM.display_name": {
+          "source": "resource_attributes",
+          "message": "resource_attributes"
+        },
+        "app.TWlzdHJhbEFp.type.YWN0aW9uOmFXMXdiM0owTFdSaGRHRnpaWFF0Wm5KdmJTMXpjR0Z1Y3c6U3BhbkRhdGFzZXRNYXBwaW5nI2ZiYWI5ZWU0N2I2ZDY5ZDgyZDQ5YTY0YzE1OTdkYjA2MGMzMGQ3OGM3ZGZlMmRjYmY4ZDg5ZDllMWI3MThmODI.field.dGFyZ2V0X2ZpZWxk.display_name": {
+          "source": "Target Field",
+          "message": "目標欄位"
+        },
+        "app.TWlzdHJhbEFp.type.YWN0aW9uOmFXMXdiM0owTFdSaGRHRnpaWFF0Wm5KdmJTMXpjR0Z1Y3c6U3BhbkRhdGFzZXRNYXBwaW5nI2ZiYWI5ZWU0N2I2ZDY5ZDgyZDQ5YTY0YzE1OTdkYjA2MGMzMGQ3OGM3ZGZlMmRjYmY4ZDg5ZDllMWI3MThmODI.field.dGFyZ2V0X2ZpZWxk.short_desc": {
+          "source": "Literal top-level key to create in the dataset record payload",
+          "message": "要在資料集記錄承載資料中建立的字面頂層鍵"
+        },
+        "app.TWlzdHJhbEFp.type.YWN0aW9uOmFXMXdiM0owTFdSaGRHRnpaWFF0Wm5KdmJTMXpjR0Z1Y3c6U3BhbkRhdGFzZXRNYXBwaW5nI2ZiYWI5ZWU0N2I2ZDY5ZDgyZDQ5YTY0YzE1OTdkYjA2MGMzMGQ3OGM3ZGZlMmRjYmY4ZDg5ZDllMWI3MThmODI.field.dGFyZ2V0X2ZpZWxk.desc": {
+          "source": "Literal top-level key to create in the dataset record payload.",
+          "message": "要在資料集記錄承載資料中建立的字面頂層鍵。"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLWxhdGVzdC1zcGFuLWV2YWx1YXRpb25z.short_desc": {
+          "source": "Search the latest span evaluation results",
+          "message": "搜尋最新的跨度評估結果"
+        },
+        "app.TWlzdHJhbEFp.action.bGlzdC1waXBlbGluZXM.option.cQ.desc": {
+          "source": "Text to filter the listed pipelines by.",
+          "message": "用於篩選所列管線的文字。"
+        },
+        "app.TWlzdHJhbEFp.action.Y3JlYXRlLXBpcGVsaW5l.desc": {
+          "source": "Create an evaluation pipeline: its selectors choose the telemetry to evaluate (spans, logs or metrics) and its definitions name the judges that score it. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
+          "message": "建立評估管線：其選取器會選擇要評估的遙測資料（跨度、日誌或指標），其定義則指定為其評分的評審。檢視 AI 活動並評估回應品質。\n\n**公共預覽版：** 可用性取決於您的帳戶及許可權。"
+        },
+        "app.TWlzdHJhbEFp.action.ZGVsZXRlLXBpcGVsaW5l.desc": {
+          "source": "Delete an evaluation pipeline. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.\n\n**Deletion:** This operation can permanently remove the selected resource or access.",
+          "message": "刪除評估管線。檢視 AI 活動並評估回應品質。\n\n**公共預覽版：** 可用性取決於您的帳戶及許可權。\n\n**刪除：** 此操作可能永久移除所選資源或存取許可權。"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXBpcGVsaW5lLXJlc3VsdHM.desc": {
+          "source": "Search the results that evaluation pipelines recorded for the pipeline configurations you name by slug. Results are returned one page at a time. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
+          "message": "搜尋評估管線針對您以 slug 指定之管線設定所記錄的結果。結果一次傳回一頁。檢視 AI 活動並評估回應品質。\n\n**公共預覽版：** 可用性取決於您的帳戶及許可權。"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXBpcGVsaW5lLXJlc3VsdHM.option.cGlwZWxpbmVfY29uZmlnX3NsdWdz.short_desc": {
+          "source": "Slugs of the pipeline configurations to search",
+          "message": "要搜尋之管線設定的 slug"
+        },
+        "app.TWlzdHJhbEFp.action.c2VhcmNoLXBpcGVsaW5lLXJlc3VsdHM.option.cGlwZWxpbmVfY29uZmlnX3NsdWdz.desc": {
+          "source": "The slugs of the pipeline configurations whose results to search, as listed under `pipeline_configs` of a pipeline; at least one is required.",
+          "message": "要搜尋其結果之管線設定的 slug，如管線的 `pipeline_configs` 中所列；至少需要一個。"
         }
       }
     }
