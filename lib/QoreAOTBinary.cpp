@@ -15849,7 +15849,14 @@ bool serializeIRFunction(QoreAOTBinaryWriter& writer, const QoreIRFunction& func
             return false;
         }
         for (auto& block : func.blocks) {
-            if (!checkCount(block->instructions.size(), u16_max, "instructions in a basic block")) {
+            // a PushTempMarkPair is written as two instructions (see below)
+            size_t inst_count = block->instructions.size();
+            for (const auto& inst_ptr : block->instructions) {
+                if (inst_ptr->opcode == QoreIROpcode::PushTempMarkPair) {
+                    ++inst_count;
+                }
+            }
+            if (!checkCount(inst_count, u16_max, "instructions in a basic block")) {
                 return false;
             }
             for (auto& inst_ptr : block->instructions) {
@@ -16024,10 +16031,28 @@ bool serializeIRFunction(QoreAOTBinaryWriter& writer, const QoreIRFunction& func
         // bit 0: is_loop_header; bits 1-3: loop_cancel (see deserializeIRFunction())
         writer.writeU8(static_cast<uint8_t>((block->is_loop_header ? 1 : 0)
             | (static_cast<uint8_t>(block->loop_cancel) << 1)));
-        writer.writeU16(static_cast<uint16_t>(block->instructions.size()));
+        // a PushTempMarkPair is written as the two PushTempMark instructions that it stands for (qore#6444)
+        size_t inst_count = block->instructions.size();
+        for (const auto& inst_ptr : block->instructions) {
+            if (inst_ptr->opcode == QoreIROpcode::PushTempMarkPair) {
+                ++inst_count;
+            }
+        }
+        writer.writeU16(static_cast<uint16_t>(inst_count));
 
         for (size_t inst_idx = 0; inst_idx < block->instructions.size(); ++inst_idx) {
             auto& inst_ptr = block->instructions[inst_idx];
+            if (inst_ptr->opcode == QoreIROpcode::PushTempMarkPair) {
+                // the outer mark has the location that the pair has, as the statement's mark had it
+                QoreIRInstruction mark(QoreIROpcode::PushTempMark);
+                mark.loc = inst_ptr->loc;
+                QoreIRInstruction inner_mark(QoreIROpcode::PushTempMark);
+                if (!serializeIRInstruction(writer, &mark, block_idx, writeExpr)
+                        || !serializeIRInstruction(writer, &inner_mark, block_idx, writeExpr)) {
+                    return false;
+                }
+                continue;
+            }
             uint32_t inst_start = writer.position();
             QoreIRInstGroup group = classifyInstruction(inst_ptr.get());
             if (QoreEnvironmentValue trace_holder("QORE_AOT_TRACE_IR_SERIALIZE");

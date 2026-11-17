@@ -86,7 +86,7 @@
 // Compile-time guard: forces review of interpreter dispatch when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 439,
+static_assert(QORE_IR_MAX_OPCODE == 440,
     "New IR opcode added — review QoreIRInterpreter.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRToLLVM.cpp.");
 #include <qore/intern/QoreJIT.h>
@@ -2189,6 +2189,48 @@ static inline void setOwnedValueSlot(IRValueSlots& values, IRCleanupSlots& clean
     }
 }
 
+//! Pushes the marks of the two nested temp scopes of a QoreIROpcode::PushTempMarkPair (qore#6444)
+/** Out of line, as only the return statements whose expression has a temp scope run it, and without
+    std::vector::push_back() of the marks: GCC inlines the push of a mark into the interpreter loop only while the
+    loop is its only caller, and a second caller costs every PushTempMark a call (+6 Ir per iteration of the benchmark
+    loops)
+*/
+static QORE_INTERN_NOINLINE void qore_ir_push_temp_mark_pair(const QoreIRInstruction* inst,
+        std::vector<IRCallFrame::TempCleanupMark>& marks, IRCleanupSlots& cleanup) {
+    size_t n = marks.size();
+    marks.resize(n + 2);
+    marks[n] = {inst->temp_scope_id, cleanup.size()};
+    cleanup.push_back(UINT32_MAX);
+    marks[n + 1] = {inst->unwind_inner_temp_scope_id, cleanup.size()};
+    cleanup.push_back(UINT32_MAX);
+}
+
+//! Releases the temps of the innermost temp scope and removes its mark, for a DiscardTempsKeep (qore#6444)
+/** The caller has checked that the scope's mark is the innermost one and that no temp of the frame is held by a
+    weak-reference load or is borrowed, and that there is no cleanup log: this then does what the interpreter's
+    general drain does (cleanupToTempMark() of the innermost mark, raising), without the bookkeeping of those.  Out of
+    line, so that the interpreter loop stays as without it.
+*/
+static QORE_INTERN_NOINLINE void qore_ir_drain_innermost_temp_scope(IRValueSlots& values, IRCleanupSlots& cleanup,
+        std::vector<IRCallFrame::TempCleanupMark>& marks, std::vector<uint32_t>& ephemeral_weak_ref_slots,
+        ExceptionSink* xsink) {
+    assert(!marks.empty());
+    size_t cleanup_size = marks.back().cleanup_size;
+    while (cleanup.size() > cleanup_size) {
+        uint32_t id = cleanup.back();
+        cleanup.pop_back();
+        if (id < values.size()) {
+            values[id].discard(xsink);
+            values[id] = QoreValue();
+        }
+    }
+    marks.pop_back();
+    if (!ephemeral_weak_ref_slots.empty()) {
+        ephemeral_weak_ref_slots.clear();
+    }
+    assert(cleanup.size() == cleanup_size);
+}
+
 static void cleanupValues(IRValueSlots& values, IRCleanupSlots& cleanup,
         ExceptionSink* xsink, bool no_throw, std::vector<std::string>* cleanup_log,
         const std::vector<uint32_t>* release_groups = nullptr) {
@@ -3660,6 +3702,29 @@ static bool buildInterpreterAnalysis(const QoreIRFunction& func, ExceptionSink* 
             }
         }
     }
+    // a DiscardTempsKeep whose value is used only by the RefSelf directly after it, which takes the reference of a
+    // return value: the kept reference is given to the RefSelf, which is stepped over (QORE_IR_KEEP_GIVES_REFSELF,
+    // qore#6444): the kept value would only hold a second reference until the frame's exit
+    if (!return_value_slot_ids.empty()) {
+        const std::vector<uint32_t>& use_counts = func.interpreter_value_use_counts;
+        for (const auto& b : func.blocks) {
+            auto& insts = b->instructions;
+            for (size_t i = 0; i + 1 < insts.size(); ++i) {
+                QoreIRInstruction* keep = insts[i].get();
+                const QoreIRInstruction* ref_self = insts[i + 1].get();
+                if (!keep || !ref_self || keep->opcode != QoreIROpcode::DiscardTempsKeep
+                        || ref_self->opcode != QoreIROpcode::RefSelf
+                        || !keep->result.isValid() || !ref_self->result.isValid() || ref_self->operands.size() != 1
+                        || ref_self->operands.front().id != keep->result.id
+                        || keep->result.id >= use_counts.size() || use_counts[keep->result.id] != 1
+                        || std::find(return_value_slot_ids.begin(), return_value_slot_ids.end(),
+                            ref_self->result.id) == return_value_slot_ids.end()) {
+                    continue;
+                }
+                keep->interpreter_gives_call_args |= QORE_IR_KEEP_GIVES_REFSELF;
+            }
+        }
+    }
     func.interpreter_slot_owned_values = std::move(slot_owned_values);
     func.interpreter_return_value_slot_ids = std::move(return_value_slot_ids);
     func.interpreter_return_preserve_slot_ids = std::move(return_preserve_slot_ids);
@@ -4649,6 +4714,7 @@ static const QoreIRIncrementLocalIntInstruction* getSimpleClosureIncrementInstru
                 case QoreIROpcode::DebugBlock:
                 case QoreIROpcode::DebugStatement:
                 case QoreIROpcode::PushTempMark:
+                case QoreIROpcode::PushTempMarkPair:
                 case QoreIROpcode::DiscardTemps:
                     break;
                 case QoreIROpcode::IncrementLocalInt: {
@@ -4692,6 +4758,7 @@ static bool getSimpleClosureStringLeaf(const QoreIRFunction* callee_ir,
             case QoreIROpcode::DebugBlock:
             case QoreIROpcode::DebugStatement:
             case QoreIROpcode::PushTempMark:
+            case QoreIROpcode::PushTempMarkPair:
             case QoreIROpcode::DiscardTemps:
                 break;
             case QoreIROpcode::LoadClosure: {
@@ -4830,6 +4897,7 @@ static bool isInterpreterNativeIntProgram(const QoreIRFunction* ir,
                 case QoreIROpcode::DebugBlock:
                 case QoreIROpcode::DebugStatement:
                 case QoreIROpcode::PushTempMark:
+                case QoreIROpcode::PushTempMarkPair:
                 case QoreIROpcode::DiscardTemps:
                 case QoreIROpcode::ConstInt:
                 case QoreIROpcode::AddInt:
@@ -4990,6 +5058,7 @@ static bool ensureInterpreterNativeLeafState(QoreIRCallDirectInstruction* inst, 
                 case QoreIROpcode::DebugBlock:
                 case QoreIROpcode::DebugStatement:
                 case QoreIROpcode::PushTempMark:
+                case QoreIROpcode::PushTempMarkPair:
                 case QoreIROpcode::DiscardTemps:
                     break;
                 case QoreIROpcode::LoadLocal: {
@@ -5127,6 +5196,7 @@ static bool ensureInterpreterNativeLeafState(QoreIRCallDirectInstruction* inst, 
             case QoreIROpcode::DebugBlock:
             case QoreIROpcode::DebugStatement:
             case QoreIROpcode::PushTempMark:
+            case QoreIROpcode::PushTempMarkPair:
             case QoreIROpcode::DiscardTemps:
                 break;
             case QoreIROpcode::LoadLocal:
@@ -5496,6 +5566,7 @@ bool qore_ir_try_execute_native_leaf(QoreIRCallDirectInstruction* inst,
                     case QoreIROpcode::DebugBlock:
                     case QoreIROpcode::DebugStatement:
                     case QoreIROpcode::PushTempMark:
+                    case QoreIROpcode::PushTempMarkPair:
                     case QoreIROpcode::DiscardTemps:
                         break;
                     case QoreIROpcode::ConstInt:
@@ -10676,7 +10747,8 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                     target_ip = i;
                     return true;
                 }
-                if (candidate->opcode == QoreIROpcode::PushTempMark) {
+                if (candidate->opcode == QoreIROpcode::PushTempMark
+                        || candidate->opcode == QoreIROpcode::PushTempMarkPair) {
                     break;
                 }
                 if (auto* br = qore_ir_inst_cast<QoreIRBranchInstruction*>(candidate)) {
@@ -17221,6 +17293,12 @@ load_local_done:
                 ++ip;
                 break;
             }
+            case QoreIROpcode::PushTempMarkPair: {
+                // the marks of two nested scopes, as two PushTempMark instructions push them (qore#6444)
+                qore_ir_push_temp_mark_pair(inst, temp_cleanup_marks, cleanup);
+                ++ip;
+                break;
+            }
             case QoreIROpcode::CallAOTHelper: {
                 // CallAOTHelper is emitted only by the AOT init-expression
                 // outlining pass (Phase 1.5).  The IR interpreter should
@@ -17453,7 +17531,48 @@ load_local_done:
                         kept.ref();
                     }
                 }
-                cleanupToTempScope(inst->temp_scope_id, false, true);
+                // the scope is the innermost one, as it is when nothing else runs between its mark and here (always
+                // for the scope of a return statement's expression, qore#6444): its temps are released without the
+                // search for its mark and the bookkeeping that the general drain makes for a temp that a weak-reference
+                // load or a borrowed temp holds, or for a cleanup log
+                if (inst->temp_scope_id && !temp_cleanup_marks.empty()
+                        && temp_cleanup_marks.back().scope_id == inst->temp_scope_id && !cleanup_log
+                        && !borrowed_temp_active && weak_load_temp_slots.empty()) {
+#ifdef DEBUG
+                    // the general drain selects the same mark and releases down to the same size
+                    size_t debug_cleanup_size = temp_cleanup_marks.back().cleanup_size;
+                    auto general_mark = std::find_if(temp_cleanup_marks.rbegin(), temp_cleanup_marks.rend(),
+                        [scope_id = inst->temp_scope_id](const IRCallFrame::TempCleanupMark& candidate) {
+                            return candidate.scope_id == scope_id;
+                        });
+                    assert(general_mark == temp_cleanup_marks.rbegin());
+                    assert(general_mark->cleanup_size == debug_cleanup_size);
+                    size_t debug_mark_count = temp_cleanup_marks.size();
+#endif
+                    qore_ir_drain_innermost_temp_scope(values, cleanup, temp_cleanup_marks, ephemeral_weak_ref_slots,
+                        xsink);
+#ifdef DEBUG
+                    assert(cleanup.size() == debug_cleanup_size);
+                    assert(temp_cleanup_marks.size() == debug_mark_count - 1);
+                    assert(weak_load_temp_slots.empty() && !borrowed_temp_active);
+#endif
+                } else {
+                    cleanupToTempScope(inst->temp_scope_id, false, true);
+                }
+                // the RefSelf that takes the return value's reference from the kept value, its only use, gets the kept
+                // reference instead, and is stepped over (QORE_IR_KEEP_GIVES_REFSELF, qore#6444): the kept value
+                // would only hold a second reference until the frame's exit, which the return value outlives.  The kept
+                // value's slot is not written then: an earlier run of the statement that raised left it empty, as the
+                // exception's branch to a handler or the frame's exit released the statement's temps
+                if ((inst->interpreter_gives_call_args & QORE_IR_KEEP_GIVES_REFSELF) && !(xsink && *xsink)) {
+                    assert(ip + 1 < block->instructions.size());
+                    const QoreIRInstruction* ref_self = block->instructions[ip + 1].get();
+                    assert(ref_self->opcode == QoreIROpcode::RefSelf
+                        && ref_self->operands.front().id == inst->result.id);
+                    setOwnedValueSlot(values, cleanup, ref_self->result.id, kept, xsink);
+                    ip += 2;
+                    break;
+                }
                 setOwnedValueSlot(values, cleanup, inst->result.id, kept, xsink);
                 if (xsink && *xsink) {
                     // a destructor raised: the scopes that the exception leaves among those that remain are

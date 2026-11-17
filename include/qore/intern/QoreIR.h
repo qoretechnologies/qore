@@ -1116,7 +1116,17 @@ enum class QoreIROpcode : uint16_t {
     */
     SetCodeParseOptions = 439,
 
-    // NOTE: When adding new opcodes, assign the next sequential ID (439, 440, ...)
+    //! Open two temp scopes, the second nested in the first: a `PushTempMark` for each, in one instruction.
+    //!
+    //! No operands, no result.  `temp_scope_id` names the outer scope, `unwind_inner_temp_scope_id` the inner
+    //! one; each is closed as the scope of a `PushTempMark` is.  The lowering emits it for a return statement whose
+    //! expression has a temp scope of its own (released by a `DiscardTempsKeep` before the block cleanups, qore#6003,
+    //! qore#6309) in place of the mark of the statement's scope, which nothing comes between: the IR interpreter
+    //! then dispatches one instruction for the two marks (qore#6444).  The AOT debug IR stores it as two
+    //! `PushTempMark` instructions.
+    PushTempMarkPair = 440,
+
+    // NOTE: When adding new opcodes, assign the next sequential ID (441, 442, ...)
     // QORE_IR_MAX_OPCODE is derived automatically from the last enum value below.
 };
 
@@ -1125,8 +1135,8 @@ enum class QoreIROpcode : uint16_t {
 //! static_assert guards that will break when this value changes, forcing
 //! review of their dispatch switches.
 constexpr uint16_t QORE_IR_MAX_OPCODE
-    = static_cast<uint16_t>(QoreIROpcode::SetCodeParseOptions);
-static_assert(QORE_IR_MAX_OPCODE == 439, "QORE_IR_MAX_OPCODE changed — update this assertion and "
+    = static_cast<uint16_t>(QoreIROpcode::PushTempMarkPair);
+static_assert(QORE_IR_MAX_OPCODE == 440, "QORE_IR_MAX_OPCODE changed — update this assertion and "
     "verify binary format compatibility");
 
 //! Returns the Any comparison of a plugin comparison opcode (QoreIROpcode::EqPlugin...GePlugin), or \a op itself
@@ -1451,6 +1461,10 @@ struct QoreIRPhiIncoming;
 static constexpr uint8_t QORE_IR_GIVES_CALL_ARGS = 1;
 //! QoreIRInstruction::interpreter_gives_call_args: one of them can be taken over observably by a parameter (#5958)
 static constexpr uint8_t QORE_IR_GIVES_CALL_TEMPS = 2;
+//! QoreIRInstruction::interpreter_gives_call_args of a DiscardTempsKeep: its value is used only by the RefSelf
+//! directly after it, which takes the reference of a return value; the IR interpreter gives that RefSelf the kept
+//! reference and steps over it (qore#6444)
+static constexpr uint8_t QORE_IR_KEEP_GIVES_REFSELF = 4;
 
 //! The check of a call's target made by the load of the target (QoreIRInstruction::fused_call_target_check)
 enum class QoreIRFusedCallTargetCheck : uint8_t {
@@ -1635,7 +1649,8 @@ public:
     // callee can take over observably (anything but a read of a plain local, which holds the value for the whole call;
     // issue #5958, see design/param-take-over.md); 0 for a call that gives nothing; set with the interpreter's analysis
     // of the function, before the function runs.  A byte with bits, not two bools: the next member follows it without
-    // padding, so a second bool would change the layout of every instruction
+    // padding, so a second bool would change the layout of every instruction.  For a DiscardTempsKeep:
+    // QORE_IR_KEEP_GIVES_REFSELF
     uint8_t interpreter_gives_call_args = 0;
     AOTStringCaseComparisonKind aot_string_case_comparison =
         AOTStringCaseComparisonKind::None;
@@ -1648,9 +1663,10 @@ public:
     // of the (possibly reordered) basic-block layout produced by short-circuit
     // operators.  Transient — used only during IR->LLVM lowering, not serialized.
     uint32_t temp_scope_id = 0;
-    // UnwindTemps only: the temp scope that the same jump released just before this one (0 = none).  Native code
+    // UnwindTemps: the temp scope that the same jump released just before this one (0 = none).  Native code
     // releases the slots registered from this scope's mark up to that scope's mark.  Transient, like
     // temp_scope_id; see design/ir-loop-jump-temp-scope.md.
+    // PushTempMarkPair: the inner temp scope that it opens (temp_scope_id is the outer one).
     uint32_t unwind_inner_temp_scope_id = 0;
 };
 
@@ -4260,6 +4276,7 @@ public:
         for (const auto& inst : instructions) {
             switch (inst->opcode) {
                 case QoreIROpcode::PushTempMark:
+                case QoreIROpcode::PushTempMarkPair:
                 case QoreIROpcode::DiscardTemps:
                 case QoreIROpcode::DiscardTempsKeep:
                 case QoreIROpcode::UnwindTemps:
