@@ -4886,7 +4886,9 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
             logger.logArgs(level, fmt, args);
         } else if (level.getValue() >= LoggerLevel::LevelError.getValue()) {
             # ensure errors are never silently dropped when the logger is not yet configured
-            stderr.printf("ProviderIndexUtil %s: %s\n", level.getStr(), vsprintf(fmt, args));
+            if (!(get_parse_options() & PO_NO_TERMINAL_IO)) {
+                stderr.printf("ProviderIndexUtil %s: %s\n", level.getStr(), vsprintf(fmt, args));
+            }
         }
     }
 }

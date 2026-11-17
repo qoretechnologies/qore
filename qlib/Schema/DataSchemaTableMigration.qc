@@ -578,7 +578,7 @@ public hash<auto> sub execute_with_report(
         table.addColumn(spec.name, column_definitions{spec.name}, True);
         ++changes;
         if (verbose > 0) {
-            printf("added nullable canonical column %s.%s\n",
+            schema_terminal_printf("added nullable canonical column %s.%s\n",
                 contract.table, spec.name);
         }
     }
@@ -666,7 +666,7 @@ public hash<auto> sub execute_with_report(
     list<auto> verification = verify_result(ds, contract, specs, cursor,
         empty_table_initialization, original_count, quarantine_count);
     if (verbose > 0) {
-        printf("migration %s complete: original=%d active=%d "
+        schema_terminal_printf("migration %s complete: original=%d active=%d "
             "quarantined=%d updated=%d newly_quarantined=%d changes=%d\n",
             contract.migration_id, original_count, active_count,
             quarantine_count, applied.updated, applied.quarantined,
@@ -868,7 +868,7 @@ hash<auto> sub scan(SqlUtil::AbstractTable table,
         }
     }
     if (verbose > 1) {
-        printf("%s scan complete: rows=%d invalid=%d\n",
+        schema_terminal_printf("%s scan complete: rows=%d invalid=%d\n",
             apply ? "migration" : "preflight", rows,
             apply ? quarantined : invalid);
     }
@@ -1257,7 +1257,7 @@ SqlUtil::AbstractTable sub ensure_quarantine_table(
     table.create();
     ensure_quarantine_index(table, name, cursor, {});
     if (verbose > 0) {
-        printf("created quarantine table %s\n", name);
+        schema_terminal_printf("created quarantine table %s\n", name);
     }
     return table;
 }

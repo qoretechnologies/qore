@@ -122,7 +122,11 @@ int reflection_check_typed_hash_init(const QoreReflectionCaller& caller, const Q
     }
     const QoreProgram* decl_pgm = th->getProgram();
     if (decl_pgm && decl_pgm->getParseOptions().hasAny(QoreParseOptions(PO_IN_MODULE))) {
-        return caller.checkModuleExport(false, "typed hash", th->getName(), xsink);
+        // a typed hash that the module exports can be named by any code that loads the module, as a class that it
+        // exports can (see reflection_check_class_export()): a module whose code builds data types from another
+        // module's typed hashes (DataProvider's HashDataType) evaluates their member defaults (qore#6481)
+        return caller.checkModuleExport(caller.canSeeDeclaration(decl_pgm, th->getNamespace(), reflection_exported(th)),
+            "typed hash", th->getName(), xsink);
     }
     // a typed hash of another Program that the caller's Program does not inherit or import
     xsink->raiseException("REFLECTION-ACCESS-ERROR", "typed hash '%s' is not visible in the Program of the calling "

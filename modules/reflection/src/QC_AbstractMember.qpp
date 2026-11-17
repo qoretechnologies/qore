@@ -122,8 +122,9 @@ auto v = m.getDefaultValue();
 auto AbstractMember::getDefaultValue() {
     // the calling code's privileges apply (see @ref reflection_caller_privilege)
     QoreReflectionCaller caller;
-    // the default of a typed hash member is evaluated if the caller could name the typed hash itself (checked below);
-    // otherwise the caller must have access to the Program of the handle
+    // the default of a typed hash member is evaluated if the caller could name the typed hash itself or the typed
+    // hash is exported by the user module that declares it (checked below); otherwise the caller must have access to
+    // the Program of the handle
     const QoreReflectionHashDeclMember* hdm = dynamic_cast<const QoreReflectionHashDeclMember*>(m);
     if (!hdm && caller.checkProgramAccess(m->pgm, "evaluate member defaults in",
             QoreReflectionCaller::Access::MemberDefault, xsink)) {

@@ -3325,8 +3325,10 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
             DataProviderActionCatalog::reportInitializationFailure("action", app.name,
                 AbstractDataProvider::GenericApiCallActionName, ex);
             # log but do not fail the surrounding registration
-            stderr.printf("DataProviderActionCatalog: failed to auto-register generic API call action for "
-                "app %y: %s: %s\n", app.name, ex.err, ex.desc);
+            if (!(get_parse_options() & PO_NO_TERMINAL_IO)) {
+                stderr.printf("DataProviderActionCatalog: failed to auto-register generic API call action for "
+                    "app %y: %s: %s\n", app.name, ex.err, ex.desc);
+            }
         }
     }
 
@@ -3358,10 +3360,12 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
             ImplicitModuleTransaction::rollback(sp);
             DataProviderActionCatalog::reportInitializationFailure("action", app.name,
                 AbstractDataProvider::GenericApiCallActionName, ex);
-            stderr.printf("DataProviderActionCatalog: REST app %y qualifies for the framework-injected "
-                "%y action, but the builder-provider module %y could not be loaded; the action will be "
-                "missing from this app: %s: %s\n", app.name, AbstractDataProvider::GenericApiCallActionName,
-                GenericApiCallBuilderModule, ex.err, ex.desc);
+            if (!(get_parse_options() & PO_NO_TERMINAL_IO)) {
+                stderr.printf("DataProviderActionCatalog: REST app %y qualifies for the framework-injected "
+                    "%y action, but the builder-provider module %y could not be loaded; the action will be "
+                    "missing from this app: %s: %s\n", app.name, AbstractDataProvider::GenericApiCallActionName,
+                    GenericApiCallBuilderModule, ex.err, ex.desc);
+            }
         }
     }
 

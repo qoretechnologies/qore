@@ -3723,13 +3723,15 @@ string sql = table.getDropTriggerSql("trig_mytable");
     private checkUniqueConstraintName(string err, string cname) {
         getAllConstraintsUnlocked();
         if (foreignConstraints.hasKey(cname))
-            throw err, printf("%y: already has a foreign constraint named %y with columns: %y", name, cname, foreignConstraints{cname}.columns.keys());
+            throw err, sprintf("%y: already has a foreign constraint named %y with columns: %y", name, cname,
+                foreignConstraints{cname}.columns.keys());
 
         if (constraints.hasKey(cname))
-            throw err, printf("%y: already has a constraint named %y", name, cname);
+            throw err, sprintf("%y: already has a constraint named %y", name, cname);
 
         if (!primaryKey.empty() && primaryKey.getName() == cname)
-            throw err, printf("%y: already has a primary key constraint named %y with columns: %y", name, cname, primaryKey.keys());
+            throw err, sprintf("%y: already has a primary key constraint named %y with columns: %y", name, cname,
+                primaryKey.keys());
     }
 
     private checkUniqueConstraintNameValidateOptions(string err, string cname, hash<auto> ropt, reference<hash> opt) {
@@ -8782,7 +8784,6 @@ int ucnt = table.updateDpql({"counter": "@counter + 1"}, '@status == "active"');
 
         string arg = (uh.nest ? getUpdateExpression(col, cast<hash<UpdateOperatorInfo>>(uh.nest)) : col);
 
-        on_error printf("uh: %y\n", uh);
         return cmd.code(arg, uh.arg);
     }
 

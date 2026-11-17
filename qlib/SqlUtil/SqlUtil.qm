@@ -156,6 +156,9 @@ module SqlUtil {
 
 
     @section sqlutilv3_11_0 SqlUtil v3.11.0
+    - can be loaded first by code without terminal I/O (@ref Qore::PO_NO_TERMINAL_IO "PO_NO_TERMINAL_IO"): an error for
+      an existing constraint name is raised without also printing its message, and a debug print of update operators was
+      removed (<a href="https://github.com/qoretechnologies/qore/issues/6438">issue 6438</a>)
     - added @ref SqlUtil::op_trunc_date() "op_trunc_date()", which compares a date column truncated as
       @ref SqlUtil::cop_trunc_date() "cop_trunc_date()" does with a value or another where operator, with the
       database's own truncation (<a href="https://github.com/qoretechnologies/qore/issues/2363">issue 2363</a>)
