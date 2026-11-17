@@ -548,8 +548,7 @@ the frame's exits) is gone.
   `debug_flow` (size, front, index, `getSingleBlock()`), the incomings of a Phi from them (`countIncomings()`,
   `getIncomings()`), and `QoreIRControlFlowGraph(func, exc, &code)`, the graph of the code only, without the path blocks
   and the flow edges.  So code with step events gets the summaries of the same code without them.  The return facts of
-  the effect summaries are those of the code; `QoreIRFunctionEffectSummary::debug_flow_returns_nothing` records a path
-  that returns NOTHING.
+  the effect summaries are those of the code (see the next item).
 - **Soundness of the return facts.**  The return facts of the effect summaries are those of the code.  Only the
   debug IR of AOT code has paths; it runs in the IR interpreter, which reads no return facts of a callee, and AOT native
   code has no paths, so an AOT batch keeps the facts of the code.  JIT code has no paths, so a request never makes a

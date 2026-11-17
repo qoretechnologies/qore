@@ -40,7 +40,8 @@ class DebugFlowPathCodeTest inherits QUnit::Test {
         addTestCase("AST reference", \astReference());
         addTestCase("compiled modes match AST", \sourceModes());
         addTestCase("qcc executables match AST", \compiled());
-        addTestCase("code lowered from the parse tree has no paths of a debugger's requests",
+        addTestCase("the IR lowered from the parse tree has no paths of a debugger's requests", \irHasNoPaths());
+        addTestCase("code lowered from the parse tree is the size of the code without step events and its hooks",
             \sourceCodeHasNoPaths());
         set_return_value(main());
     }
@@ -80,10 +81,49 @@ class DebugFlowPathCodeTest inherits QUnit::Test {
         }
     }
 
-    #! code lowered from the parse tree has no paths of a debugger's requests (#6201)
+    #! the IR lowered from the parse tree has the step events of a debugger but no paths of its requests (#6201)
     /** Only the debug IR of AOT code has them (QoreIRFunction::hasDebugFlowPaths()): a call that starts while a
-        debugger is attached runs on the AST interpreter.  The function with step events (the default) has no blocks
-        of the paths, and is the size of the same function without step events plus its step hooks, with the code of
+        debugger is attached runs on the AST interpreter.  The IR of top-level code with loops, a try statement, a
+        catch block with a local and an on_exit handler, and break and continue statements (--ir-dump, which dumps
+        the IR of the top-level code as it is lowered) has the step events of its statements and blocks, and no block of
+        the paths (named "debug.flow...", QoreIRLowering::lowerDebugFlowPath())
+    */
+    irHasNoPaths() {
+        TmpFile tmp(NOTHING, ".q");
+        tmp.file.write("%modern
+int r = 0;
+for (int i = 0; i < 3; ++i) {
+    while (r < 100) {
+        try {
+            r += i;
+            if (i == 5) {
+                break;
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            int l = r;
+            on_exit { r += l; }
+            continue;
+        }
+        break;
+    }
+}
+printf(\"rv:%d\\n\", r);
+");
+        tmp.file.close();
+        string out = backquote("env LD_LIBRARY_PATH=" + quote(lib_dir) + " QORE_LIBDIR=" + quote(lib_dir) + " "
+            + quote(qore_bin) + " -b --ir-dump --exec-mode=ir " + quote(tmp.path) + " 2>&1");
+        list<string> lines = out.split("\n");
+        assertEq(1, (select lines, $1 == "rv:3").size(), "the code ran");
+        # the dump names the blocks and has the step events
+        assertGt(0, (select lines, $1 =~ /^try\.catch\.[0-9]+:/).size(), "named blocks in the dump");
+        assertGt(0, (select lines, $1 =~ /^  debug\.statement/).size(), "step events of statements");
+        assertGt(0, (select lines, $1 =~ /^  debug\.block/).size(), "step events of blocks");
+        assertEq((), (select lines, $1 =~ /debug\.flow/), "no blocks of the paths of a debugger's requests");
+    }
+
+    #! code lowered from the parse tree is the size of the same code without step events plus its step hooks (#6201)
+    /** The function with step events (the default) is the size of the same function without step events plus its
+        step hooks, with the code of
         the handlers out of line and inline (QORE_JIT_OBE_TABLE_BUDGET): 1.52 times the blocks and 1.04 to 1.18 times
         the instructions of the function without step events with 25 and 50 catch blocks; with the paths, it had 1.81
         times the blocks and 1.11 times the instructions (inline handler code)
@@ -94,7 +134,6 @@ class DebugFlowPathCodeTest inherits QUnit::Test {
                 hash<auto> dbg = compileHandlers(n, True, inline_handlers);
                 hash<auto> nd = compileHandlers(n, False, inline_handlers);
                 string what = sprintf("%d catch blocks%s", n, inline_handlers ? ", inline handler code" : "");
-                assertEq(0, dbg.path_blocks, what + ": path blocks");
                 float block_ratio = float(dbg.blocks) / nd.blocks;
                 assertTrue(block_ratio <= MaxBlockRatio, sprintf("%s: the function has %0.2f times the blocks of the "
                     "same function without step events (at most %0.2f): %d and %d", what, block_ratio, MaxBlockRatio,
@@ -154,7 +193,7 @@ printf(\"rv:%d\\n\", big(1) + big(2) + big(3));
         string command = "env LD_LIBRARY_PATH=" + quote(lib_dir) + " QORE_LIBDIR=" + quote(lib_dir) + " "
             + (map quote($1), args).join(" ") + " 2>&1";
         string out = backquote(command);
-        hash<auto> sizes = {"insts": 0, "blocks": 0, "path_blocks": 0};
+        hash<auto> sizes = {"insts": 0, "blocks": 0};
         bool in_big = False;
         foreach string line in (out.split("\n")) {
             if (!in_big) {
@@ -166,10 +205,6 @@ printf(\"rv:%d\\n\", big(1) + big(2) + big(3));
             }
             if (line =~ /^[A-Za-z0-9_.$"-]+:/) {
                 ++sizes.blocks;
-                # the blocks of the paths of a debugger's requests (QoreIRBasicBlock::debug_flow)
-                if (line =~ /^"?debug\.flow/) {
-                    ++sizes.path_blocks;
-                }
             } else if (line =~ /^  [^ ;]/) {
                 ++sizes.insts;
             }

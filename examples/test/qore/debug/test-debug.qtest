@@ -452,9 +452,11 @@ class DebugTest inherits QUnit::Test {
         background debugBreakThread(tid, breakRes, attached, done);
         # the loop's call starts with the debugger attached, and so runs on the AST interpreter in every execution
         # mode: a frame that was already running when the debugger attached does not take a break with the IR, JIT
-        # and tiered execution modes (see debugger_running_code in the documentation)
+        # and tiered execution modes (see debugger_running_code in the documentation); it is made by
+        # call_object_method(), which calls the method through the call path, never as a direct call of native code
+        # (a callee of this method's JIT batch would run as native code, #6289)
         attached.waitForZero();
-        auto res = tstBreakProgram();
+        auto res = call_object_method(self, "tstBreakProgram");
         semaphore.unlock();
         done.waitForZero();
         debugProgram.waitForTerminationAndClear();

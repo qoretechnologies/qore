@@ -730,6 +730,13 @@ class DebuggerStepFlowTest inherits QUnit::Test {
                     assertEq("0", detached[1], sprintf("%s: %s: functions compiled after the debugger attached", what,
                         mode));
                 }
+                # the function is compiled to native code once in the run (QORE_JIT_TIMING trace), also without
+                # library debugging: never again after the debugger attached or detached
+                if (mode == "jit" || mode == "tiered") {
+                    string name = "'" + c.function + "@";
+                    assertEq(1, (select r.trace, ExecModeHarness::is_native_compilation($1) && $1.find(name) >= 0)
+                        .size(), sprintf("%s: %s: compilations of %s()", what, mode, c.function));
+                }
             }
             # the locals that the IR keeps in native registers in the function (SSA promotion)
             if (c.promoted && mode != "ast") {
