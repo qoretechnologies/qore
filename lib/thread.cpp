@@ -168,6 +168,38 @@ struct QoreDbgFinishHoldReleaser {
     }
 };
 static QoreDbgFinishHoldReleaser dbg_finish_hold_releaser;
+
+//! The state of the debug hold of a starting thread before it registers (qore#6469); never freed, as dbg_finish_hold
+struct QoreDbgStartHold {
+    std::mutex m;
+    std::condition_variable cv;
+    //! the time the next starting thread is held, if positive
+    int hold_ms = 0;
+    //! a thread is held
+    bool held = false;
+    //! the held thread is to continue
+    bool released = false;
+};
+static QoreDbgStartHold* dbg_start_hold = new QoreDbgStartHold;
+
+//! Holds a thread that has been started, before it registers, if a hold is armed (qore#6469)
+static void qore_dbg_hold_thread_start() {
+    std::unique_lock<std::mutex> l(dbg_start_hold->m);
+    int ms = dbg_start_hold->hold_ms;
+    if (ms <= 0) {
+        return;
+    }
+    dbg_start_hold->hold_ms = 0;
+    dbg_start_hold->held = true;
+    dbg_start_hold->cv.notify_all();
+    dbg_start_hold->cv.wait_for(l, std::chrono::milliseconds(ms), [] () { return dbg_start_hold->released; });
+    if (!dbg_start_hold->released) {
+        // reported, as a test releases the thread it holds before the timeout
+        fputs("qore-dbg: a starting thread hold ended by its timeout\n", stderr);
+    }
+    dbg_start_hold->held = false;
+    dbg_start_hold->cv.notify_all();
+}
 #endif
 
 // global background thread counter
@@ -7509,6 +7541,28 @@ void qore_exit_process(int rc) {
 }
 
 #ifdef DEBUG
+void qore_dbg_hold_next_thread_start(int ms) {
+    std::lock_guard<std::mutex> l(dbg_start_hold->m);
+    dbg_start_hold->hold_ms = ms;
+    dbg_start_hold->released = false;
+}
+
+bool qore_dbg_wait_thread_start_held(int timeout_ms) {
+    std::unique_lock<std::mutex> l(dbg_start_hold->m);
+    return dbg_start_hold->cv.wait_for(l, std::chrono::milliseconds(timeout_ms),
+        [] () { return dbg_start_hold->held; });
+}
+
+void qore_dbg_release_thread_start() {
+    std::unique_lock<std::mutex> l(dbg_start_hold->m);
+    // a hold that no thread has taken yet is disarmed
+    dbg_start_hold->hold_ms = 0;
+    dbg_start_hold->released = true;
+    dbg_start_hold->cv.notify_all();
+    // returns when the held thread has continued, so that a later hold is not ended by this release
+    dbg_start_hold->cv.wait(l, [] () { return !dbg_start_hold->held; });
+}
+
 void qore_dbg_hold_next_thread_finish(int ms) {
     std::lock_guard<std::mutex> l(dbg_finish_hold->m);
     dbg_finish_hold->hold_ms = ms;
@@ -8117,6 +8171,9 @@ namespace {
             qore_thread_counter_share = 1;
         }
 
+#ifdef DEBUG
+        qore_dbg_hold_thread_start();
+#endif
         register_thread(ta->tid, pthread_self(), 0, false, ta->flags);
         printd(5, "q_run_thread() ta: %p TID %d started\n", ta, ta->tid);
 
@@ -8214,6 +8271,9 @@ namespace {
         BGThreadParams* btp = (BGThreadParams*)x;
         // the count added for this thread when it was started
         qore_thread_counter_share = 1;
+#ifdef DEBUG
+        qore_dbg_hold_thread_start();
+#endif
         // register thread
         register_thread(btp->tid, pthread_self(), btp->pgm);
         printd(5, "op_background_thread() btp: %p TID %d started\n", btp, btp->tid);
@@ -9172,8 +9232,9 @@ QoreHashNode* QoreThreadList::getAllCallStacks() {
     // the thread list lock keeps the data of each listed thread in place while its stack is walked
     QoreThreadListIterator i;
     while (i.next()) {
-        // get call stack
-        ThreadData* td = entry[*i].thread_data;
+        // get call stack; a thread that has not registered yet has none, and a foreign thread that is being
+        // deregistered (no longer active) is left out as well
+        ThreadData* td = getThreadData(*i);
         if (!td) {
             continue;
         }
