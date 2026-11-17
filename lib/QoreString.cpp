@@ -3782,23 +3782,12 @@ const QoreEncoding* QoreString::getEncoding() const {
 
 const char* qore_string_private::effective_buf_view_path() const {
     assert(view_parent);
-    // A view onto a parent buffer is only guaranteed null-terminated at
-    // view_offset + len if the view reaches the parent's own null terminator
-    // (i.e., view_offset + len == parent->len). For mid-slice views the
-    // parent byte at view_offset + len is a valid byte, not '\0'.
-    //
-    // QoreString consumers historically treat getBuffer()/c_str() as a C
-    // string and may call strlen/strcmp/printf("%s", ...) on it. To preserve
-    // that contract we materialise mid-slice views lazily on first access.
-    // Substr-from-end views (the common case — splitString's last field,
-    // `tail = str.substr(n)`, tokeniser `readUntil` views, etc.) do NOT
-    // trigger this and remain zero-copy.
-    qore_string_private* parent_priv = qore_string_private::get(view_parent);
-    if (view_offset + len == parent_priv->len) {
-        return parent_priv->buffer + view_offset;
-    }
-    const_cast<qore_string_private*>(this)->materialize();
-    return buffer;
+    // a view reaches the end of its parent (QoreStringNode::makeView()), so its bytes are terminated by the parent's
+    // own terminator, and a read never has to copy them: reads of a view shared between threads only read the
+    // parent's bytes, which do not change while the view exists (issue #6239)
+    const qore_string_private* parent_priv = qore_string_private::get(view_parent);
+    assert(view_offset + len == parent_priv->len);
+    return parent_priv->buffer + view_offset;
 }
 
 void qore_string_private::dec_view_parent() {

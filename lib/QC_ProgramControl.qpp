@@ -35,6 +35,7 @@
 #include "qore/intern/QC_Breakpoint.h"
 #include "qore/intern/QC_TimeZone.h"
 #include "qore/intern/qore_program_private.h"
+#include "qore/intern/ql_debug.h"
 #include "qore/intern/QoreObjectIntern.h"
 #include "qore/intern/qore_date_private.h"
 #include "qore/intern/QoreHashNodeIntern.h"
@@ -208,13 +209,21 @@ Program ProgramControl::createEvalProgram(softint parse_options = PO_DEFAULT) [f
         : QoreParseOptions(parse_options);
     // the new Program has this Program's options too: %modern cannot be in effect with a compatibility option that it
     // does not allow, given or inherited (issue #5682)
-    if (qore_program_private::checkNewProgramModernOptions(p, po, xsink, "ProgramControl::createEvalProgram()")) {
+    // this Program's options are read once: the check and the options that the new Program inherits use the same
+    // value, also if they change meanwhile (issue #6176)
+    QoreParseOptions parent_po = qore_program_private::readParseOptions(*p);
+    if (qore_program_private::checkNewProgramModernOptions(p, parent_po, po, xsink,
+            "ProgramControl::createEvalProgram()")) {
         return QoreValue();
     }
+#ifdef DEBUG
+    // tests hold the creation here to change this Program's options after the check
+    qore_dbg_child_program_create_hold();
+#endif
     QoreProgram* pgm;
     {
         InheritAllUserCodeHelper all_user_code;
-        pgm = new QoreProgram(p, po);
+        pgm = new QoreProgram(p, po, false, nullptr, &parent_po);
     }
     copy_holder.release();
     if (restricted) {

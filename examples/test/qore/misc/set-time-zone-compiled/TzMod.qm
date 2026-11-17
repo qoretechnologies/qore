@@ -1,0 +1,32 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# module of set-time-zone-compiled.qtest: a module whose code sets its time zone with %set-time-zone (qore#6270)
+
+%modern
+%set-time-zone Asia/Tokyo
+# the module disallows changes to its time zone after setting it
+%no-locale-control
+
+module TzMod {
+    version = "1.0";
+    desc = "a module that sets its time zone";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+public namespace TzMod {
+    public string sub tz_region() {
+        return TimeZone::get().region();
+    }
+
+    public string sub tz_date() {
+        return sprintf("%n", date("2026-06-01 12:00:00"));
+    }
+
+    public class TzC {
+        string region() {
+            return TimeZone::get().region();
+        }
+    }
+}

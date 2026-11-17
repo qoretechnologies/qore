@@ -2887,6 +2887,10 @@ add_executable(qore-ascii-string-index-test examples/test/qore/strings/ascii_str
 target_include_directories(qore-ascii-string-index-test PRIVATE
     ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include)
 target_link_libraries(qore-ascii-string-index-test PRIVATE libqore)
+add_executable(qore-ir-pointer-slot-test examples/test/ir/ir-pointer-slot/ir_pointer_slot.cpp)
+target_include_directories(qore-ir-pointer-slot-test PRIVATE
+    ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include)
+target_link_libraries(qore-ir-pointer-slot-test PRIVATE libqore)
 add_executable(qore-number-round-trip-test EXCLUDE_FROM_ALL
     examples/test/qore/vars/number_round_trip.cpp)
 target_include_directories(qore-number-round-trip-test PRIVATE
@@ -2941,6 +2945,11 @@ target_include_directories(qore-stream-peek-test PRIVATE
     ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include ${OPENSSL_INCLUDE_DIR} ${ICONV_INCLUDE_DIR})
 # the readers keep an IconvHelper for text in stateful encodings, which is inline
 target_link_libraries(qore-stream-peek-test PRIVATE libqore ${ICONV_LIBRARY})
+add_executable(qore-stream-writer-ints-test examples/test/qore/streams/stream_writer_ints.cpp)
+target_include_directories(qore-stream-writer-ints-test PRIVATE
+    ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include ${OPENSSL_INCLUDE_DIR} ${ICONV_INCLUDE_DIR})
+# the readers keep an IconvHelper for text in stateful encodings, which is inline
+target_link_libraries(qore-stream-writer-ints-test PRIVATE libqore ${ICONV_LIBRARY})
 add_executable(qore-string-offset-bounds-test examples/test/qore/strings/string_offset_bounds.cpp)
 target_include_directories(qore-string-offset-bounds-test PRIVATE
     ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include)
@@ -3253,6 +3262,11 @@ set(_qcc_format_sources
 #                      calls that give their temporary arguments) in a unit of
 #                      its own, and is out for the same reason.
 #   QoreIRPrinter      diagnostic IR dumps to stderr behind a debug flag.
+#   QoreIRPointerSlot  how the IR interpreter keeps the addresses of the objects
+#                      that a frame owns in its value slots, at run time; native
+#                      code keeps these handles in SSA values, and the runtime
+#                      functions that allocate them only check that their types
+#                      are aligned for it.
 #   QoreAOTBatchMemory the memory admission of batch codegen workers: it decides
 #                      how many objects are compiled at once, never what they
 #                      contain (the objects are the same with any worker count).
@@ -3260,6 +3274,7 @@ set(_qcc_format_excluded_sources
     ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreAOTBatchMemory.h
     ${CMAKE_SOURCE_DIR}/lib/QoreAOTBatchMemory.cpp
     ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreIRInterpreter.h
+    ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreIRPointerSlot.h
     ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreIRPrinter.h
     ${CMAKE_SOURCE_DIR}/lib/QoreIRInterpreter.cpp
     ${CMAKE_SOURCE_DIR}/lib/QoreIRInterpreterGivenArgs.cpp
@@ -4584,6 +4599,34 @@ endif()
     if (MONGOC_FOUND)
         add_dependencies(docs-lang-final docs-mongodb)
     endif()
+
+    # Tag files imported by each bundled native module's final documentation pass: the modules whose pages the
+    # module's documentation links to (see qore_bundled_module_two_phase_docs()); importing every module's tag
+    # file instead copies all their symbols into the module's search index (#6350).  A missing entry is only a
+    # Doxygen warning in the module's final pass (nothing fails; the reference renders as plain text): add the
+    # module here, do not widen the set.  A name that is not a module fails the configure.  Like
+    # QORE_DOC_EXTRA_MODULES_<mod> for user modules, these are the documentation references.
+    set(QORE_DOC_REFERENCE_MODULES_astparser Qdx QoreApiMetadata QoreCodeFormat)
+    set(QORE_DOC_REFERENCE_MODULES_avro AvroUtil DataProvider)
+    set(QORE_DOC_REFERENCE_MODULES_dataframe DataProvider DataProviderDataFrame SqlUtil ml)
+    set(QORE_DOC_REFERENCE_MODULES_i18n ParseOptions Util)
+    set(QORE_DOC_REFERENCE_MODULES_json A2aClient A2aClientDataProvider A2aServerHandler AgUi Connect DataProvider
+        FhirRestClient FhirRestDataProvider HttpClientIo HttpServerUtil JsonFileDataProvider JsonLd JsonPatch
+        JsonRpcClientIo JsonRpcConnection JsonRpcHandler McpClient McpClientDataProvider McpServerHandler
+        NdjsonDataProvider OneRecordClient OneRecordServerHandler QUnit Schema dataframe)
+    set(QORE_DOC_REFERENCE_MODULES_krb5 Krb5Util)
+    set(QORE_DOC_REFERENCE_MODULES_linenoise DebugLinenoiseCmdLine QoreHistory)
+    set(QORE_DOC_REFERENCE_MODULES_logger_bin Logger Util)
+    set(QORE_DOC_REFERENCE_MODULES_ml DataProvider DataProviderML QoreMLUtils QoreModelRegistry QoreOnnxExport
+        QoreOnnxTools QoreRagUtils QoreTokenizerUtils dataframe tokenizer)
+    set(QORE_DOC_REFERENCE_MODULES_mongodb MongoDbDataProvider)
+    set(QORE_DOC_REFERENCE_MODULES_ocr QoreOcrUtils)
+    set(QORE_DOC_REFERENCE_MODULES_protobuf Connect QoreOnnxExport Schema)
+    set(QORE_DOC_REFERENCE_MODULES_reflection ConnectionProvider DataProvider QoreApiMetadata)
+    set(QORE_DOC_REFERENCE_MODULES_tokenizer DataProviderML QoreTokenizerUtils ml)
+    set(QORE_DOC_REFERENCE_MODULES_yaml Connect ConnectDataProvider DataProvider DataStreamClient
+        DataStreamClientIo DataStreamRequestHandler DataStreamUtil HttpClientIo HttpServerUtil RestClient Schema
+        YamlDocumentDataProvider YamlRpcClient YamlRpcClientIo YamlRpcHandler YamlSchema YamlTagHandler)
 
     # Native module landing pages link back into qlib. Keep their final rendering
     # behind all initial indexes, and keep the shared language index immutable.

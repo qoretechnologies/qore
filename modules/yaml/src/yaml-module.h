@@ -446,16 +446,23 @@ public:
 class QoreYamlParser : public QoreYamlBase {
 public:
     //! Creates the parser
-    /** @param str the YAML text
-        @param xsink exception sink
+    /** @param str the YAML text, in any encoding; text in another encoding than UTF-8 is converted to UTF-8, which
+        the parser reads (issue #872)
+        @param xsink exception sink; an exception is raised here if the text cannot be converted to UTF-8, and
+        parse() then returns no value
         @param core_schema if true, plain scalars are resolved with the YAML 1.2 core schema only; see
         yaml_parse_core_schema_scalar()
     */
     DLLLOCAL QoreYamlParser(const QoreString& str, ExceptionSink* xsink, bool core_schema = false)
             : QoreYamlBase(xsink), discard(false), core_schema(core_schema) {
         yaml_parser_initialize(&parser);
-        yaml_parser_set_input_string(&parser, (const unsigned char*)str.c_str(), str.strlen());
         yaml_parser_set_encoding(&parser, YAML_UTF8_ENCODING);
+        // set() returns 1 if the string is converted, 0 if an exception was raised
+        if (!utf8.set(&str, QCS_UTF8, xsink)) {
+            yaml_parser_set_input_string(&parser, (const unsigned char*)"", 0);
+            return;
+        }
+        yaml_parser_set_input_string(&parser, (const unsigned char*)utf8->c_str(), utf8->strlen());
         valid = true;
     }
 
@@ -471,6 +478,8 @@ public:
     }
 
 protected:
+    //! the YAML text in UTF-8, which the parser reads while it parses
+    TempEncodingHelper utf8;
     yaml_parser_t parser;
     bool discard;
     //! true if plain scalars are resolved with the YAML 1.2 core schema only

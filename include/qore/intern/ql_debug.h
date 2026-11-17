@@ -224,6 +224,11 @@ DLLLOCAL void qore_dbg_socket_cancel_conversion();
 typedef void (*qore_dbg_socket_send_hook_t)(int fd);
 DLLLOCAL extern std::atomic<qore_dbg_socket_send_hook_t> qore_dbg_socket_send_hook;
 
+//! called by SocketRecvUntilBytesPollState::doRecv() after SSL_read() reported SSL_ERROR_WANT_READ, before the
+//! descriptor is polled; \a fd is the socket's descriptor; set by dbg_hold_tls_read_until_hangup() (#6315)
+typedef void (*qore_dbg_tls_read_want_hook_t)(int fd);
+DLLLOCAL extern std::atomic<qore_dbg_tls_read_want_hook_t> qore_dbg_tls_read_want_hook;
+
 //! called by AbstractHttpPollConnectionPriv::setClosed() on the first close of a connection, after the close hook and
 //! before it releases the reference that it holds while running the hook; returns true if the hook released a
 //! reference of its own, in which case qore_dbg_conn_close_released() is called once setClosed() has released its
@@ -244,10 +249,41 @@ enum class QoreDbgHttpHoldPoint : unsigned char {
     Submit,
     //! an HTTP/1 or HTTP/2 client connection's closeConnection() has invalidated it and is about to close it
     CloseAfterInvalidate,
+    //! HTTPClient::startPollSendRecv() submitted the request on a ready connection, the submit raised an exception, and
+    //! the error is about to be classified (whether it is reported through the poll operation)
+    SubmitFailed,
+    //! HTTPClient::startPollSendRecv() found an ALPN-negotiating connection ready and is about to finalize it (hand it
+    //! over to a concrete connection); while this point is armed, the request waits for its connection to be ready
+    //! first, so that it reaches the point
+    Finalize,
+    //! NegotiatingHttpClientConnection::takeOver() checked the connection and holds its method guard, before it hands
+    //! the socket over to the concrete connection
+    Takeover,
+    //! HttpClientConnectionBase::drainInFlight() has to wait for a call in flight (armed with a release Counter of 0,
+    //! the point only reports that the close waits)
+    DrainWait,
+    //! HttpClientConnectionManagerBase::swapNegotiatedConnection() was given the concrete connection that took over a
+    //! negotiating connection, before it reads the negotiating connection
+    Swap,
+    //! HttpClientConnectionManagerBase::acquireConnectionImpl() found a connection in its pool and released the pool
+    //! lock, before it returns the connection
+    Acquired,
+    //! HttpClientConnectionBase::tryReservePendingStream() was called to reserve a stream of a Qore-level connection,
+    //! before it takes the reservation lock
+    ReservePending,
+    //! the number of hold points
+    Count,
 };
 
 //! holds the calling thread at the given point if dbg_http_hold_at() armed it (one-shot)
 DLLLOCAL void qore_dbg_http_hold(QoreDbgHttpHoldPoint point);
+
+//! holds the creation of a child Program after its options were checked and before the Program is created, if
+//! dbg_hold_child_program_create() armed it (one-shot)
+DLLLOCAL void qore_dbg_child_program_create_hold();
+
+//! returns true if dbg_http_hold_at() armed the given point and no thread has reached it yet
+DLLLOCAL bool qore_dbg_http_hold_armed(QoreDbgHttpHoldPoint point);
 
 //! records that an HTTP client connection's closeConnection() runs, for dbg_http_concurrent_closes(); destroying it
 //! records the end of the close

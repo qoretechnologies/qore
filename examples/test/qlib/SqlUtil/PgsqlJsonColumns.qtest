@@ -1,0 +1,160 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%prepend-module-path "${SCRIPT_DIR}"
+%requires QUnit
+%requires json
+%requires SqlUtil
+%requires PgsqlSqlUtil
+%requires ./PgsqlTestIsolation.qm
+
+%try-module pgsql
+%define NoPgsql
+%endtry
+
+%exec-class PgsqlJsonColumnsTest
+
+#! Tests writing the values of json and jsonb columns with SqlUtil on PostgreSQL (issue #4448)
+/** The JSON text given as a string is cast to the column's type in the SQL of inserts, updates and upserts, as
+    PostgreSQL does not convert a value bound as text to json or jsonb by itself
+*/
+class PgsqlJsonColumnsTest inherits QUnit::Test {
+    public {
+        const J1 = "{\"a\": 1}";
+        const J2 = "{\"b\": [1, 2]}";
+        const J3 = "{\"c\": null}";
+    }
+
+    private {
+        *Datasource ds;
+    }
+
+    constructor() : Test("PgsqlJsonColumns", "1.0", \ARGV) {
+        addTestCase("insert", \insertTest());
+        addTestCase("update", \updateTest());
+        addTestCase("upsert", \upsertTest());
+        addTestCase("bulk writes", \bulkTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+%ifndef NoPgsql
+        if (ENV.QORE_DB_CONNSTR_PGSQL) {
+            PgsqlRunSchema::setup(ENV.QORE_DB_CONNSTR_PGSQL, "PgsqlJsonColumns");
+            ds = new Datasource(ENV.QORE_DB_CONNSTR_PGSQL);
+            Database db(ds);
+            map ds.exec($1), db.makeTable("jsc_t", {
+                "columns": {
+                    "id": {"native_type": "integer", "notnull": True},
+                    "j": {"native_type": "json"},
+                    "jb": {"native_type": "jsonb"},
+                },
+                "primary_key": {"name": "jsc_t_pkey", "columns": "id"},
+            }).getCreateSql();
+            ds.commit();
+        }
+%endif
+    }
+
+    globalTearDown() {
+        if (ds) {
+            ds.rollback();
+            delete ds;
+            PgsqlRunSchema::teardown();
+        }
+    }
+
+    private Table getTable() {
+%ifdef NoPgsql
+        testSkip("no pgsql module");
+%endif
+        if (!ds) {
+            testSkip("QORE_DB_CONNSTR_PGSQL is not set");
+        }
+        return new Table(ds, "jsc_t");
+    }
+
+    #! returns the rows of the table, with the JSON values parsed
+    private list<auto> getRows() {
+        return map parseRow($1), ds.selectRows("select id, j::text as j, jb::text as jb from jsc_t order by id");
+    }
+
+    private static hash<auto> parseRow(hash<auto> row) {
+        return {
+            "id": row.id,
+            "j": row.j ? parse_json(row.j) : NOTHING,
+            "jb": row.jb ? parse_json(row.jb) : NOTHING,
+        };
+    }
+
+    private static hash<auto> makeRow(int id) {
+        return {"id": id, "j": {"b": (1, 2)}, "jb": {"c": NOTHING}};
+    }
+
+    insertTest() {
+        Table t = getTable();
+        on_exit ds.rollback();
+        string sql;
+        t.insert({"id": 1, "j": J1, "jb": J2}, \sql);
+        assertRegex("values \\(%v,%v::json,%v::jsonb\\)", sql);
+        t.insert({"id": 2, "j": NULL, "jb": J3});
+        assertEq(({"id": 1, "j": {"a": 1}, "jb": {"b": (1, 2)}}, {"id": 2, "j": NOTHING, "jb": {"c": NOTHING}}),
+            getRows());
+        # the column's JSON value as a jsonb value compares with a JSON string cast in the where clause
+        assertEq(1, ds.selectRow("select count(1) as c from jsc_t where jb = %v::jsonb", J2).c);
+    }
+
+    updateTest() {
+        Table t = getTable();
+        on_exit ds.rollback();
+        t.insert({"id": 1, "j": J1, "jb": J1});
+        string sql;
+        assertEq(1, t.update({"j": J2, "jb": J3}, {"id": 1}, \sql));
+        assertRegex("set j = %v::json, jb = %v::jsonb where ", sql);
+        assertEq(({"id": 1, "j": {"b": (1, 2)}, "jb": {"c": NOTHING}},), getRows());
+    }
+
+    upsertTest() {
+        Table t = getTable();
+        on_exit ds.rollback();
+        int id = 0;
+        foreach int strategy in (AbstractTable::UpsertAuto, AbstractTable::UpsertInsertFirst,
+                AbstractTable::UpsertUpdateFirst, AbstractTable::UpsertSelectFirst,
+                AbstractTable::UpsertInsertOnly) {
+            ++id;
+            # an insert, then an update of the same key (not for the insert-only strategy)
+            t.upsert({"id": id, "j": J1, "jb": J1}, strategy);
+            if (strategy != AbstractTable::UpsertInsertOnly) {
+                t.upsert({"id": id, "j": J2, "jb": J3}, strategy);
+            }
+        }
+        t.upsert({"id": 1, "j": J3, "jb": J2}, AbstractTable::UpsertUpdateOnly);
+        list<auto> rows = getRows();
+        assertEq(5, rows.size());
+        assertEq({"id": 1, "j": {"c": NOTHING}, "jb": {"b": (1, 2)}}, rows[0]);
+        assertEq((map makeRow($1), (2, 3, 4)), rows[1..3]);
+        assertEq({"id": 5, "j": {"a": 1}, "jb": {"a": 1}}, rows[4]);
+    }
+
+    bulkTest() {
+        Table t = getTable();
+        on_exit ds.rollback();
+        # an insert of a hash of lists
+        t.insert({"id": (1, 2), "j": (J1, J2), "jb": (J2, J3)});
+        # an insert from an iterator
+        t.insertFromIterator(new ListIterator(({"id": 3, "j": J3, "jb": J1}, {"id": 4, "j": J1, "jb": J1})));
+        # a bulk update
+        code bulk_update = t.getBulkUpdateClosure({"jb": J1}, {"id": 1});
+        bulk_update({"jb": (J3, J3)}, {"id": (1, 2)});
+        assertEq((
+            {"id": 1, "j": {"a": 1}, "jb": {"c": NOTHING}},
+            {"id": 2, "j": {"b": (1, 2)}, "jb": {"c": NOTHING}},
+            {"id": 3, "j": {"c": NOTHING}, "jb": {"a": 1}},
+            {"id": 4, "j": {"a": 1}, "jb": {"a": 1}},
+        ), getRows());
+    }
+}

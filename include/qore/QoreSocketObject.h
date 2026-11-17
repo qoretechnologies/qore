@@ -916,6 +916,13 @@ if (accepted) {
     */
     DLLLOCAL int watchQuicResponseSend(int64_t session_id, int64_t stream_id, ExceptionSink* xsink);
 
+    //! Returns true if the given QUIC session of the socket is closed or no longer exists
+    /** Takes the socket's lock and its QUIC session lock; it does not wait for the I/O thread.
+
+        @param session_id the QUIC session
+    */
+    DLLLOCAL bool isQuicSessionClosedOrGone(int64_t session_id) const;
+
     //! Wait for an HTTP/2 stream's send buffer to drain below the backpressure threshold
     /** @param stream_id the HTTP/2 stream ID
         @param timeout_ms maximum wait time in milliseconds (0 = no wait, -1 = infinite)

@@ -28,6 +28,9 @@
       value of the wrong type
     - the destructor of a statement's temporary that raises when the statement ends, also in an if condition and in
       a loop over a temporary list; and without a handler in the function, where the exception leaves the function
+    - the assignment of the list made by a foreach statement over a reference when the loop ends, which the variable's
+      type refuses, or which releases an object whose destructor raises; also when the loop is left with break or
+      return (with a list value, in a block with an on_exit handler), and in a loop (qore#6197)
 
     The on_exit handlers of the try blocks run before the handlers, as with the AST interpreter.
 */
@@ -76,6 +79,18 @@ class ExceptionHandlerSameFrameTest inherits QUnit::Test {
             "discard temps loop: 1:DTOR-ERR 2:DTOR-ERR",
             "  on_exit",
             "discard temps out: escaped DTOR-ERR",
+            "  on_exit",
+            "ref foreach type: caught RUNTIME-TYPE-ERROR [1, 2]",
+            "  on_exit",
+            "ref foreach type ok: not raised [3, 3]",
+            "ref foreach break: caught RUNTIME-TYPE-ERROR [1, 2]",
+            "ref foreach return: caught RUNTIME-TYPE-ERROR [1, 2]",
+            "  inner on_exit",
+            "ref foreach return list: caught RUNTIME-TYPE-ERROR [1, 2]",
+            "  inner on_exit",
+            "ref foreach return list ok: returned list",
+            "ref foreach dtor: caught DTOR-ERR [1]",
+            "ref foreach loop: 0:RUNTIME-TYPE-ERROR 1:RUNTIME-TYPE-ERROR",
         );
     }
 

@@ -2603,7 +2603,11 @@ public:
 };
 
 //! Fused add-assign for two typed int locals: target += source
-//! Replaces LoadLocal(target) + LoadLocal(source) + AddAssignInt + StoreLocal(target)
+/** Replaces LoadLocal(target) + LoadLocal(source) + AddAssignInt + StoreLocal(target); the target's type stores the
+    integer as it is (int or softint, never an enum, which takes the lvalue path).  The instruction has the handler of
+    an enclosing try block as its exception target: the read of the source and the change of the target, made by a
+    runtime helper for a variable on the runtime stack, can raise an exception
+*/
 class QoreIRAddAssignLocalIntInstruction : public QoreIRInstruction {
 public:
     QORE_IR_INST_CLASS(AddAssignLocalInt)
@@ -2624,7 +2628,11 @@ public:
 };
 
 //! Fused increment for typed int local: local += delta (constant int)
-//! Replaces LoadLocal + ConstInt(delta) + AddAssignInt + StoreLocal
+/** Replaces LoadLocal + ConstInt(delta) + AddAssignInt + StoreLocal; the local's type stores the integer as it is
+    (int or softint, never an enum, which takes the lvalue path).  The instruction has the handler of an enclosing
+    try block as its exception target: the change, made by a runtime helper for a variable on the runtime stack or a
+    closure-bound variable, can raise an exception
+*/
 class QoreIRIncrementLocalIntInstruction : public QoreIRInstruction {
 public:
     QORE_IR_INST_CLASS(IncrementLocalInt)
@@ -3920,6 +3928,8 @@ public:
     QoreValue where_exp;     //!< optional `where` filter expression (empty = no filter)
     QoreValue sort_exp;      //!< optional sort expression (empty = no sort)
     int sort_type = -1;      //!< CM_SORT_ASCENDING, CM_SORT_DESCENDING, or -1 for none
+    //! the expressions read the implicit index (\c $#) from the thread at run time (qore#6341)
+    bool reads_implicit_element = false;
 };
 
 //! Backquote expression instruction — execute command and return stdout as string.
@@ -3977,6 +3987,8 @@ public:
     QoreValue find_exp;
     QoreValue where;
     int32_t mode = 0;
+    //! the expressions read the implicit index (\c $#) from the thread at run time (qore#6341)
+    bool reads_implicit_element = false;
 };
 
 class QoreIRSummarizeInstruction : public QoreIRInstruction {
@@ -4159,6 +4171,16 @@ public:
     //! coordinator block returning the helper's result value through the
     //! coordinator's own epilogue (see design/aot-function-outlining.md).
     QoreIRBasicBlock* return_target = nullptr;
+
+    //! Transient (never serialized): the locals of the coordinator that the
+    //! outlined function-body helper also references (its shared locals; empty
+    //! for an init-expression helper)
+    /** The coordinator releases its own references to their values before the
+        call and reloads them after it, so that a value that the helper
+        replaces is released at its assignment in the helper (qore#6300; see
+        QoreIRToLLVM::recordHelperSite())
+    */
+    std::vector<const LocalVar*> shared_locals;
 };
 
 //! Returns the instruction as the given instruction class pointer type if it is one, otherwise nullptr
@@ -4412,8 +4434,22 @@ public:
     //! @return true if direct parameter passing is enabled and no parameter local is closure-captured
     bool isDirectParamsRuntimeSafe() const;
 
+    //! Returns the LLVM symbol of the AOT-compiled body that owns this function's expression slots
+    /** An AOT outlined helper (function-body regions and init-expression operands, see
+        design/aot-function-outlining.md) runs with its owner's slot map and context, so the per-slot symbols that its
+        code references, such as the dispatch functions of the closures that it creates and calls, are named after
+        and defined with the owner (compileAOTClosureBodiesForOwner()), not after the helper.
+    */
+    const std::string& getAOTSymbolOwner() const {
+        return aot_symbol_owner.empty() ? name : aot_symbol_owner;
+    }
+
     std::string name;
     std::string display_name;
+    //! the LLVM symbol of the AOT body whose slot map this function uses, when it is an outlined helper
+    /** Empty for every other function; see getAOTSymbolOwner().
+    */
+    std::string aot_symbol_owner;
     //! the count of the on_block_exit handlers lowered for this function; numbers their names deterministically
     uint32_t handler_name_seq = 0;
     //! Source QoreFunction this IR was lowered from.

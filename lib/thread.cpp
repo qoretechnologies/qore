@@ -180,6 +180,8 @@ QoreThreadLock stack_lck;
 size_t qore_thread_stack_size = 0;
 size_t qore_thread_stack_limit = 0;
 
+constinit thread_local std::atomic<size_t> q_thread_stack_limit_tls{0};
+
 // default thread creation attribute
 QorePThreadAttr ta_default;
 
@@ -754,7 +756,10 @@ public:
 
 #ifdef QORE_MANAGE_STACK
     size_t stack_start;
+    //! the stack limit; set with setStackLimit(), which publishes it to the thread's TLS
     size_t stack_limit;
+    //! the thread's q_thread_stack_limit_tls, once bound (see bindStackLimitTls())
+    std::atomic<size_t>* stack_limit_tls = nullptr;
     // this thread's stack size for error reporting
     size_t stack_size;
     // the primary thread only: where its stack starts (the highest address of a stack that grows down) and its full
@@ -1001,6 +1006,12 @@ public:
 #endif
 
     DLLLOCAL ~ThreadData() {
+#ifdef QORE_MANAGE_STACK
+        // the thread has no limit without its data; deleted by the thread itself
+        if (stack_limit_tls) {
+            stack_limit_tls->store(0, std::memory_order_relaxed);
+        }
+#endif
         // the registry keeps no pointer into the map of a thread whose data is deleted
         unregisterThreadLocalVars();
 
@@ -1391,6 +1402,20 @@ public:
     }
 
 #ifdef QORE_MANAGE_STACK
+    //! Sets the stack limit, and the thread's copy of it in its TLS once bound (see q_thread_stack_reserve_exceeded())
+    DLLLOCAL void setStackLimit(size_t limit) {
+        stack_limit = limit;
+        if (stack_limit_tls) {
+            stack_limit_tls->store(limit, std::memory_order_relaxed);
+        }
+    }
+
+    //! Binds the thread's TLS copy of the stack limit; called by the thread itself when its data is set
+    DLLLOCAL void bindStackLimitTls() {
+        stack_limit_tls = &q_thread_stack_limit_tls;
+        stack_limit_tls->store(stack_limit, std::memory_order_relaxed);
+    }
+
     //! Sets the stack limit of the primary thread when another runtime enforces a maximum stack size on it
     /** The limit is derived from the real start of the stack where it could be determined, and keeps the stack guard
         of the primary thread above the end of the stack that the thread can use.
@@ -1410,9 +1435,9 @@ public:
         // a stack no larger than the guard leaves no usable stack; see the constructor
         size_t usable = stack_size > stack_guard ? stack_size - stack_guard : 0;
 #ifdef STACK_DIRECTION_DOWN
-        stack_limit = primary_stack_top - usable;
+        setStackLimit(primary_stack_top - usable);
 #else
-        stack_limit = primary_stack_top + usable;
+        setStackLimit(primary_stack_top + usable);
 #endif
         printd(5, "ThreadData::enforcePrimaryStackSize() max: %lld protected: %lld size: %lld usable: %lld\n",
             (int64)max_size, (int64)protected_size, (int64)size, (int64)usable);
@@ -1454,6 +1479,10 @@ void ThreadEntry::activate(int tid, pthread_t n_ptid, QoreProgram* p, bool forei
     assert(!::thread_data.get());
     thread_data = new ThreadData(tid, p, foreign, flags);
     ::thread_data.set(thread_data);
+#ifdef QORE_MANAGE_STACK
+    // the inline stack checks of the thread read its limit from its TLS (see q_thread_stack_reserve_exceeded())
+    thread_data->bindStackLimitTls();
+#endif
     // the thread's RuntimeConfig writes the call sites of AST calls directly (QoreRcCallSiteHelper)
     rc_tls_set_call_site_ptr(&thread_data->call_site_loc);
     // the thread's lock-free releases publish in its hazard slot; called on the thread itself, as the thread data is
@@ -1500,6 +1529,10 @@ void ThreadEntry::abandonAfterFork() {
     wake_busy = false;
     waiting_fd.store(-1, std::memory_order_relaxed);
     wake_reg_depth = 0;
+#ifdef DEBUG
+    // the thread's wait does not go on in the child, where its TID can be given to another thread
+    dbg_in_wait.store(false);
+#endif
     // the descriptors are the child's own copies
     closeCancelWakeup();
     status = QTS_AVAIL;
@@ -1915,6 +1948,8 @@ struct ThreadProgramDataLiveCount {
     std::mutex m;
     std::condition_variable cond;
     int64 count = 0;
+    //! a leaf lock, taken whenever thread data is created or destroyed, also in the child of fork()
+    QoreForkStdMutex fork_handler{m, QFLR_LEAF, "tpd_live_count", QFLM_ACQUIRE, {&cond}};
 };
 
 ThreadProgramDataLiveCount& tpd_live_count() {
@@ -1922,6 +1957,10 @@ ThreadProgramDataLiveCount& tpd_live_count() {
     static ThreadProgramDataLiveCount* c = new ThreadProgramDataLiveCount;
     return *c;
 }
+
+// created during static initialization, so that its fork handler is not registered while another registered lock is
+// held (see design/fork-handlers.md)
+[[maybe_unused]] ThreadProgramDataLiveCount& tpd_live_count_init = tpd_live_count();
 }
 
 void ThreadProgramData::dbgLiveCountChanged(int64 delta) {
@@ -2512,7 +2551,7 @@ size_t qore_sandbox_tighten_stack(int64 bytes, size_t& saved) {
         return 0;
     }
 #endif
-    td->stack_limit = limit;
+    td->setStackLimit(limit);
     return limit;
 #else
     // no stack guard on this platform; see check_stack()
@@ -2531,23 +2570,19 @@ int64 qore_sandbox_dbg_cpu_used() {
 
 void qore_sandbox_restore_stack(size_t saved) {
 #ifdef QORE_MANAGE_STACK
-    thread_data.get()->stack_limit = saved;
+    thread_data.get()->setStackLimit(saved);
 #endif
 }
 
-bool q_thread_stack_reserve_exceeded(size_t reserve) {
+bool q_thread_stack_smaller_than_default() {
 #ifdef QORE_MANAGE_STACK
     ThreadData* td = thread_data.get();
-    // a thread with no stack guard has no limit (see QTF_NO_STACK_GUARD)
-    if (!td || !td->stack_limit) {
+    // the primary thread's stack is the process's: it counts as enough stack, as does a thread with no stack limit
+    if (!td || td->tid == initial_thread || !td->stack_limit) {
         return false;
     }
-    size_t pos = get_stack_pos();
-#ifdef STACK_DIRECTION_DOWN
-    return pos < td->stack_limit + reserve;
-#else
-    return pos + reserve > td->stack_limit;
-#endif
+    // the size that new threads are created with; set_default_thread_stack_size() can change it
+    return td->stack_size < q_thread_get_stack_size();
 #else
     return false;
 #endif
@@ -2563,13 +2598,10 @@ QoreElidedStackHelper::QoreElidedStackHelper(size_t elided) {
     old_limit = td->stack_limit;
 #ifdef STACK_DIRECTION_DOWN
     // a limit beyond the stack's start makes every check fail, as the recursion would have
-    td->stack_limit = elided > SIZE_MAX - old_limit ? SIZE_MAX : old_limit + elided;
+    td->setStackLimit(elided > SIZE_MAX - old_limit ? SIZE_MAX : old_limit + elided);
 #else
-    td->stack_limit = elided > old_limit ? 0 : old_limit - elided;
     // a limit of zero means no limit: the recursion would have exceeded the limit anywhere
-    if (!td->stack_limit) {
-        td->stack_limit = 1;
-    }
+    td->setStackLimit(elided >= old_limit ? 1 : old_limit - elided);
 #endif
     shifted = true;
 #endif
@@ -2578,7 +2610,7 @@ QoreElidedStackHelper::QoreElidedStackHelper(size_t elided) {
 QoreElidedStackHelper::~QoreElidedStackHelper() {
 #ifdef QORE_MANAGE_STACK
     if (shifted) {
-        thread_data.get()->stack_limit = old_limit;
+        thread_data.get()->setStackLimit(old_limit);
     }
 #endif
 }
@@ -3617,6 +3649,26 @@ void swap_runtime_parse_options(const QoreParseOptions& po, const AbstractStatem
     td->runtime_po = apply_runtime_po_override(td, po);
 }
 
+// the per-statement path of the AST interpreter (AbstractStatement::exec()) inlines update_runtime_statement_location():
+// lowered top-level code switches the options with functions of its own, so that it adds no caller to the functions
+// of that path, which changed the compiler's inlining decisions for it (an extra call per AST statement)
+__attribute__((noinline, cold)) void swap_toplevel_code_parse_options(const QoreParseOptions& po,
+        const AbstractStatement*& old_stmt, const QoreProgramLocation*& old_loc, QoreParseOptions& old_po) {
+    ThreadData* td = thread_data.get();
+    old_stmt = td->runtime_statement;
+    old_loc = td->runtime_loc;
+    old_po = td->runtime_po;
+    td->runtime_po = apply_runtime_po_override(td, po);
+}
+
+__attribute__((noinline, cold)) void restore_toplevel_code_parse_options(const AbstractStatement* stmt,
+        const QoreProgramLocation* loc, const QoreParseOptions& po) {
+    ThreadData* td = thread_data.get();
+    td->runtime_statement = stmt;
+    td->runtime_loc = loc;
+    td->runtime_po = apply_runtime_po_override(td, po);
+}
+
 void update_runtime_statement_location(const AbstractStatement* stmt, const QoreProgramLocation* loc,
         const QoreParseOptions& po) {
     ThreadData* td = thread_data.get();
@@ -4474,6 +4526,7 @@ int ThreadEntryHandlerFrame::enterHandlers(ThreadData* td, QoreProgram* pgm, Exc
         if (xsink) {
             xsink->assimilate(handler_xsink);
         }
+        handler_cpp_exception = true;
         throw;
     }
     if (!handler_xsink) {
@@ -4819,6 +4872,49 @@ void ProgramThreadCountContextHelper::set(ExceptionSink* xsink, QoreProgram* pgm
     if (!pgm) {
         return;
     }
+    // a call within the Program that the thread has entered, the usual case, has nothing to do (see setRethrow()),
+    // and is made without the call that converts a C++ exception
+    {
+        ThreadData* td = thread_data.get();
+        if (pgm == td->current_pgm && td->tlpd && td->entry_pgm == pgm && !td->cancel_defer_count
+                && !td->dtor_cancel_defer_count) {
+            assert(!old_pgm);
+            assert(!entry_frame.isActive());
+            ctx_td = td;
+            return;
+        }
+    }
+    try {
+        setRethrow(xsink, pgm, runtime);
+    } catch (std::exception& e) {
+        // the entry left the thread as it was; the code that enters the Program gets a Qore exception instead, which
+        // it can catch (issue #6255), as for a Qore exception of the entry handler; an exception already in xsink
+        // (one that the handler raised, or one propagating while a destructor runs) is the one reported
+        if (!xsink) {
+            // nothing can tell the caller that the entry failed but the exception
+            throw;
+        }
+        failed = true;
+        if (!*xsink) {
+            try {
+                if (entry_frame.handlerFailedWithCppException()) {
+                    xsink->raiseException("THREAD-ENTRY-HANDLER-ERROR", "the Program's thread entry handler could "
+                        "not be completed: out of memory or an internal error (%s)", e.what());
+                } else {
+                    xsink->raiseException("PROGRAM-ENTRY-ERROR", "the thread could not enter Program " QLLD ": out "
+                        "of memory or an internal error (%s)", (int64)pgm->getProgramId(), e.what());
+                }
+            } catch (...) {
+                // nothing more can be recorded
+            }
+        }
+    }
+}
+
+void ProgramThreadCountContextHelper::setRethrow(ExceptionSink* xsink, QoreProgram* pgm, bool runtime) {
+    if (!pgm) {
+        return;
+    }
     assert(!old_pgm);
     assert(!entry_frame.isActive());
 
@@ -4900,8 +4996,10 @@ void ProgramThreadCountContextHelper::setOtherProgram(ThreadData* td, ExceptionS
                 return;
             }
             // try to increment thread count
+            // a refused entry (the Program is deleted or parsed) runs none of the Program's code
             if (pp->incThreadCount(td->tid, xsink)) {
                 printd(5, "ProgramThreadCountContextHelper::set() failed\n");
+                failed = true;
                 return;
             }
             thread_count_incremented = true;
@@ -5641,6 +5739,47 @@ bool qore_caller_is_sandboxed() {
         // the sandbox cannot be resolved: what the code creates is not trusted
         return true;
     }
+}
+
+//! returns true if the parse options of \a pgm, a Program that is not a module's, restrict \a dom
+static bool qore_program_restricts(const QoreProgram* pgm, const QoreParseOptions& dom) {
+    assert(pgm && !qore_program_is_module_inline(pgm));
+    return qore_program_private::getParseOptions(*pgm).hasAny(dom);
+}
+
+bool qore_caller_restricts_domain(int64 domain) {
+    // only the restricting options are domains; the positive options (PO_ALLOW_*) and PO_IN_MODULE are not
+    const QoreParseOptions dom = QoreParseOptions(domain) & ~QoreParseOptions::POSITIVE_OPTIONS
+        & ~QoreParseOptions(PO_IN_MODULE);
+    ThreadData* td = thread_data.get();
+    // before the library is initialized, only the embedding application runs
+    if (!dom || !td) {
+        return false;
+    }
+    // the restrictions of a sandboxed caller that the module code runs with (see
+    // qore_set_module_call_runtime_po_override()); the module code passes them on to the module code it calls
+    if (td->runtime_po_caller_restrictions.hasAny(dom)) {
+        return true;
+    }
+    // the calling code is the nearest Program on the call stack that is not a module's: a module's own options are
+    // those of the Program that loaded it first, which say nothing about the code that calls it now
+    const QoreProgram* pgm = td->current_pgm;
+    if (pgm && !qore_program_is_module_inline(pgm)) {
+        return qore_program_restricts(pgm, dom);
+    }
+    for (const ProgramThreadCountContextHelper* ch = td->current_pgm_ctx; ch; ch = ch->getOldContext()) {
+        const QoreProgram* old_pgm = ch->getOldProgram();
+        if (old_pgm && !qore_program_is_module_inline(old_pgm)) {
+            return qore_program_restricts(old_pgm, dom);
+        }
+    }
+    // a builtin call of a module function made for another Program (QoreProgram::callFunction()): the Program of the
+    // call
+    if (td->call_program_context && !qore_program_is_module_inline(td->call_program_context)) {
+        return qore_program_restricts(td->call_program_context, dom);
+    }
+    // no code of a Program that is not a module's is on the stack: the embedding application calls the module code
+    return false;
 }
 
 //! returns the ID of the current Program of the thread, or QORE_NO_PROGRAM_ID
@@ -9327,6 +9466,11 @@ void QoreThreadList::forkChild(int tid) {
     // the joiners of the parent do not exist in the child, and one of them may have held join_lck
     join_lck.reinitAfterFork();
     join_cond.reinitAfterFork();
+#ifdef DEBUG
+    // a thread of the parent may have held the lock of dbgNoteWait(), which every cancellable wait takes
+    dbg_wait_lck.reinitAfterFork();
+    dbg_wait_cond.reinitAfterFork();
+#endif
 }
 
 int qore_fork_get_tid() {
@@ -9569,7 +9713,7 @@ static bool qore_cancel_limits_only() {
 }
 
 int qore_cond_wait_cancellable(QoreCondition& cond, pthread_mutex_t* m, int64 timeout_ms, ExceptionSink* xsink,
-        const char* operation) {
+        const char* operation, int (*before_block)(void*), void* before_block_arg) {
     // a fast route must never block
     QORE_ASSERT_NOT_IN_FAST_ROUTE();
     // a request made before the wait
@@ -9581,8 +9725,16 @@ int qore_cond_wait_cancellable(QoreCondition& cond, pthread_mutex_t* m, int64 ti
     // once no other thread can run (the condition waker has been stopped for good: see qore_thread_start_closed)
     if (tid < 0 || tid >= MAX_QORE_THREADS || qore_is_cancel_deferred()
             || qore_thread_start_closed.load(std::memory_order_acquire)) {
+        if (before_block && before_block(before_block_arg)) {
+            return QORE_COND_RESULT_SUCCESS;
+        }
         return cond.wait2(m, timeout_ms) ? QORE_COND_RESULT_TIMEOUT : QORE_COND_RESULT_SUCCESS;
     }
+#ifdef DEBUG
+    if (void (*register_hook)() = qore_cond_wait_register_hook.load()) {
+        register_hook();
+    }
+#endif
     if (thread_list.registerCondWait(tid, &cond, m, qore_cancel_limits_only())) {
         if (xsink) {
             xsink->raiseErrnoException("THREAD-CREATION-FAILURE", errno, "%s: cannot start the condition waker "
@@ -9590,6 +9742,9 @@ int qore_cond_wait_cancellable(QoreCondition& cond, pthread_mutex_t* m, int64 ti
             return QORE_COND_RESULT_INTERRUPTED;
         }
         // without an exception sink the failure cannot be reported: the wait is not a cancellation point
+        if (before_block && before_block(before_block_arg)) {
+            return QORE_COND_RESULT_SUCCESS;
+        }
         return cond.wait2(m, timeout_ms) ? QORE_COND_RESULT_TIMEOUT : QORE_COND_RESULT_SUCCESS;
     }
     // a request made after the registration: either this check sees it, or the canceller sees the registration and
@@ -9597,6 +9752,12 @@ int qore_cond_wait_cancellable(QoreCondition& cond, pthread_mutex_t* m, int64 ti
     if (qore_check_cancel(xsink, operation)) {
         thread_list.unregisterCondWait(tid, m);
         return QORE_COND_RESULT_INTERRUPTED;
+    }
+    // the caller's own condition, made with the same ordering: a thread that sets what it reads and then wakes this
+    // one either is seen here, or sees the registration
+    if (before_block && before_block(before_block_arg)) {
+        thread_list.unregisterCondWait(tid, m);
+        return QORE_COND_RESULT_SUCCESS;
     }
 #ifdef DEBUG
     void (*hook)() = qore_cond_wait_window_hook.load();
@@ -9615,6 +9776,7 @@ int qore_cond_wait_cancellable(QoreCondition& cond, pthread_mutex_t* m, int64 ti
 
 #ifdef DEBUG
 std::atomic<void (*)()> qore_cond_wait_window_hook{nullptr};
+std::atomic<void (*)()> qore_cond_wait_register_hook{nullptr};
 #endif
 
 void QoreThreadList::clearCancel(int tid) {

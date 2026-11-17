@@ -61,12 +61,20 @@ protected:
         FLOAT,
         //! the lvalue is assigned an integer value, which its type must accept
         INT,
+        //! *= with a date operand: the lvalue is assigned a date value, which its type must accept; the result
+        //! type is decided at runtime (a softint lvalue converts the date)
+        DATE,
+        //! /= on a date lvalue: the lvalue is assigned the quotient, an integer, float or number value and never a
+        //! date, which its type must accept; the result has the lvalue's type (a softdate lvalue converts it)
+        DATE_QUOTIENT,
         //! the type is not known well enough; the operation is decided at runtime
         GENERIC,
     };
 
     //! returns how the operator treats the given lvalue type with an operand of the given type
-    DLLLOCAL static lvalue_e getLValueKind(const QoreTypeInfo* lti, const QoreTypeInfo* rti) {
+    /** @param divide true for /=, false for *=
+    */
+    DLLLOCAL static lvalue_e getLValueKind(const QoreTypeInfo* lti, const QoreTypeInfo* rti, bool divide) {
         // a value of a type parameter has its bound, or a type known only at run time (qore#5774)
         if (const QoreTypeInfo* src = QoreTypeInfo::getTypeParameterSourceType(lti)) {
             lti = src;
@@ -74,13 +82,14 @@ protected:
         if (const QoreTypeInfo* src = QoreTypeInfo::getTypeParameterSourceType(rti)) {
             rti = src;
         }
-        // a date operand gives a relative date, as the * operator does (qore#6109): a date lvalue keeps its type, and
-        // the product is assigned to any other lvalue, whose type decides at runtime
+        // a date operand of *= gives a relative date, as the * operator does (qore#6109): a date lvalue keeps its
+        // type, and the product is assigned to any other lvalue, whose type must accept a date; /= has no date case:
+        // the quotient of a date lvalue is an integer, float or number value (qore#6103)
         if (QoreTypeInfo::isType(lti, NT_DATE)) {
-            return lvalue_e::KEEP;
+            return divide ? lvalue_e::DATE_QUOTIENT : lvalue_e::KEEP;
         }
         if (QoreTypeInfo::isType(rti, NT_DATE)) {
-            return lvalue_e::GENERIC;
+            return divide ? lvalue_e::GENERIC : lvalue_e::DATE;
         }
         if (QoreTypeInfo::isType(lti, NT_NUMBER)) {
             return lvalue_e::KEEP;
@@ -107,6 +116,40 @@ public:
 
     DLLLOCAL virtual QoreOperatorNode* copyBackground(ExceptionSink *xsink) const {
         return copyBackgroundExplicit<QoreMultiplyEqualsOperatorNode>(xsink);
+    }
+
+    //! raises a parse error if the lvalue's type accepts none of the values that /= can give a date lvalue
+    /** the quotient is a number for a number operand, a float for a float operand, an integer for an operand of
+        another single type, and one of these for an operand whose type is not known (qore#6103)
+    */
+    DLLLOCAL int checkDateQuotient(const QoreTypeInfo* rti, const char* name) const {
+        if (const QoreTypeInfo* src = QoreTypeInfo::getTypeParameterSourceType(rti)) {
+            rti = src;
+        }
+        if (QoreTypeInfo::isType(rti, NT_NUMBER)) {
+            return check_lvalue_accepts_result(loc, ti, name, {numberTypeInfo}, "a number value");
+        }
+        if (QoreTypeInfo::isType(rti, NT_FLOAT)) {
+            return check_lvalue_accepts_result(loc, ti, name, {floatTypeInfo}, "a float value");
+        }
+        if (QoreTypeInfo::returnsSingle(rti)) {
+            return check_lvalue_accepts_result(loc, ti, name, {bigIntTypeInfo}, "an integer value");
+        }
+        return check_lvalue_accepts_result(loc, ti, name, {bigIntTypeInfo, floatTypeInfo, numberTypeInfo},
+            "an integer, float, or number value");
+    }
+
+    //! raises a parse error if the lvalue's type accepts none of the values that the operator can assign it
+    /** for an lvalue whose type is not a single type (ex: a union): /= assigns an integer, float or number value,
+        and *= one of these or a date (qore#6103)
+    */
+    DLLLOCAL int checkGenericResult(bool divide, const char* name) const {
+        if (divide) {
+            return check_lvalue_accepts_result(loc, ti, name, {bigIntTypeInfo, floatTypeInfo, numberTypeInfo},
+                "an integer, float, or number value");
+        }
+        return check_lvalue_accepts_result(loc, ti, name,
+            {bigIntTypeInfo, floatTypeInfo, numberTypeInfo, dateTypeInfo}, "an integer, float, number, or date value");
     }
 
     DLLLOCAL int parseInitIntern(const char* name, QoreParseContext& parse_context) {
@@ -136,8 +179,15 @@ public:
         // refuses can never succeed on *T; the error names the declared type, and the result type and the runtime
         // operation follow the declared type
         const QoreTypeInfo* plain_ti = get_or_nothing_base_type(ti);
-        lvalue_e kind = getLValueKind(ti, rightTypeInfo);
-        lvalue_e check_kind = plain_ti == ti ? kind : getLValueKind(plain_ti, rightTypeInfo);
+        const bool divide = name[0] == '/';
+        lvalue_e kind = getLValueKind(ti, rightTypeInfo, divide);
+        // /= divides by a date operand as by an integer: the lvalue's type is checked as for an integer operand,
+        // while the result type stays as it was (qore#6103)
+        const bool date_divisor = divide && QoreTypeInfo::isType(rightTypeInfo, NT_DATE);
+        const QoreTypeInfo* check_rti = date_divisor ? bigIntTypeInfo : rightTypeInfo;
+        lvalue_e check_kind = (plain_ti == ti && check_rti == rightTypeInfo)
+            ? kind
+            : getLValueKind(plain_ti, check_rti, divide);
 
         switch (check_kind) {
             case lvalue_e::NUMBER:
@@ -151,12 +201,34 @@ public:
                 }
                 break;
             case lvalue_e::INT:
-                if (check_lvalue_int(loc, ti, name) && !err) {
+                // the integer quotient of a date divisor is refused only if the lvalue's type refuses it both as
+                // check_lvalue_int() does for an integer divisor and as an assignment does, which a soft type
+                // accepts by converting it (ex: softstring); the result type is not changed for it
+                if ((date_divisor
+                        ? (!QoreTypeInfo::parseAcceptsReturns(ti, NT_INT)
+                            && check_lvalue_accepts_result(loc, ti, name, {bigIntTypeInfo}, "an integer value"))
+                        : check_lvalue_int(loc, ti, name))
+                        && !err) {
+                    err = -1;
+                }
+                break;
+            // a result that the lvalue's type can never hold is a parse error, as for an assignment (qore#6103)
+            case lvalue_e::DATE:
+                if (check_lvalue_accepts_result(loc, ti, name, {dateTypeInfo}, "a date value") && !err) {
+                    err = -1;
+                }
+                break;
+            case lvalue_e::DATE_QUOTIENT:
+                if (checkDateQuotient(check_rti, name) && !err) {
+                    err = -1;
+                }
+                break;
+            case lvalue_e::GENERIC:
+                if (checkGenericResult(divide, name) && !err) {
                     err = -1;
                 }
                 break;
             case lvalue_e::KEEP:
-            case lvalue_e::GENERIC:
                 break;
         }
 
@@ -170,9 +242,11 @@ public:
             case lvalue_e::INT:
                 ti = bigIntTypeInfo;
                 break;
+            case lvalue_e::DATE:
             case lvalue_e::GENERIC:
                 ti = nullptr;
                 break;
+            case lvalue_e::DATE_QUOTIENT:
             case lvalue_e::KEEP:
                 break;
         }

@@ -17,8 +17,9 @@
 
 #! Regression test: as ClosureLocalExitRelease.qtest, with the array form of native code's exit release
 /** QORE_JIT_CLEANUP_PHI_BUDGET=1 makes native code release the locals of a function at its exits with
-    qore_rt_cleanup_run_allocas() and an array of their caches and variables, where a closure-bound variable that the
-    frame instantiated is tagged in bits 0 and 1 (see ClosureLocalExitRelease.qtest)
+    qore_rt_cleanup_run_frame() and a table of their caches and variables, where a closure-bound variable that the
+    frame instantiated is tagged with QORE_FRAME_ENTRY_LOCAL and QORE_FRAME_ENTRY_OBJECT (see
+    ClosureLocalExitRelease.qtest)
 */
 class ClosureLocalExitReleaseArrayTest inherits ExecModeOutputTest {
     private {

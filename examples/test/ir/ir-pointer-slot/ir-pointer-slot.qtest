@@ -1,0 +1,91 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - the native checks and the partial removes run in child processes
+# test-platform: macos - addresses of heap objects in IR value slots, which depend on the allocator
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../TestInterpreter.qm
+%requires ../../ExecModeHarness.qm
+%exec-class IrPointerSlotTest
+
+#! the addresses of the objects that the IR interpreter keeps in value slots (issue #6345)
+/** The IR interpreter keeps the address of an iterator, of an exception that it sets aside, and of the state of a
+    context statement or a foreach over a reference in a value slot, shifted right by the bits that the object's
+    alignment leaves clear.  It dropped 4 bits, but an allocator aligns a small object only as its size requires:
+    jemalloc, which libqore links on musl, gives an 8-byte ExceptionSink an address that is a multiple of 8 only, so the
+    interpreter refused it, and a remove whose selector raised after an earlier selector removed nothing on musl.
+
+    The native helper checks the encoding with heap addresses that are multiples of 8 but not of 16 and with given
+    addresses (deterministic on every platform); the language checks run a partial remove of a list in every
+    execution mode (on musl, libqore links jemalloc), and once more on glibc Linux with jemalloc preloaded where it is
+    installed.
+*/
+class IrPointerSlotTest inherits QUnit::Test {
+    private {
+        string binary = TestInterpreter::qore_interpreter();
+        # native tools belong beside the running interpreter (a compiled test has none: then beside the interpreter
+        # that it runs)
+        string tools_dir = dirname(TestInterpreter::running_compiled() ? TestInterpreter::qore_interpreter()
+            : TestInterpreter::own_executable());
+        string source = get_script_dir() + "/ir-pointer-slot.q";
+
+        #! the output of the partial remove
+        const Expected = "caught SEL-ERROR: [11, 12, 13]\n";
+
+        #! where jemalloc can be preloaded
+        const JemallocPaths = (
+            "/usr/lib/x86_64-linux-gnu/libjemalloc.so.2",
+            "/usr/lib/aarch64-linux-gnu/libjemalloc.so.2",
+            "/usr/lib64/libjemalloc.so.2",
+        );
+    }
+
+    constructor() : QUnit::Test("IR pointer slot", "1.0", \ARGV) {
+        addTestCase("native encoding of the addresses", \native());
+        addTestCase("a partial remove in all execution modes", \modes());
+        addTestCase("a partial remove with jemalloc", \jemalloc());
+        set_return_value(main());
+    }
+
+    private native() {
+        string helper = ENV.QORE_IR_POINTER_SLOT_TEST ?? tools_dir + "/qore-ir-pointer-slot-test";
+        if (!is_file(helper)) {
+            testSkip("native IR pointer slot test executable is not available");
+        }
+        auto result = ExecModeHarness::run_command(quote(helper));
+        assertEq(0, result.rc, result.out);
+        assertRegex("^PASS: [0-9]+ IR pointer slot checks\n$", result.stdout, result.out);
+    }
+
+    private modes() {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            assertEq(Expected, ExecModeHarness::run(quote(binary) + " -b --exec-mode=" + mode + " " + quote(source)),
+                mode);
+        }
+    }
+
+    private jemalloc() {
+        if (PlatformOS != "Linux") {
+            testSkip("jemalloc is preloaded on Linux only");
+        }
+        *string lib;
+        foreach string path in (JemallocPaths) {
+            if (is_file(path)) {
+                lib = path;
+                break;
+            }
+        }
+        if (!lib) {
+            testSkip("jemalloc is not installed");
+        }
+        assertEq(Expected, ExecModeHarness::run(sprintf("LD_PRELOAD=%s %s -b --exec-mode=ir %s", quote(lib),
+            quote(binary), quote(source))), "ir with jemalloc");
+    }
+
+    private static string quote(string str) {
+        return "'" + replace(str, "'", "'\\''") + "'";
+    }
+}

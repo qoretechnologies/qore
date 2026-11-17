@@ -2702,6 +2702,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             BlockCleanupEntry ref_foreach_entry;
             ref_foreach_entry.type = BlockCleanupEntry::RefForeach;
             ref_foreach_entry.ref_foreach_state = state;
+            ref_foreach_entry.ref_foreach_exception_target = getCurrentExceptionTarget();
             ref_foreach_entry.loc = stmt->loc;
             pushBlockCleanup(ref_foreach_entry);
 
@@ -2882,14 +2883,21 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             builder.createRefForeachRecord(state, break_modified, stmt->loc);
             builder.createScopeExit(try_scope_id, false);
             QoreIRValue fill_true = builder.createConstInt(1, stmt->loc)->result;
-            builder.createRefForeachFinalize(state, fill_true, stmt->loc);
+            // the write-back assigns the list to the lvalue, which can refuse it, and releases the list it replaces,
+            // which can run a destructor: an exception goes to the handler of an enclosing try block, as in the AST
+            // interpreter, where the statement raises it (ForEachStatement::execRef(), qore#6197); the handler of the
+            // loop was popped above
+            builder.createRefForeachFinalize(state, fill_true, stmt->loc)->exception_target
+                = getCurrentExceptionTarget();
             builder.createBranch(merge_block);
 
             // Exit normal: scope exit, finalize without fill remaining
             builder.setBlock(exit_normal_block);
             builder.createScopeExit(try_scope_id, false);
             QoreIRValue fill_false = builder.createConstInt(0, stmt->loc)->result;
-            builder.createRefForeachFinalize(state, fill_false, stmt->loc);
+            // an exception raised by the write-back goes to the handler of an enclosing try block (see above)
+            builder.createRefForeachFinalize(state, fill_false, stmt->loc)->exception_target
+                = getCurrentExceptionTarget();
             builder.createBranch(merge_block);
 
             // Catch: landing pad, cleanup without write-back, rethrow to outer handler
@@ -3213,12 +3221,22 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
                         op = static_cast<const QoreIRInvokeInstruction*>(inst.get())
                             ->invoke_opcode;
                     }
+                    // a context statement and a find expression evaluate their expressions (the data, where and
+                    // sort expressions of a context statement, the source, find and where expressions of a find
+                    // expression) as AST at run time, where a $# in them reads the thread's implicit element
+                    // (qore#6341)
                     if (getOpcodeIsCallInvoke(static_cast<int>(op))
                             || op == QoreIROpcode::InvokeMethodDirect
                             || op == QoreIROpcode::DotEvalMethodDirect
                             || op == QoreIROpcode::InvokeDotEvalMethodDirect
                             || op == QoreIROpcode::LoadImplicitElement
-                            || op == QoreIROpcode::OnBlockExit) {
+                            || op == QoreIROpcode::OnBlockExit
+                            || (inst->opcode == QoreIROpcode::Context
+                                && static_cast<const QoreIRContextInstruction*>(inst.get())
+                                    ->reads_implicit_element)
+                            || (inst->opcode == QoreIROpcode::Find
+                                && static_cast<const QoreIRFindInstruction*>(inst.get())
+                                    ->reads_implicit_element)) {
                         ++observers;
                     }
                 }
@@ -3430,19 +3448,28 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
                 if (!list_val.isValid()) {
                     return false;
                 }
-                msg = builder.createExprOp(QoreIROpcode::Sprintf, message, {list_val},
-                    stmt->loc)->result;
+                // the formatting can raise an exception (ex: ENCODING-CONVERSION-ERROR for an argument that cannot
+                // be converted to the format's encoding), which goes to the handler of an enclosing try block, as
+                // in the AST interpreter (qore#6197)
+                auto* sprintf_inst = builder.createExprOp(QoreIROpcode::Sprintf, message, {list_val}, stmt->loc);
+                sprintf_inst->exception_target = getCurrentExceptionTarget();
+                msg = sprintf_inst->result;
             } else {
                 // Single message expression — convert to string for the error desc
                 QoreIRValue raw_msg = lowerExpression(message, error);
                 if (!raw_msg.isValid()) {
                     return false;
                 }
-                // Wrap in sprintf("%s", val) to ensure string conversion
-                QoreIRValue fmt = builder.createConstString("%s", stmt->loc)->result;
-                QoreIRValue sprintf_list = builder.createMakeList({fmt, raw_msg}, stmt->loc)->result;
-                msg = builder.createExprOp(QoreIROpcode::Sprintf, QoreValue(),
-                    {sprintf_list}, stmt->loc)->result;
+                // the value is given to Sprintf as it is, which makes the message with
+                // AssertStatement::makeMessage(), as the AST interpreter does: a string keeps its encoding (a "%s"
+                // format converted it to the encoding of the format, which raised ENCODING-CONVERSION-ERROR for a
+                // string that has no representation in it), a list is formatted as the arguments of sprintf(), and
+                // any other value is converted with getAsString(); an exception raised by the formatting goes to the
+                // handler of an enclosing try block (see above)
+                auto* sprintf_inst = builder.createExprOp(QoreIROpcode::Sprintf, QoreValue(), {raw_msg},
+                    stmt->loc);
+                sprintf_inst->exception_target = getCurrentExceptionTarget();
+                msg = sprintf_inst->result;
             }
         } else {
             msg = builder.createConstString("assertion failed", stmt->loc)->result;
@@ -3489,6 +3516,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         }
         auto* init_inst = builder.createContext(name, context_stmt->exp,
             context_stmt->where_exp, sort_exp, sort_type, stmt->loc);
+        init_inst->reads_implicit_element = context_stmt->reads_implicit_element;
         if (!exception_stack.empty()) {
             init_inst->exception_target = exception_stack.back();
         }
@@ -5295,7 +5323,9 @@ bool QoreIRLowering::emitBlockCleanups(size_t target_depth, std::string& error, 
                 // Finalize ref foreach: write back to reference (with or without fill remaining)
                 QoreIRValue fill = builder.createConstInt(
                     (flags & CF_FILL_REMAINING) ? 1 : 0, entry.loc)->result;
-                builder.createRefForeachFinalize(entry.ref_foreach_state, fill, entry.loc);
+                // an exception raised by the write-back goes to the handler outside the statement (qore#6197)
+                builder.createRefForeachFinalize(entry.ref_foreach_state, fill, entry.loc)->exception_target
+                    = entry.ref_foreach_exception_target;
                 break;
             }
             case BlockCleanupEntry::Context: {
@@ -7170,6 +7200,7 @@ QoreIRValue QoreIRLowering::lowerExpressionImpl(const QoreValue& expr, std::stri
     if (auto* find_node = dynamic_cast<const FindNode*>(node)) {
         auto* inst = builder.createFind(find_node->exp, find_node->find_exp, find_node->where,
                 static_cast<int32_t>(find_node->getMode()), find_node->loc);
+        inst->reads_implicit_element = find_node->reads_implicit_element;
         if (!exception_stack.empty()) {
             inst->exception_target = exception_stack.back();
         }
@@ -9250,6 +9281,20 @@ QoreIRValue QoreIRLowering::lowerAssignment(const QoreValue& expr, std::string& 
     return right;
 }
 
+//! Returns true if \a ti is the type of an enum lvalue, which holds only the members of its enum
+/** The parser gives an enum lvalue of a numeric base type the integer-specialized operators (ex:
+    QoreIntPlusEqualsOperatorNode, QoreIntPreIncrementOperatorNode), as it can be assigned an integer
+    (check_lvalue_int(), check_lvalue_int_float_number()), but the value they compute is a plain integer or float,
+    which the enum type refuses: the AST interpreter raises RUNTIME-TYPE-ERROR with the operator's description from
+    LValueHelper and leaves the lvalue unchanged.  The fast paths that compute the value and store it themselves (the
+    fused local int instructions IncrementLocalInt and AddAssignLocalInt, a load, the operation and a store) do not
+    make that check, so an enum lvalue takes the lvalue path, which makes the operation with LValueHelper as the AST
+    interpreter does (qore#6197)
+*/
+static bool qore_ir_is_enum_lvalue_type(const QoreTypeInfo* ti) {
+    return QoreTypeInfo::getReturnEnum(ti) != nullptr;
+}
+
 // documented in QoreIRLowering.h
 QoreIRValue QoreIRLowering::compoundAssignmentResult(bool needs_rv, const VarRefNode* var,
         const QoreValue& left, QoreIRValue result, std::string& error, const char* context) {
@@ -9300,7 +9345,9 @@ QoreIRValue QoreIRLowering::lowerPlusEquals(const QoreValue& expr, std::string& 
                 // a timeout lvalue adds a date as milliseconds, and an or-nothing lvalue (*T) with no value takes
                 // the default value of T, which the value alone does not show
                 || get_or_nothing_base_type(ti) != ti
-                || QoreTypeInfo::equal(ti, timeoutTypeInfo)) {
+                || QoreTypeInfo::equal(ti, timeoutTypeInfo)
+                // an enum lvalue refuses the result (see qore_ir_is_enum_lvalue_type())
+                || qore_ir_is_enum_lvalue_type(ti)) {
             left_var = nullptr;  // Force lvalue path
         }
     }
@@ -9325,8 +9372,10 @@ QoreIRValue QoreIRLowering::lowerPlusEquals(const QoreValue& expr, std::string& 
             auto* inst = builder.createAddAssignLocalInt(
                 left_var->ref.id, right_var->ref.id, op->loc);
             // the instruction reads the source as a load of it reads it: a source of no type can hold a reference,
-            // whose read raises an exception if the referenced lvalue is gone
-            setReferenceLoadExceptionTarget(inst, right_var->ref.id->getTypeInfo());
+            // whose read raises an exception if the referenced lvalue is gone; and the change of the target, which
+            // the JIT makes with a runtime helper for a variable on the runtime stack, raises an exception if the
+            // variable refuses it, which goes to the handler of an enclosing try block (qore#6197)
+            inst->exception_target = getCurrentExceptionTarget();
             if (parse_context) {
                 parse_context->markLocalAssignment(left_var->ref.id, true,
                     left_var->getTypeInfo());
@@ -9337,6 +9386,9 @@ QoreIRValue QoreIRLowering::lowerPlusEquals(const QoreValue& expr, std::string& 
             // local += const → IncrementLocalInt
             auto* inst = builder.createIncrementLocalInt(
                 left_var->ref.id, right_expr.getAsBigInt(), op->loc);
+            // an exception raised by the change goes to the handler of an enclosing try block (see
+            // QoreIRIncrementLocalIntInstruction)
+            inst->exception_target = getCurrentExceptionTarget();
             if (parse_context) {
                 parse_context->markLocalAssignment(left_var->ref.id, true,
                     left_var->getTypeInfo());
@@ -9552,7 +9604,9 @@ QoreIRValue QoreIRLowering::lowerMinusEquals(const QoreValue& expr, std::string&
                 // a timeout lvalue subtracts a date as milliseconds, and an or-nothing lvalue (*T) with no value
                 // takes the default value of T, which the value alone does not show
                 || get_or_nothing_base_type(ti) != ti
-                || QoreTypeInfo::equal(ti, timeoutTypeInfo)) {
+                || QoreTypeInfo::equal(ti, timeoutTypeInfo)
+                // an enum lvalue refuses the result (see qore_ir_is_enum_lvalue_type())
+                || qore_ir_is_enum_lvalue_type(ti)) {
             left_var = nullptr;
         }
     }
@@ -9566,6 +9620,9 @@ QoreIRValue QoreIRLowering::lowerMinusEquals(const QoreValue& expr, std::string&
             ? amount : -amount;
         auto* inst = builder.createIncrementLocalInt(
             left_var->ref.id, delta, op->loc);
+        // an exception raised by the change goes to the handler of an enclosing try block (see
+        // QoreIRIncrementLocalIntInstruction)
+        inst->exception_target = getCurrentExceptionTarget();
         if (parse_context) {
             parse_context->markLocalAssignment(left_var->ref.id, true,
                 left_var->getTypeInfo());
@@ -9783,7 +9840,9 @@ QoreIRValue QoreIRLowering::lowerMultiplyEquals(const QoreValue& expr, std::stri
         if (QoreTypeInfo::getBaseType(ti) == NT_FLOAT
                 || QoreTypeInfo::getBaseType(ti) == NT_NUMBER
                 || QoreTypeInfo::isReference(ti)
-                || qore_ir_multiplicative_store_may_fail(ti, op->getRight())) {
+                || qore_ir_multiplicative_store_may_fail(ti, op->getRight())
+                // an enum lvalue refuses the result (see qore_ir_is_enum_lvalue_type())
+                || qore_ir_is_enum_lvalue_type(ti)) {
             left_var = nullptr;
         }
     }
@@ -9901,7 +9960,9 @@ QoreIRValue QoreIRLowering::lowerDivideEquals(const QoreValue& expr, std::string
         if (QoreTypeInfo::getBaseType(ti) == NT_FLOAT
                 || QoreTypeInfo::getBaseType(ti) == NT_NUMBER
                 || QoreTypeInfo::isReference(ti)
-                || qore_ir_multiplicative_store_may_fail(ti, op->getRight())) {
+                || qore_ir_multiplicative_store_may_fail(ti, op->getRight())
+                // an enum lvalue refuses the result (see qore_ir_is_enum_lvalue_type())
+                || qore_ir_is_enum_lvalue_type(ti)) {
             left_var = nullptr;
         }
     }
@@ -10004,9 +10065,11 @@ QoreIRValue QoreIRLowering::lowerModuloEquals(const QoreValue& expr, std::string
     bool force_int = dynamic_cast<const QoreBinaryIntLValueOperatorNode*>(node) != nullptr;
     const AbstractQoreNode* left_node = op->getLeft().getInternalNode();
     auto* left_var = dynamic_cast<const VarRefNode*>(left_node);
-    // Reference-typed locals need lvalue semantics for write-through
+    // Reference-typed locals need lvalue semantics for write-through; an enum lvalue refuses the integer result
+    // (see qore_ir_is_enum_lvalue_type())
     if (left_var && left_var->getTypeInfo()
-            && QoreTypeInfo::isReference(left_var->getTypeInfo())) {
+            && (QoreTypeInfo::isReference(left_var->getTypeInfo())
+                || qore_ir_is_enum_lvalue_type(left_var->getTypeInfo()))) {
         left_var = nullptr;
     }
     QoreValue right_expr(op->getRight());
@@ -10082,9 +10145,11 @@ QoreIRValue QoreIRLowering::lowerAndEquals(const QoreValue& expr, std::string& e
     bool force_int = dynamic_cast<const QoreBinaryIntLValueOperatorNode*>(node) != nullptr;
     const AbstractQoreNode* left_node = op->getLeft().getInternalNode();
     auto* left_var = dynamic_cast<const VarRefNode*>(left_node);
-    // Reference-typed locals need lvalue semantics for write-through
+    // Reference-typed locals need lvalue semantics for write-through; an enum lvalue refuses the integer result
+    // (see qore_ir_is_enum_lvalue_type())
     if (left_var && left_var->getTypeInfo()
-            && QoreTypeInfo::isReference(left_var->getTypeInfo())) {
+            && (QoreTypeInfo::isReference(left_var->getTypeInfo())
+                || qore_ir_is_enum_lvalue_type(left_var->getTypeInfo()))) {
         left_var = nullptr;
     }
     QoreValue right_expr(op->getRight());
@@ -10160,9 +10225,11 @@ QoreIRValue QoreIRLowering::lowerOrEquals(const QoreValue& expr, std::string& er
     bool force_int = dynamic_cast<const QoreBinaryIntLValueOperatorNode*>(node) != nullptr;
     const AbstractQoreNode* left_node = op->getLeft().getInternalNode();
     auto* left_var = dynamic_cast<const VarRefNode*>(left_node);
-    // Reference-typed locals need lvalue semantics for write-through
+    // Reference-typed locals need lvalue semantics for write-through; an enum lvalue refuses the integer result
+    // (see qore_ir_is_enum_lvalue_type())
     if (left_var && left_var->getTypeInfo()
-            && QoreTypeInfo::isReference(left_var->getTypeInfo())) {
+            && (QoreTypeInfo::isReference(left_var->getTypeInfo())
+                || qore_ir_is_enum_lvalue_type(left_var->getTypeInfo()))) {
         left_var = nullptr;
     }
     QoreValue right_expr(op->getRight());
@@ -10238,9 +10305,11 @@ QoreIRValue QoreIRLowering::lowerXorEquals(const QoreValue& expr, std::string& e
     bool force_int = dynamic_cast<const QoreBinaryIntLValueOperatorNode*>(node) != nullptr;
     const AbstractQoreNode* left_node = op->getLeft().getInternalNode();
     auto* left_var = dynamic_cast<const VarRefNode*>(left_node);
-    // Reference-typed locals need lvalue semantics for write-through
+    // Reference-typed locals need lvalue semantics for write-through; an enum lvalue refuses the integer result
+    // (see qore_ir_is_enum_lvalue_type())
     if (left_var && left_var->getTypeInfo()
-            && QoreTypeInfo::isReference(left_var->getTypeInfo())) {
+            && (QoreTypeInfo::isReference(left_var->getTypeInfo())
+                || qore_ir_is_enum_lvalue_type(left_var->getTypeInfo()))) {
         left_var = nullptr;
     }
     QoreValue right_expr(op->getRight());
@@ -10301,19 +10370,54 @@ QoreIRValue QoreIRLowering::lowerXorEquals(const QoreValue& expr, std::string& e
     return result;
 }
 
+//! Returns true if ++ and -- on an lvalue of the given parse type can raise an error that names the operator
+/** The operators raise RUNTIME-TYPE-ERROR with the operator's name (<tt><++ (post) operator></tt>) when the type of
+    the lvalue refuses the int, float or number result (LValueHelper::makeIntQv(), makeFloat() and the store of a
+    converted result); the plain int, float and number types (also soft and or-nothing) accept every result.  Any
+    other type can refuse it (an enum type), and so can an lvalue whose parse type is unknown or untyped: it can be an
+    element or member whose container gives it a type (a member of a hashdecl or an object read through a variable
+    of no type) or refer to a typed lvalue (an untyped reference parameter)
+*/
+static bool qore_ir_incdec_may_name_operator(const QoreTypeInfo* ti) {
+    return ti != bigIntTypeInfo && ti != bigIntOrNothingTypeInfo && ti != softBigIntTypeInfo
+        && ti != softBigIntOrNothingTypeInfo && ti != floatTypeInfo && ti != floatOrNothingTypeInfo
+        && ti != softFloatTypeInfo && ti != softFloatOrNothingTypeInfo && ti != numberTypeInfo
+        && ti != numberOrNothingTypeInfo && ti != softNumberTypeInfo && ti != softNumberOrNothingTypeInfo;
+}
+
+//! Returns the declared type of an lvalue of ++ or --, or its parse type
+/** A member that a method names without "self." and a static class variable have the declared type of the member or
+    variable, which getExprTypeInfo() does not give
+*/
+static const QoreTypeInfo* qore_ir_incdec_lvalue_type(const QoreValue& lvexp) {
+    const AbstractQoreNode* node = lvexp.getInternalNode();
+    if (auto* self_ref = dynamic_cast<const SelfVarrefNode*>(node)) {
+        return self_ref->getMemberTypeInfo();
+    }
+    if (auto* static_ref = dynamic_cast<const StaticClassVarRefNode*>(node)) {
+        return static_ref->vi.getTypeInfo();
+    }
+    return getExprTypeInfo(lvexp);
+}
+
 // documented in QoreIRLowering.h
 QoreIRValue QoreIRLowering::lowerPreIncDec(const QoreValue& expr, const QoreValue& lvexp, bool int_op, bool increment,
-        const QoreProgramLocation* loc, std::string& error) {
+        bool post, const QoreProgramLocation* loc, std::string& error) {
     const char* int_context = increment ? "pre-increment-int" : "pre-decrement-int";
     QoreIROpcode int_opcode = increment ? QoreIROpcode::AddAssignInt : QoreIROpcode::SubAssignInt;
     // Typed int pre-increment / pre-decrement on simple VarRef (exclude references — need lvalue write-through)
     if (int_op) {
         auto* var = dynamic_cast<const VarRefNode*>(lvexp.getInternalNode());
+        // an enum lvalue refuses the result and takes the lvalue path (see qore_ir_is_enum_lvalue_type())
         if (var && var->getType() != VT_IMMEDIATE && !isRangeLValue(lvexp)
-                && !QoreTypeInfo::isReference(var->getTypeInfo())) {
+                && !QoreTypeInfo::isReference(var->getTypeInfo())
+                && !qore_ir_is_enum_lvalue_type(var->getTypeInfo())) {
             // Fused path: emit single IncrementLocalInt (delta +1 or -1) for lvstack and closure-use locals.
             if (isLocalOrClosureVar(var)) {
                 auto* inst = builder.createIncrementLocalInt(var->ref.id, increment ? 1 : -1, loc);
+                // an exception raised by the change goes to the handler of an enclosing try block (see
+                // QoreIRIncrementLocalIntInstruction)
+                inst->exception_target = getCurrentExceptionTarget();
                 if (parse_context) {
                     parse_context->markLocalAssignment(var->ref.id, true,
                         var->getTypeInfo());
@@ -10348,9 +10452,19 @@ QoreIRValue QoreIRLowering::lowerPreIncDec(const QoreValue& expr, const QoreValu
     // every other lvalue, including a hash key, takes the lvalue path, which changes the lvalue in one operation;
     // the fixed-aggregate scalar replacement removes the path of a key of a hash that a local holds (qore#6199)
     {
+        // an unused post operator changes the lvalue as the pre operator does, but its error names the post operator,
+        // as the AST interpreter's does: it takes the post operation where the lvalue's type can raise the error, with
+        // ref_rv = false, as its old value is unused and so the old value of a number is not copied, and the pre
+        // operation where the type cannot raise it
+        LVUnaryOp unary_op = increment ? LVUnaryOp::PreInc : LVUnaryOp::PreDec;
+        bool ref_rv = true;
+        if (post && qore_ir_incdec_may_name_operator(qore_ir_incdec_lvalue_type(lvexp))) {
+            unary_op = increment ? LVUnaryOp::PostInc : LVUnaryOp::PostDec;
+            ref_rv = false;
+        }
         QoreIRValue path_result = tryEmitLValuePathOp(QoreIROpcode::LValuePathUnary,
-            lvexp, nullptr, loc, error, AssignmentMode::Normal, LVCompoundOp::AddAssign,
-            increment ? LVUnaryOp::PreInc : LVUnaryOp::PreDec);
+            lvexp, nullptr, loc, error, AssignmentMode::Normal, LVCompoundOp::AddAssign, unary_op,
+            LVBinaryMutOp::Push, QoreValue(), ref_rv);
         if (path_result.isValid()) {
             return path_result;
         }
@@ -10376,7 +10490,7 @@ QoreIRValue QoreIRLowering::lowerPreIncrement(const QoreValue& expr, std::string
         return QoreIRValue();
     }
     return lowerPreIncDec(expr, lvexp, dynamic_cast<const QoreIntPreIncrementOperatorNode*>(node) != nullptr, true,
-        op->loc, error);
+        false, op->loc, error);
 }
 
 QoreIRValue QoreIRLowering::lowerPostIncrement(const QoreValue& expr, std::string& error) {
@@ -10399,17 +10513,19 @@ QoreIRValue QoreIRLowering::lowerPostIncrement(const QoreValue& expr, std::strin
     // an unused value (an expression statement, the update of a for loop) is the only difference from the
     // pre-increment: both change the lvalue the same way (LValueHelper::postIncrementBigInt() and
     // preIncrementBigInt(), and the float and number versions), so it is lowered as the pre-increment, with its fused
-    // paths (qore#6199)
+    // paths (qore#6199), except that an error names the post operator
     if (!base_op->needsReturnValue()) {
         return lowerPreIncDec(expr, lvexp, dynamic_cast<const QoreIntPostIncrementOperatorNode*>(node) != nullptr, true,
-            base_op->loc, error);
+            true, base_op->loc, error);
     }
     // Typed int post-increment on simple VarRef (exclude references — need lvalue write-through)
     if (dynamic_cast<const QoreIntPostIncrementOperatorNode*>(node)) {
         auto* var = dynamic_cast<const VarRefNode*>(lvexp.getInternalNode());
-        // a variable that other threads can change takes the lvalue path below; see isSharedVar()
+        // a variable that other threads can change takes the lvalue path below; see isSharedVar(); so does an enum
+        // lvalue, which refuses the result (see qore_ir_is_enum_lvalue_type())
         if (var && var->getType() != VT_IMMEDIATE && !isRangeLValue(lvexp)
-                && !QoreTypeInfo::isReference(var->getTypeInfo()) && !changesThroughLValue(var)) {
+                && !QoreTypeInfo::isReference(var->getTypeInfo()) && !changesThroughLValue(var)
+                && !qore_ir_is_enum_lvalue_type(var->getTypeInfo())) {
             QoreIRValue old_value = loadVarRef(var, error, "post-increment-int", lvexp);
             if (!old_value.isValid()) {
                 return QoreIRValue();
@@ -10465,7 +10581,7 @@ QoreIRValue QoreIRLowering::lowerPreDecrement(const QoreValue& expr, std::string
         return QoreIRValue();
     }
     return lowerPreIncDec(expr, lvexp, dynamic_cast<const QoreIntPreDecrementOperatorNode*>(node) != nullptr, false,
-        op->loc, error);
+        false, op->loc, error);
 }
 
 QoreIRValue QoreIRLowering::lowerPostDecrement(const QoreValue& expr, std::string& error) {
@@ -10488,17 +10604,19 @@ QoreIRValue QoreIRLowering::lowerPostDecrement(const QoreValue& expr, std::strin
     // an unused value (an expression statement, the update of a for loop) is the only difference from the
     // pre-decrement: both change the lvalue the same way (LValueHelper::postDecrementBigInt() and
     // preDecrementBigInt(), and the float and number versions), so it is lowered as the pre-decrement, with its fused
-    // paths (qore#6199)
+    // paths (qore#6199), except that an error names the post operator
     if (!base_op->needsReturnValue()) {
         return lowerPreIncDec(expr, lvexp, dynamic_cast<const QoreIntPostDecrementOperatorNode*>(node) != nullptr,
-            false, base_op->loc, error);
+            false, true, base_op->loc, error);
     }
     // Typed int post-decrement on simple VarRef (exclude references — need lvalue write-through)
     if (dynamic_cast<const QoreIntPostDecrementOperatorNode*>(node)) {
         auto* var = dynamic_cast<const VarRefNode*>(lvexp.getInternalNode());
-        // a variable that other threads can change takes the lvalue path below; see isSharedVar()
+        // a variable that other threads can change takes the lvalue path below; see isSharedVar(); so does an enum
+        // lvalue, which refuses the result (see qore_ir_is_enum_lvalue_type())
         if (var && var->getType() != VT_IMMEDIATE && !isRangeLValue(lvexp)
-                && !QoreTypeInfo::isReference(var->getTypeInfo()) && !changesThroughLValue(var)) {
+                && !QoreTypeInfo::isReference(var->getTypeInfo()) && !changesThroughLValue(var)
+                && !qore_ir_is_enum_lvalue_type(var->getTypeInfo())) {
             QoreIRValue old_value = loadVarRef(var, error, "post-decrement-int", lvexp);
             if (!old_value.isValid()) {
                 return QoreIRValue();
@@ -11234,9 +11352,11 @@ QoreIRValue QoreIRLowering::lowerShiftLeftEquals(const QoreValue& expr, std::str
 
     const AbstractQoreNode* left_node = op->getLeft().getInternalNode();
     auto* left_var = dynamic_cast<const VarRefNode*>(left_node);
-    // Reference-typed locals need lvalue semantics for write-through
+    // Reference-typed locals need lvalue semantics for write-through; an enum lvalue refuses the integer result
+    // (see qore_ir_is_enum_lvalue_type())
     if (left_var && left_var->getTypeInfo()
-            && QoreTypeInfo::isReference(left_var->getTypeInfo())) {
+            && (QoreTypeInfo::isReference(left_var->getTypeInfo())
+                || qore_ir_is_enum_lvalue_type(left_var->getTypeInfo()))) {
         left_var = nullptr;
     }
     QoreValue right_expr(op->getRight());
@@ -11304,9 +11424,11 @@ QoreIRValue QoreIRLowering::lowerShiftRightEquals(const QoreValue& expr, std::st
 
     const AbstractQoreNode* left_node = op->getLeft().getInternalNode();
     auto* left_var = dynamic_cast<const VarRefNode*>(left_node);
-    // Reference-typed locals need lvalue semantics for write-through
+    // Reference-typed locals need lvalue semantics for write-through; an enum lvalue refuses the integer result
+    // (see qore_ir_is_enum_lvalue_type())
     if (left_var && left_var->getTypeInfo()
-            && QoreTypeInfo::isReference(left_var->getTypeInfo())) {
+            && (QoreTypeInfo::isReference(left_var->getTypeInfo())
+                || qore_ir_is_enum_lvalue_type(left_var->getTypeInfo()))) {
         left_var = nullptr;
     }
     QoreValue right_expr(op->getRight());
@@ -11766,8 +11888,9 @@ bool QoreIRLowering::listSelectorSeqAlwaysApplies(const QoreValue& expr) const {
 QoreIRValue QoreIRLowering::lowerListSelectorSteps(const QoreSquareBracketsOperatorNode* op, QoreIRValue seq,
         const std::vector<QoreValue>& selectors, std::string& error) {
     assert(!selectors.empty());
-    const int64_t string_index_char = op->hasStringIndexChar()
-        ? static_cast<int64_t>(QoreIRListSelectorFlag::StringIndexChar) : 0;
+    // %no-string-index-char is refused under %modern, so lowered code always has string index chars
+    assert(op->hasStringIndexChar());
+    const int64_t string_index_char = static_cast<int64_t>(QoreIRListSelectorFlag::StringIndexChar);
 
     // a sequence that is always a list, a string or a binary object gets the selectors applied by the step that makes
     // the result; for any other sequence a Begin step makes the empty result first, or NOTHING if no selector applies
@@ -12224,15 +12347,11 @@ bool QoreIRLowering::getLazySelectorSource(const QoreValue& expr, LazySelectorSo
 }
 
 int64_t QoreIRLowering::selectorIteratorFlags(const LazySelectorSource& src) {
-    int64_t flags = 0;
-    if (src.op->hasStringIndexChar()) {
-        flags |= static_cast<int64_t>(QoreIRListSelectorFlag::StringIndexChar);
-    }
-    // the negative offsets of the operator, as the AST interpreter's iterator resolves its indices with them
-    if (src.op->hasNegativeOffsets()) {
-        flags |= static_cast<int64_t>(QoreIRListSelectorFlag::NegativeOffsets);
-    }
-    return flags;
+    // string index chars and negative offsets, as the AST interpreter's iterator resolves its indices with them:
+    // %no-string-index-char and %no-negative-offsets are refused under %modern, so lowered code always has both
+    assert(src.op->hasStringIndexChar() && src.op->hasNegativeOffsets());
+    return static_cast<int64_t>(QoreIRListSelectorFlag::StringIndexChar)
+        | static_cast<int64_t>(QoreIRListSelectorFlag::NegativeOffsets);
 }
 
 QoreIRValue QoreIRLowering::lowerSourceIterator(const QoreValue& expr, const LazySelectorSource& src, bool iterate,
@@ -12284,12 +12403,10 @@ bool QoreIRLowering::getForeachSource(const QoreValue& list, ForeachSourceOperat
         src.kind = QoreIRIteratorSourceKind::Indexes;
         src.operand = op->getLeft();
         src.first = op->getRight();
-        if (op->hasStringIndexChar()) {
-            src.flags |= static_cast<int64_t>(QoreIRListSelectorFlag::StringIndexChar);
-        }
-        if (op->hasNegativeOffsets()) {
-            src.flags |= static_cast<int64_t>(QoreIRListSelectorFlag::NegativeOffsets);
-        }
+        // %no-string-index-char and %no-negative-offsets are refused under %modern
+        assert(op->hasStringIndexChar() && op->hasNegativeOffsets());
+        src.flags |= static_cast<int64_t>(QoreIRListSelectorFlag::StringIndexChar)
+            | static_cast<int64_t>(QoreIRListSelectorFlag::NegativeOffsets);
     } else {
         return false;
     }
@@ -14677,11 +14794,13 @@ QoreIRValue QoreIRLowering::lowerDotEval(const QoreValue& expr, std::string& err
             const QoreTypeInfo* analyzed_base_type = have_base_analysis
                 && base_analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)
                 ? selectAnalysisType(base_analysis) : nullptr;
+            // a value of a string enum type is the enum's member, not a string (qore#6254)
             bool pseudo_base_known_string = have_base_analysis
                 && base_analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)
                 && analyzed_base_type
                 && QoreTypeInfo::isType(
-                    qore_get_value_type(analyzed_base_type), NT_STRING);
+                    qore_get_value_type(analyzed_base_type), NT_STRING)
+                && !QoreTypeInfo::getReturnEnum(analyzed_base_type);
             bool pseudo_base_known_assigned_string = pseudo_base_known_string
                 && (base_analysis.hasFlag(QoreParseAnalysis::NeverNothing)
                     || (base_analysis.hasFlag(
@@ -14738,11 +14857,13 @@ QoreIRValue QoreIRLowering::lowerDotEval(const QoreValue& expr, std::string& err
                                     QoreParseAnalysis::DefinitelyAssigned)
                                 && !QoreTypeInfo::parseAcceptsReturns(
                                     arg_type, NT_NOTHING)));
-                    bool known_assigned_int = assigned && arg_type
+                    // a value of an enum type is the enum's member, not a value of its base type (qore#6254)
+                    bool arg_enum = arg_type && QoreTypeInfo::getReturnEnum(arg_type);
+                    bool known_assigned_int = assigned && arg_type && !arg_enum
                         && QoreTypeInfo::isType(
                             qore_get_value_type(arg_type), NT_INT);
                     if (!ai) {
-                        pseudo_arg0_known_string = have_analysis && arg_type
+                        pseudo_arg0_known_string = have_analysis && arg_type && !arg_enum
                             && QoreTypeInfo::isType(
                                 qore_get_value_type(arg_type), NT_STRING);
                         pseudo_arg0_known_assigned_string = assigned && pseudo_arg0_known_string;
@@ -15232,7 +15353,7 @@ QoreIRValue QoreIRLowering::emitHashKeyDynamicStore(
 QoreIRValue QoreIRLowering::tryEmitLValuePathOp(QoreIROpcode opcode, const QoreValue& lvalue,
         const QoreIRValue* rhs, const QoreProgramLocation* loc, std::string& error,
         AssignmentMode mode, LVCompoundOp compound_op, LVUnaryOp unary_op,
-        LVBinaryMutOp binary_mut_op, const QoreValue& pattern_expr) {
+        LVBinaryMutOp binary_mut_op, const QoreValue& pattern_expr, bool ref_rv) {
     std::vector<LVPathStep> lv_path;
     std::vector<QoreValue> dynamic_operands;
     // Slice lvalues (HashKeySlice / ListIndexSlice / ListRangeSlice) are lvalues only of remove and delete
@@ -15358,6 +15479,7 @@ QoreIRValue QoreIRLowering::tryEmitLValuePathOp(QoreIROpcode opcode, const QoreV
     path_inst->compound_op = compound_op;
     path_inst->unary_op = unary_op;
     path_inst->binary_mut_op = binary_mut_op;
+    path_inst->ref_rv = ref_rv;
     if (pattern_expr.hasNode()) {
         const_cast<QoreValue&>(path_inst->pattern_expr) = pattern_expr;
         // Copy ref_rv flag from the operator node (determines if return value is used)
@@ -16403,7 +16525,9 @@ QoreIRValue QoreIRLowering::lowerFunctionCall(const QoreValue& expr, std::string
                 && arg_analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)
                 && (arg_analysis.hasFlag(QoreParseAnalysis::NeverNothing)
                     || arg_analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned))
-                && QoreTypeInfo::isType(selectAnalysisType(arg_analysis), NT_STRING)) {
+                && QoreTypeInfo::isType(selectAnalysisType(arg_analysis), NT_STRING)
+                // a value of a string enum type is the enum's member, not a string (qore#6254)
+                && !QoreTypeInfo::getReturnEnum(selectAnalysisType(arg_analysis))) {
             std::vector<QoreIRValue> operands;
             if (!lowerCallArgs(parse_args, args, operands, error)) {
                 return QoreIRValue();

@@ -1,0 +1,100 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class ExpressionDirectivesTest
+
+#! Parse directives in the code of an expression (issue #6258)
+/** An expression adds no code to its Program and does not change its parse state: a parse directive in its code is a
+    parse error and is not applied.
+*/
+public class ExpressionDirectivesTest inherits QUnit::Test {
+    constructor() : QUnit::Test("ExpressionDirectivesTest", "1.0", \ARGV) {
+        addTestCase("%requires", \requiresTest());
+        addTestCase("%define", \defineTest());
+        addTestCase("parse options", \parseOptionsTest());
+        addTestCase("other directives", \otherDirectivesTest());
+        addTestCase("code that is not a directive", \notDirectiveTest());
+        set_return_value(main());
+    }
+
+    #! returns the Program that the expressions are created in
+    private Program getProgram() {
+        Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_NO_CHILD_PO_RESTRICTIONS | PO_ALLOW_REPARSE);
+        p.parse("int sub f() { return 1; }", "f");
+        return p;
+    }
+
+    #! creates the expression and returns the description of the exception raised, or NOTHING if it was created
+    private *string tryExpression(Program p, string code) {
+        try {
+            Expression e(p, code, "test");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("PARSE-EXCEPTION", ex.err);
+            return ex.desc;
+        }
+    }
+
+    requiresTest() {
+        Program p = getProgram();
+        *string desc = tryExpression(p, "1)\n%requires Util\n#");
+        assertRegex("parse directives cannot be used in the code of an expression", desc);
+        # the module was not loaded into the Program: its functions are not found in a later parse
+        assertThrows("PARSE-EXCEPTION", \p.parse(), ("int sub g() { return get_random_string().size(); }", "g"));
+    }
+
+    defineTest() {
+        Program p = getProgram();
+        *string desc = tryExpression(p, "1)\n%define INJ 1\n#");
+        assertRegex("parse directives cannot be used in the code of an expression", desc);
+        assertFalse(p.isDefined("INJ"));
+        # a later parse does not see the define
+        p.parse("%ifdef INJ\nint sub inj() { return 1; }\n%endif\nint sub after() { return 2; }", "after");
+        assertEq(2, p.callFunction("after"));
+        assertThrows("NO-FUNCTION", \p.callFunction(), "inj");
+    }
+
+    parseOptionsTest() {
+        Program p = getProgram();
+        list<string> po = p.getFullParseOptions().toStringList();
+        foreach string dir in ("%no-gui", "%new-style", "%old-style", "%allow-injection", "%lock-options",
+                "%push-parse-options", "%enable-all-warnings") {
+            *string desc = tryExpression(p, "1)\n" + dir + "\n#");
+            assertRegex("parse directives cannot be used in the code of an expression", desc, dir);
+        }
+        # the Program's parse options are unchanged
+        assertEq(po, p.getFullParseOptions().toStringList());
+        p.setParseOptions(PO_NO_GUI);
+        assertTrue(p.getFullParseOptions().hasAny(PO_NO_GUI));
+    }
+
+    otherDirectivesTest() {
+        Program p = getProgram();
+        foreach string dir in ("%include /nonexistent-file", "%ifdef X", "%endif", "%set-time-zone UTC",
+                "%exec-class X", "%module-cmd(Util) x", "%try-module Util", "%append-module-path /tmp") {
+            *string desc = tryExpression(p, "1)\n" + dir + "\n#");
+            assertRegex("parse directives cannot be used in the code of an expression", desc, dir);
+        }
+        # %exec-class was not applied: the Program accepts top-level statements
+        assertFalse(p.getFullParseOptions().hasAny(PO_NO_TOP_LEVEL_STATEMENTS));
+        p.parse("our int top = 1;", "top");
+    }
+
+    notDirectiveTest() {
+        Program p = getProgram();
+        # the modulo operator at the start of a line is not a directive
+        Expression e(p, "7\n% 4", "mod");
+        assertEq(3, e.eval());
+        # nor is a directive in a string literal
+        e = new Expression(p, "\"a\n%requires Util\"", "str");
+        assertEq("a\n%requires Util", e.eval());
+        # an expression that calls the Program's code
+        e = new Expression(p, "f() + 1", "call");
+        assertEq(2, e.eval());
+    }
+}

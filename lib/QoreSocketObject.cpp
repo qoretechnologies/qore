@@ -7439,6 +7439,12 @@ void QoreSocketObject::cleanupQuicStream(int64_t session_id, int64_t stream_id,
         "cleanupQuicStream", xsink);
 }
 
+bool QoreSocketObject::isQuicSessionClosedOrGone(int64_t session_id) const {
+    // a stream's session is in the map from before the stream exists until it is reaped after its close
+    std::shared_ptr<QuicSession> session = qore_socket_object_get_quic_session(this, session_id);
+    return !session || session->isClosed();
+}
+
 int QoreSocketObject::watchQuicResponseSend(int64_t session_id, int64_t stream_id, ExceptionSink* xsink) {
     return static_cast<int>(qore_socket_object_exec_quic_enqueue_int(this,
         new QoreSocketObjectQuicEnqueuePollOperation(this,

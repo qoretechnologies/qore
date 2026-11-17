@@ -1405,30 +1405,42 @@ QoreColumnarResult* QoreDataFrame::toColumnarResult(ExceptionSink* xsink) const 
             }
         }
 
-        if (buffer_type != QoreBufferElementType::Invalid) {
-            ReferenceHolder<QoreBufferNode> buffer(columnToQoreBuffer(cd, xsink), xsink);
+        // the column data, made again if the kept schema does not match it
+        auto make_data = [&]() -> QoreValue {
+            if (buffer_type != QoreBufferElementType::Invalid) {
+                return columnToQoreBuffer(cd, xsink);
+            }
+            return columnToQoreList(cd, xsink);
+        };
+
+        if (use_schema) {
+            ValueHolder data(make_data(), xsink);
             if (*xsink) {
                 return nullptr;
             }
-            int rc = use_schema
-                ? result->addColumn(col.name.c_str(), QoreValue(buffer.release()), schema, xsink)
-                : result->addColumn(col.name.c_str(), QoreValue(buffer.release()), columnar_type, buffer_type,
-                    nullable, "", xsink);
-            if (rc) {
+            // the schema kept from a ColumnarResult or Arrow column describes the column as it was then; a column
+            // whose values no longer match it (qore#6214), so that the schema is refused or the values cannot be
+            // stored in the buffer of its kind, is added with the schema of its values
+            ExceptionSink schema_xsink;
+            if (!result->addColumn(col.name.c_str(), data.release(), schema, &schema_xsink)) {
+                continue;
+            }
+            QoreValue err = schema_xsink.getExceptionErr();
+            const char* err_str = err.getType() == NT_STRING ? err.get<const QoreStringNode>()->c_str() : nullptr;
+            if (!err_str || (strcmp(err_str, "COLUMNAR-SCHEMA-ERROR") && strcmp(err_str, "BUFFER-TYPE-ERROR")
+                    && strcmp(err_str, "BUFFER-RANGE-ERROR") && strcmp(err_str, "COLUMNAR-RESULT-ERROR"))) {
+                xsink->assimilate(schema_xsink);
                 return nullptr;
             }
-        } else {
-            ReferenceHolder<QoreListNode> values(columnToQoreList(cd, xsink), xsink);
-            if (*xsink) {
-                return nullptr;
-            }
-            int rc = use_schema
-                ? result->addColumn(col.name.c_str(), QoreValue(values.release()), schema, xsink)
-                : result->addColumn(col.name.c_str(), QoreValue(values.release()), columnar_type,
-                    QoreBufferElementType::Invalid, nullable, "", xsink);
-            if (rc) {
-                return nullptr;
-            }
+            schema_xsink.clear();
+        }
+
+        ValueHolder data(make_data(), xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+        if (result->addColumn(col.name.c_str(), data.release(), columnar_type, buffer_type, nullable, "", xsink)) {
+            return nullptr;
         }
     }
 
