@@ -974,6 +974,9 @@ private:
     // cached value when the local holds no reference, so a call that takes the value as an argument releases the slot
     // only if it holds the value (qore_rt_release_reference_read())
     std::unordered_map<uint32_t, llvm::AllocaInst*> reference_read_slots;
+    // the arrays of given argument slots that are null when no read through a reference holds its value (see
+    // buildArgCleanupArray())
+    std::unordered_set<llvm::Value*> nullable_arg_cleanups;
     // the slot of the last reference read emitted by emitReferenceLocalRead()
     llvm::AllocaInst* last_reference_read_slot = nullptr;
 
@@ -2625,6 +2628,15 @@ private:
 
     // Clear ownership slots after a direct fast-entry call.
     void emitArgCleanupClear(llvm::Module& module,
+            llvm::Value* arg_cleanups, int nargs,
+            bool callee_proven_nothrow);
+    //! Emits the call of a call that gives argument slots with \a given, and when buildArgCleanupArray() gave no
+    //! array because no slot of a read through a reference holds its value, the call of a call that gives nothing
+    //! with \a plain, branched on the array at run time; returns the call's value (issue #6262)
+    llvm::Value* emitGivenOrPlainCall(llvm::Value* arg_cleanups, const std::function<llvm::Value*()>& given,
+            const std::function<llvm::Value*()>& plain);
+    //! emitArgCleanupClear() for an array that is not null
+    void emitArgCleanupClearIntern(llvm::Module& module,
             llvm::Value* arg_cleanups, int nargs,
             bool callee_proven_nothrow);
 

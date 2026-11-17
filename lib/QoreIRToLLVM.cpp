@@ -3075,6 +3075,7 @@ void QoreIRToLLVM::collectLocals(const QoreIRFunction& func) {
     value_defined_by_variable_read.clear();
     reused_call_args.clear();
     reference_read_slots.clear();
+    nullable_arg_cleanups.clear();
     last_reference_read_slot = nullptr;
     immediate_closure_creates.clear();
     known_function_call_refs.clear();
@@ -8613,6 +8614,12 @@ llvm::Value* QoreIRToLLVM::buildArgCleanupArray(const QoreIRInstruction* inst,
             llvm::ConstantInt::get(i32_type, nargs));
     llvm::Value* null_ptr = llvm::ConstantPointerNull::get(
             llvm::cast<llvm::PointerType>(ptr_type));
+    // whether a slot is given whatever the arguments' values are (a temporary's cleanup slot), and whether a slot of a
+    // read through a reference holds its value (see below)
+    bool static_given = false;
+    llvm::Value* any_read_held = nullptr;
+    std::vector<llvm::Value*> slot_ptrs;
+    slot_ptrs.reserve(nargs);
 
     for (int i = 0; i < nargs; ++i) {
         if (i && !(i % 100)) {
@@ -8640,6 +8647,7 @@ llvm::Value* QoreIRToLLVM::buildArgCleanupArray(const QoreIRInstruction* inst,
                 }
                 if (cleanup_ptr) {
                     has_cleanup = true;
+                    static_given = true;
                 } else {
                     cleanup_ptr = null_ptr;
                 }
@@ -8649,8 +8657,11 @@ llvm::Value* QoreIRToLLVM::buildArgCleanupArray(const QoreIRInstruction* inst,
                 std::string val_error;
                 llvm::Value* arg_val = getVal(value_id, val_error);
                 if (arg_val) {
-                    llvm::Value* held = builder->CreateICmpEQ(builder->CreateLoad(i64_type, read_slot),
-                        boxValue(arg_val, value_id));
+                    llvm::Value* boxed = boxValue(arg_val, value_id);
+                    llvm::Value* held = builder->CreateAnd(
+                        builder->CreateICmpEQ(builder->CreateLoad(i64_type, read_slot), boxed),
+                        builder->CreateICmpNE(boxed, llvm::ConstantInt::get(i64_type, VAL_NOTHING)));
+                    any_read_held = any_read_held ? builder->CreateOr(any_read_held, held) : held;
                     // otherwise a slot that holds NOTHING, which the call leaves alone: a cleanup slot that is given
                     // is never null (see emitArgCleanupClear())
                     llvm::AllocaInst* no_slot = ab.CreateAlloca(i64_type, nullptr, "no_given_reference_read");
@@ -8660,15 +8671,86 @@ llvm::Value* QoreIRToLLVM::buildArgCleanupArray(const QoreIRInstruction* inst,
                 }
             }
         }
-        llvm::Value* gep = builder->CreateGEP(ptr_type, cleanup_array,
-                llvm::ConstantInt::get(i32_type, i));
-        builder->CreateStore(cleanup_ptr, gep);
+        slot_ptrs.push_back(cleanup_ptr);
     }
 
+    auto store_slots = [&]() {
+        for (int i = 0; i < nargs; ++i) {
+            llvm::Value* gep = builder->CreateGEP(ptr_type, cleanup_array, llvm::ConstantInt::get(i32_type, i));
+            builder->CreateStore(slot_ptrs[i], gep);
+        }
+    };
+
+    // a call that gives only the slots of reads through references gives no array when none holds its value (the
+    // locals held no reference, the usual case), and fills the array only when one does: the call releases nothing,
+    // and is made as a call that gives nothing (see emitGivenOrPlainCall(); issue #6262); emitArgCleanupClear() tests
+    // the array
+    if (has_cleanup && !static_given && any_read_held) {
+        llvm::Function* fn = builder->GetInsertBlock()->getParent();
+        llvm::BasicBlock* from_bb = builder->GetInsertBlock();
+        llvm::BasicBlock* fill_bb = llvm::BasicBlock::Create(ctx, "given_reference_reads_fill", fn);
+        llvm::BasicBlock* cont_bb = llvm::BasicBlock::Create(ctx, "given_reference_reads_filled", fn);
+        builder->CreateCondBr(any_read_held, fill_bb, cont_bb, llvm::MDBuilder(ctx).createBranchWeights(1, 1000));
+        builder->SetInsertPoint(fill_bb);
+        store_slots();
+        builder->CreateBr(cont_bb);
+        builder->SetInsertPoint(cont_bb);
+        llvm::PHINode* rv = builder->CreatePHI(ptr_type, 2, "given_reference_reads");
+        rv->addIncoming(cleanup_array, fill_bb);
+        rv->addIncoming(null_ptr, from_bb);
+        nullable_arg_cleanups.insert(rv);
+        return rv;
+    }
+    store_slots();
     return cleanup_array;
 }
 
+// documented in QoreIRToLLVM.h
+llvm::Value* QoreIRToLLVM::emitGivenOrPlainCall(llvm::Value* arg_cleanups,
+        const std::function<llvm::Value*()>& given, const std::function<llvm::Value*()>& plain) {
+    if (!nullable_arg_cleanups.count(arg_cleanups)) {
+        return given();
+    }
+    llvm::Function* fn = builder->GetInsertBlock()->getParent();
+    llvm::BasicBlock* given_bb = llvm::BasicBlock::Create(ctx, "given_reference_reads_call", fn);
+    llvm::BasicBlock* plain_bb = llvm::BasicBlock::Create(ctx, "plain_call", fn);
+    llvm::BasicBlock* merge_bb = llvm::BasicBlock::Create(ctx, "given_or_plain_call", fn);
+    builder->CreateCondBr(builder->CreateIsNotNull(arg_cleanups), given_bb, plain_bb,
+        llvm::MDBuilder(ctx).createBranchWeights(1, 1000));
+    builder->SetInsertPoint(given_bb);
+    llvm::Value* given_rv = given();
+    llvm::BasicBlock* given_end = builder->GetInsertBlock();
+    builder->CreateBr(merge_bb);
+    builder->SetInsertPoint(plain_bb);
+    llvm::Value* plain_rv = plain();
+    llvm::BasicBlock* plain_end = builder->GetInsertBlock();
+    builder->CreateBr(merge_bb);
+    builder->SetInsertPoint(merge_bb);
+    llvm::PHINode* rv = builder->CreatePHI(given_rv->getType(), 2, "given_or_plain_result");
+    rv->addIncoming(given_rv, given_end);
+    rv->addIncoming(plain_rv, plain_end);
+    return rv;
+}
+
 void QoreIRToLLVM::emitArgCleanupClear(llvm::Module& module,
+        llvm::Value* arg_cleanups, int nargs, bool callee_proven_nothrow) {
+    // an array that buildArgCleanupArray() gives only when a read through a reference holds its value is tested first
+    if (nullable_arg_cleanups.count(arg_cleanups)) {
+        llvm::Function* llvm_func = builder->GetInsertBlock()->getParent();
+        llvm::BasicBlock* clear_bb = llvm::BasicBlock::Create(ctx, "given_reference_reads_clear", llvm_func);
+        llvm::BasicBlock* cont_bb = llvm::BasicBlock::Create(ctx, "given_reference_reads_cont", llvm_func);
+        builder->CreateCondBr(builder->CreateIsNotNull(arg_cleanups), clear_bb, cont_bb,
+            llvm::MDBuilder(ctx).createBranchWeights(1, 1000));
+        builder->SetInsertPoint(clear_bb);
+        emitArgCleanupClearIntern(module, arg_cleanups, nargs, callee_proven_nothrow);
+        builder->CreateBr(cont_bb);
+        builder->SetInsertPoint(cont_bb);
+        return;
+    }
+    emitArgCleanupClearIntern(module, arg_cleanups, nargs, callee_proven_nothrow);
+}
+
+void QoreIRToLLVM::emitArgCleanupClearIntern(llvm::Module& module,
         llvm::Value* arg_cleanups, int nargs, bool callee_proven_nothrow) {
     if (nargs == 1 && callee_proven_nothrow
             && !q_env_is_set("QORE_DISABLE_AOT_SINGLE_ARG_CLEANUP_INLINE")) {
@@ -15212,6 +15294,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
         }
     }
     reference_read_slots.clear();
+    nullable_arg_cleanups.clear();
     last_reference_read_slot = nullptr;
     immediate_closure_creates.clear();
     known_function_call_refs.clear();
@@ -22224,6 +22307,31 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             }
                         }
 
+                        // the call of a call that gives nothing
+                        auto emit_plain_direct_call = [&]() -> llvm::Value* {
+                            if (invoke_explicit_inst) {
+                                llvm::Value* inst_ptr = builder->CreateIntToPtr(
+                                    llvm::ConstantInt::get(i64_type,
+                                        reinterpret_cast<uint64_t>(invoke_explicit_inst)),
+                                    ptr_type);
+                                auto helper = module.getOrInsertFunction(call_name,
+                                    llvm::FunctionType::get(i64_type,
+                                        {ptr_type, ptr_type, ptr_type, ptr_type,
+                                         i32_type, ptr_type, ptr_type}, false));
+                                return builder->CreateCall(helper,
+                                    {func_ptr, variant_ptr, pgm_ptr, args_array,
+                                     llvm::ConstantInt::get(i32_type, nargs),
+                                     inst_ptr, xsink_arg});
+                            }
+                            auto helper = module.getOrInsertFunction(call_name,
+                                llvm::FunctionType::get(i64_type,
+                                    {ptr_type, ptr_type, ptr_type, ptr_type,
+                                     i32_type, ptr_type}, false));
+                            return builder->CreateCall(helper,
+                                {func_ptr, variant_ptr, pgm_ptr, args_array,
+                                 llvm::ConstantInt::get(i32_type, nargs),
+                                 xsink_arg});
+                        };
                         if (has_arg_cleanups) {
                             // the call releases the arguments given to it in the callee's frame (issue #5882)
                             std::string consume_name = std::string(call_name) + "_consume_args";
@@ -22242,29 +22350,11 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             consume_types.push_back(ptr_type);
                             auto helper = module.getOrInsertFunction(consume_name,
                                 llvm::FunctionType::get(i64_type, consume_types, false));
-                            result = builder->CreateCall(helper, consume_args);
-                        } else if (invoke_explicit_inst) {
-                            llvm::Value* inst_ptr = builder->CreateIntToPtr(
-                                llvm::ConstantInt::get(i64_type,
-                                    reinterpret_cast<uint64_t>(invoke_explicit_inst)),
-                                ptr_type);
-                            auto helper = module.getOrInsertFunction(call_name,
-                                llvm::FunctionType::get(i64_type,
-                                    {ptr_type, ptr_type, ptr_type, ptr_type,
-                                     i32_type, ptr_type, ptr_type}, false));
-                            result = builder->CreateCall(helper,
-                                {func_ptr, variant_ptr, pgm_ptr, args_array,
-                                 llvm::ConstantInt::get(i32_type, nargs),
-                                 inst_ptr, xsink_arg});
+                            result = emitGivenOrPlainCall(arg_cleanups,
+                                [&]() -> llvm::Value* { return builder->CreateCall(helper, consume_args); },
+                                [&]() -> llvm::Value* { return emit_plain_direct_call(); });
                         } else {
-                            auto helper = module.getOrInsertFunction(call_name,
-                                llvm::FunctionType::get(i64_type,
-                                    {ptr_type, ptr_type, ptr_type, ptr_type,
-                                     i32_type, ptr_type}, false));
-                            result = builder->CreateCall(helper,
-                                {func_ptr, variant_ptr, pgm_ptr, args_array,
-                                 llvm::ConstantInt::get(i32_type, nargs),
-                                 xsink_arg});
+                            result = emit_plain_direct_call();
                         }
                     }
                 } else if (aot_mode && inv->invoke_opcode == QoreIROpcode::CallDirect) {
@@ -26127,6 +26217,30 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     }
                 }
 
+                // the call of a call that gives nothing
+                auto emit_plain_direct_call = [&]() -> llvm::Value* {
+                    if (explicit_inst) {
+                        llvm::Value* inst_ptr = builder->CreateIntToPtr(
+                            llvm::ConstantInt::get(i64_type,
+                                reinterpret_cast<uint64_t>(explicit_inst)),
+                            ptr_type);
+                        auto helper = module.getOrInsertFunction(call_name,
+                            llvm::FunctionType::get(i64_type,
+                                {ptr_type, ptr_type, ptr_type, ptr_type, i32_type,
+                                 ptr_type, ptr_type}, false));
+                        return builder->CreateCall(helper,
+                            {func_ptr, variant_ptr, pgm_ptr, args_array,
+                             llvm::ConstantInt::get(i32_type, nargs), inst_ptr,
+                             xsink_arg});
+                    }
+                    auto helper = module.getOrInsertFunction(call_name,
+                        llvm::FunctionType::get(i64_type,
+                            {ptr_type, ptr_type, ptr_type, ptr_type, i32_type,
+                             ptr_type}, false));
+                    return builder->CreateCall(helper,
+                        {func_ptr, variant_ptr, pgm_ptr, args_array,
+                         llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+                };
                 if (has_arg_cleanups) {
                     // the call releases the arguments given to it in the callee's frame (issue #5882)
                     std::string consume_name = std::string(call_name) + "_consume_args";
@@ -26148,31 +26262,16 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             llvm::FunctionType::get(i64_type,
                                 {ptr_type, ptr_type, ptr_type, ptr_type, ptr_type, i32_type,
                                  ptr_type}, false));
-                        call_result = builder->CreateCall(helper,
-                            {func_ptr, variant_ptr, pgm_ptr, args_array, arg_cleanups,
-                             llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+                        call_result = emitGivenOrPlainCall(arg_cleanups,
+                            [&]() -> llvm::Value* {
+                                return builder->CreateCall(helper,
+                                    {func_ptr, variant_ptr, pgm_ptr, args_array, arg_cleanups,
+                                     llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+                            },
+                            [&]() -> llvm::Value* { return emit_plain_direct_call(); });
                     }
-                } else if (explicit_inst) {
-                    llvm::Value* inst_ptr = builder->CreateIntToPtr(
-                        llvm::ConstantInt::get(i64_type,
-                            reinterpret_cast<uint64_t>(explicit_inst)),
-                        ptr_type);
-                    auto helper = module.getOrInsertFunction(call_name,
-                        llvm::FunctionType::get(i64_type,
-                            {ptr_type, ptr_type, ptr_type, ptr_type, i32_type,
-                             ptr_type, ptr_type}, false));
-                    call_result = builder->CreateCall(helper,
-                        {func_ptr, variant_ptr, pgm_ptr, args_array,
-                         llvm::ConstantInt::get(i32_type, nargs), inst_ptr,
-                         xsink_arg});
                 } else {
-                    auto helper = module.getOrInsertFunction(call_name,
-                        llvm::FunctionType::get(i64_type,
-                            {ptr_type, ptr_type, ptr_type, ptr_type, i32_type,
-                             ptr_type}, false));
-                    call_result = builder->CreateCall(helper,
-                        {func_ptr, variant_ptr, pgm_ptr, args_array,
-                         llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+                    call_result = emit_plain_direct_call();
                 }
             }
 

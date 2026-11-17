@@ -9670,6 +9670,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_closure_fast(uint64_t ref_bits, uint6
 
 extern "C" DLLEXPORT uint64_t qore_rt_call_closure_fast_consume_args(uint64_t ref_bits,
         uint64_t* args, uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink) {
+    // no array: the slots of reads through references that the call gives hold nothing (issue #6262)
+    if (!arg_cleanups) {
+        return qore_rt_call_closure_fast(ref_bits, args, nargs, xsink);
+    }
     return qore_rt_call_closure_fast_impl(ref_bits, args, arg_cleanups, nargs, xsink);
 }
 
@@ -11853,6 +11857,10 @@ static uint64_t qore_rt_call_with_args_impl(uint64_t expr_bits, uint64_t* args,
 //! such as a call of a method of self
 extern "C" DLLEXPORT uint64_t qore_rt_call_with_args_consume_args(uint64_t expr_bits,
         uint64_t* args, uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink) {
+    // no array: the slots of reads through references that the call gives hold nothing (issue #6262)
+    if (!arg_cleanups) {
+        return qore_rt_call_with_args(expr_bits, args, nargs, xsink);
+    }
     return qore_rt_call_with_args_impl(expr_bits, args, arg_cleanups, nargs, xsink);
 }
 #endif
@@ -12312,6 +12320,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_function_direct(const QoreFunction* f
 extern "C" DLLEXPORT uint64_t qore_rt_call_function_direct_consume_args(const QoreFunction* func,
         const AbstractQoreFunctionVariant* variant, QoreProgram* pgm,
         uint64_t* args, uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink) {
+    // no array: the slots of reads through references that the call gives hold nothing (issue #6262)
+    if (!arg_cleanups) {
+        return qore_rt_call_function_direct(func, variant, pgm, args, nargs, xsink);
+    }
     return qore_rt_call_function_direct_impl(func, variant, pgm, args, arg_cleanups, nargs, xsink);
 }
 
@@ -13662,6 +13674,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_fast(const QoreFunction* func,
 extern "C" DLLEXPORT uint64_t qore_rt_call_fast_consume_args(const QoreFunction* func,
         const AbstractQoreFunctionVariant* variant, QoreProgram* pgm,
         uint64_t* args, uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink) {
+    // no array: the slots of reads through references that the call gives hold nothing (issue #6262)
+    if (!arg_cleanups) {
+        return qore_rt_call_fast(func, variant, pgm, args, nargs, xsink);
+    }
     return qore_rt_call_fast_consume_impl(func, variant, pgm, args, arg_cleanups, nargs, xsink);
 }
 #endif // QORE_JIT_RUNTIME_GIVEN_ARGS_UNIT
@@ -14006,6 +14022,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_immediate_closure(
 extern "C" DLLEXPORT uint64_t qore_rt_call_immediate_closure_consume_args(
         const QoreClosureParseNode* cn, uint64_t* args, uint64_t** arg_cleanups,
         int nargs, ExceptionSink* xsink) {
+    // no array: the slots of reads through references that the call gives hold nothing (issue #6262)
+    if (!arg_cleanups) {
+        return qore_rt_call_immediate_closure(cn, args, nargs, xsink);
+    }
     return qore_rt_call_immediate_closure_impl(cn, args, arg_cleanups, nargs, xsink);
 }
 
@@ -14230,6 +14250,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_fast_with_target(uint64_t (*target_fn
 extern "C" DLLEXPORT uint64_t qore_rt_call_fast_with_target_consume_args(uint64_t (*target_fn)(ExceptionSink*),
         const AbstractQoreFunctionVariant* variant, uint64_t* args, uint64_t** arg_cleanups, int nargs,
         ExceptionSink* xsink) {
+    // no array: the slots of reads through references that the call gives hold nothing (issue #6262)
+    if (!arg_cleanups) {
+        return qore_rt_call_fast_with_target(target_fn, variant, args, nargs, xsink);
+    }
     return qore_rt_call_fast_with_target_consume_impl(target_fn, variant, args, arg_cleanups, nargs, xsink);
 }
 #endif // QORE_JIT_RUNTIME_GIVEN_ARGS_UNIT
@@ -14457,6 +14481,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_self_recursive(const AbstractQoreFunc
 //! qore_rt_call_self_recursive() for a call that gives the references of its temporary arguments to the call
 extern "C" DLLEXPORT uint64_t qore_rt_call_self_recursive_consume_args(const AbstractQoreFunctionVariant* variant,
         uint64_t* args, uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink) {
+    // no array: the slots of reads through references that the call gives hold nothing (issue #6262)
+    if (!arg_cleanups) {
+        return qore_rt_call_self_recursive(variant, args, nargs, xsink);
+    }
     return qore_rt_call_self_recursive_consume_impl(variant, args, arg_cleanups, nargs, xsink);
 }
 #endif // QORE_JIT_RUNTIME_GIVEN_ARGS_UNIT
@@ -14522,6 +14550,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_method_direct(const QoreMethod* metho
 
 extern "C" DLLEXPORT uint64_t qore_rt_call_method_direct_consume_args(const QoreMethod* method,
         uint64_t* args, uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink) {
+    // no array: the slots of reads through references that the call gives hold nothing (issue #6262)
+    if (!arg_cleanups) {
+        return qore_rt_call_method_direct(method, args, nargs, xsink);
+    }
     return qore_rt_call_method_direct_impl(method, args, arg_cleanups, nargs, xsink);
 }
 #endif // QORE_JIT_RUNTIME_GIVEN_ARGS_UNIT
@@ -14924,6 +14956,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_method_fast(const QoreMethod* method,
 extern "C" DLLEXPORT uint64_t qore_rt_call_method_fast_consume_args(const QoreMethod* method,
         const AbstractQoreFunctionVariant* variant, uint64_t* args, uint64_t** arg_cleanups,
         int nargs, ExceptionSink* xsink) {
+    // no array: the slots of reads through references that the call gives hold nothing (issue #6262)
+    if (!arg_cleanups) {
+        return qore_rt_call_method_fast(method, variant, args, nargs, xsink);
+    }
     return qore_rt_call_method_fast_impl(method, variant, args, arg_cleanups, nargs, xsink);
 }
 
@@ -21372,6 +21408,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_dot_eval_method_direct_consume_args(uint64
         const QoreMethod* method, const QoreClass* qc,
         const AbstractQoreFunctionVariant* variant, uint64_t* args,
         uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink) {
+    // no array: the slots of reads through references that the call gives hold nothing (issue #6262)
+    if (!arg_cleanups) {
+        return qore_rt_dot_eval_method_direct(base_bits, method, qc, variant, args, nargs, xsink);
+    }
     return qore_rt_dot_eval_method_direct_impl<true>(base_bits, method, qc, variant,
         args, arg_cleanups, nargs, xsink, nullptr);
 }
@@ -22831,6 +22871,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_static_method_direct_with_inst(
 extern "C" DLLEXPORT uint64_t qore_rt_call_static_method_direct_consume_args(const QoreMethod* method,
         const AbstractQoreFunctionVariant* variant, uint64_t* args, uint64_t** arg_cleanups, int nargs,
         ExceptionSink* xsink) {
+    // no array: the slots of reads through references that the call gives hold nothing (issue #6262)
+    if (!arg_cleanups) {
+        return qore_rt_call_static_method_direct(method, variant, args, nargs, xsink);
+    }
     return qore_rt_call_static_method_direct_impl(method, variant, args, arg_cleanups, nargs, xsink, nullptr);
 }
 

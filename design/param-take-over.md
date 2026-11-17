@@ -221,7 +221,10 @@ The AST interpreter gives a parameter these arguments with no other reference, s
   `buildArgCleanupArray()`), as the IR interpreter gives the read's cleanup entry.  Such a call is made as a call
   that gives its arguments (the consume path), also when the local holds no reference, unless it calls a function
   or a static method whose IR shows that no parameter takes its argument over, or a builtin variant
-  (`qore_ir_call_takes_no_arg_over()`): such a call releases the read when it returns, as before.  The AOT compiler
+  (`qore_ir_call_takes_no_arg_over()`): such a call releases the read when it returns, as before.  When no slot of
+  a read through a reference holds its value (the local held no reference, the usual case), `buildArgCleanupArray()`
+  fills no array and gives null, a direct function call branches to the call of a call that gives nothing
+  (`emitGivenOrPlainCall()`), and the other consume helpers fall through to their plain helpers for a null array.  The AOT compiler
   does not cache the IR of a closure, so a call that gives a closure an argument does not call its native code
   directly (`qore_ir_native_closure_call_eligible()`).
 
