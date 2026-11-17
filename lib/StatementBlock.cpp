@@ -961,6 +961,8 @@ int TopLevelStatementBlock::execImpl(RuntimeConfig& rc, QoreValue& return_value,
         pgm = rc.getProgram();
     }
     const QoreParseOptions& runtime_parse_options = qore_program_private::getParseWarnOptions(pgm).parse_options;
+    const bool reparse_mode = (runtime_parse_options & QoreParseOptions(PO_ALLOW_REPARSE))
+        == QoreParseOptions(PO_ALLOW_REPARSE);
 
     // with a debugger attached, the top-level code runs on the AST tier, as a function does (see
     // UserVariantBase::evalTiered()): the debugger's callbacks, such as the exception callback of each statement that
@@ -971,8 +973,10 @@ int TopLevelStatementBlock::execImpl(RuntimeConfig& rc, QoreValue& return_value,
     // with a debugger attached, top-level code compiled ahead of time runs its debug IR in the IR interpreter, as an AOT
     // function does (UserVariantBase::materializeAOTDebugIR()): native code reads no value that the debugger sets
     // and does not stop for an exception that a try statement catches (qore#5851)
+    // in REPARSE mode, it runs once, as below (issue #6474)
     if (statement_list.empty() && cached_toplevel_aot_ctx && cached_toplevel_aot_ctx->hasLazyDebugIR()
-            && qore_program_private::get(*pgm)->hasDebuggerAttached()) {
+            && qore_program_private::get(*pgm)->hasDebuggerAttached()
+            && (!reparse_mode || !aot_toplevel_ran.exchange(true))) {
         QoreIRFunction* debug_ir = getAOTDebugIR(xsink);
         if (!debug_ir) {
             return -1;
@@ -980,9 +984,15 @@ int TopLevelStatementBlock::execImpl(RuntimeConfig& rc, QoreValue& return_value,
         return execIR(debug_ir, false, runtime_parse_options, pgm, return_value, xsink);
     }
 
-    // AOT pre-compiled top-level function — execute directly if registered
-    if (!debug_ast
-            && !((runtime_parse_options & QoreParseOptions(PO_ALLOW_REPARSE)) == QoreParseOptions(PO_ALLOW_REPARSE))) {
+    // AOT pre-compiled top-level function — execute directly if registered; in REPARSE mode, it runs once, and later
+    // runs execute the statements that later parses add (issue #6474)
+    if (!debug_ast && (!reparse_mode
+            || ((cached_toplevel_aot_fn || cached_toplevel_jit_fn) && !aot_toplevel_ran.exchange(true)))) {
+        // a run outside of REPARSE mode executes all of the statements (see markExecuted(), issue #6475); the
+        // statements of an image with its source are those of the precompiled code, which a later run in REPARSE mode
+        // does not execute again; the paths below (IR/JIT, AST) are taken from here when there is no precompiled
+        // code, and a run with a debugger outside of REPARSE mode records them on the AST path
+        markExecuted();
         if (cached_toplevel_aot_fn && cached_toplevel_aot_ctx) {
             // Instantiate nested non-closure body locals before AOT execution.
             // Top-level locals are pre-instantiated by QoreProgram.  Closure-use
@@ -1204,7 +1214,11 @@ int TopLevelStatementBlock::execImpl(RuntimeConfig& rc, QoreValue& return_value,
         int stmt_rc = 0;
 
         // Determine start position - one past the execution high water mark
-        statement_list_t::iterator start = ehwm;
+        statement_list_t::iterator start;
+        {
+            std::lock_guard<std::mutex> lg(ehwm_lock);
+            start = ehwm;
+        }
         if (start != statement_list.end()) {
             ++start;
         } else {
@@ -1233,6 +1247,7 @@ int TopLevelStatementBlock::execImpl(RuntimeConfig& rc, QoreValue& return_value,
             // Update ehwm to current statement after successful execution
             // so that on exception, only successfully executed statements are marked
             if (!stmt_rc && !*xsink) {
+                std::lock_guard<std::mutex> lg(ehwm_lock);
                 ehwm = i;
             }
             if (*xsink && tlpd->runtimeCheck()) {
@@ -1246,7 +1261,9 @@ int TopLevelStatementBlock::execImpl(RuntimeConfig& rc, QoreValue& return_value,
         return stmt_rc;
     }
 
-    // Normal mode - execute all statements
+    // Normal mode - execute all statements; they are recorded as executed, so that a run after PO_ALLOW_REPARSE is set
+    // does not execute them again (issue #6475)
+    markExecuted();
     return execIntern(rc, return_value, xsink);
 }
 

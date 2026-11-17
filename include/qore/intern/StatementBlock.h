@@ -37,6 +37,7 @@
 #include "qore/intern/AbstractStatement.h"
 #include <qore/safe_dslist>
 
+#include <atomic>
 #include <memory>
 #include <mutex>
 #include <set>
@@ -336,6 +337,23 @@ protected:
     statement_list_t::iterator hwm;
     // iterator to last executed element in statement list (for REPARSE mode execution)
     statement_list_t::iterator ehwm;
+    //! serializes the changes of ehwm by the threads that run the top-level code (issue #6475)
+    std::mutex ehwm_lock;
+    //! true once the top-level code compiled ahead of time has run in REPARSE mode, which runs it once (issue #6474)
+    std::atomic<bool> aot_toplevel_ran{false};
+
+    //! Records the statements that the code has when a run starts as executed (issue #6475)
+    /** A run outside of REPARSE mode executes all of them, so a run after PO_ALLOW_REPARSE is set later executes only
+        the statements of later parses; the statements after one that raised an exception are recorded as well, as
+        the code that runs outside of REPARSE mode does not record the last one that it ran.  The list cannot change
+        while the code runs, as the Program cannot be parsed while threads run it.
+    */
+    DLLLOCAL void markExecuted() {
+        if (!statement_list.empty()) {
+            std::lock_guard<std::mutex> lg(ehwm_lock);
+            ehwm = statement_list.last();
+        }
+    }
     // true only the first time parseInit() is called
     bool first;
     // the values of first and of the size of lvars that a rollback restores: those of the last commit (issue #678)
