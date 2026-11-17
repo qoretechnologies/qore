@@ -23637,3 +23637,68 @@ QoreValue QoreIRInterpreter::evalLValueTernary(QoreIROpcode op, const QoreValue&
     return QoreValue();
 }
 #endif // QORE_IR_INTERPRETER_GIVEN_ARGS_UNIT
+
+QoreIRFunction::~QoreIRFunction() {
+    // no eviction may run on the guard profiles once they are being freed (issue #6421)
+    if (guard_profile_types) {
+        qore_generic_cache_unregister(guard_profile_types.get());
+    }
+    delete cached_pre_instantiated;
+    for (auto* loc : owned_locations) {
+        delete loc;
+    }
+}
+
+void QoreIRFunction::initGuardProfiles() {
+    if (guard_profile_count < num_guards) {
+        if (!guard_profile_types) {
+            guard_profile_types = std::make_unique<QoreIRGuardProfileTypes>(*this);
+        } else {
+            // no eviction may run on the profiles that are replaced
+            qore_generic_cache_unregister(guard_profile_types.get());
+        }
+        guard_profiles.reset(new TypeProfile[num_guards]());
+        for (uint32_t i = 0; i < num_guards; ++i) {
+            guard_profiles[i].type_cache = guard_profile_types.get();
+        }
+        guard_profile_count = num_guards;
+    }
+}
+
+void TypeProfile::recordTypeInfo(const QoreTypeInfo* type_info) {
+    if (!type_info) {
+        other_count.fetch_add(1, std::memory_order_relaxed);
+        return;
+    }
+
+    TypeProfileTypeKey key{type_info, qore_get_type_identity_serial(type_info)};
+    bool counted = false;
+    {
+        std::lock_guard<std::mutex> lock(extended_mutex);
+        if (extended_type_counts) {
+            auto i = extended_type_counts->find(key);
+            if (i != extended_type_counts->end()) {
+                ++i->second;
+                counted = true;
+            }
+        }
+    }
+    if (!counted) {
+        auto add = [this, &key] () {
+            std::lock_guard<std::mutex> lock(extended_mutex);
+            if (!extended_type_counts) {
+                extended_type_counts = std::make_unique<std::unordered_map<TypeProfileTypeKey, uint32_t,
+                    TypeProfileTypeKeyHash>>();
+            }
+            ++(*extended_type_counts)[key];
+        };
+        if (key.serial && type_cache) {
+            // the entry is added with the registry locked, so the eviction of the type cannot run in between
+            qore_generic_cache_insert_weak(type_cache, {type_info}, add);
+        } else {
+            // a type that is never freed while the library is initialized
+            add();
+        }
+    }
+    other_count.fetch_add(1, std::memory_order_relaxed);
+}

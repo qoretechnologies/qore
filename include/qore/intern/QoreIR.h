@@ -1972,45 +1972,10 @@ struct TypeProfile {
     //! counts a value of a type that is not builtin
     /** A type that can be freed (one with an identity serial) is registered with the function's cache when it is first
         counted, so that its entry is evicted when the type is destroyed (issue #6421); the registration does not keep
-        the type's declaration alive (qore_generic_cache_insert_weak())
+        the type's declaration alive (qore_generic_cache_insert_weak()).  Defined in QoreIRInterpreter.cpp: it calls
+        internal functions of the library, which code outside of it that includes this header cannot link.
     */
-    void recordTypeInfo(const QoreTypeInfo* type_info) {
-        if (!type_info) {
-            other_count.fetch_add(1, std::memory_order_relaxed);
-            return;
-        }
-
-        TypeProfileTypeKey key{type_info, qore_get_type_identity_serial(type_info)};
-        bool counted = false;
-        {
-            std::lock_guard<std::mutex> lock(extended_mutex);
-            if (extended_type_counts) {
-                auto i = extended_type_counts->find(key);
-                if (i != extended_type_counts->end()) {
-                    ++i->second;
-                    counted = true;
-                }
-            }
-        }
-        if (!counted) {
-            auto add = [this, &key] () {
-                std::lock_guard<std::mutex> lock(extended_mutex);
-                if (!extended_type_counts) {
-                    extended_type_counts = std::make_unique<std::unordered_map<TypeProfileTypeKey, uint32_t,
-                        TypeProfileTypeKeyHash>>();
-                }
-                ++(*extended_type_counts)[key];
-            };
-            if (key.serial && type_cache) {
-                // the entry is added with the registry locked, so the eviction of the type cannot run in between
-                qore_generic_cache_insert_weak(type_cache, {type_info}, add);
-            } else {
-                // a type that is never freed while the library is initialized
-                add();
-            }
-        }
-        other_count.fetch_add(1, std::memory_order_relaxed);
-    }
+    DLLLOCAL void recordTypeInfo(const QoreTypeInfo* type_info);
 
     uint32_t getTypeInfoCount(const QoreTypeInfo* type_info) const {
         std::lock_guard<std::mutex> lock(extended_mutex);
@@ -4357,16 +4322,12 @@ public:
             display_name(n_display_name.empty() ? deriveDisplayName(name) : std::move(n_display_name)) {
     }
 
-    ~QoreIRFunction() {
-        // no eviction may run on the guard profiles once they are being freed
-        if (guard_profile_types) {
-            qore_generic_cache_unregister(guard_profile_types.get());
-        }
-        delete cached_pre_instantiated;
-        for (auto* loc : owned_locations) {
-            delete loc;
-        }
-    }
+    //! Destroys the function
+    /** Defined in QoreIRInterpreter.cpp, as it unregisters the guard profile type cache with an internal function of
+        the library; code outside of the library that includes this header (the AOT IR test programs) calls this
+        destructor, so it cannot be inline
+    */
+    ~QoreIRFunction();
 
     //! Returns the total number of IR instructions in all of the function's basic blocks
     /** Used to keep exceptionally large functions off the native tier; see
@@ -5057,21 +5018,9 @@ public:
     mutable std::unique_ptr<QoreIRGuardProfileTypes> guard_profile_types;
 
     //! Allocate guard profiles array to match num_guards
-    void initGuardProfiles() {
-        if (guard_profile_count < num_guards) {
-            if (!guard_profile_types) {
-                guard_profile_types = std::make_unique<QoreIRGuardProfileTypes>(*this);
-            } else {
-                // no eviction may run on the profiles that are replaced
-                qore_generic_cache_unregister(guard_profile_types.get());
-            }
-            guard_profiles.reset(new TypeProfile[num_guards]());
-            for (uint32_t i = 0; i < num_guards; ++i) {
-                guard_profiles[i].type_cache = guard_profile_types.get();
-            }
-            guard_profile_count = num_guards;
-        }
-    }
+    /** Defined in QoreIRInterpreter.cpp: it calls internal functions of the library
+    */
+    DLLLOCAL void initGuardProfiles();
 
     //! Returns the number of types counted by the guard type profiles, for debug checks
     size_t getGuardProfileTypeCount() const {
