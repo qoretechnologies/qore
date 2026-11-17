@@ -116,8 +116,10 @@ public class HttpClientPollOperation inherits AbstractPollOperation<auto> {
         result delivery (no closures on the worker thread).
     */
     nothing onComplete(hash<SocketPollResultInfo> result) {
-        if (connection_ref) {
-            connection_ref.handleCompletion(result);
+        # read once: the connection's close clears the member from another thread (#6427)
+        *HttpClientConnection conn = connection_ref;
+        if (conn) {
+            conn.handleCompletion(result);
         }
     }
 
@@ -217,9 +219,11 @@ public class HttpClientPollOperation inherits AbstractPollOperation<auto> {
         virtual dispatch, no closures.
     */
     private fireReadyCallback() {
-        if (connection_ref) {
+        # read once: the connection's close clears the member from another thread (#6427)
+        *HttpClientConnection conn = connection_ref;
+        if (conn) {
             try {
-                connection_ref.onConnectionReady();
+                conn.onConnectionReady();
             } catch (hash<ExceptionInfo> ex) {
                 log(LoggerLevel::ERROR, "onConnectionReady exception: %s: %s", ex.err, ex.desc);
             }

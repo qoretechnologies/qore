@@ -3440,6 +3440,12 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
 
     //printd(5, "QoreModuleManager::loadModuleIntern() this: %p name: %s not found\n", this, name);
 
+    // a blacklisted module is refused before any of its forms is looked for: none of them is loaded, and a binary
+    // module that is refused does not fall back to its source
+    if (checkBlacklist(xsink, name)) {
+        return nullptr;
+    }
+
     // see if we are loading a user module from an explicit source
     if (src) {
         QoreString modulePath;
@@ -4223,6 +4229,12 @@ QoreAbstractModule* QoreModuleManager::loadSeparatedModule(ExceptionSink& xsink,
     printd(5, "QoreModuleManager::loadSeparatedModule() path: %s, feature: %s, pgm: %p, reexport: %d, mpgm: %p, "
         "path_pgm: %p, load_opt: %d warning_mask: %d\n", path, feature, pgm, reexport, mpgm, path_pgm,
         load_opt, warning_mask);
+
+    // checked as by the other module loaders, before anything is read
+    if (checkBlacklist(xsink, feature)) {
+        return nullptr;
+    }
+
     if (module_load_check(feature)) {
         xsink.raiseException("LOAD-MODULE-ERROR", "cannot load user module '%s'; recursive module dependency "
             "detected", feature);
@@ -4669,8 +4681,8 @@ ChildAttachHelper::~ChildAttachHelper() {
     loaded by \c %%requires, which has no warning sink separate from its exception sink (raising the warning
     there would make it a parse error), the warning is a parse warning of the code with the directive.
 
-    A skipped child (\c MODULE-CHILD-SKIPPED) reflects a deliberate restriction in the container Program and is
-    only reported when warnings are enabled.
+    A skipped child (\c MODULE-CHILD-SKIPPED) reflects a deliberate restriction (the child is blacklisted, or the
+    container Program cannot load modules) and is only reported when warnings are enabled.
 */
 static void qore_report_child_module_not_attached(ExceptionSink& xsink, ExceptionSink& wsink,
         int warning_mask, const char* mod_name, const ChildModuleInfo& c) {
@@ -4771,6 +4783,21 @@ int QoreModuleManager::attachChildModules(QoreAbstractModule& mi, ExceptionSink&
         // diagnostic.  The recorded failure stays visible in the module hash
         if (c.status == CMS_ATTACHED || c.status == CMS_ABSENT || c.status == CMS_FAILED) {
             continue;
+        }
+
+        // a blacklisted child is excluded on purpose, whether or not it is installed: it is skipped, not loaded,
+        // and as a module cannot be removed from the blacklist, the skip is final and reported once
+        {
+            bl_map_t::const_iterator bi = mod_blacklist.find(c.name);
+            if (bi != mod_blacklist.end()) {
+                QoreStringMaker reason("module '%s' was blacklisted %s", c.name.c_str(), bi->second.c_str());
+                if (c.status != CMS_SKIPPED || c.desc != reason.c_str()) {
+                    c.status = CMS_SKIPPED;
+                    c.desc = reason.c_str();
+                    qore_report_child_module_not_attached(xsink, wsink, warning_mask, mi.getName(), c);
+                }
+                continue;
+            }
         }
 
         if (no_modules) {
@@ -5231,6 +5258,17 @@ int QoreModuleManager::addModuleToBlacklist(const char* name, const char* msg) {
     QoreAbstractModule* mi = findModuleUnlocked(name);
     if (mi) {
         return -1;
+    }
+    // a module whose load is in progress cannot be blacklisted either: every loader checks the blacklist before it
+    // reserves the module's feature name in module_load_map with the mutex held, and then releases the mutex while
+    // the module is parsed and initialized, so a module blacklisted then would still be loaded and registered.  A
+    // terminal entry (loaded or failed) that is only kept for the threads waiting on it is not a load in progress:
+    // a loaded module is found above, and a module that failed to load can be blacklisted
+    {
+        module_load_map_t::const_iterator li = module_load_map.find(name);
+        if (li != module_load_map.end() && li->second.state == MLS_INITIALIZING) {
+            return -1;
+        }
     }
 
     // check if it's been blacklisted

@@ -1511,7 +1511,7 @@ static bool readDeferredMemberDefault(
             return false;
         }
         uint32_t blob_size = QoreAOTBinaryReader::readU32(ptr);
-        if (ptr + blob_size > end) {
+        if (end < ptr || blob_size > static_cast<size_t>(end - ptr)) {
             error = "expr_tree blob exceeds section bounds";
             return false;
         }
@@ -1530,7 +1530,7 @@ static bool readDeferredMemberDefault(
             return false;
         }
         uint32_t blob_size = QoreAOTBinaryReader::readU32(ptr);
-        if (ptr + blob_size > end) {
+        if (end < ptr || blob_size > static_cast<size_t>(end - ptr)) {
             error = "native expr blob exceeds section bounds";
             return false;
         }
@@ -4606,6 +4606,12 @@ bool QoreAOTBinaryReader::open(const uint8_t* in_data, uint32_t in_size, std::st
         string_pool_size = stored_string_pool_size;
     }
     ptr += stored_string_pool_size;
+    // every string of the pool ends with a NUL, so a string that getString() gives ends in the pool; a pool whose
+    // last string is not terminated would be read past its end (qore#6265)
+    if (string_pool_size && string_pool[string_pool_size - 1] != '\0') {
+        error = "the string pool is not terminated";
+        return false;
+    }
 
     // Remaining data is the data area
     data_area = ptr;
@@ -4664,6 +4670,38 @@ bool QoreAOTBinaryReader::open(const uint8_t* in_data, uint32_t in_size, std::st
         }
     }
 
+    return true;
+}
+
+//! Returns true and sets \a error if a read of the section \a name went past its end (qore#6265)
+static bool qore_aot_section_overrun(const QoreAOTSectionBounds& bounds, const char* name, std::string& error) {
+    if (!bounds.overrun()) {
+        return false;
+    }
+    error = std::string("truncated ") + name + " section";
+    return true;
+}
+
+//! Returns true if \a count records of at least \a min_size bytes fit in the rest of the section that the thread
+//! reads, or if it reads none (qore#6265)
+static bool qore_aot_count_fits(uint64_t count, size_t min_size, const uint8_t* ptr) {
+    const uint8_t* end = qore_aot_read_bounds.end;
+    if (!end) {
+        return true;
+    }
+    size_t remaining = ptr < end ? static_cast<size_t>(end - ptr) : 0;
+    return count <= remaining / (min_size ? min_size : 1);
+}
+
+//! Returns true and sets \a error if \a count records of at least \a min_size bytes do not fit in the rest of the
+//! section \a name (qore#6265)
+static bool qore_aot_count_exceeds(const QoreAOTSectionBounds& bounds, uint64_t count, size_t min_size,
+        const uint8_t* ptr, const char* name, std::string& error) {
+    if (bounds.fits(count, min_size, ptr)) {
+        return false;
+    }
+    error = std::string("truncated ") + name + " section: " + std::to_string(count) + " entries do not fit in "
+        + std::to_string(bounds.remaining(ptr)) + " bytes";
     return true;
 }
 
@@ -5068,7 +5106,7 @@ QoreValue QoreAOTBinaryReader::readValueIntern(const uint8_t*& ptr, const uint8_
             if (len == 0) {
                 return QoreValue(new BinaryNode());
             }
-            if (ptr + len > end) {
+            if (end < ptr || len > static_cast<size_t>(end - ptr)) {
                 error = "unexpected end of data reading binary payload";
                 return QoreValue();
             }
@@ -5483,7 +5521,7 @@ QoreValue QoreAOTBinaryReader::readValueIntern(const uint8_t*& ptr, const uint8_
                 return QoreValue();
             }
             uint32_t blob_size = QoreAOTBinaryReader::readU32(ptr);
-            if (ptr + blob_size > end) {
+            if (end < ptr || blob_size > static_cast<size_t>(end - ptr)) {
                 error = "expr_tree blob exceeds section bounds";
                 return QoreValue();
             }
@@ -5500,7 +5538,7 @@ QoreValue QoreAOTBinaryReader::readValueIntern(const uint8_t*& ptr, const uint8_
                 return QoreValue();
             }
             uint32_t blob_size = QoreAOTBinaryReader::readU32(ptr);
-            if (ptr + blob_size > end) {
+            if (end < ptr || blob_size > static_cast<size_t>(end - ptr)) {
                 error = "native expr blob exceeds section bounds";
                 return QoreValue();
             }
@@ -6905,33 +6943,34 @@ static bool collectAOTSlotMapFunctionNames(const QoreAOTBinaryReader& reader,
     if (!ptr) {
         return true;
     }
-    const uint8_t* end = ptr + sec->size;
-    if (ptr + sizeof(uint32_t) > end) {
+    // the names are collected as far as the section is well formed; every read is in the section (qore#6265)
+    QoreAOTSectionBounds bounds(ptr, sec->size);
+    if (bounds.remaining(ptr) < sizeof(uint32_t)) {
         return true;
     }
 
     uint32_t num_funcs = QoreAOTBinaryReader::readU32(ptr);
-    qoreAOTReserveAdditional(slot_map_names, num_funcs);
-    for (uint32_t i = 0; i < num_funcs && ptr + sizeof(uint32_t) <= end; ++i) {
+    // an entry has at least its size
+    if (bounds.fits(num_funcs, sizeof(uint32_t), ptr)) {
+        qoreAOTReserveAdditional(slot_map_names, num_funcs);
+    }
+    for (uint32_t i = 0; i < num_funcs && bounds.remaining(ptr) >= sizeof(uint32_t); ++i) {
         if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT slot map name collection")) {
             error = "operation cancelled during AOT slot map name collection";
             return false;
         }
-        const uint8_t* entry_start = ptr;
         uint32_t entry_size = QoreAOTBinaryReader::readU32(ptr);
-        const uint8_t* entry_end = ptr + entry_size;
-        if (entry_end < ptr || entry_end > end) {
+        // an entry starts with the reference of its function name
+        if (entry_size < sizeof(uint32_t) || entry_size > bounds.remaining(ptr)) {
             break;
         }
+        const uint8_t* entry_end = ptr + entry_size;
         if (const char* name = reader.readStringRef(ptr)) {
             if (*name) {
                 slot_map_names.insert(name);
             }
         }
         ptr = entry_end;
-        if (ptr <= entry_start) {
-            break;
-        }
     }
     return true;
 }
@@ -10234,7 +10273,8 @@ bool readCallRelocations(const QoreAOTBinaryReader& reader, QoreAOTCallRelocatio
         return false;
     }
     uint32_t count = QoreAOTBinaryReader::readU32(ptr);
-    if (count > 1000000) {
+    // a record has at least a string reference: a count that does not fit is refused before the reserve (qore#6265)
+    if (count > 1000000 || count > static_cast<size_t>(end - ptr) / 4) {
         error = "invalid CALL_RELOCATIONS record count";
         return false;
     }
@@ -15062,8 +15102,13 @@ bool readInitFuncs(const QoreAOTBinaryReader& reader,
         error = "invalid INIT_FUNCS section data";
         return false;
     }
+    QoreAOTSectionBounds bounds(ptr, sec->size);
 
     uint32_t count = QoreAOTBinaryReader::readU32(ptr);
+    if (qore_aot_section_overrun(bounds, "INIT_FUNCS", error)
+            || qore_aot_count_exceeds(bounds, count, 13, ptr, "INIT_FUNCS", error)) {
+        return false;
+    }
     init_funcs.reserve(count);
 
     for (uint32_t i = 0; i < count; ++i) {
@@ -15089,6 +15134,9 @@ bool readInitFuncs(const QoreAOTBinaryReader& reader,
         }
         desc.item_name = item_name;
         init_funcs.push_back(std::move(desc));
+    }
+    if (qore_aot_section_overrun(bounds, "INIT_FUNCS", error)) {
+        return false;
     }
 
     return true;
@@ -15900,6 +15948,13 @@ bool QoreAOTBinaryDeserializer::resolvePluginImports(std::string& error) {
         return false;
     }
     uint32_t import_count = QoreAOTBinaryReader::readU32(ptr);
+    // an import has at least the 12 bytes of its fixed fields: a count that does not fit is refused before the
+    // reserves (qore#6265)
+    if (import_count > static_cast<size_t>(end - ptr) / 12) {
+        error = "truncated PLUGIN_IMPORTS section: " + std::to_string(import_count)
+            + " imports do not fit in the section";
+        return false;
+    }
     tracePluginQord("load: resolving " + std::to_string(import_count) + " plugin import(s)");
     plugin_imports_resolved.reserve(import_count);
     std::vector<std::vector<uint16_t>> required_type_ids;
@@ -16508,7 +16563,12 @@ bool QoreAOTBinaryDeserializer::resolveTypeTable(std::string& error) {
         error = "invalid TYPE_TABLE section data";
         return false;
     }
+    QoreAOTSectionBounds bounds(ptr, sec->size);
     uint32_t count = QoreAOTBinaryReader::readU32(ptr);
+    if (qore_aot_section_overrun(bounds, "TYPE_TABLE", error)
+            || qore_aot_count_exceeds(bounds, count, 4, ptr, "TYPE_TABLE", error)) {
+        return false;
+    }
     type_table_resolved.resize(count);
     type_table_paths.resize(count);
     for (uint32_t i = 0; i < count; ++i) {
@@ -16536,6 +16596,9 @@ bool QoreAOTBinaryDeserializer::resolveTypeTable(std::string& error) {
             ti = autoTypeInfo;
         }
         type_table_resolved[i] = ti;
+    }
+    if (qore_aot_section_overrun(bounds, "TYPE_TABLE", error)) {
+        return false;
     }
     return true;
 }
@@ -16950,8 +17013,20 @@ bool QoreAOTBinaryDeserializer::deserializeNamespaces(std::string& error) {
         error = "invalid NAMESPACES section data";
         return false;
     }
-
+    // every read is checked against the end of the section (qore#6265)
+    const uint8_t* end = ptr + sec->size;
+    // a namespace record: name and path string references, parent index, depth (u32 each), flags (u16)
+    static constexpr size_t ns_record_size = 4 + 4 + 4 + 4 + 2;
+    if (static_cast<size_t>(end - ptr) < 4) {
+        error = "truncated NAMESPACES section: no namespace count";
+        return false;
+    }
     uint32_t count = QoreAOTBinaryReader::readU32(ptr);
+    if (count > static_cast<size_t>(end - ptr) / ns_record_size) {
+        error = "truncated NAMESPACES section: " + std::to_string(count) + " namespaces do not fit in "
+            + std::to_string(end - ptr) + " bytes";
+        return false;
+    }
     ns_list.resize(count);
 
     // Get program's root namespace
@@ -16981,12 +17056,19 @@ bool QoreAOTBinaryDeserializer::deserializeNamespaces(std::string& error) {
     };
 
     for (uint32_t i = 0; i < count; ++i) {
+        // the count was checked against the size of the section, so every record is in it
+        assert(static_cast<size_t>(end - ptr) >= ns_record_size);
         const char* name = reader.readStringRef(ptr);
         const char* path = reader.readStringRef(ptr);
         uint32_t parent_idx = QoreAOTBinaryReader::readU32(ptr);
         uint32_t depth = QoreAOTBinaryReader::readU32(ptr);
         uint16_t flags = QoreAOTBinaryReader::readU16(ptr);
         (void)depth;
+        // a string reference outside of the string pool gives no string; every namespace but the root has a name
+        if (!name && parent_idx != UINT32_MAX) {
+            error = "invalid NAMESPACES section: namespace " + std::to_string(i) + " has an invalid name reference";
+            return false;
+        }
 
         if (parent_idx == UINT32_MAX) {
             // Root namespace - use existing
@@ -17055,8 +17137,14 @@ bool QoreAOTBinaryDeserializer::deserializeClasses(std::string& error) {
         return false;
     }
     const uint8_t* end = ptr + sec->size;
+    QoreAOTSectionBounds bounds(ptr, sec->size);
 
     uint32_t count = QoreAOTBinaryReader::readU32(ptr);
+    // a class has at least its name, path, namespace index, flags and domain
+    if (qore_aot_section_overrun(bounds, "CLASSES", error)
+            || qore_aot_count_exceeds(bounds, count, 22, ptr, "CLASSES", error)) {
+        return false;
+    }
     class_list.resize(count);
     class_signature_hashes.resize(count);
     class_injected_paths.resize(count);
@@ -17109,9 +17197,20 @@ bool QoreAOTBinaryDeserializer::deserializeClasses(std::string& error) {
         uint32_t ns_idx = QoreAOTBinaryReader::readU32(ptr);
         uint16_t flags = QoreAOTBinaryReader::readU16(ptr);
         int64_t domain = QoreAOTBinaryReader::readI64(ptr);
+        if (qore_aot_section_overrun(bounds, "CLASSES", error)) {
+            return false;
+        }
+        if (!name) {
+            error = "invalid CLASSES section: class " + std::to_string(i) + " has an invalid name reference";
+            return false;
+        }
+        if (!path) {
+            error = "invalid CLASSES section: class '" + class_name + "' has an invalid path reference";
+            return false;
+        }
         if (has_class_hash) {
             uint8_t hash_valid = QoreAOTBinaryReader::readU8(ptr);
-            if (ptr + SH_SIZE > end) {
+            if (end < ptr || static_cast<size_t>(end - ptr) < SH_SIZE) {
                 error = "invalid class signature hash for class '" + std::string(name) + "'";
                 return false;
             }
@@ -17127,6 +17226,9 @@ bool QoreAOTBinaryDeserializer::deserializeClasses(std::string& error) {
         std::vector<QoreGenericTypeParam> type_params;
         if (has_class_type_params) {
             uint32_t type_param_count = QoreAOTBinaryReader::readU32(ptr);
+            if (qore_aot_count_exceeds(bounds, type_param_count, 4, ptr, "CLASSES", error)) {
+                return false;
+            }
             type_params.reserve(type_param_count);
             std::unordered_set<std::string> seen_type_params;
             qoreAOTReserveAdditional(seen_type_params, type_param_count);
@@ -17246,6 +17348,10 @@ bool QoreAOTBinaryDeserializer::deserializeClasses(std::string& error) {
 
         // Read base classes (store paths for later resolution)
         uint32_t num_bases = QoreAOTBinaryReader::readU32(ptr);
+        // a base class has at least its path and access
+        if (qore_aot_count_exceeds(bounds, num_bases, 5, ptr, "CLASSES", error)) {
+            return false;
+        }
         std::vector<PendingBaseClass> bases;
         bases.reserve(num_bases);
         for (uint32_t j = 0; j < num_bases; ++j) {
@@ -17282,6 +17388,10 @@ bool QoreAOTBinaryDeserializer::deserializeClasses(std::string& error) {
 
         // Read instance members (store for later resolution after hashdecls/enums)
         uint32_t num_members = QoreAOTBinaryReader::readU32(ptr);
+        // a member has two references and three flag bytes at least (qore#6265)
+        if (qore_aot_count_exceeds(bounds, num_members, 11, ptr, "CLASSES", error)) {
+            return false;
+        }
         std::vector<PendingInstanceMember> instance_members;
         if (!class_already_existed) {
             // a member has 8 bytes at least: a malformed count allocates no more than the data can hold (qore#5848)
@@ -17326,6 +17436,10 @@ bool QoreAOTBinaryDeserializer::deserializeClasses(std::string& error) {
 
         // Read static members (store for later resolution)
         uint32_t num_static = QoreAOTBinaryReader::readU32(ptr);
+        // a static member has at least its name and type path
+        if (qore_aot_count_exceeds(bounds, num_static, 8, ptr, "CLASSES", error)) {
+            return false;
+        }
         std::vector<PendingStaticMember> static_members;
         if (!class_already_existed) {
             static_members.reserve(num_static);
@@ -17368,6 +17482,10 @@ bool QoreAOTBinaryDeserializer::deserializeClasses(std::string& error) {
 
         // Read class constants (store for later resolution after hashdecls/enums)
         uint32_t num_consts = QoreAOTBinaryReader::readU32(ptr);
+        // a constant has at least its name and type path
+        if (qore_aot_count_exceeds(bounds, num_consts, 8, ptr, "CLASSES", error)) {
+            return false;
+        }
         std::vector<PendingClassConstant> class_constants;
         if (!class_already_existed) {
             class_constants.reserve(num_consts);
@@ -17424,6 +17542,10 @@ bool QoreAOTBinaryDeserializer::deserializeClasses(std::string& error) {
             }
         }
         pending_class_constants.push_back(std::move(class_constants));
+        // the values read past the end of the section are 0: they are not used
+        if (qore_aot_section_overrun(bounds, "CLASSES", error)) {
+            return false;
+        }
     }
 
     if (has_class_injection) {
@@ -18603,8 +18725,14 @@ bool QoreAOTBinaryDeserializer::deserializeHashDecls(std::string& error) {
         return false;
     }
     const uint8_t* end = ptr + sec->size;
+    QoreAOTSectionBounds bounds(ptr, sec->size);
 
     uint32_t count = QoreAOTBinaryReader::readU32(ptr);
+    // a hashdecl has at least its name, path, namespace index, flags, parent path and member count
+    if (qore_aot_section_overrun(bounds, "HASHDECLS", error)
+            || qore_aot_count_exceeds(bounds, count, 22, ptr, "HASHDECLS", error)) {
+        return false;
+    }
 
     // Two-pass approach: first create all hashdecls, then resolve parent pointers
     struct HashdeclInfo {
@@ -18625,6 +18753,13 @@ bool QoreAOTBinaryDeserializer::deserializeHashDecls(std::string& error) {
         uint32_t ns_idx = QoreAOTBinaryReader::readU32(ptr);
         uint16_t flags = QoreAOTBinaryReader::readU16(ptr);
         const char* parent_path = reader.readStringRef(ptr);
+        if (qore_aot_section_overrun(bounds, "HASHDECLS", error)) {
+            return false;
+        }
+        if (!name) {
+            error = "invalid HASHDECLS section: hashdecl " + std::to_string(i) + " has an invalid name reference";
+            return false;
+        }
         std::vector<QoreGenericTypeParam> type_params;
         if ((reader.getHeader().feature_flags & QORE_AOT_FEAT_HASHDECL_TYPE_PARAMS) != 0) {
             const bool has_type_param_defaults
@@ -18632,6 +18767,9 @@ bool QoreAOTBinaryDeserializer::deserializeHashDecls(std::string& error) {
             const bool has_type_param_bounds
                 = (reader.getHeader().feature_flags & QORE_AOT_FEAT_TYPE_PARAM_BOUNDS) != 0;
             uint16_t type_param_count = QoreAOTBinaryReader::readU16(ptr);
+            if (qore_aot_count_exceeds(bounds, type_param_count, 4, ptr, "HASHDECLS", error)) {
+                return false;
+            }
             type_params.reserve(type_param_count);
             for (uint16_t ti = 0; ti < type_param_count; ++ti) {
                 if (ti && !(ti % 100) && qore_check_cancel(nullptr, "AOT hashdecl type parameter deserialization")) {
@@ -18675,6 +18813,10 @@ bool QoreAOTBinaryDeserializer::deserializeHashDecls(std::string& error) {
         // Constant names are registered batch-wide before resolving defaults.
         std::vector<PendingHashdeclMember> members;
         uint32_t num_members = QoreAOTBinaryReader::readU32(ptr);
+        // a member has two references and a flag byte at least (qore#6265)
+        if (qore_aot_count_exceeds(bounds, num_members, 9, ptr, "HASHDECLS", error)) {
+            return false;
+        }
         // a member has 8 bytes at least: a malformed count allocates no more than the data can hold (qore#5848)
         members.reserve(std::min<size_t>(num_members, ptr < end ? (end - ptr) / 8 : 0));
 
@@ -18695,6 +18837,12 @@ bool QoreAOTBinaryDeserializer::deserializeHashDecls(std::string& error) {
                 }
             }
             members.push_back(std::move(mi));
+        }
+        if (qore_aot_section_overrun(bounds, "HASHDECLS", error)) {
+            for (auto& mi : members) {
+                mi.default_val.discard(nullptr);
+            }
+            return false;
         }
 
         // Validate namespace index
@@ -18810,8 +18958,14 @@ bool QoreAOTBinaryDeserializer::deserializeEnums(std::string& error) {
         return false;
     }
     const uint8_t* end = ptr + sec->size;
+    QoreAOTSectionBounds bounds(ptr, sec->size);
 
     uint32_t count = QoreAOTBinaryReader::readU32(ptr);
+    // an enum has at least its name, path, namespace index, flags, base type and member count
+    if (qore_aot_section_overrun(bounds, "ENUMS", error)
+            || qore_aot_count_exceeds(bounds, count, 22, ptr, "ENUMS", error)) {
+        return false;
+    }
 
     for (uint32_t i = 0; i < count; ++i) {
         const char* name = reader.readStringRef(ptr);
@@ -18819,6 +18973,13 @@ bool QoreAOTBinaryDeserializer::deserializeEnums(std::string& error) {
         uint32_t ns_idx = QoreAOTBinaryReader::readU32(ptr);
         uint16_t flags = QoreAOTBinaryReader::readU16(ptr);
         const char* base_type_path = reader.readStringRef(ptr);
+        if (qore_aot_section_overrun(bounds, "ENUMS", error)) {
+            return false;
+        }
+        if (!name) {
+            error = "invalid ENUMS section: enum " + std::to_string(i) + " has an invalid name reference";
+            return false;
+        }
 
         // Read members first to collect info
         struct EnumMemberInfo {
@@ -18828,6 +18989,10 @@ bool QoreAOTBinaryDeserializer::deserializeEnums(std::string& error) {
         std::vector<EnumMemberInfo> members;
 
         uint32_t num_members = QoreAOTBinaryReader::readU32(ptr);
+        // a member has a reference and a value type byte at least (qore#6265)
+        if (qore_aot_count_exceeds(bounds, num_members, 5, ptr, "ENUMS", error)) {
+            return false;
+        }
         // a member has 8 bytes at least: a malformed count allocates no more than the data can hold (qore#5848)
         members.reserve(std::min<size_t>(num_members, ptr < end ? (end - ptr) / 8 : 0));
         for (uint32_t j = 0; j < num_members; ++j) {
@@ -18837,9 +19002,19 @@ bool QoreAOTBinaryDeserializer::deserializeEnums(std::string& error) {
             if (!error.empty()) {
                 error = "enum '" + std::string(name ? name : "(null)") + "' member '"
                     + emi.name.c_str() + "': " + error;
+                emi.val.discard(nullptr);
+                for (auto& m : members) {
+                    m.val.discard(nullptr);
+                }
                 return false;
             }
             members.push_back(std::move(emi));
+        }
+        if (qore_aot_section_overrun(bounds, "ENUMS", error)) {
+            for (auto& emi : members) {
+                emi.val.discard(nullptr);
+            }
+            return false;
         }
 
         // Validate namespace index
@@ -18953,8 +19128,13 @@ bool QoreAOTBinaryDeserializer::deserializeTypedefs(std::string& error) {
         error = "invalid TYPEDEFS section data";
         return false;
     }
+    QoreAOTSectionBounds bounds(ptr, sec->size);
 
     uint32_t count = QoreAOTBinaryReader::readU32(ptr);
+    if (qore_aot_section_overrun(bounds, "TYPEDEFS", error)
+            || qore_aot_count_exceeds(bounds, count, 13, ptr, "TYPEDEFS", error)) {
+        return false;
+    }
 
     // Store typedefs for later resolution (after all hashdecls/enums exist)
     qoreAOTReserveAdditional(pending_typedefs, count);
@@ -18963,6 +19143,9 @@ bool QoreAOTBinaryDeserializer::deserializeTypedefs(std::string& error) {
         const char* type_path = reader.readStringRef(ptr);
         uint32_t ns_idx = QoreAOTBinaryReader::readU32(ptr);
         uint8_t is_pub = QoreAOTBinaryReader::readU8(ptr);
+        if (qore_aot_section_overrun(bounds, "TYPEDEFS", error)) {
+            return false;
+        }
 
         // Validate namespace index
         if (ns_idx >= ns_list.size() || !ns_list[ns_idx]) {
@@ -18995,8 +19178,14 @@ bool QoreAOTBinaryDeserializer::registerNamespaceConstantShells(std::string& err
         return false;
     }
     const uint8_t* end = ptr + sec->size;
+    QoreAOTSectionBounds bounds(ptr, sec->size);
 
     uint32_t count = QoreAOTBinaryReader::readU32(ptr);
+    // a constant has at least its name, type path, namespace index, access and public flag
+    if (qore_aot_section_overrun(bounds, "CONSTANTS", error)
+            || qore_aot_count_exceeds(bounds, count, 14, ptr, "CONSTANTS", error)) {
+        return false;
+    }
 
     const bool has_pending_flag =
         (reader.getHeader().feature_flags & QORE_AOT_FEAT_CONST_PENDING) != 0;
@@ -19022,6 +19211,9 @@ bool QoreAOTBinaryDeserializer::registerNamespaceConstantShells(std::string& err
             ? (flags & QORE_AOT_CONST_FLAG_PENDING) : flags;
         bool explicit_type = reader.getHeader().version < QORE_AOT_CONST_EXPLICIT_TYPE_VERSION
             || (flags & QORE_AOT_CONST_FLAG_EXPLICIT_TYPE);
+        if (qore_aot_section_overrun(bounds, "CONSTANTS", error)) {
+            return false;
+        }
 
         QoreAOTDeferredValueBlob value_blob;
         if (!readDeferredValueBlob(ptr, end, error, value_blob)) {
@@ -19226,8 +19418,13 @@ bool QoreAOTBinaryDeserializer::deserializeGlobals(std::string& error) {
         error = "invalid GLOBALS section data";
         return false;
     }
+    QoreAOTSectionBounds bounds(ptr, sec->size);
 
     uint32_t count = QoreAOTBinaryReader::readU32(ptr);
+    if (qore_aot_section_overrun(bounds, "GLOBALS", error)
+            || qore_aot_count_exceeds(bounds, count, 14, ptr, "GLOBALS", error)) {
+        return false;
+    }
 
     for (uint32_t i = 0; i < count; ++i) {
         const char* name = reader.readStringRef(ptr);
@@ -19235,6 +19432,9 @@ bool QoreAOTBinaryDeserializer::deserializeGlobals(std::string& error) {
         uint32_t ns_idx = QoreAOTBinaryReader::readU32(ptr);
         uint8_t is_thread_local = QoreAOTBinaryReader::readU8(ptr);
         uint8_t is_pub = QoreAOTBinaryReader::readU8(ptr);
+        if (qore_aot_section_overrun(bounds, "GLOBALS", error)) {
+            return false;
+        }
 
         if (ns_idx >= ns_list.size() || !ns_list[ns_idx]) {
             error = "invalid namespace index " + std::to_string(ns_idx) +
@@ -19352,7 +19552,7 @@ static bool skipAOTVariantSignature(const QoreAOTBinaryReader& reader,
 
     if (reader.getHeader().version >= 10 && (sig_flags & 0x0008)) {
         uint32_t type_param_count = QoreAOTBinaryReader::readU32(ptr);
-        if (!type_param_count || type_param_count > UINT16_MAX) {
+        if (!type_param_count || type_param_count > UINT16_MAX || !qore_aot_count_fits(type_param_count, 4, ptr)) {
             error = "invalid callable type parameter count: " + std::to_string(type_param_count);
             return false;
         }
@@ -19367,6 +19567,11 @@ static bool skipAOTVariantSignature(const QoreAOTBinaryReader& reader,
         }
     }
 
+    // a parameter has two 4-byte fields at least (qore#6265)
+    if (!qore_aot_count_fits(num_params, 8, ptr)) {
+        error = "truncated variant signature: " + std::to_string(num_params) + " parameters";
+        return false;
+    }
     for (uint32_t p = 0; p < num_params; ++p) {
         if (p && !(p % 100) && qore_check_cancel(nullptr, "AOT variant signature skip")) {
             error = "operation cancelled during AOT variant signature skip";
@@ -19490,7 +19695,7 @@ static bool readAndSetupVariantSignature(
     UserSignature* sig = uvb->getUserSignature();
     if (has_callable_type_params) {
         uint32_t type_param_count = QoreAOTBinaryReader::readU32(ptr);
-        if (!type_param_count || type_param_count > UINT16_MAX) {
+        if (!type_param_count || type_param_count > UINT16_MAX || !qore_aot_count_fits(type_param_count, 4, ptr)) {
             error = "invalid callable type parameter count: " + std::to_string(type_param_count);
             return false;
         }
@@ -19529,6 +19734,10 @@ static bool readAndSetupVariantSignature(
     std::vector<const QoreTypeInfo*> param_types;
     std::vector<QoreValue> param_defaults;
     std::vector<uint8_t> param_flags;
+    if (!qore_aot_count_fits(np, 4, ptr) || qore_aot_read_bounds.overrun) {
+        error = "truncated variant signature: " + std::to_string(np) + " parameters do not fit in the section";
+        return false;
+    }
     param_names.reserve(np);
     param_types.reserve(np);
     param_defaults.resize(np);  // sparse by has_default — keep indexed
@@ -19926,14 +20135,25 @@ bool QoreAOTBinaryDeserializer::deserializeFunctions(std::string& error) {
         return false;
     }
     const uint8_t* end = ptr + sec->size;
+    QoreAOTSectionBounds bounds(ptr, sec->size);
 
     uint32_t count = QoreAOTBinaryReader::readU32(ptr);
+    // a function has at least its name, namespace index, flags and variant count
+    if (qore_aot_section_overrun(bounds, "FUNCTIONS", error)
+            || qore_aot_count_exceeds(bounds, count, 14, ptr, "FUNCTIONS", error)) {
+        return false;
+    }
 
     for (uint32_t i = 0; i < count; ++i) {
         const char* name = reader.readStringRef(ptr);
         uint32_t ns_idx = QoreAOTBinaryReader::readU32(ptr);
         uint16_t flags = QoreAOTBinaryReader::readU16(ptr);
         uint32_t num_variants = QoreAOTBinaryReader::readU32(ptr);
+        // a variant has at least its return type and parameter count
+        if (qore_aot_section_overrun(bounds, "FUNCTIONS", error)
+                || qore_aot_count_exceeds(bounds, num_variants, 8, ptr, "FUNCTIONS", error)) {
+            return false;
+        }
 
         if (!name || !*name || ns_idx >= ns_list.size() || !ns_list[ns_idx]) {
             error = "invalid function entry";
@@ -19985,7 +20205,8 @@ bool QoreAOTBinaryDeserializer::deserializeFunctions(std::string& error) {
             const std::vector<const char*>* tp = uses_type_table ? &type_table_paths : nullptr;
             if (!readAndSetupVariantSignature(reader, type_resolver, pgm, ptr, end,
                     ufv, sig_has_ellipsis, needs_extra_args_flag, entry_first_line,
-                    entry_last_line, variant_parse_options, error, nullptr, tt, tp)) {
+                    entry_last_line, variant_parse_options, error, nullptr, tt, tp)
+                    || qore_aot_section_overrun(bounds, "FUNCTIONS", error)) {
                 // variant ownership transfers to addPendingVariant or cleanup
                 ufv->deref();
                 // function can't be deleted directly; add it to namespace empty
@@ -20034,6 +20255,10 @@ bool QoreAOTBinaryDeserializer::deserializeFunctions(std::string& error) {
         printd(5, "AOT deser: created function '%s' with %d variant(s)\n", name, num_variants);
     }
 
+    // the last records, also those of skipped functions, were read within the section (qore#6265)
+    if (qore_aot_section_overrun(bounds, "FUNCTIONS", error)) {
+        return false;
+    }
     return true;
 }
 
@@ -20048,8 +20273,14 @@ bool QoreAOTBinaryDeserializer::deserializeMethods(std::string& error) {
         return false;
     }
     const uint8_t* end = ptr + sec->size;
+    QoreAOTSectionBounds bounds(ptr, sec->size);
 
     uint32_t count = QoreAOTBinaryReader::readU32(ptr);
+    // a method has at least its class index, name, static flag and variant count
+    if (qore_aot_section_overrun(bounds, "METHODS", error)
+            || qore_aot_count_exceeds(bounds, count, 13, ptr, "METHODS", error)) {
+        return false;
+    }
 
     // Fine-grained sub-timing for the per-variant inner loop.
     // Gated by QORE_AOT_PHASE_TIMING; totals across all sessions
@@ -20070,6 +20301,15 @@ bool QoreAOTBinaryDeserializer::deserializeMethods(std::string& error) {
         const char* method_name = reader.readStringRef(ptr);
         uint8_t is_static = QoreAOTBinaryReader::readU8(ptr);
         uint32_t num_variants = QoreAOTBinaryReader::readU32(ptr);
+        // a variant has at least its access, flags, return type and parameter count
+        if (qore_aot_section_overrun(bounds, "METHODS", error)
+                || qore_aot_count_exceeds(bounds, num_variants, 10, ptr, "METHODS", error)) {
+            return false;
+        }
+        if (!method_name) {
+            error = "invalid METHODS section: method " + std::to_string(i) + " has an invalid name reference";
+            return false;
+        }
 
         if (class_idx >= class_list.size() || !class_list[class_idx]) {
             error = "invalid class index for method '" + std::string(method_name ? method_name : "") + "'";
@@ -20161,7 +20401,8 @@ bool QoreAOTBinaryDeserializer::deserializeMethods(std::string& error) {
             const std::vector<const char*>* tp = uses_type_table ? &type_table_paths : nullptr;
             if (!readAndSetupVariantSignature(reader, type_resolver, pgm, ptr, end,
                     umv, sig_has_ellipsis, needs_extra_args_flag, entry_first_line,
-                    entry_last_line, variant_parse_options, error, qc, tt, tp)) {
+                    entry_last_line, variant_parse_options, error, qc, tt, tp)
+                    || qore_aot_section_overrun(bounds, "METHODS", error)) {
                 delete mvb;
                 return false;
             }
@@ -20233,6 +20474,7 @@ bool QoreAOTBinaryDeserializer::deserializeMethods(std::string& error) {
                                     if (mi && !(mi % 100)
                                             && qore_check_cancel(nullptr, "AOT BCA named argument map deserialization")) {
                                         error = "operation cancelled during AOT BCA named argument map deserialization";
+                                        delete mvb;
                                         return false;
                                     }
                                     entry.source_to_param.push_back(QoreAOTBinaryReader::readU16(ptr));
@@ -20250,11 +20492,22 @@ bool QoreAOTBinaryDeserializer::deserializeMethods(std::string& error) {
 
                             // Read raw arg blobs (advance ptr but don't deserialize)
                             uint16_t num_args = QoreAOTBinaryReader::readU16(ptr);
+                            if (qore_aot_count_exceeds(bounds, num_args, 4, ptr, "METHODS", error)) {
+                                delete mvb;
+                                return false;
+                            }
                             entry.arg_blobs.reserve(num_args);
                             for (uint16_t ai = 0; ai < num_args; ++ai) {
                                 uint32_t blob_size = QoreAOTBinaryReader::readU32(ptr);
+                                // a blob that does not fit in the section ends the read
+                                if (blob_size > bounds.remaining(ptr)) {
+                                    error = "truncated METHODS section: a base constructor argument of "
+                                        + std::to_string(blob_size) + " bytes does not fit in the section";
+                                    delete mvb;
+                                    return false;
+                                }
                                 PendingBCAArgBlob ab;
-                                ab.data = (blob_size > 0 && ptr + blob_size <= end) ? ptr : nullptr;
+                                ab.data = blob_size > 0 ? ptr : nullptr;
                                 ab.size = blob_size;
                                 entry.arg_blobs.push_back(ab);
                                 ptr += blob_size;
@@ -20356,6 +20609,10 @@ bool QoreAOTBinaryDeserializer::deserializeMethods(std::string& error) {
         g_aot_dm_sig_us   += local_sig_us;
         g_aot_dm_add_us   += local_add_us;
         g_aot_dm_variants += local_variants;
+    }
+    // the last records, also their base constructor arguments, were read within the section (qore#6265)
+    if (qore_aot_section_overrun(bounds, "METHODS", error)) {
+        return false;
     }
     return true;
 }
@@ -20887,6 +21144,13 @@ bool QoreAOTBinaryDeserializer::deserializeEmbeddedSource(std::string& error) {
         error = "invalid FUNC_SOURCES section data";
         return false;
     }
+    // every read is checked against the end of the section (qore#6265)
+    const uint8_t* end = ptr + sec->size;
+    // the source text reference and the count of the fallback function names
+    if (static_cast<size_t>(end - ptr) < 8) {
+        error = "truncated FUNC_SOURCES section: no source reference or function count";
+        return false;
+    }
 
     // Read the full source text reference
     const char* src = reader.readStringRef(ptr);
@@ -20895,8 +21159,13 @@ bool QoreAOTBinaryDeserializer::deserializeEmbeddedSource(std::string& error) {
         embedded_source_len = strlen(src);
     }
 
-    // Read fallback function names
+    // Read fallback function names: a string reference each
     uint32_t count = QoreAOTBinaryReader::readU32(ptr);
+    if (count > static_cast<size_t>(end - ptr) / 4) {
+        error = "truncated FUNC_SOURCES section: " + std::to_string(count) + " function names do not fit in "
+            + std::to_string(end - ptr) + " bytes";
+        return false;
+    }
     fallback_func_names.reserve(count);
     for (uint32_t i = 0; i < count; ++i) {
         if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT fallback metadata deserialization")) {
@@ -21593,12 +21862,12 @@ bool readReexportModules(const QoreAOTBinaryReader& reader, std::vector<std::str
         error = "invalid REEXPORT_MODULES section data";
         return false;
     }
+    QoreAOTSectionBounds bounds(ptr, sec->size);
 
     uint32_t count = QoreAOTBinaryReader::readU32(ptr);
-    // Sanity check: each entry needs at least 4 bytes (string ref), so count can't exceed section size
-    uint32_t max_entries = sec->size / 4;
-    if (count > max_entries) {
-        error = "reexport module count " + std::to_string(count) + " exceeds section capacity";
+    // each entry is a string reference of 4 bytes, after the count
+    if (qore_aot_section_overrun(bounds, "REEXPORT_MODULES", error)
+            || qore_aot_count_exceeds(bounds, count, 4, ptr, "REEXPORT_MODULES", error)) {
         return false;
     }
     reexport_modules.reserve(count);
@@ -21792,13 +22061,18 @@ bool readModulePathLists(const QoreAOTBinaryReader& reader,
             error = "invalid module-path section data";
             return false;
         }
+        QoreAOTSectionBounds bounds(ptr, sec->size);
         uint32_t count = QoreAOTBinaryReader::readU32(ptr);
+        if (qore_aot_section_overrun(bounds, "module-path", error)
+                || qore_aot_count_exceeds(bounds, count, 4, ptr, "module-path", error)) {
+            return false;
+        }
         out.reserve(count);
         for (uint32_t i = 0; i < count; ++i) {
             const char* s = reader.readStringRef(ptr);
             out.emplace_back(s ? s : "");
         }
-        return true;
+        return !qore_aot_section_overrun(bounds, "module-path", error);
     };
 
     if (!readList(QoreAOTSectionType::MODULE_PATH_PREPEND, prepended)) {
@@ -21851,6 +22125,7 @@ bool readProgramMetadata(const QoreAOTBinaryReader& reader, std::string& exec_cl
         error = "invalid PROGRAM_METADATA section data";
         return false;
     }
+    QoreAOTSectionBounds bounds(ptr, sec->size);
 
     uint8_t has_exec_class = QoreAOTBinaryReader::readU8(ptr);
     if (has_exec_class) {
@@ -21860,7 +22135,7 @@ bool readProgramMetadata(const QoreAOTBinaryReader& reader, std::string& exec_cl
         }
     }
 
-    return true;
+    return !qore_aot_section_overrun(bounds, "PROGRAM_METADATA", error);
 }
 
 void serializeFunctionalDomain(QoreAOTBinaryWriter& writer, const QoreParseOptions& dom) {
@@ -22149,9 +22424,13 @@ bool readEmbeddedSource(const uint8_t* data, uint32_t size, const char*& source,
         error = "invalid FUNC_SOURCES section data";
         return false;
     }
+    QoreAOTSectionBounds bounds(ptr, sec->size);
 
     // Read the full source text reference (first item in FUNC_SOURCES section)
     const char* src = reader.readStringRef(ptr);
+    if (qore_aot_section_overrun(bounds, "FUNC_SOURCES", error)) {
+        return false;
+    }
     if (src && *src) {
         source = src;
         source_len = strlen(src);

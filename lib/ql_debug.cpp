@@ -352,6 +352,19 @@ static QoreValue f_dbg_retired_type_declarations(const QoreListNode* params, Run
     return static_cast<int64>(qore_retired_type_owner_count());
 }
 
+//! Returns the declarations and derived types kept until library cleanup, by kind, and the sizes of the derived type
+//! caches (issue #6419)
+static QoreValue f_dbg_type_retention_breakdown(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    std::map<std::string, int64_t> counts;
+    qore_type_retention_breakdown(counts);
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(bigIntTypeInfo), xsink);
+    for (const auto& i : counts) {
+        rv->setKeyValue(i.first.c_str(), i.second, xsink);
+    }
+    return rv.release();
+}
+
 //! Returns the number of groups of declarations that survived their Program and are not collected yet (issue #5790)
 static QoreValue f_dbg_type_declaration_groups(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     return static_cast<int64>(qore_type_owner_group_count());
@@ -22417,6 +22430,15 @@ static QoreValue f_dbg_get_lvalue_scan_count(const QoreListNode* params, Runtime
     return q_get_lvalue_scan_count();
 }
 
+//! returns the number of parent class edges that the checks of the generic parent instantiations have visited
+/** In all threads, since the library was loaded: a test takes the difference over a parse, so that it can require a
+    bound on the steps of the checks of the classes that the parse declares (qore#6423)
+*/
+static QoreValue f_dbg_generic_parent_check_steps(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return qore_generic_parent_check_steps.load(std::memory_order_relaxed);
+}
+
 //! returns the number of values visited by removal bookkeeping in the current thread
 static QoreValue f_dbg_get_lvalue_removal_visit_count(const QoreListNode* params, RuntimeConfig& rc,
         ExceptionSink* xsink) {
@@ -24680,17 +24702,20 @@ namespace {
 struct DbgHttpHold {
     Counter* reached = nullptr;
     Counter* release = nullptr;
+    //! the object for which the point is armed (compared only, not referenced), or nullptr for any
+    const void* target = nullptr;
 };
 std::mutex dbg_http_hold_m;
 DbgHttpHold dbg_http_holds[static_cast<int>(QoreDbgHttpHoldPoint::Count)];
 }
 
-void qore_dbg_http_hold(QoreDbgHttpHoldPoint point) {
+void qore_dbg_http_hold(QoreDbgHttpHoldPoint point, const void* target) {
     DbgHttpHold h;
     {
         std::lock_guard<std::mutex> l(dbg_http_hold_m);
         DbgHttpHold& armed = dbg_http_holds[static_cast<int>(point)];
-        if (!armed.reached) {
+        // a point armed for an object holds only a thread that reaches it for that object
+        if (!armed.reached || (armed.target && armed.target != target)) {
             return;
         }
         // one-shot: the hold is taken over by this thread
@@ -24796,9 +24821,18 @@ static QoreValue f_dbg_hold_child_program_create_clear(const QoreListNode* param
     handed over, and the connection manager is about to replace it in its pool with the connection that took it over;
     \c "acquired": the connection manager found a connection in its pool for a request and released the pool lock;
     \c "reserve-pending": a stream of a Qore-level HTTP client connection is to be reserved, before the reservation
-    lock is taken
+    lock is taken; \c "error-record": an HTTP/1 or HTTP/3 client, HTTP/3 server, WebSocket server or client, or HTTP
+    client ping poll operation records its first error, holding the lock that protects it, before the error is stored;
+    \c "error-read": a read of the error of one of these poll operations found that lock taken, and is about to wait
+    for it (armed with the release Counter of \c "error-record" as its \a reached Counter and a release Counter of 0,
+    the read releases the thread that records the error once it is certain to wait for it); \c "value-record" and
+    \c "value-read": the same for the output of an HTTP client ping poll operation and the close reason of a
+    WebSocket server poll operation
     @param reached decremented when a thread reaches the point
     @param release the thread waits until it reaches zero
+    @param target if given, only a thread that reaches the point for this object is held: the poll operation of the
+    \c "error-record", \c "error-read", \c "value-record" and \c "value-read" points (the object is compared, not
+    referenced)
 
     @throw DBG-ARGUMENT-ERROR unknown point, or the point is already armed
 */
@@ -24823,6 +24857,14 @@ static QoreValue f_dbg_http_hold_at(const QoreListNode* params, RuntimeConfig& r
         point = static_cast<int>(QoreDbgHttpHoldPoint::Acquired);
     } else if (!strcmp(name->c_str(), "reserve-pending")) {
         point = static_cast<int>(QoreDbgHttpHoldPoint::ReservePending);
+    } else if (!strcmp(name->c_str(), "error-record")) {
+        point = static_cast<int>(QoreDbgHttpHoldPoint::ErrorRecord);
+    } else if (!strcmp(name->c_str(), "error-read")) {
+        point = static_cast<int>(QoreDbgHttpHoldPoint::ErrorRead);
+    } else if (!strcmp(name->c_str(), "value-record")) {
+        point = static_cast<int>(QoreDbgHttpHoldPoint::ValueRecord);
+    } else if (!strcmp(name->c_str(), "value-read")) {
+        point = static_cast<int>(QoreDbgHttpHoldPoint::ValueRead);
     } else {
         xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_http_hold_at(): unknown point '%s'", name->c_str());
         return QoreValue();
@@ -24844,6 +24886,8 @@ static QoreValue f_dbg_http_hold_at(const QoreListNode* params, RuntimeConfig& r
     }
     h.reached = reached.release();
     h.release = release.release();
+    QoreValue target = get_param_value(params, 3);
+    h.target = target.getType() == NT_OBJECT ? static_cast<const void*>(target.get<const QoreObject>()) : nullptr;
     return QoreValue();
 }
 
@@ -25878,6 +25922,14 @@ static QoreValue f_dbg_hold_next_thread_finish(const QoreListNode* params, Runti
     return QoreValue();
 }
 
+//! Holds the next background thread that ends for up to the given milliseconds in a thread-local destructor, after its
+//! thread function has returned (issue #6412)
+static QoreValue f_dbg_hold_next_thread_tls_exit(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    qore_dbg_hold_next_thread_tls_exit(static_cast<int>(get_param_value(params, 0).getAsBigInt()));
+    return QoreValue();
+}
+
 //! Waits until a finishing background thread is held by dbg_hold_next_thread_finish(); returns False on timeout
 static QoreValue f_dbg_wait_thread_finish_held(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     return qore_dbg_wait_thread_finish_held(static_cast<int>(get_param_value(params, 0).getAsBigInt()));
@@ -26051,6 +26103,8 @@ void init_debug_functions(QoreNamespace& qns) {
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_type_declaration_groups", f_dbg_type_declaration_groups, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_type_retention_breakdown", f_dbg_type_retention_breakdown, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, hashTypeInfo);
     qns.addBuiltinVariant("dbg_cyclic_type_declarations", f_dbg_cyclic_type_declarations, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_get_ns_info", f_dbg_get_ns_info, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, hashTypeInfo);
@@ -26097,6 +26151,8 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_sandbox_cpu_used", f_dbg_sandbox_cpu_used, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_hold_next_thread_finish", f_dbg_hold_next_thread_finish, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, nothingTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "ms");
+    qns.addBuiltinVariant("dbg_hold_next_thread_tls_exit", f_dbg_hold_next_thread_tls_exit, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, nothingTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "ms");
     qns.addBuiltinVariant("dbg_wait_thread_finish_held", f_dbg_wait_thread_finish_held, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, boolTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
@@ -26381,6 +26437,8 @@ void init_debug_functions(QoreNamespace& qns) {
         listTypeInfo);
     qns.addBuiltinVariant("dbg_get_lvalue_scan_count", f_dbg_get_lvalue_scan_count, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_generic_parent_check_steps", f_dbg_generic_parent_check_steps, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_get_lvalue_removal_visit_count", f_dbg_get_lvalue_removal_visit_count, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_get_lvalue_removal_allocation_count", f_dbg_get_lvalue_removal_allocation_count,
@@ -26558,9 +26616,10 @@ void init_debug_functions(QoreNamespace& qns) {
         "stream_id");
     qns.addBuiltinVariant("dbg_quic_release_stream_data", f_dbg_quic_release_stream_data, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, nothingTypeInfo);
-    qns.addBuiltinVariant("dbg_http_hold_at", f_dbg_http_hold_at, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 3,
+    qns.addBuiltinVariant("dbg_http_hold_at", f_dbg_http_hold_at, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 4,
         stringTypeInfo, QORE_PARAM_NO_ARG, "point", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "reached",
-        QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "release");
+        QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "release", objectOrNothingTypeInfo, QORE_PARAM_NO_ARG,
+        "target");
     qns.addBuiltinVariant("dbg_http_hold_clear", f_dbg_http_hold_clear, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         nothingTypeInfo);
     qns.addBuiltinVariant("dbg_http_concurrent_closes", f_dbg_http_concurrent_closes, QCF_NO_FLAGS,

@@ -196,3 +196,37 @@ ast, ir, jit, tiered, tiered with thresholds 1 (tlow), qcc -O0 and -O3.
 - Standard call and map rows against R (spinster, same build): `f_four`, `m_four`, `s_four`, `cl_int`, `map_cb` are
   0 or cheaper in every mode (ir -14..-105, tiered/tlow -9..-105, jit 0..-4, qcc 0; `cl_int` qcc -O0 +8.6 is libc
   only, +8.4).
+
+## The values of functional operators and reads through references (issue #6262)
+
+The AST interpreter gives a parameter these arguments with no other reference, so the parameter's write destroys them:
+
+- the values of map, map with select, hash map and hash map with select, which the operator pushes into its result
+  container: the IR lowering releases the value of the operator's expression once it is stored
+  (`QoreIRLowering::releaseStoredOperatorValue()`, ReleaseOwnedTemp; nothing is emitted for a value of a type that
+  holds no object, so the maps of scalars run as before); the IR interpreter's Phi of the operator takes its result
+  container over (`CreateSizedList`, `MakeHash` and the list and hash literals in `buildValueUseCounts()`);
+- over a single value, map, select and map with select give the value itself, which the compiled modes read from the
+  result list: it gets a reference of its own and the list is released (`ownUnwrappedOperatorValue()`);
+- a fold releases its source when it has run, also a source that is a conditional expression (`?:`, `??`, `?*`) of
+  temporaries, or the list that the stages of a lazy pipeline gave it (`FunctionalSourceCapture::intermediate`), and
+  its value, which `lowerWithSourceRelease()` gives a reference of its own (RefSelf), is a temporary that the IR
+  interpreter's call gives (`def_by_call`), as native code gives its cleanup slot; the accumulator Phi that is its own
+  incoming value on the loop's back edge does not keep the Phi after the loop from taking it over;
+- the value of a fold or of such a conditional expression is released once a list or hash literal holds it, as a
+  temporary is (`qore_ir_expr_gives_owned_value()`);
+- a value read through a reference by a local with a reference flag (an untyped or `auto` parameter given `\v`) is
+  held in the slot of its read site in native code: a call gives that slot when it holds the value
+  (`QoreIRToLLVM::givenReferenceReadSlot()`, a select between the slot and a slot that holds NOTHING in
+  `buildArgCleanupArray()`), as the IR interpreter gives the read's cleanup entry.  Such a call is made as a call
+  that gives its arguments (the consume path), also when the local holds no reference, unless it calls a function
+  or a static method whose IR shows that no parameter takes its argument over, or a builtin variant
+  (`qore_ir_call_takes_no_arg_over()`): such a call releases the read when it returns, as before.  When no slot of
+  a read through a reference holds its value (the local held no reference, the usual case), `buildArgCleanupArray()`
+  fills no array and gives null, a direct function call branches to the call of a call that gives nothing
+  (`emitGivenOrPlainCall()`), and the other consume helpers fall through to their plain helpers for a null array.  The AOT compiler
+  does not cache the IR of a closure, so a call that gives a closure an argument does not call its native code
+  directly (`qore_ir_native_closure_call_eligible()`).
+
+The value of a cast is not one of them: the AST interpreter holds a temporary operand of a cast until the statement
+ends (issue #5712), and so do the other modes.

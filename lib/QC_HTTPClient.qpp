@@ -1606,9 +1606,8 @@ hash<auto> msg = httpclient.send(body, "POST", "/path", {"Content-Type": "applic
     bodies without a \c "Content-Length" header.
     @param info An optional reference to an lvalue that will be used as an output variable giving a hash of request
     headers and other information about the HTTP request; this hash contains the following keys:
-    - <tt>[accept-charset]:</tt> this key will be set to an appropriate value from any \c "Accept-Charset" header; if any of
-      \c "*", \c "utf8", or \c "utf-8" are present, then this will be set to \c "utf8", otherwise it will be set to
-      the first requested character encoding in the list
+    - <tt>[accept-charset]:</tt> the response encoding chosen from any \c "Accept-Charset" header by the rule of
+      @ref Qore::get_http_accept_charset() "get_http_accept_charset()" (RFC 9110; \c "utf8" without one)
     - <tt>[charset]:</tt> if there is a \c "charset" declaration in the \c "Content-Type" header, the value is returned in
       this key; a quoted-string value is unquoted
     - <tt>[body-content-type]:</tt> the MIME \c Content-Type for the response body (if any)
@@ -1696,9 +1695,8 @@ hash<auto> msg = httpclient.send(body, "POST", "/path", {"Content-Type": "applic
     @param headers An optional hash of headers to include in the message; values are converted to strings; a list is converted to a string of comma-separated values; headers that differ only in case will be overwritten by the last header in the hash with a matching name with a case-insensitive search
     @param read_response_body If this argument is @ref True, then the object will try to receive a message body even if no \c "Content-Length" header is present in the response. Use this only with broken servers that send message bodies without a \c "Content-Length" header.
     @param info An optional reference to an lvalue that will be used as an output variable giving a hash of request headers and other information about the HTTP request; this hash contains the following keys:
-    - <tt>[accept-charset]:</tt> this key will be set to an appropriate value from any \c "Accept-Charset" header; if any of
-      \c "*", \c "utf8", or \c "utf-8" are present, then this will be set to \c "utf8", otherwise it will be set to
-      the first requested character encoding in the list
+    - <tt>[accept-charset]:</tt> the response encoding chosen from any \c "Accept-Charset" header by the rule of
+      @ref Qore::get_http_accept_charset() "get_http_accept_charset()" (RFC 9110; \c "utf8" without one)
     - <tt>[charset]:</tt> if there is a \c "charset" declaration in the \c "Content-Type" header, the value is returned in
       this key; a quoted-string value is unquoted
     - <tt>[body-content-type]:</tt> the MIME \c Content-Type for the response body (if any)
@@ -2190,9 +2188,8 @@ hash<auto> msg = httpclient.sendWithSendCallback(callback, "POST", "/path", {"Co
     @param timeout_ms the timeout in milliseconds for the socket I/O operations; 0 means use the default timeout value
     @param read_response_body If this argument is @ref True, then the object will try to receive a message body even if no \c "Content-Length" header is present in the response. Use this only with broken servers that send message bodies without a \c "Content-Length" header.
     @param info An optional reference to an lvalue that will be used as an output variable giving a hash of request headers and other information about the HTTP request; this hash contains the following keys:
-    - <tt>[accept-charset]:</tt> this key will be set to an appropriate value from any \c "Accept-Charset" header; if any of
-      \c "*", \c "utf8", or \c "utf-8" are present, then this will be set to \c "utf8", otherwise it will be set to
-      the first requested character encoding in the list
+    - <tt>[accept-charset]:</tt> the response encoding chosen from any \c "Accept-Charset" header by the rule of
+      @ref Qore::get_http_accept_charset() "get_http_accept_charset()" (RFC 9110; \c "utf8" without one)
     - <tt>[charset]:</tt> if there is a \c "charset" declaration in the \c "Content-Type" header, the value is returned in
       this key; a quoted-string value is unquoted
     - <tt>[body-content-type]:</tt> the MIME \c Content-Type for the response body (if any)
@@ -2291,9 +2288,8 @@ httpclient.sendWithRecvCallback(rcv_callback, data, "POST", "/path", {"Content-T
     @param timeout_ms the timeout in milliseconds for the socket I/O operations; 0 means use the default timeout value
     @param read_response_body If this argument is @ref True, then the object will try to receive a message body even if no \c "Content-Length" header is present in the response. Use this only with broken servers that send message bodies without a \c "Content-Length" header.
     @param info An optional reference to an lvalue that will be used as an output variable giving a hash of request headers and other information about the HTTP request; this hash contains the following keys:
-    - <tt>[accept-charset]:</tt> this key will be set to an appropriate value from any \c "Accept-Charset" header; if any of
-      \c "*", \c "utf8", or \c "utf-8" are present, then this will be set to \c "utf8", otherwise it will be set to
-      the first requested character encoding in the list
+    - <tt>[accept-charset]:</tt> the response encoding chosen from any \c "Accept-Charset" header by the rule of
+      @ref Qore::get_http_accept_charset() "get_http_accept_charset()" (RFC 9110; \c "utf8" without one)
     - <tt>[charset]:</tt> if there is a \c "charset" declaration in the \c "Content-Type" header, the value is returned in
       this key; a quoted-string value is unquoted
     - <tt>[body-content-type]:</tt> the MIME \c Content-Type for the response body (if any)
@@ -2389,9 +2385,8 @@ httpclient.sendWithRecvCallback(rcv_callback, data, "POST", "/path", {"Content-T
     @param timeout_ms the timeout in milliseconds for the socket I/O operations; 0 means use the default timeout value
     @param read_response_body If this argument is @ref True, then the object will try to receive a message body even if no \c "Content-Length" header is present in the response. Use this only with broken servers that send message bodies without a \c "Content-Length" header.
     @param info An optional reference to an lvalue that will be used as an output variable giving a hash of request headers and other information about the HTTP request; this hash contains the following keys:
-    - <tt>[accept-charset]:</tt> this key will be set to an appropriate value from any \c "Accept-Charset" header; if any of
-      \c "*", \c "utf8", or \c "utf-8" are present, then this will be set to \c "utf8", otherwise it will be set to
-      the first requested character encoding in the list
+    - <tt>[accept-charset]:</tt> the response encoding chosen from any \c "Accept-Charset" header by the rule of
+      @ref Qore::get_http_accept_charset() "get_http_accept_charset()" (RFC 9110; \c "utf8" without one)
     - <tt>[charset]:</tt> if there is a \c "charset" declaration in the \c "Content-Type" header, the value is returned in
       this key; a quoted-string value is unquoted
     - <tt>[body-content-type]:</tt> the MIME \c Content-Type for the response body (if any)
@@ -2659,9 +2654,8 @@ httpclient.sendWithCallbacks(send_callback, rcv_callback, "POST", "/path", {"Con
     @param timeout_ms the timeout in milliseconds for the socket I/O operations; 0 means use the default timeout value
     @param read_response_body If this argument is @ref True, then the object will try to receive a message body even if no \c "Content-Length" header is present in the response. Use this only with broken servers that send message bodies without a \c "Content-Length" header.
     @param info An optional reference to an lvalue that will be used as an output variable giving a hash of request headers and other information about the HTTP request; this hash contains the following keys:
-    - <tt>[accept-charset]:</tt> this key will be set to an appropriate value from any \c "Accept-Charset" header; if any of
-      \c "*", \c "utf8", or \c "utf-8" are present, then this will be set to \c "utf8", otherwise it will be set to
-      the first requested character encoding in the list
+    - <tt>[accept-charset]:</tt> the response encoding chosen from any \c "Accept-Charset" header by the rule of
+      @ref Qore::get_http_accept_charset() "get_http_accept_charset()" (RFC 9110; \c "utf8" without one)
     - <tt>[charset]:</tt> if there is a \c "charset" declaration in the \c "Content-Type" header, the value is returned in
       this key; a quoted-string value is unquoted
     - <tt>[body-content-type]:</tt> the MIME \c Content-Type for the response body (if any)
@@ -2741,7 +2735,8 @@ nothing HTTPClient::sendWithCallbacks(code send_callback, code receive_callback,
     @param path the path for the message (i.e. \c "/path/resource?method&param=value")
     @param headers An optional hash of headers to include in the message; values are converted to strings; a list is converted to a string of comma-separated values; headers that differ only in case will be overwritten by the last header in the hash with a matching name with a case-insensitive search
     @param info an optional reference to an lvalue that will be used as an output variable giving a hash of request headers and other information about the HTTP request; this hash contains the following keys:
-    - \c accept-charset: this key will be set to an appropriate value from any \c "Accept-Charset" header; if any of \c "*", \c "utf8", or \c "utf-8" are present, then this will be set to \c "utf8", otherwise it will be set to the first requested character encoding in the list
+    - \c accept-charset: the response encoding chosen from any \c "Accept-Charset" header by the rule of
+      @ref Qore::get_http_accept_charset() "get_http_accept_charset()" (RFC 9110; \c "utf8" without one)
     - \c charset: if there is a \c "charset" declaration in the \c "Content-Type" header, the value is returned in this
       key; a quoted-string value is unquoted
     - \c body-content-type: the outgoing message body MIME \c Content-Type value
@@ -2818,7 +2813,8 @@ hash<auto> msg = httpclient.head("/path");
     @param path the path for the message (i.e. \c "/path/resource?method&param=value")
     @param headers An optional hash of headers to include in the message; values are converted to strings; a list is converted to a string of comma-separated values; headers that differ only in case will be overwritten by the last header in the hash with a matching name with a case-insensitive search
     @param info an optional reference to an lvalue that will be used as an output variable giving a hash of request headers and other information about the HTTP request; this hash contains the following keys:
-    - \c accept-charset: this key will be set to an appropriate value from any \c "Accept-Charset" header; if any of \c "*", \c "utf8", or \c "utf-8" are present, then this will be set to \c "utf8", otherwise it will be set to the first requested character encoding in the list
+    - \c accept-charset: the response encoding chosen from any \c "Accept-Charset" header by the rule of
+      @ref Qore::get_http_accept_charset() "get_http_accept_charset()" (RFC 9110; \c "utf8" without one)
     - \c charset: if there is a \c "charset" declaration in the \c "Content-Type" header, the value is returned in this
       key; a quoted-string value is unquoted
     - \c body-content-type: the outgoing message body MIME \c Content-Type value
@@ -2890,7 +2886,8 @@ httpclient.post("/path", body);
     @param body the string to use as the message body
     @param headers An optional hash of headers to include in the message; values are converted to strings; a list is converted to a string of comma-separated values; headers that differ only in case will be overwritten by the last header in the hash with a matching name with a case-insensitive search
     @param info an optional reference to an lvalue that will be used as an output variable giving a hash of request headers and other information about the HTTP request; this hash contains the following keys:
-    - \c accept-charset: this key will be set to an appropriate value from any \c "Accept-Charset" header; if any of \c "*", \c "utf8", or \c "utf-8" are present, then this will be set to \c "utf8", otherwise it will be set to the first requested character encoding in the list
+    - \c accept-charset: the response encoding chosen from any \c "Accept-Charset" header by the rule of
+      @ref Qore::get_http_accept_charset() "get_http_accept_charset()" (RFC 9110; \c "utf8" without one)
     - \c charset: if there is a \c "charset" declaration in the \c "Content-Type" header, the value is returned in this
       key; a quoted-string value is unquoted
     - \c body-content-type: the outgoing message body MIME \c Content-Type value
@@ -2970,7 +2967,8 @@ httpclient.post("/path", body);
     @param body the optional data to use as the message body
     @param headers An optional hash of headers to include in the message; values are converted to strings; a list is converted to a string of comma-separated values; headers that differ only in case will be overwritten by the last header in the hash with a matching name with a case-insensitive search
     @param info an optional reference to an lvalue that will be used as an output variable giving a hash of request headers and other information about the HTTP request; this hash contains the following keys:
-    - \c accept-charset: this key will be set to an appropriate value from any \c "Accept-Charset" header; if any of \c "*", \c "utf8", or \c "utf-8" are present, then this will be set to \c "utf8", otherwise it will be set to the first requested character encoding in the list
+    - \c accept-charset: the response encoding chosen from any \c "Accept-Charset" header by the rule of
+      @ref Qore::get_http_accept_charset() "get_http_accept_charset()" (RFC 9110; \c "utf8" without one)
     - \c charset: if there is a \c "charset" declaration in the \c "Content-Type" header, the value is returned in this
       key; a quoted-string value is unquoted
     - \c body-content-type: the outgoing message body MIME \c Content-Type value

@@ -44,9 +44,10 @@ class LexicalSoftEqualityTest inherits QUnit::Test {
             }', "lexical-soft-equality");
             list<bool> expected = (!legacy, !legacy, legacy, !legacy, !legacy, !legacy);
             foreach int invocation in (0, 1) {
-                assertEq(expected, p.callFunction("sample", value), "nested comparisons keep lexical policy");
+                assertEq(expected, p.callFunction("sample", value),
+                    sprintf("nested comparisons keep lexical policy (invocation %d)", invocation));
                 assertEq((!legacy, !legacy, legacy, !legacy), p.callFunction("typed"),
-                    "typed and constant comparisons keep lexical policy");
+                    sprintf("typed and constant comparisons keep lexical policy (invocation %d)", invocation));
                 if (legacy) p.disableParseOptions(PO_STRICT_BOOLEAN_EVAL);
                 else p.setParseOptions(PO_STRICT_BOOLEAN_EVAL);
             }
@@ -66,7 +67,8 @@ class LexicalSoftEqualityTest inherits QUnit::Test {
             # Non-boolean comparison preserves the existing asymmetric treatment of a weak RHS container.
             list<bool> expected = (!legacy, nested ? False : !legacy);
             foreach int invocation in (0, 1) {
-                assertEq(expected, p.callFunction("sample", target, comparison), "weak references keep lexical policy");
+                assertEq(expected, p.callFunction("sample", target, comparison),
+                    sprintf("weak references keep lexical policy (invocation %d)", invocation));
                 if (legacy) p.disableParseOptions(PO_STRICT_BOOLEAN_EVAL);
                 else p.setParseOptions(PO_STRICT_BOOLEAN_EVAL);
             }
