@@ -505,6 +505,12 @@ LocalVar* push_local_var(const char* name, const QoreProgramLocation* loc,
     //printd(5, "push_local_var(): pushing var %s\n", name);
     if (pflag & PF_TOP_LEVEL) {
         lv->setTopLevel();
+        // a later parse of a Program with PO_ALLOW_REPARSE can capture the variable in a closure or take a reference
+        // to it, after threads have instantiated it: its storage is that of a closure-bound variable from its
+        // declaration, as it cannot change once it is instantiated (issue #6462)
+        if (parse_check_parse_option(QoreParseOptions(PO_ALLOW_REPARSE))) {
+            lv->setClosureUse();
+        }
     }
     new VNode(lv, loc, n_refs, pflag & PF_TOP_LEVEL);
     return lv;
@@ -826,6 +832,12 @@ void TopLevelStatementBlock::parseCommit(QoreProgram* pgm) {
     }
     hwm = statement_list.last();
     committed_native_parse_info = native_parse_info;
+    // the top-level local variables of the parse can now be instantiated by threads (issue #6462)
+    if (lvars) {
+        for (unsigned i = inherited_lvars; i < lvars->size(); ++i) {
+            lvars->lv[i]->setTopLevelCommitted();
+        }
+    }
     markCommitted();
 }
 
