@@ -5133,6 +5133,7 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
 
 void QoreIRLowering::pushBlockCleanup(BlockCleanupEntry entry) {
     entry.temp_scope_depth = builder.getTempScopeDepth();
+    entry.outer_exception_target = getCurrentExceptionTarget();
     entry.open_scopes = scope_stack.size();
     entry.open_catch_depth = catch_cleanup_depth;
     entry.open_try_depth = try_catch_cleanup_depth_stack.size();
@@ -5350,10 +5351,18 @@ bool QoreIRLowering::emitBlockCleanups(size_t target_depth, std::string& error, 
             case BlockCleanupEntry::Lvars:
                 if (!(flags & CF_SKIP_LVARS)) {
                     assert(entry.lvars);
+                    bool may_hold_object = false;
                     for (int j = static_cast<int>(entry.lvars->size()) - 1; j >= 0; --j) {
                         auto* ui = builder.createUninstantiateLocal(entry.lvars->lv[j], entry.loc);
                         // break/continue/return always exit the scope permanently
                         ui->is_block_exit = true;
+                        may_hold_object = may_hold_object
+                            || qore_ir_type_may_hold_object(entry.lvars->lv[j]->getTypeInfo());
+                    }
+                    // an exception raised by a destructor of the locals goes to the cleanups of the enclosing blocks
+                    // and the handler that encloses them, as when the block ends (qore#6084)
+                    if (!is_error && may_hold_object && entry.outer_exception_target) {
+                        builder.createCheckException(entry.loc)->exception_target = entry.outer_exception_target;
                     }
                 }
                 break;
@@ -5362,6 +5371,11 @@ bool QoreIRLowering::emitBlockCleanups(size_t target_depth, std::string& error, 
                     assert(entry.catch_var);
                     auto* ui = builder.createUninstantiateLocal(entry.catch_var, entry.loc);
                     ui->is_block_exit = true;
+                    // see the Lvars entries above (qore#6084)
+                    if (!is_error && entry.outer_exception_target
+                            && qore_ir_type_may_hold_object(entry.catch_var->getTypeInfo())) {
+                        builder.createCheckException(entry.loc)->exception_target = entry.outer_exception_target;
+                    }
                 }
                 break;
             case BlockCleanupEntry::ForeachElement:

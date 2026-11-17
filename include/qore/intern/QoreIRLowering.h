@@ -982,6 +982,10 @@ private:
         //! once the statement has ended goes to (#6128; the hand-over of a return in it, #6074)
         QoreIRBasicBlock* try_outer_target = nullptr;
         const LVList* lvars = nullptr;             //!< local variables for Lvars entries
+        //! the exception target where the entry was pushed, outside the block: an exception that a destructor raises
+        //! when a break, a continue or a return releases the locals of an Lvars or CatchVar entry goes there, to the
+        //! cleanups of the enclosing blocks and the handler that encloses them, as when the block ends (qore#6084)
+        QoreIRBasicBlock* outer_exception_target = nullptr;
         const QoreProgramLocation* loc = nullptr;  //!< location for cleanup instructions
         QoreIRValue ref_foreach_state;             //!< state handle for RefForeach/RefForeachRecord
         //! for a RefForeach entry: the exception target outside the statement, where an exception raised by the
