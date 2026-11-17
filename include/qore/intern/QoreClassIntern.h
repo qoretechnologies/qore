@@ -69,8 +69,16 @@
 */
 DLLLOCAL extern std::atomic<int64> qore_generic_parent_check_steps;
 #define QORE_GENERIC_PARENT_CHECK_STEP() qore_generic_parent_check_steps.fetch_add(1, std::memory_order_relaxed)
+//! the parent class edges that the walks of class hierarchies that set up a class have visited (qore#6499)
+/** BCList::findInHierarchy(), BCList::addBaseClassesToSubclass() and the walks that build the inheritance lists of
+    methods; read by the dbg_class_hierarchy_walk_steps() debug hook, so that a test can require a bound on the steps
+    independent of the timing
+*/
+DLLLOCAL extern std::atomic<int64> qore_class_hierarchy_walk_steps;
+#define QORE_CLASS_HIERARCHY_WALK_STEP() qore_class_hierarchy_walk_steps.fetch_add(1, std::memory_order_relaxed)
 #else
 #define QORE_GENERIC_PARENT_CHECK_STEP()
+#define QORE_CLASS_HIERARCHY_WALK_STEP()
 #endif
 
 // cannot use vector_map here for performance reasons with method lookups

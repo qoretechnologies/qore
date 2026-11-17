@@ -1,0 +1,161 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: parent - the step counts are taken over parses of Programs of the test's own process
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+%requires ../../../TestInterpreter.qm
+
+%exec-class DiamondHierarchyStepsTest
+
+#! the walks of a class hierarchy that set up a class take steps linear in its ancestors, not in its paths (qore#6499)
+/** In a chain of diamonds (each level: two classes inheriting the class of the level below, and a class inheriting
+    both), there are 2^depth paths from the top class to the base class.  The walks that set up a class
+    (BCList::findInHierarchy(), BCList::addBaseClassesToSubclass(), the walks that build the inheritance lists of
+    methods and the search for the implementations of abstract methods) followed every path, so that the parse of a
+    few dozen classes did not end.  Each walk must visit each ancestor once: the walks of a class visit at most its
+    ancestors for each of its ancestors, so the steps of the walks of a whole chain are bounded by the square of the
+    number of its classes times the number of its inheritance edges, and grow polynomially with the depth (about 8
+    times for twice the depth), not with 2^depth.
+
+    The steps are counted by a debug hook of the library, so that check is skipped by a library built without it; a
+    chain of depth 40 is also parsed and run in every execution mode and as a qcc-compiled executable, where the walks
+    on every path did not end.
+*/
+class DiamondHierarchyStepsTest inherits QUnit::Test {
+    public {
+        #! the depths of the chains whose steps are counted
+        const Depths = (5, 10, 20, 40);
+
+        #! the depth of the chain that is run in child processes
+        const RunDepth = 40;
+
+        #! the output expected from the program with the chain of depth RunDepth
+        const Expected = (
+            "calls: [\"X0 1\", \"X40 s\", \"R1 1\"]",
+            "listed: {::X40::s(string str): 1, ::X0::s(int i): 1, ::R1::s(bool b): 1}",
+        );
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+    }
+
+    constructor() : QUnit::Test("DiamondHierarchySteps", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = TestInterpreter::qcc_compiler() ?? "qcc";
+
+        addTestCase("steps of the walks of diamond chains", \stepsTest());
+        addTestCase("a chain of depth 40 in every execution mode and qcc", \runTest());
+        set_return_value(main());
+    }
+
+    #! returns the steps of the hierarchy walks of the parser so far, or NOTHING without the debug hook
+    private static *int steps() {
+        # the debug hook exists in debug builds of the library only
+        try {
+            return call_function("dbg_class_hierarchy_walk_steps");
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "NO-FUNCTION" || ex.err == "UNDEFINED-FUNCTION-CALL") {
+                return;
+            }
+            rethrow;
+        }
+    }
+
+    #! returns the source of a chain of diamonds of the given depth
+    /** \c X0 is the base class; level k has \c Lk and \c Rk inheriting \c X(k-1), and \c Xk inheriting \c Lk and
+        \c Rk.  \c X0 and the top class declare a static method \c s(), and so does \c R1, so that the walks that
+        build the inheritance lists of methods run over the whole chain; \c X0 declares an abstract method that only
+        the top class implements, so that the search for its implementation in each class runs over the chain too.
+        No object is created, as the constructor calls of the classes of such a chain still walk every path
+        (qore#6513).
+    */
+    private static string chain(int depth) {
+        string src = "class X0 { static string s(int i) { return \"X0 \" + i; } abstract string am(); }\n";
+        for (int k = 1; k <= depth; ++k) {
+            src += sprintf("class L%d inherits X%d {}\n", k, k - 1);
+            if (k == 1) {
+                src += "class R1 inherits X0 { static string s(bool b) { return \"R1 \" + b; } }\n";
+            } else {
+                src += sprintf("class R%d inherits X%d {}\n", k, k - 1);
+            }
+            if (k == depth) {
+                src += sprintf("class X%d inherits L%d, R%d { static string s(string str) { return \"X%d \" + str; } "
+                    "string am() { return \"am\"; } }\n", k, k, k, k);
+            } else {
+                src += sprintf("class X%d inherits L%d, R%d {}\n", k, k, k);
+            }
+        }
+        return src;
+    }
+
+    #! parses chains of increasing depth and checks that the steps of the walks are bounded by the chain's size
+    stepsTest() {
+        if (!exists steps()) {
+            testSkip("the library has no class hierarchy step counter (a debug build is required)");
+        }
+        hash<string, int> counts;
+        foreach int depth in (Depths) {
+            # the classes: X0, and three for each level
+            int classes = 1 + 3 * depth;
+            # the inheritance edges: four for each level
+            int edges = 4 * depth;
+            Program p(PO_NEW_STYLE);
+            int before = steps();
+            p.parse(chain(depth), "chain");
+            int n = steps() - before;
+            counts{depth} = n;
+            assertTrue(n > 0, sprintf("depth %d: the walks were counted", depth));
+            assertTrue(n <= classes * classes * edges, sprintf("depth %d: %d steps for %d classes and %d edges (at "
+                "most %d)", depth, n, classes, edges, classes * classes * edges));
+        }
+        # twice the depth: about eight times the steps, not 2^depth times
+        assertTrue(counts{"40"} <= 10 * counts{"20"}, sprintf("steps by depth: %y", counts));
+        assertTrue(counts{"20"} <= 10 * counts{"10"}, sprintf("steps by depth: %y", counts));
+    }
+
+    #! a program with a chain of depth RunDepth runs in every execution mode and as a qcc-compiled executable
+    runTest() {
+        TmpDir tmp("qore-diamond-hierarchy-steps-");
+        string file = tmp.path + DirSep + "chain.q";
+        File f();
+        f.open2(file, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write("%modern\n" + chain(RunDepth)
+            + sprintf("printf(\"calls: %%y\\n\", (X%d::s(1), X%d::s(\"s\"), X%d::s(True)));\n", RunDepth,
+                RunDepth, RunDepth)
+            + "auto bad = (1,);\n"
+            + sprintf("try { X%d::s(bad); } catch (hash<ExceptionInfo> ex) {\n", RunDepth)
+            + "    hash<string, int> h = {};\n"
+            + "    foreach string line in (ex.desc.split(\"\\n\")) {\n"
+            + "        if (line =~ /^ +::/) { string v = trim(line); h{v} = (h{v} ?? 0) + 1; }\n"
+            + "    }\n"
+            + "    printf(\"listed: %y\\n\", h);\n"
+            + "}\n");
+        f.close();
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            checkOutput(mode, ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s "
+                "--exec-mode=%s %s", libqore_dir, libqore_dir, qore_bin, mode, file)));
+        }
+        string exe = tmp.path + DirSep + "chain";
+        string out = backquote(sprintf("QORE_LIBDIR=%s LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s -o %s %s 2>&1",
+            libqore_dir, libqore_dir, libqore_dir, qcc_bin, exe, file));
+        assertTrue(is_file(exe), "compiled the executable: " + out);
+        checkOutput("executable", ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s",
+            libqore_dir, libqore_dir, exe)));
+    }
+
+    private checkOutput(string label, string out) {
+        list<string> lines = (select out.split("\n"), $1);
+        assertEq(Expected, lines, label + ": " + out);
+    }
+}
