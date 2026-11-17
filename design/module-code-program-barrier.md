@@ -77,7 +77,7 @@ as before.  The override is cleared when module code calls code of another Progr
 it once per crossing; `UserVariantBase::eval()` does not compute it again.
 
 The override records the module Program it was computed for (`QoreCallParseOptionsOverride::override_pgm`, kept in
-`ThreadData::runtime_po_override_pgm`).  A call of module code by code of the same module, made in the module's Program
+`ThreadData::runtime_po_state.override_pgm`).  A call of module code by code of the same module, made in the module's Program
 while that override is in effect (`runtime_module_call_override_in_effect()`), keeps it instead of computing it again:
 the override it would compute is the same, as the caller's effective options already hold the module's options and the
 restrictions it inherits, and it runs for the same application and sandbox.  Any other override (that of code of
