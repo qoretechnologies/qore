@@ -12,12 +12,12 @@
       module needs neither a Rust toolchain nor the tree-sitter CLI, which are only needed to change the grammar
       (see the \c BUILDING file)
     - added @ref astparser::AstTree::getHighlights() "AstTree::getHighlights()" and the
-      @ref astparser::AstHighlight "AstHighlight" hashdecl to highlight source with the highlight query of the
+      @ref Qore::AstHighlight "AstHighlight" hashdecl to highlight source with the highlight query of the
       tree-sitter grammar (\c queries/highlights.scm, installed in <tt>share/qore/treesitter/tree-sitter-qore/queries</tt>
       for editors that use tree-sitter)
       (<a href="https://github.com/qoretechnologies/qore/issues/5573">issue 5573</a>)
     - added @ref astparser::AstTree::getErrorRanges() "AstTree::getErrorRanges()" and the
-      @ref astparser::AstErrorRange "AstErrorRange" hashdecl to get the ranges of the source that cannot be parsed
+      @ref Qore::AstErrorRange "AstErrorRange" hashdecl to get the ranges of the source that cannot be parsed
     - added @ref astparser::AstTree::getIdentifierFilter() "AstTree::getIdentifierFilter()" and
       @ref astparser::AstTree::identifierFilterContains() "AstTree::identifierFilterContains()" to test whether an
       identifier can occur in a file without keeping its syntax tree or reading it again
@@ -35,7 +35,7 @@
       including closures in nested hashes and lists: closure parameters and locals are resolved, and the locals of
       the enclosing code are in scope in a closure
     - added @ref astparser::AstTreeSearcher::getExpressionChain() "AstTreeSearcher::getExpressionChain()" and the
-      @ref astparser::AstExpressionLink "AstExpressionLink" hashdecl, which give the receiver chain of an expression
+      @ref Qore::AstExpressionLink "AstExpressionLink" hashdecl, which give the receiver chain of an expression
       such as \c "f.stat().size", so the types of members and call results can be resolved link by link
     - the signatures of functions and methods from
       @ref astparser::AstTreeSearcher::hoverInfo() "AstTreeSearcher::hoverInfo()" include their modifiers and
