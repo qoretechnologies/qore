@@ -406,15 +406,6 @@ LocalVar* push_local_var(const char* name, const QoreProgramLocation* loc,
         const QoreTypeInfo* typeInfo, int& err, bool is_auto, int n_refs, int pflag) {
     QoreProgram* pgm = getProgram();
 
-    if ((pflag & PF_TOP_LEVEL) && (pflag & PF_NO_TOP_LEVEL_LVARS)) {
-        parseException(*loc, "ILLEGAL-TOP-LEVEL-LOCAL-VARIABLE", "cannot declare local variable '%s' in the " \
-            "top-level block; local variables in the top-level block of a Program object can only be declared in " \
-            "the very first parse transaction to the Program object", name);
-        if (!err) {
-            err = -1;
-        }
-    }
-
     LocalVar* lv = qore_program_private::get(*pgm)->createLocalVar(name, typeInfo);
 
     /*
@@ -718,10 +709,6 @@ int TopLevelStatementBlock::parseInit() {
         return -1;
     }
 
-    // Check if we're in REPL mode (allows new local vars in subsequent parse transactions)
-    const QoreParseOptions& current_parse_options = qore_program_private::getParseWarnOptions(getProgram()).parse_options;
-    bool repl_mode = (current_parse_options & QoreParseOptions(PO_ALLOW_REPARSE)) == QoreParseOptions(PO_ALLOW_REPARSE);
-
     if (!first && lvars) {
         // push the already-registered local variables of this program on the stack; the inherited ones are not visible
         // to its code
@@ -731,10 +718,6 @@ int TopLevelStatementBlock::parseInit() {
 
     QoreParseContext parse_context;
     parse_context.setFlags(PF_TOP_LEVEL);
-    if (!first && !repl_mode) {
-        // In REPL mode, allow new local variables in subsequent parse transactions
-        parse_context.setFlags(PF_NO_TOP_LEVEL_LVARS);
-    }
     int err = parseInitIntern(parse_context, hwm);
 
     //printd(5, "TopLevelStatementBlock::parseInit(rns=%p) first=%d, lvids=%d\n", &rns, first, parse_context.lvids);
@@ -758,17 +741,11 @@ int TopLevelStatementBlock::parseInit() {
         // Save count of existing local vars that were pushed before adding new ones
         unsigned existing_lvars = lvars ? lvars->size() - inherited_lvars : 0;
 
-        if (repl_mode) {
-            // In REPL mode, save new local variables to lvars instead of discarding
-            if (parse_context.lvids) {
-                // setupLVList pops new vars from vstack and adds them to lvars
-                setupLVList(parse_context);
-            }
-        } else if (parse_context.lvids) {
-            // In non-REPL mode, discard new variables immediately
-            for (int i = 0; i < parse_context.lvids; ++i) {
-                pop_local_var();
-            }
+        // a later parse is one of a Program with PO_ALLOW_REPARSE (see qore_program_private::checkParseIntern()): its
+        // new top-level local variables are added to lvars, so that they are instantiated with the others
+        if (parse_context.lvids) {
+            // setupLVList pops new vars from vstack and adds them to lvars
+            setupLVList(parse_context);
         }
 
         // pop existing local vars off the stack

@@ -49,7 +49,7 @@
 #define PF_TOP_LEVEL             (1 << 5) //!< parsing at the top-level of the program
 #define PF_BREAK_OK              (1 << 6)
 #define PF_CONTINUE_OK           (1 << 7)
-#define PF_NO_TOP_LEVEL_LVARS    (1 << 8)
+// (1 << 8) was PF_NO_TOP_LEVEL_LVARS
 #define PF_NARROWED_TYPE         (1 << 9) //!< current expression involves a narrowed auto type
 #define PF_CONST_METHOD          (1 << 10) //!< parsing a const method body
 #define PF_EXISTENCE_CHECK       (1 << 11) //!< parsing the operand of exists; an unassigned value is intentional
