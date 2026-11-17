@@ -1,0 +1,232 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - HTTP/1.1 client poll operation completion actions released by other threads while it is used
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Mime
+%requires HttpServerUtil
+%requires HttpServer
+%requires HttpClientIo
+
+%exec-class Http1PollOperationLockReleaseTest
+
+#! answers every request with "ok"
+class OkHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return makeResponse(200, "ok", {"Content-Type": MimeTypeText});
+    }
+}
+
+#! reads the error of an operation from another thread, and records whether the read had to wait for the operation's
+#! lock
+class ReentryCheck {
+    public {
+        #! True once the check ran
+        bool ran = False;
+        #! True if the read did not wait for the lock of the operation
+        bool lock_free = False;
+        #! the error raised by the read, if any
+        *hash<ExceptionInfo> read_ex;
+    }
+
+    private {
+        object op;
+        #! the end of the reading thread
+        Counter done(0);
+    }
+
+    constructor(object op) {
+        self.op = op;
+    }
+
+    #! reads the error of the operation in another thread
+    /** The read releases this thread when it finds the operation's lock taken ("error-read") or when it is done:
+        a read done while this thread waits did not need the lock that this thread may hold
+    */
+    run() {
+        Counter reached(1);
+        call_function("dbg_http_hold_at", "error-read", reached, new Counter(0), op);
+        on_exit call_function("dbg_http_hold_clear");
+        bool read_done = False;
+        done.inc();
+        background sub () {
+            on_exit done.dec();
+            try {
+                op.getError();
+            } catch (hash<ExceptionInfo> ex) {
+                read_ex = ex;
+            }
+            read_done = True;
+            if (reached.getCount()) {
+                reached.dec();
+            }
+        }();
+        # a hang guard only: the reading thread releases this thread either way
+        if (reached.waitForZero(60s)) {
+            throw "TEST-ERROR", "the reading thread did not finish or wait for the operation's lock";
+        }
+        lock_free = read_done;
+        ran = True;
+    }
+
+    #! waits for the reading thread to end
+    waitDone() {
+        done.waitForZero();
+    }
+}
+
+#! a Promise that records its release
+class RecordingPromise inherits Promise {
+    public {
+        #! set when the Promise is released
+        static bool released = False;
+    }
+
+    destructor() {
+        RecordingPromise::released = True;
+    }
+}
+
+#! an EventNotifier that runs a reentry check when it is destroyed
+class CheckingNotifier inherits EventNotifier {
+    private {
+        ReentryCheck check;
+    }
+
+    constructor(ReentryCheck check) {
+        self.check = check;
+    }
+
+    destructor() {
+        check.run();
+    }
+}
+
+#! An HTTP/1.1 client poll operation completes and releases the actions of its requests without holding its lock
+#! (issue #6453)
+/** The release of an action can run Qore code (the destructor of a Promise or EventNotifier object of the action),
+    which can use the operation again: the cleanup of the operation and the submission of a request complete and
+    release them after the operation's lock is released.  The code run by the release of a completed request's action
+    in a submission reads the operation's error in another thread, which uses the operation's lock; the "error-read"
+    hold point of debug builds reports a read that finds the lock taken.  The cleanup runs when the operation's object
+    is destroyed, which no longer has the operation for such a read: its test checks that a pending request is
+    completed with an error and its action released.
+*/
+class Http1PollOperationLockReleaseTest inherits QUnit::Test {
+    private {
+        #! the most poll cycles that this thread runs to complete a connect that the peer has accepted
+        const MaxCycles = 50;
+    }
+
+    constructor() : Test("HTTP/1.1 poll operation lock release test", "1.0") {
+        addTestCase("the cleanup completes and releases a pending request's action", \cleanupTest());
+        addTestCase("a submission releases a completed request's action without the lock", \submitTest());
+        set_return_value(main());
+    }
+
+    cleanupTest() {
+        checkDebug();
+        # a listener that accepts the connection and never answers: the request stays pending
+        Socket listener();
+        on_exit listener.close();
+        listener.bindINET("127.0.0.1", 0, True, AF_INET);
+        listener.listen();
+        int port = listener.getSocketInfo().port;
+        AbstractHttpPollConnection conn();
+        Http1ClientPollOperationBase op(new Socket(), "127.0.0.1:" + port, "127.0.0.1", port, False, False, False,
+            conn);
+        # this thread drives the operation: its first cycle starts the connect, which completes when the connection
+        # is accepted, and the operation then becomes ready
+        op.continuePoll();
+        *Socket peer = listener.accept(60s);
+        on_exit if (peer) { peer.close(); }
+        assertTrue(exists peer, "the connection is accepted");
+        for (int i = 0; i < MaxCycles && !op.isReady(); ++i) {
+            op.continuePoll();
+        }
+        assertTrue(op.isReady(), "the operation is ready");
+
+        Future f;
+        {
+            # the operation holds the only reference of the Promise
+            RecordingPromise p();
+            f = p.getFuture();
+            op.submitRequest("GET", "/", NOTHING, NOTHING, p, 1);
+        }
+        assertFalse(RecordingPromise::released, "the Promise exists while the request is pending");
+        # the cleanup completes the pending request with an error and releases its action
+        delete op;
+        assertTrue(RecordingPromise::released, "the cleanup released the Promise");
+        assertThrows("HTTP1-ABORT", \f.get());
+    }
+
+    submitTest() {
+        checkDebug();
+        HttpServer server(<HttpServerOptionInfo>{});
+        on_exit server.stop();
+        server.setDefaultHandler("ok", new OkHandler());
+        string url = sprintf("http://127.0.0.1:%d", server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1", "service": 0}).port);
+        server.waitForAsyncIo();
+        HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{
+            "protocol": "h1",
+            "max_streams_per_connection": 1,
+        });
+        on_exit mgr.closeAll();
+        HttpClientStreamHandle s1 = mgr.acquireStream(url);
+        assertEq(200, s1.request("GET", "/ok").status_code);
+        Http1ClientConnection conn = cast<Http1ClientConnection>(s1.getConnection());
+        HttpClientPollOperation op = conn.getPollOperation();
+        ReentryCheck check(op);
+        on_exit check.waitDone();
+
+        # a streamed request whose action is kept after its response ends; the action holds the only reference of
+        # the notifier
+        {
+            Channel ch(-1);
+            conn.submitRequestStreaming("GET", "/ok", NOTHING, NOTHING, ch, True, False, new CheckingNotifier(check),
+                True);
+            readToEnd(ch);
+        }
+        assertFalse(check.ran, "the notifier exists while the completed request's action is kept");
+        # the next request releases the kept action
+        hash<auto> r = conn.submitRequest("GET", "/ok");
+        assertTrue(check.ran, "the submission released the completed request's action");
+        assertEq(NOTHING, check.read_ex, "the operation's error was read");
+        assertTrue(check.lock_free, "the action was released without the operation's lock");
+        hash<auto> resp = r.future.get();
+        assertEq(200, resp.status_code, "the next request is answered");
+    }
+
+    #! reads the response of a streamed request until it ends
+    private readToEnd(Channel ch) {
+        while (True) {
+            auto v;
+            try {
+                v = ch.recv(60s);
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err == "CHANNEL-CLOSED") {
+                    break;
+                }
+                rethrow;
+            }
+            if (v.typeCode() == NT_HASH && v.end_stream) {
+                break;
+            }
+            if (ch.isClosed() && ch.empty()) {
+                break;
+            }
+        }
+    }
+
+    private checkDebug() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("needs a debug build of the library (dbg_http_hold_at())");
+        }
+    }
+}
