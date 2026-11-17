@@ -714,11 +714,14 @@ DLLLOCAL QoreSandboxManager* qore_module_init_lift_manager_ref();
 class QoreTrustedBuildChargeHelper {
 public:
     //! Starts it; established() is false if it could not be recorded for lack of memory
-    /** @param creator the Program that created the capability, or nullptr: its sandboxes are entered above the
-        charge floor, so that its memory limit governs the build also when its own code called the capability (it is
-        current already, so entering it does not enter its sandboxes again)
+    /** @param creator the Program that created the capability, or nullptr: its sandboxes are entered in the build,
+        so that its memory limit governs the build also when its own code called the capability (it is current
+        already, so entering it does not enter its sandboxes again)
+        @param callers the sandboxes that governed the caller before the build's barrier was set (a referenced manager
+        or composite, which the helper takes over), or nullptr: the code that they govern is the caller's code (see
+        QoreSandboxBudgetStack::suspendCharge())
     */
-    DLLLOCAL QoreTrustedBuildChargeHelper(QoreProgram* creator);
+    DLLLOCAL QoreTrustedBuildChargeHelper(QoreProgram* creator, QoreSandboxManager* callers);
     DLLLOCAL ~QoreTrustedBuildChargeHelper();
 
     //! returns true if the accounting is in effect
@@ -730,7 +733,8 @@ public:
     DLLLOCAL QoreTrustedBuildChargeHelper& operator=(const QoreTrustedBuildChargeHelper&) = delete;
 
 private:
-    QoreSandboxCharge* saved = nullptr;
+    //! the sandboxes of the caller (referenced), or nullptr
+    QoreSandboxManager* callers;
     bool started = false;
     //! the TID of the thread
     int tid = 0;

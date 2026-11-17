@@ -5605,13 +5605,14 @@ QoreSandboxManager* qore_module_init_lift_manager_ref() {
     return mib.loader_manager;
 }
 
-QoreTrustedBuildChargeHelper::QoreTrustedBuildChargeHelper(QoreProgram* creator) {
+QoreTrustedBuildChargeHelper::QoreTrustedBuildChargeHelper(QoreProgram* creator, QoreSandboxManager* callers)
+        : callers(callers) {
     ThreadData* td = thread_data.get();
     if (!td) {
         return;
     }
     try {
-        saved = td->sandbox_budgets.suspendCharge();
+        td->sandbox_budgets.suspendCharge(callers);
     } catch (std::bad_alloc&) {
         return;
     }
@@ -5641,7 +5642,10 @@ QoreTrustedBuildChargeHelper::~QoreTrustedBuildChargeHelper() {
         ThreadData* td = thread_data.get();
         // the frames entered for the creator are above the floor and on the top of the stack again
         td->sandbox_budgets.leave(tid, this);
-        td->sandbox_budgets.resumeCharge(saved);
+        td->sandbox_budgets.resumeCharge();
+    }
+    if (callers) {
+        callers->deref(nullptr);
     }
 }
 
