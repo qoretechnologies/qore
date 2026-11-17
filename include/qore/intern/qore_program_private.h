@@ -6518,6 +6518,11 @@ public:
         return missing_return_checks.defer(uvb);
     }
 
+    //! Returns the missing return checks of the Program and the analysis of its code that they keep (issue #5940)
+    DLLLOCAL QoreMissingReturnChecks& getMissingReturnChecks() {
+        return missing_return_checks;
+    }
+
     //! returns new ProgramControl objects for all Programs that have references
     DLLLOCAL static QoreListNode* getAllQoreObjects(ExceptionSink *xsink) {
         std::vector<QoreProgram*> programs;

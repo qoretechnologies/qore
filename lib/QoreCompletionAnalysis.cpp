@@ -32,24 +32,30 @@
 /*  The analysis of the completion of code for the MISSING-RETURN check (issue #5940)
 
     The end of the code of a function, method or closure whose declared return type does not accept NOTHING must not
-    be reachable without a return statement.  The check raises MISSING-RETURN only when the end is CERTAINLY
-    reachable, so that correct code is never refused: each statement and expression is given, for each way in which
-    it can end (completing normally, returning, breaking, continuing, raising an exception), whether that way is
-    certainly possible (YES), certainly impossible (NO) or not known (MAYBE).
+    be reachable without a return statement.  Each statement and expression is given, for each way in which it can
+    end (completing normally, returning, breaking, continuing, raising an exception), whether that way is possible
+    (YES), impossible (NO) or not known (MAYBE), and MISSING-RETURN is raised only when completing is YES.
 
-    - Conditions are taken as able to be true and false, as in the definite return analysis of other languages,
-      except constant ones: the end of "if (x) { return 1; }" is reachable, the end of "while (True) {...}" without a
-      break is not.
+    - Every condition that is not a constant boolean or integer is assumed to go both ways, as in the definite return
+      analysis of other languages, and a switch statement without a default case to be able to match no case (unless
+      its cases are not all values or its type has a few values: an enum, bool, or no declared type): the end of
+      "if (x) { return 1; }" is reachable, the end of "while (True) {...}" without a break is not.  Another constant
+      (a string) has a boolean value that depends on the semantics of the code: either branch may run (MAYBE).  A
+      switch over a constant value runs the case that the value matches.
     - A call completes if its target can return, which is found from the code of the target: a user function, a
       static method, or a method called where no override can be called instead (the call names the class of the
       method, the class of the call is final), of the same Program, whose code can complete or reach a return
-      statement.  A builtin function or method completes, except exit(), abort() and exec(), which do not, and the
-      builtins that can call code: the call_*() functions that call code by name, a builtin given an argument that
-      can be a closure or a call reference, and a pseudo-method of a value that can be an object, a hash or code
-      (MAYBE).  A call whose target is not
-      known when the code is parsed (a call reference, a closure, a method that a subclass can override, a variant
-      of another Program or AOT-compiled code without a parse tree, a recursive call) is MAYBE, as is a construct
-      that the analysis does not know.  A MAYBE makes the end MAYBE, and no error is raised.
+      statement; the call raises an exception if that code does.  A builtin function of the Qore namespace returns,
+      except Qore::exit(), Qore::abort() and Qore::exec(), which do not, and the builtins that can run user code
+      (MAYBE): the call_*() functions, load_module(), throw_thread_resource_exceptions*(), any builtin given an
+      argument that can be code or an object, any builtin method (which can call the methods of its object that a
+      user class overrides), and a pseudo-method of a value that can be an object, a hash or code.  Whether a builtin
+      raises an exception is not known.  A call whose target is not known when the code is parsed (a call reference,
+      a closure, a method that a subclass can override, a variant of another Program or AOT-compiled code without a
+      parse tree, a recursive call) is MAYBE, as is a construct that the analysis does not know.  A MAYBE makes the
+      end MAYBE, and no error is raised.
+    - A catch block is reached when the try block raises an exception: a throw or rethrow statement, or a call of
+      analyzed code that raises one; an assertion, an operator or another call may raise one (MAYBE).
     - Code that runs implicitly is MAYBE where the construct is known to run it: "delete" (a destructor), the
       member of an object (memberGate()), an iterated object (next()), the creation of a value of a hashdecl (the
       default values of its members).  Destructors that run when the last reference to an object is released (by an
@@ -108,6 +114,7 @@
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/qore_thread_intern.h"
 
+#include <algorithm>
 #include <cstring>
 #include <map>
 #include <set>
@@ -201,6 +208,26 @@ struct QoreCompletion {
     }
 };
 
+//! What a call of code can do
+struct QoreCallOutcome {
+    //! returns to the caller
+    qore_reach_e returns = QR_MAYBE;
+    //! raises an exception
+    qore_reach_e thr = QR_MAYBE;
+
+    //! Returns the outcome of a call of code that is not known
+    static QoreCallOutcome unknown() {
+        return QoreCallOutcome();
+    }
+
+    //! Returns the outcome of a call of a builtin that returns; whether it raises an exception is not known
+    static QoreCallOutcome builtin() {
+        QoreCallOutcome o;
+        o.returns = QR_YES;
+        return o;
+    }
+};
+
 //! The value of a constant condition
 enum qore_completion_cond_e {
     //! not a constant: can be true and false
@@ -239,6 +266,12 @@ bool qcr_type_may_be_code(const QoreTypeInfo* ti) {
         || QoreTypeInfo::parseReturns(ti, NT_FUNCREF) != QTI_NOT_EQUAL;
 }
 
+//! Returns true if a builtin given a value of the type can run user code: the value can be code or an object, whose
+//! methods the builtin can call
+bool qcr_type_may_run_user_code(const QoreTypeInfo* ti) {
+    return qcr_type_may_be_code(ti) || QoreTypeInfo::parseReturns(ti, NT_OBJECT) != QTI_NOT_EQUAL;
+}
+
 //! Returns true if a value of the type can be an object, a hash, a closure or a call reference, whose methods, code
 //! members or code a call through the dot operator (such as the <callref>::exec() pseudo-method) can call
 bool qcr_type_may_call_user_code(const QoreTypeInfo* ti) {
@@ -247,26 +280,27 @@ bool qcr_type_may_call_user_code(const QoreTypeInfo* ti) {
         || qcr_type_may_be_code(ti);
 }
 
-//! Returns whether a call of the builtin function of the given name returns
-/** exit(), abort() and exec() do not return; the functions that call code that they are given by name can call any
-    code
+//! Returns what a call of the builtin function of the given name in the Qore namespace can do
+/** Qore::exit(), Qore::abort() and Qore::exec() do not return; the functions that call code that they are given by
+    name (the call_*() functions), that run the code of modules (load_module()) or that run the cleanup code of thread
+    resources (throw_thread_resource_exceptions*()) can call any code; the other builtin functions return
 */
-qore_reach_e qcr_builtin_function_returns(const char* name) {
+QoreCallOutcome qcr_qore_function_outcome(const char* name) {
     static const char* never[] = {"exit", "abort", "exec"};
     for (const char* n : never) {
         if (!strcmp(name, n)) {
-            return QR_NO;
+            QoreCallOutcome o;
+            o.returns = QR_NO;
+            return o;
         }
     }
-    static const char* by_name[] = {"call_function", "call_function_args", "call_builtin_function",
-        "call_builtin_function_args", "call_object_method", "call_object_method_args", "call_static_method",
-        "call_static_method_args", "call_pseudo", "call_pseudo_args"};
-    for (const char* n : by_name) {
-        if (!strcmp(name, n)) {
-            return QR_MAYBE;
+    static const char* prefixes[] = {"call_", "load_module", "throw_thread_resource_exceptions"};
+    for (const char* n : prefixes) {
+        if (!strncmp(name, n, strlen(n))) {
+            return QoreCallOutcome::unknown();
         }
     }
-    return QR_YES;
+    return QoreCallOutcome::builtin();
 }
 
 //! Returns true if a value of the type can be an object, which an iteration calls the next() method of
@@ -274,10 +308,20 @@ bool qcr_type_may_be_object(const QoreTypeInfo* ti) {
     return QoreTypeInfo::parseReturns(ti, NT_OBJECT) != QTI_NOT_EQUAL;
 }
 
+//! What a function called is
+enum qore_call_kind_e {
+    //! a method
+    QCK_METHOD,
+    //! a function of the Qore namespace
+    QCK_QORE_FUNCTION,
+    //! another function
+    QCK_FUNCTION,
+};
+
 //! The analysis of the code of a Program that the parse of the Program has initialized
 class QoreCompletionAnalyzer {
 public:
-    DLLLOCAL QoreCompletionAnalyzer(QoreProgram* pgm) : pgm(pgm) {
+    DLLLOCAL QoreCompletionAnalyzer(QoreProgram* pgm, QoreMissingReturnChecks& cache) : pgm(pgm), cache(cache) {
     }
 
     //! Returns whether the end of the code of the variant is certainly reachable
@@ -296,8 +340,9 @@ public:
 private:
     //! The Program whose code is analyzed; the code of other Programs is not
     QoreProgram* pgm;
-    //! Whether the variants analyzed can return, by variant
-    std::map<const UserVariantBase*, qore_reach_e> summaries;
+    //! The analysis of the variants of the Program, kept until code is added to it
+    QoreMissingReturnChecks& cache;
+
     //! The variants whose code is being analyzed
     std::set<const UserVariantBase*> in_progress;
     //! The depth of the analysis
@@ -349,19 +394,23 @@ private:
     //! The completion of an expression: only normal and thr are set
     DLLLOCAL QoreCompletion expr(const QoreValue& v);
     DLLLOCAL QoreCompletion operatorExpr(const QoreOperatorNode* op);
-    //! The completion of the arguments of a call; @a code_args is set if an argument can be a closure or a call
-    //! reference, which a builtin can call
-    DLLLOCAL QoreCompletion callArgs(const FunctionCallBase* call, bool& code_args);
+    //! The completion of the arguments of a call; @a user_args is set if an argument can be code or an object, with
+    //! which a builtin can run user code
+    DLLLOCAL QoreCompletion callArgs(const FunctionCallBase* call, bool& user_args);
     //! Returns the completion of the call of the target after its arguments
-    DLLLOCAL QoreCompletion call(QoreCompletion args, qore_reach_e target_returns);
+    DLLLOCAL QoreCompletion call(QoreCompletion args, const QoreCallOutcome& target);
 
-    //! Returns whether a call of the function or method can return
-    /** a builtin variant that can be given a closure or a call reference (@a code_args) can call it */
-    DLLLOCAL qore_reach_e functionReturns(const QoreFunction* f, bool code_args);
-    //! Returns whether a call of the method, which is called without virtual dispatch, can return
-    DLLLOCAL qore_reach_e methodReturns(const QoreMethod* m, bool code_args);
-    //! Returns whether a call of the variant can return
-    DLLLOCAL qore_reach_e variantReturns(const AbstractQoreFunctionVariant* v);
+    //! Returns what a call of the function or method can do
+    /** @param f the function or method
+        @param user_args true if the arguments can be code or objects, with which a builtin can run user code
+        @param kind what @a f is
+    */
+    DLLLOCAL QoreCallOutcome functionOutcome(const QoreFunction* f, bool user_args, qore_call_kind_e kind);
+    //! Returns what a call of the method, which is called without virtual dispatch, can do; a builtin method, which
+    //! can call methods of its object that a user class overrides, is not known
+    DLLLOCAL QoreCallOutcome methodOutcome(const QoreMethod* m, bool user_args);
+    //! Returns what a call of the user variant can do
+    DLLLOCAL QoreCallOutcome variantOutcome(const AbstractQoreFunctionVariant* v);
 
     DLLLOCAL QoreCompletion selfCall(const SelfFunctionCallNode* call);
     DLLLOCAL QoreCompletion dotCall(const QoreDotEvalOperatorNode* op);
@@ -378,23 +427,41 @@ QoreCompletion QoreCompletionAnalyzer::block(const StatementBlock* b) {
     qore_reach_e handlers = QR_YES;
     // the same for the on_exit and on_error handlers and the exceptions that leave the block
     qore_reach_e error_handlers = QR_YES;
+    // the on_exit and on_success handlers that can raise an exception, which they do when they run as the code
+    // leaves the block without an exception after their registration: what they raise, and how the code leaves
+    struct handler_exit_t {
+        qore_reach_e thr;
+        qore_reach_e exits;
+    };
+    std::vector<handler_exit_t> raising_handlers;
     for (const AbstractStatement* s : b->getStatements()) {
         if (!s) {
             continue;
         }
         if (const OnBlockExitStatement* obe = dynamic_cast<const OnBlockExitStatement*>(s)) {
             if (obe->getCode()) {
-                qore_reach_e h = block(obe->getCode()).normal;
+                QoreCompletion hc = block(obe->getCode());
                 if (obe->getType() != OBE_Error) {
-                    handlers = qcr_min(handlers, h);
+                    handlers = qcr_min(handlers, hc.normal);
+                    if (hc.thr != QR_NO) {
+                        raising_handlers.push_back({hc.thr, QR_NO});
+                    }
                 }
                 if (obe->getType() != OBE_Success) {
-                    error_handlers = qcr_min(error_handlers, h);
+                    // a handler that raises an exception replaces the exception; one that neither completes nor
+                    // raises an exception (that ends the thread or the process) keeps it from leaving the block
+                    error_handlers = qcr_min(error_handlers, qcr_max(hc.normal, hc.thr));
                 }
             }
             continue;
         }
         QoreCompletion c = statement(s);
+        if (!raising_handlers.empty()) {
+            qore_reach_e exits = qcr_min(rv.normal, qcr_max(c.ret, qcr_max(c.brk, c.cont)));
+            for (handler_exit_t& h : raising_handlers) {
+                h.exits = qcr_max(h.exits, exits);
+            }
+        }
         c.ret = qcr_min(c.ret, handlers);
         c.brk = qcr_min(c.brk, handlers);
         c.cont = qcr_min(c.cont, handlers);
@@ -404,6 +471,10 @@ QoreCompletion QoreCompletionAnalyzer::block(const StatementBlock* b) {
             // the rest of the block is not reached
             break;
         }
+    }
+    // the block completes and the handlers run
+    for (handler_exit_t& h : raising_handlers) {
+        rv.thr = qcr_max(rv.thr, qcr_min(qcr_max(h.exits, rv.normal), h.thr));
     }
     rv.normal = qcr_min(rv.normal, handlers);
     return rv;
@@ -535,21 +606,59 @@ QoreCompletion QoreCompletionAnalyzer::statement(const AbstractStatement* s) {
         return rv;
     }
     if (const SwitchStatement* ss = dynamic_cast<const SwitchStatement*>(s)) {
-        QoreCompletion rv = expr(ss->getSwitchExp());
+        QoreValue sexp = ss->getSwitchExp();
+        QoreCompletion rv = expr(sexp);
         qore_reach_e dispatched = rv.normal;
+        // the case that a constant value matches, which is nullptr if it matches no case and there is no default
+        // case
+        const CaseNode* target = nullptr;
+        bool constant = !sexp.needsEval();
+        if (constant) {
+            ExceptionSink xsink;
+            for (const CaseNode* w = ss->getCases(); w; w = w->next) {
+                if (!w->isDefault() && w->matches(sexp, &xsink)) {
+                    target = w;
+                    break;
+                }
+                if (xsink) {
+                    break;
+                }
+            }
+            if (xsink) {
+                // the comparison cannot be made here
+                xsink.clear();
+                constant = false;
+                target = nullptr;
+            } else if (!target) {
+                for (const CaseNode* w = ss->getCases(); w; w = w->next) {
+                    if (w->isDefault()) {
+                        target = w;
+                        break;
+                    }
+                }
+            }
+        }
         QoreCompletion cases = QoreCompletion::unreached();
         // a case block that completes falls through to the next one
         qore_reach_e fall_through = QR_NO;
         for (const CaseNode* w = ss->getCases(); w; w = w->next) {
-            qore_reach_e entry = qcr_max(dispatched, fall_through);
+            qore_reach_e entry = qcr_max(constant && w != target ? QR_NO : dispatched, fall_through);
             QoreCompletion c = optionalBlock(w->code).reachedWith(entry);
             fall_through = c.normal;
             c.normal = QR_NO;
             cases.join(c);
         }
+        // a value that matches no case leaves the switch statement
+        qore_reach_e no_match;
+        if (constant) {
+            no_match = target ? QR_NO : dispatched;
+        } else if (ss->noMatchIsPossible()) {
+            no_match = dispatched;
+        } else {
+            no_match = qcr_min(dispatched, QR_MAYBE);
+        }
         QoreCompletion out;
-        out.normal = qcr_max(qcr_max(fall_through, cases.brk),
-            ss->noMatchIsPossible() ? dispatched : qcr_min(dispatched, QR_MAYBE));
+        out.normal = qcr_max(qcr_max(fall_through, cases.brk), no_match);
         out.ret = cases.ret;
         if (ss->getSemanticPolicy().brokenLoop()) {
             // with %broken-loop-statement, continue leaves the switch statement, as break does
@@ -562,8 +671,8 @@ QoreCompletion QoreCompletionAnalyzer::statement(const AbstractStatement* s) {
     }
     if (const AssertStatement* as = dynamic_cast<const AssertStatement*>(s)) {
         QoreCompletion rv = expr(as->getCondition());
-        // a failed assertion raises an exception
-        rv.thr = qcr_max(rv.thr, rv.normal);
+        // a failed assertion raises an exception, but assertions can be disabled and the condition true
+        rv.thr = qcr_max(rv.thr, qcr_min(rv.normal, QR_MAYBE));
         return rv;
     }
     if (const DebugStatement* ds = dynamic_cast<const DebugStatement*>(s)) {
@@ -588,21 +697,19 @@ QoreCompletion QoreCompletionAnalyzer::statement(const AbstractStatement* s) {
     return QoreCompletion::unknown();
 }
 
-QoreCompletion QoreCompletionAnalyzer::call(QoreCompletion args, qore_reach_e target_returns) {
-    // any call can raise an exception, but code that never returns can also end the process or the thread or never
-    // end
-    args.thr = qcr_max(args.thr, qcr_min(args.normal, target_returns == QR_NO ? QR_MAYBE : QR_YES));
-    args.normal = qcr_min(args.normal, target_returns);
+QoreCompletion QoreCompletionAnalyzer::call(QoreCompletion args, const QoreCallOutcome& target) {
+    args.thr = qcr_max(args.thr, qcr_min(args.normal, target.thr));
+    args.normal = qcr_min(args.normal, target.returns);
     return args;
 }
 
-QoreCompletion QoreCompletionAnalyzer::callArgs(const FunctionCallBase* call, bool& code_args) {
-    code_args = false;
+QoreCompletion QoreCompletionAnalyzer::callArgs(const FunctionCallBase* call, bool& user_args) {
+    user_args = false;
     QoreCompletion rv;
     auto arg = [&] (const QoreValue& v) {
         rv.then(expr(v));
-        if (!code_args && qcr_type_may_be_code(qcr_value_type(v))) {
-            code_args = true;
+        if (!user_args && qcr_type_may_run_user_code(qcr_value_type(v))) {
+            user_args = true;
         }
     };
     if (const QoreListNode* args = call->getArgs()) {
@@ -617,83 +724,95 @@ QoreCompletion QoreCompletionAnalyzer::callArgs(const FunctionCallBase* call, bo
     return rv;
 }
 
-qore_reach_e QoreCompletionAnalyzer::variantReturns(const AbstractQoreFunctionVariant* v) {
-    if (!v->isUser()) {
-        // the builtin variants of functions are checked by the caller
-        return QR_YES;
-    }
+QoreCallOutcome QoreCompletionAnalyzer::variantOutcome(const AbstractQoreFunctionVariant* v) {
+    assert(v->isUser());
     const UserVariantBase* uvb = v->getUserVariantBase();
     if (!uvb || uvb->pgm != pgm) {
-        return QR_MAYBE;
+        return QoreCallOutcome::unknown();
     }
     const MethodVariantBase* mvb = v->getMethodVariantBase();
     if (mvb && mvb->isAbstract()) {
-        return QR_MAYBE;
+        return QoreCallOutcome::unknown();
     }
-    std::map<const UserVariantBase*, qore_reach_e>::const_iterator i = summaries.find(uvb);
-    if (i != summaries.end()) {
-        return i->second;
+    unsigned char returns, thr;
+    if (cache.get(uvb->serial, returns, thr)) {
+        QoreCallOutcome o;
+        o.returns = static_cast<qore_reach_e>(returns);
+        o.thr = static_cast<qore_reach_e>(thr);
+        return o;
     }
     if (in_progress.find(uvb) != in_progress.end()) {
         // a recursive call
-        return QR_MAYBE;
+        return QoreCallOutcome::unknown();
     }
     const StatementBlock* b = uvb->getStatementBlock();
     if (!b || !b->isParseInitialized()) {
-        return QR_MAYBE;
+        return QoreCallOutcome::unknown();
     }
     QoreCompletion c;
     {
         InProgressHelper iph(in_progress, uvb);
         c = block(b);
     }
-    // the code returns if a return statement is reached or its end is
-    qore_reach_e rv = qcr_max(c.normal, c.ret);
-    summaries[uvb] = rv;
-    return rv;
+    // the code returns if a return statement is reached or its end is; it raises the exceptions that leave it
+    QoreCallOutcome o;
+    o.returns = qcr_max(c.normal, c.ret);
+    o.thr = c.thr;
+    cache.set(uvb->serial, o.returns, o.thr);
+    return o;
 }
 
-qore_reach_e QoreCompletionAnalyzer::functionReturns(const QoreFunction* f, bool code_args) {
+QoreCallOutcome QoreCompletionAnalyzer::functionOutcome(const QoreFunction* f, bool user_args,
+        qore_call_kind_e kind) {
     if (!f || !f->numVariants() || !f->hasOnlyOwnVariants()) {
-        return QR_MAYBE;
+        return QoreCallOutcome::unknown();
     }
-    // a call resolves to one of the variants: it returns if all of them return and does not if none does
-    bool all_return = true;
-    bool none_returns = true;
+    // a call resolves to one of the variants: the outcome is certain if it is the same for all of them
+    bool first = true;
+    QoreCallOutcome rv;
     QoreFunctionIterator i(*f);
     while (i.next()) {
         const AbstractQoreFunctionVariant* v = i.getVariant();
-        qore_reach_e r;
+        QoreCallOutcome o;
         if (!v->isUser()) {
-            r = qcr_builtin_function_returns(f->getName());
-            if (r == QR_YES && code_args) {
-                r = QR_MAYBE;
+            if (kind == QCK_METHOD) {
+                // a builtin method can call the methods of its object that a user class overrides
+                return QoreCallOutcome::unknown();
+            }
+            o = kind == QCK_QORE_FUNCTION ? qcr_qore_function_outcome(f->getName()) : QoreCallOutcome::builtin();
+            if (user_args) {
+                o.returns = qcr_min(o.returns, QR_MAYBE);
             }
         } else {
-            r = variantReturns(v);
+            o = variantOutcome(v);
         }
-        if (r != QR_YES) {
-            all_return = false;
-        }
-        if (r != QR_NO) {
-            none_returns = false;
+        if (first) {
+            rv = o;
+            first = false;
+        } else {
+            if (rv.returns != o.returns) {
+                rv.returns = QR_MAYBE;
+            }
+            if (rv.thr != o.thr) {
+                rv.thr = QR_MAYBE;
+            }
         }
     }
-    return none_returns ? QR_NO : (all_return ? QR_YES : QR_MAYBE);
+    return rv;
 }
 
-qore_reach_e QoreCompletionAnalyzer::methodReturns(const QoreMethod* m, bool code_args) {
+QoreCallOutcome QoreCompletionAnalyzer::methodOutcome(const QoreMethod* m, bool user_args) {
     if (!m) {
-        return QR_MAYBE;
+        return QoreCallOutcome::unknown();
     }
-    return functionReturns(qore_method_private::get(*m)->getFunction(), code_args);
+    return functionOutcome(qore_method_private::get(*m)->getFunction(), user_args, QCK_METHOD);
 }
 
 QoreCompletion QoreCompletionAnalyzer::selfCall(const SelfFunctionCallNode* sc) {
-    bool code_args;
-    QoreCompletion args = callArgs(sc, code_args);
+    bool user_args;
+    QoreCompletion args = callArgs(sc, user_args);
     if (sc->isCopyCall() || sc->isAbstractCall() || !sc->getMethod()) {
-        return call(args, QR_MAYBE);
+        return call(args, QoreCallOutcome::unknown());
     }
     if (sc->hasSingleName()) {
         // an unqualified call is dispatched on the class of the object: the method of the call is called only if
@@ -701,11 +820,11 @@ QoreCompletion QoreCompletionAnalyzer::selfCall(const SelfFunctionCallNode* sc) 
         const qore_class_private* ctx = sc->getClassContext();
         const QoreClass* cls = ctx ? ctx->cls : sc->getClass();
         if (!cls || !qore_class_private::isFinal(*cls)) {
-            return call(args, QR_MAYBE);
+            return call(args, QoreCallOutcome::unknown());
         }
     }
     // a qualified call (Base::m()) calls the method that it names
-    return call(args, methodReturns(sc->getMethod(), code_args));
+    return call(args, methodOutcome(sc->getMethod(), user_args));
 }
 
 QoreCompletion QoreCompletionAnalyzer::dotCall(const QoreDotEvalOperatorNode* op) {
@@ -715,21 +834,21 @@ QoreCompletion QoreCompletionAnalyzer::dotCall(const QoreDotEvalOperatorNode* op
         rv.then(QoreCompletion::unknown());
         return rv;
     }
-    bool code_args;
-    rv.then(callArgs(m, code_args));
-    qore_reach_e returns = QR_MAYBE;
+    bool user_args;
+    rv.then(callArgs(m, user_args));
+    QoreCallOutcome target;
     if (m->isPseudo()) {
-        // a pseudo-method is builtin, but an object, a hash or code can be called instead or by it, as can code that
-        // it is given
-        if (!code_args && !qcr_type_may_call_user_code(qcr_value_type(op->getExpression()))) {
-            returns = QR_YES;
+        // a pseudo-method is builtin, but an object, a hash or code can be called instead or by it, as can code or
+        // an object that it is given
+        if (!user_args && !qcr_type_may_call_user_code(qcr_value_type(op->getExpression()))) {
+            target = QoreCallOutcome::builtin();
         }
     } else if (m->getMethod() && m->getClass() && qore_class_private::isFinal(*m->getClass())) {
         // a method call is dispatched on the class of the object, which is the final class of the call: its method
         // is called
-        returns = methodReturns(m->getMethod(), code_args);
+        target = methodOutcome(m->getMethod(), user_args);
     }
-    return call(rv, returns);
+    return call(rv, target);
 }
 
 QoreCompletion QoreCompletionAnalyzer::operatorExpr(const QoreOperatorNode* op) {
@@ -742,7 +861,7 @@ QoreCompletion QoreCompletionAnalyzer::operatorExpr(const QoreOperatorNode* op) 
     }
     if (const QoreDeleteOperatorNode* d = dynamic_cast<const QoreDeleteOperatorNode*>(op)) {
         // runs the destructor of an object
-        return call(expr(d->getExp()), QR_MAYBE);
+        return call(expr(d->getExp()), QoreCallOutcome::unknown());
     }
     if (const QoreHashObjectDereferenceOperatorNode* d
             = dynamic_cast<const QoreHashObjectDereferenceOperatorNode*>(op)) {
@@ -756,7 +875,7 @@ QoreCompletion QoreCompletionAnalyzer::operatorExpr(const QoreOperatorNode* op) 
     }
     if (const QoreHashDeclCastOperatorNode* c = dynamic_cast<const QoreHashDeclCastOperatorNode*>(op)) {
         // can evaluate the default values of the members of the hashdecl
-        return call(expr(c->getExp()), QR_MAYBE);
+        return call(expr(c->getExp()), QoreCallOutcome::unknown());
     }
     // operators that evaluate their right operand only for some values of the left one
     if (dynamic_cast<const QoreLogicalAndOperatorNode*>(op) || dynamic_cast<const QoreNullCoalescingOperatorNode*>(op)
@@ -886,9 +1005,10 @@ QoreCompletion QoreCompletionAnalyzer::expr(const QoreValue& v) {
             }
             const QoreClass* cls
                 = QoreTypeInfo::getUniqueReturnClass(static_cast<const ParseNode*>(vn)->getParseTypeInfo());
-            bool code_args;
-            QoreCompletion args = callArgs(vn, code_args);
-            return call(args, cls && cls->isSystem() && !code_args ? QR_YES : QR_MAYBE);
+            bool user_args;
+            QoreCompletion args = callArgs(vn, user_args);
+            return call(args, cls && cls->isSystem() && !user_args ? QoreCallOutcome::builtin()
+                : QoreCallOutcome::unknown());
         }
 
         // values, references to variables and creations of call references and closures, which call nothing
@@ -969,9 +1089,13 @@ QoreCompletion QoreCompletionAnalyzer::expr(const QoreValue& v) {
             if (!fc) {
                 return QoreCompletion::unknown();
             }
-            bool code_args;
-            QoreCompletion args = callArgs(fc, code_args);
-            return call(args, functionReturns(fc->getFunction(), code_args));
+            bool user_args;
+            QoreCompletion args = callArgs(fc, user_args);
+            // the builtin functions of the Qore namespace are known by their name
+            const FunctionEntry* fe = fc->getFunctionEntry();
+            const qore_ns_private* ns = fe ? fe->getNamespace() : nullptr;
+            qore_call_kind_e kind = ns && ns->depth == 1 && ns->name == "Qore" ? QCK_QORE_FUNCTION : QCK_FUNCTION;
+            return call(args, functionOutcome(fc->getFunction(), user_args, kind));
         }
 
         case NT_STATIC_METHOD_CALL: {
@@ -979,9 +1103,9 @@ QoreCompletion QoreCompletionAnalyzer::expr(const QoreValue& v) {
             if (!sc) {
                 return QoreCompletion::unknown();
             }
-            bool code_args;
-            QoreCompletion args = callArgs(sc, code_args);
-            return call(args, methodReturns(sc->getMethod(), code_args));
+            bool user_args;
+            QoreCompletion args = callArgs(sc, user_args);
+            return call(args, methodOutcome(sc->getMethod(), user_args));
         }
 
         case NT_SELF_CALL: {
@@ -995,9 +1119,10 @@ QoreCompletion QoreCompletionAnalyzer::expr(const QoreValue& v) {
             if (!nc) {
                 return QoreCompletion::unknown();
             }
-            bool code_args;
-            QoreCompletion args = callArgs(nc, code_args);
-            return call(args, nc->getClass() && nc->getClass()->isSystem() && !code_args ? QR_YES : QR_MAYBE);
+            bool user_args;
+            QoreCompletion args = callArgs(nc, user_args);
+            return call(args, nc->getClass() && nc->getClass()->isSystem() && !user_args ? QoreCallOutcome::builtin()
+                : QoreCallOutcome::unknown());
         }
 
         case NT_SCOPE_REF: {
@@ -1007,9 +1132,10 @@ QoreCompletion QoreCompletionAnalyzer::expr(const QoreValue& v) {
             if (!sc) {
                 return QoreCompletion::unknown();
             }
-            bool code_args;
-            QoreCompletion args = callArgs(sc, code_args);
-            return call(args, sc->oc && sc->oc->isSystem() && !code_args ? QR_YES : QR_MAYBE);
+            bool user_args;
+            QoreCompletion args = callArgs(sc, user_args);
+            return call(args, sc->oc && sc->oc->isSystem() && !user_args ? QoreCallOutcome::builtin()
+                : QoreCallOutcome::unknown());
         }
 
         case NT_OPERATOR: {
@@ -1023,21 +1149,26 @@ QoreCompletion QoreCompletionAnalyzer::expr(const QoreValue& v) {
     return QoreCompletion::unknown();
 }
 
-//! Raises MISSING-RETURN if the end of the code of the variant is certainly reachable and its declared return type
-//! does not accept NOTHING; returns -1 if the exception was raised
-int qore_check_missing_return(QoreCompletionAnalyzer& a, QoreProgram* pgm, const UserVariantBase* uvb) {
+//! Returns the declared return type of the variant if it does not accept NOTHING and the end of its code is
+//! certainly reachable, otherwise nullptr
+const QoreTypeInfo* qore_missing_return_type(QoreCompletionAnalyzer& a, const UserVariantBase* uvb) {
     const QoreTypeInfo* rti = uvb->getUserSignature()->getReturnTypeInfo();
     if (!QoreTypeInfo::hasType(rti) || QoreTypeInfo::parseAccepts(rti, nothingTypeInfo)) {
-        return 0;
+        return nullptr;
     }
     const StatementBlock* b = uvb->getStatementBlock();
     if (!b || a.bodyEnd(uvb) != QR_YES) {
-        return 0;
+        return nullptr;
     }
+    return rti;
+}
+
+//! Raises MISSING-RETURN for the code of the variant
+void qore_raise_missing_return(QoreProgram* pgm, const UserVariantBase* uvb, const QoreTypeInfo* rti) {
+    const StatementBlock* b = uvb->getStatementBlock();
     QoreStringNode* desc = new QoreStringNodeMaker("this code block has declared return type '%s' but the end of "
         "the block can be reached without a return statement", QoreTypeInfo::getName(rti));
     qore_program_private::makeParseException(pgm, *b->loc, "MISSING-RETURN", desc);
-    return -1;
 }
 }
 
@@ -1069,15 +1200,35 @@ void QoreMissingReturnChecks::run(QoreProgram* pgm) {
         std::vector<AbstractQoreFunctionVariant*>& v;
     } rh(checks);
 
-    // the analysis of the code called is shared by the checks
-    QoreCompletionAnalyzer a(pgm);
+    // the errors are raised in the order of their locations
+    std::vector<std::pair<const UserVariantBase*, const QoreTypeInfo*>> missing;
+    QoreCompletionAnalyzer a(pgm, *this);
     for (AbstractQoreFunctionVariant* v : checks) {
-        qore_check_missing_return(a, pgm, v->getUserVariantBase());
+        const UserVariantBase* uvb = v->getUserVariantBase();
+        const QoreTypeInfo* rti = qore_missing_return_type(a, uvb);
+        if (rti) {
+            missing.push_back(std::make_pair(uvb, rti));
+        }
     }
+    typedef std::pair<const UserVariantBase*, const QoreTypeInfo*> missing_t;
+    std::stable_sort(missing.begin(), missing.end(), [] (const missing_t& l, const missing_t& r) -> bool {
+        const QoreProgramLocation* ll = l.first->getStatementBlock()->loc;
+        const QoreProgramLocation* rl = r.first->getStatementBlock()->loc;
+        int c = strcmp(ll->getFileValue() ? ll->getFileValue() : "", rl->getFileValue() ? rl->getFileValue() : "");
+        if (c) {
+            return c < 0;
+        }
+        return ll->start_line < rl->start_line;
+    });
+    for (auto& i : missing) {
+        qore_raise_missing_return(pgm, i.first, i.second);
+    }
+    // the cache is cleared at the end of the parse (see clear())
 }
 
 void QoreMissingReturnChecks::clear() noexcept {
     active = false;
+    clearCache();
     for (AbstractQoreFunctionVariant* v : pending) {
         v->deref();
     }
@@ -1085,6 +1236,11 @@ void QoreMissingReturnChecks::clear() noexcept {
 }
 
 int qore_parse_check_missing_return(QoreProgram* pgm, const UserVariantBase* uvb) {
-    QoreCompletionAnalyzer a(pgm);
-    return qore_check_missing_return(a, pgm, uvb);
+    QoreCompletionAnalyzer a(pgm, qore_program_private::get(*pgm)->getMissingReturnChecks());
+    const QoreTypeInfo* rti = qore_missing_return_type(a, uvb);
+    if (!rti) {
+        return 0;
+    }
+    qore_raise_missing_return(pgm, uvb, rti);
+    return -1;
 }

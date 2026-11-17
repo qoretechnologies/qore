@@ -106,9 +106,9 @@ T sub a10() { try { T z("a10-z"); auto u = new U("a10-u"); return u; } catch (ha
 # success path, local return and member, try without locals
 T sub b1(T t) { try { return t; } catch () {} }
 T sub b2() { T z("b2-z"); T t("b2-t"); return t; }
-T sub b3() { try { T t("b3-t"); return t; } catch () { rethrow; } }
+T sub b3() { try { T t("b3-t"); return t; } catch () {} }
 string sub b4(string s) { try { return s; } catch () {} }
-list<T> sub b5() { try { list<T> l = (new T("b5-t"),); return l; } catch () { rethrow; } }
+list<T> sub b5() { try { list<T> l = (new T("b5-t"),); return l; } catch () {} }
 # closure capturing local
 T sub a11() { auto u = new U("a11-u"); code c = auto sub () { return u; }; T z("a11-z"); return u; }
 %allow-weak-references

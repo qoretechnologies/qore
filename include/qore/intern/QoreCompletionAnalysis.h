@@ -32,6 +32,9 @@
 #ifndef _QORE_INTERN_QORECOMPLETIONANALYSIS_H
 #define _QORE_INTERN_QORECOMPLETIONANALYSIS_H
 
+#include <cstdint>
+#include <mutex>
+#include <unordered_map>
 #include <vector>
 
 class QoreProgram;
@@ -49,6 +52,11 @@ class AbstractQoreFunctionVariant;
 
     The variants are held with a reference while they wait, as code that the parse initialized can be discarded
     before the checks are made.
+
+    It also keeps what the calls of the code of the Program analyzed can do (whether they return and raise
+    exceptions), by the serial of the variant (which is never reused), so that the code that the checks call is
+    analyzed once; it is cleared when a parse starts to initialize code and when its checks have been made, as the
+    analysis of a call depends on the variants of the functions that the code calls.
 */
 class QoreMissingReturnChecks {
 public:
@@ -64,6 +72,7 @@ public:
     //! Starts collecting the checks of the code that the parse initializes
     DLLLOCAL void start() {
         active = true;
+        clearCache();
     }
 
     //! Collects the check of the variant if the parse is initializing its code; returns true if the check waits
@@ -76,8 +85,36 @@ public:
     //! Stops collecting and releases the variants without making their checks
     DLLLOCAL void clear() noexcept;
 
+    //! Returns true and what a call of the variant with the given serial can do if it has been analyzed
+    DLLLOCAL bool get(uint64_t serial, unsigned char& returns, unsigned char& thr) const {
+        std::lock_guard<std::mutex> lock(cache_lock);
+        auto i = cache.find(serial);
+        if (i == cache.end()) {
+            return false;
+        }
+        returns = i->second.first;
+        thr = i->second.second;
+        return true;
+    }
+
+    //! Keeps what a call of the variant with the given serial can do
+    DLLLOCAL void set(uint64_t serial, unsigned char returns, unsigned char thr) {
+        std::lock_guard<std::mutex> lock(cache_lock);
+        cache[serial] = std::make_pair(returns, thr);
+    }
+
+    //! Forgets what calls of the code of the Program can do
+    DLLLOCAL void clearCache() noexcept {
+        std::lock_guard<std::mutex> lock(cache_lock);
+        cache.clear();
+    }
+
 private:
     std::vector<AbstractQoreFunctionVariant*> pending;
+    //! what the calls of the variants can do, by the serial of the variant
+    std::unordered_map<uint64_t, std::pair<unsigned char, unsigned char>> cache;
+    //! protects the cache: code can be initialized at run time in several threads (ex: Expression objects)
+    mutable std::mutex cache_lock;
     bool active = false;
 };
 

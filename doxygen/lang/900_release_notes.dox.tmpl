@@ -882,8 +882,9 @@
 
     @par Code with a Return Type Whose End Can Be Reached Is a Parse Error
     A function, method or closure whose declared return type does not accept @ref nothing "NOTHING" and whose end can
-    certainly be reached without a \c return statement now raises a \c MISSING-RETURN parse error (see
-    @ref missing_return); 2.2.1 did not check it, or checked it with the return type of the running code (issue #5940).
+    be reached without a \c return statement, with conditions assumed to go both ways, now raises a
+    \c MISSING-RETURN parse error (see @ref missing_return); 2.2.1 did not check it, or checked it with the return
+    type of the running code (issue #5940).
 
     @subsection qore_3_0_0_new_features New Features in Qore
     @par Strict Number Parsing

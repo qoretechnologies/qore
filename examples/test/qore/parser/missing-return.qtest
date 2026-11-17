@@ -42,8 +42,12 @@ class MissingReturnTest inherits QUnit::Test {
             "switch without default": "int sub f(int i) { switch (i) { case 1: return 1; case 2: return 2; } }",
             "switch case that completes": "int sub f(int i) { switch (i) { case 1: return 1; default: i = 2; } }",
             "switch case left with break": "int sub f(int i) { switch (i) { case 1: break; default: return 2; } }",
-            "catch block that completes":
-                "int sub f() { try { printf(\"\"); return 1; } catch (hash<ExceptionInfo> ex) {} }",
+            "catch block after a throw statement": "int sub f() { try { throw \"X\"; } catch () {} }",
+            "catch block after a call of code that can raise an exception":
+                "sub t(bool b) { if (b) { throw \"X\"; } } int sub f() { try { t(True); return 1; } catch () {} }",
+            "constant switch value that matches no case": "int sub f() { switch (2) { case 1: return 1; } }",
+            "constant switch value that matches a case that completes":
+                "int sub f() { switch (1) { case 1: break; default: return 2; } }",
             "try block that completes":
                 "int sub f() { try { printf(\"\"); } catch (hash<ExceptionInfo> ex) { rethrow; } }",
             "on_exit handler": "int sub f() { on_exit { printf(\"\"); } }",
@@ -65,8 +69,12 @@ class MissingReturnTest inherits QUnit::Test {
             "builtin given a list": "int sub f(list<int> l) { sort(l); }",
             "member of a hash": "int sub f(hash<auto> h) { auto v = h.a; }",
             "on_error handler that completes":
-                "int sub f() { try { on_error printf(\"\"); printf(\"\"); return 1; } "
+                "int sub f(bool b) { try { on_error printf(\"\"); if (b) { throw \"X\"; } return 1; } "
                 "catch (hash<ExceptionInfo> ex) {} }",
+            "on_exit handler that raises an exception in a try block":
+                "int sub f() { try { on_exit throw \"Y\"; return 1; } catch (hash<ExceptionInfo> ex) {} }",
+            "catch block after a call of a function that always raises an exception":
+                "sub t() { throw \"X\"; } int sub f() { try { t(); } catch (hash<ExceptionInfo> ex) {} }",
             "continue in a switch in a loop":
                 "int sub f(int x) { do { switch (x) { default: continue; } return 1; } while (False); }",
             "call of exit() that is not reached": "int sub f(bool b) { if (b) { exit(1); } }",
@@ -96,8 +104,30 @@ class MissingReturnTest inherits QUnit::Test {
                 "sub t(int i) { if (i) { throw \"A\"; } else { throw \"B\"; } } int sub f() { t(1); }",
             "call of exit()": "int sub f() { exit(1); }",
             "catch block after a call of exit()": "int sub f() { try { exit(1); } catch (hash<ExceptionInfo> ex) {} }",
+            "catch block after a call of a function that exits":
+                "sub die() { exit(1); } int sub f() { try { die(); } catch (hash<ExceptionInfo> ex) {} }",
+            "catch block after a call of a builtin, which is not known to raise an exception":
+                "int sub f() { try { printf(\"\"); return 1; } catch (hash<ExceptionInfo> ex) {} }",
+            "catch block after a pseudo-method call": "int sub f(string s) { try { return s.size(); } catch () {} }",
+            "catch block after a call of a function that returns":
+                "int sub h() { return 1; } int sub f() { try { return h(); } catch () {} }",
+            "constant switch value that matches a case that returns":
+                "int sub f() { switch (1) { case 1: return 1; } }",
+            "constant switch value that matches the default case":
+                "int sub f() { switch (2) { case 1: break; default: return 2; } }",
+            "builtin method of the same name as Qore::exec()":
+                "class D inherits Datasource { constructor() : Datasource(\"pgsql:a/b@c\") {} "
+                "int m() { Datasource::exec(\"x\"); } }",
+            "builtin method called as Base::m()":
+                "class D inherits Datasource { constructor() : Datasource(\"pgsql:a/b@c\") {} "
+                "int m() { Datasource::commit(); } }",
+            "builtin given an object":
+                "final class O inherits OutputStream { write(binary data) { throw \"X\"; } close() {} } "
+                "int sub f(O o) { EncodingConversionOutputStream e(o, \"utf-8\", \"iso-8859-1\"); e.write(<00>); }",
+            "load_module()": "int sub f() { load_module(\"x\"); }",
+            "throw_thread_resource_exceptions()": "int sub f() { throw_thread_resource_exceptions(); }",
             "catch block after a call that does not return":
-                "sub t() { throw \"X\"; } int sub f() { try { t(); } catch (hash<ExceptionInfo> ex) {} }",
+                "sub t() { throw \"X\"; } int sub f() { try { t(); } catch (hash<ExceptionInfo> ex) { rethrow; } }",
             "call of abort()": "int sub f(bool b) { if (b) { return 1; } abort(); }",
             "call of a static method that throws":
                 "class C { static throwIt() { throw \"X\"; } } int sub f() { C::throwIt(); }",
@@ -153,9 +183,11 @@ class MissingReturnTest inherits QUnit::Test {
             "callref exec pseudo-method": "int sub f(code c) { c.exec(); }",
             "member of an object": "class C { public { int a; } } int sub f(C c) { int i = c.a; }",
             "on_exit handler that exits in a try block":
-                "int sub f() { try { on_exit exit(1); printf(\"\"); return 1; } catch (hash<ExceptionInfo> ex) {} }",
+                "int sub f(bool b) { try { on_exit exit(1); if (b) { throw \"X\"; } return 1; } "
+                "catch (hash<ExceptionInfo> ex) {} }",
             "on_error handler that exits in a try block":
-                "int sub f() { try { on_error exit(1); printf(\"\"); return 1; } catch (hash<ExceptionInfo> ex) {} }",
+                "int sub f(bool b) { try { on_error exit(1); if (b) { throw \"X\"; } return 1; } "
+                "catch (hash<ExceptionInfo> ex) {} }",
             "constant string condition": "int sub f() { if (\"yes\") { return 1; } }",
             "constant string loop condition": "int sub f() { while (\"yes\") { printf(\"\"); } }",
         };
@@ -204,6 +236,14 @@ class MissingReturnTest inherits QUnit::Test {
         # every missing return is reported
         errs = parseErrors("int sub f() {} string sub g() {} class C { int m() {} }");
         assertEq(3, errs.size());
+        # the errors are reported in the order of their locations
+        errs = parseErrors("int sub e() {}\nint sub d() {}\nclass X { int m() {} }\nint sub c() {}\n"
+            "int sub b() {}\nint sub a() {}\n");
+        assertEq((1, 2, 3, 4, 5, 6), map $1.line, errs);
+        # an assertion is not certain to raise an exception: assertions can be disabled
+        errs = parseErrors("int sub f() { try { @assert(True); return 1; } catch () {} }",
+            PO_MODERN | PO_ENABLE_DEBUG);
+        assertEq(0, errs.size());
         # with %broken-loop-statement, continue in a switch statement leaves the switch statement
         errs = parseErrors("%old-style\n%broken-loop-statement\n%allow-bare-refs\n"
             "int sub f(int x) { do { switch (x) { default: continue; } return 1; } while (False); }");
@@ -263,8 +303,8 @@ int sub m(int i) { return (new C()).m(i); }
     }
 
     #! returns the MISSING-RETURN errors of parsing the code
-    static list<hash<ExceptionInfo>> parseErrors(string code) {
-        Program p(PO_MODERN);
+    static list<hash<ExceptionInfo>> parseErrors(string code, int opts = PO_MODERN) {
+        Program p(opts);
         list<hash<ExceptionInfo>> rv = ();
         hash<ExceptionInfo> ex;
         try {
