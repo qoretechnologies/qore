@@ -781,6 +781,58 @@ void qore_program_private::clearRemainingPrograms() {
 }
 
 #ifdef DEBUG
+namespace {
+//! the destructions of Programs, for dbgWaitProgramDestroyed(); a leaf lock, taken with the registry lock held
+struct QoreProgramDestroyedGate {
+    std::mutex m;
+    std::condition_variable cv;
+    uint64_t gen = 0;
+};
+
+QoreProgramDestroyedGate& program_destroyed_gate() {
+    // not destroyed: Programs are destroyed while static objects are destroyed
+    static QoreProgramDestroyedGate* g = new QoreProgramDestroyedGate;
+    return *g;
+}
+}
+
+void qore_program_private::dbgProgramDestroyed() {
+    QoreProgramDestroyedGate& g = program_destroyed_gate();
+    std::lock_guard<std::mutex> lg(g.m);
+    ++g.gen;
+    g.cv.notify_all();
+}
+
+bool qore_program_private::dbgWaitProgramDestroyed(qore_program_id_t id, int64 timeout_ms) {
+    QoreProgramDestroyedGate& g = program_destroyed_gate();
+    auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(timeout_ms);
+    while (true) {
+        uint64_t gen;
+        {
+            std::lock_guard<std::mutex> lg(g.m);
+            gen = g.gen;
+        }
+        // the registry lock is not taken with the gate's lock held
+        if (!dbgIsLiveProgram(id)) {
+            return true;
+        }
+        std::unique_lock<std::mutex> l(g.m);
+        if (!g.cv.wait_until(l, deadline, [&g, gen]() { return g.gen != gen; })) {
+            return false;
+        }
+    }
+}
+
+bool qore_program_private::dbgIsLiveProgram(qore_program_id_t id) {
+    QoreAutoRWReadLocker al(&lck_programMap);
+    for (QoreProgram* p : qore_program_set) {
+        if (p->priv->programId == id) {
+            return true;
+        }
+    }
+    return false;
+}
+
 size_t qore_program_private::dbgGetLiveProgramCount() {
     QoreAutoRWReadLocker al(&lck_programMap);
     return qore_program_set.size();
@@ -1208,6 +1260,9 @@ qore_program_private::~qore_program_private() {
     qore_program_set_t::iterator i = qore_program_set.find(pgm);
     assert(i != qore_program_set.end());
     qore_program_set.erase(i);
+#ifdef DEBUG
+    dbgProgramDestroyed();
+#endif
     // a Program left the registry when its last reference was released (see derefUnregister()), unless it is
     // destroyed with references, as a Program that was never handed out can be
     programid_to_program_map_t::iterator pi = programid_to_program_map.find(programId);

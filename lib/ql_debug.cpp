@@ -23309,6 +23309,17 @@ static QoreValue f_dbg_get_live_program_count(const QoreListNode* params, Runtim
     return static_cast<int64>(qore_program_private::dbgGetLiveProgramCount());
 }
 
+//! returns True if the Program with the given ID has not been destroyed
+static QoreValue f_dbg_is_live_program(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    return qore_program_private::dbgIsLiveProgram(get_param_value(params, 0).getAsBigInt());
+}
+
+//! waits until the Program with the given ID has been destroyed; returns False on timeout
+static QoreValue f_dbg_wait_program_destroyed(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    return qore_program_private::dbgWaitProgramDestroyed(get_param_value(params, 0).getAsBigInt(),
+        get_param_value(params, 1).getAsBigInt());
+}
+
 //! holds the next batch JIT collection of the named root function after it has held a Program (qore#5874)
 static QoreValue f_dbg_hold_batch_collection(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     const QoreStringNode* func = get_param_value(params, 0).get<const QoreStringNode>();
@@ -27224,6 +27235,11 @@ void init_debug_functions(QoreNamespace& qns) {
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_get_live_program_count", f_dbg_get_live_program_count, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_is_live_program", f_dbg_is_live_program, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolTypeInfo,
+        1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "id");
+    qns.addBuiltinVariant("dbg_wait_program_destroyed", f_dbg_wait_program_destroyed, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, boolTypeInfo, 2, bigIntTypeInfo, QORE_PARAM_NO_ARG, "id", bigIntTypeInfo, QORE_PARAM_NO_ARG,
+        "timeout_ms");
     qns.addBuiltinVariant("dbg_object_external_ref", f_dbg_object_external_ref, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         bigIntTypeInfo, 1, objectTypeInfo, QORE_PARAM_NO_ARG, "obj");
     qns.addBuiltinVariant("dbg_object_external_deref", f_dbg_object_external_deref, QCF_NO_FLAGS,

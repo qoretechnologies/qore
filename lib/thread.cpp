@@ -2002,57 +2002,65 @@ void ThreadProgramData::del(ExceptionSink* xsink) {
         e = ModuleProgramDataCacheEntry();
     }
 
-    // free the thread's thread-local data in all Program families first, as the old per-Program finalization did
-    freeAllThreadData(xsink);
-
-    // first purge all data
-    {
-        SafeDerefHelper sdh(xsink);
-
-        // remove and finalize all thread-local data in all referenced programs
-        {
-            AutoLocker al(pslock);
-            for (auto& i : pgm_set) {
-                qore_program_private::get(*i)->finalizeThreadData(this, sdh);
-            }
-        }
-    }
-
-    // purge thread data in contained programs
+    // the destructors run below can enter Programs again, which records them and the thread's data in them again,
+    // and save thread-local data again: the data is purged until none is left, so that no record of a Program and no
+    // reference to it is left behind
     while (true) {
-        QoreProgram* pgm;
-        {
-            AutoLocker al(pslock);
-            pgm_set_t::iterator i = pgm_set.begin();
-            if (i == pgm_set.end())
-                break;
+        // free the thread's thread-local data in all Program families first, as the old per-Program finalization did
+        freeAllThreadData(xsink);
 
-            pgm = (*i);
-            pgm_set.erase(i);
-        }
-        //printd(5, "ThreadProgramData::del() this: %p pgm: %p\n", this, pgm);
-#ifdef DEBUG
+        // first purge all data
         {
-            dbg_after_unlist_t hook = dbg_after_unlist.load();
-            if (hook) {
-                hook(td->tid, pgm);
+            SafeDerefHelper sdh(xsink);
+
+            // remove and finalize all thread-local data in all referenced programs
+            {
+                AutoLocker al(pslock);
+                for (auto& i : pgm_set) {
+                    qore_program_private::get(*i)->finalizeThreadData(this, sdh);
+                }
             }
         }
+
+        // purge thread data in contained programs
+        while (true) {
+            QoreProgram* pgm;
+            {
+                AutoLocker al(pslock);
+                pgm_set_t::iterator i = pgm_set.begin();
+                if (i == pgm_set.end())
+                    break;
+
+                pgm = (*i);
+                pgm_set.erase(i);
+            }
+            //printd(5, "ThreadProgramData::del() this: %p pgm: %p\n", this, pgm);
+#ifdef DEBUG
+            {
+                dbg_after_unlist_t hook = dbg_after_unlist.load();
+                if (hook) {
+                    hook(td->tid, pgm);
+                }
+            }
 #endif
-        // the dependency reference keeps the Program alive for endThread(); once the Program is no longer in
-        // pgm_set, its own teardown cannot release this reference, so it can be the last one
-        bool ended = !qore_program_private::get(*pgm)->endThread(this, xsink);
-        pgm->depDeref();
-        // the reference to this object belongs to the Program's entry for the thread: it is released here only if the
-        // thread removed the entry (endThread() succeeded); otherwise the Program releases it with the entry when its
-        // data is cleared (see delProgram())
-        if (ended) {
-            deref();
+            // the dependency reference keeps the Program alive for endThread(); once the Program is no longer in
+            // pgm_set, its own teardown cannot release this reference, so it can be the last one
+            bool ended = !qore_program_private::get(*pgm)->endThread(this, xsink);
+            pgm->depDeref();
+            // the reference to this object belongs to the Program's entry for the thread: it is released here only if
+            // the thread removed the entry (endThread() succeeded); otherwise the Program releases it with the entry
+            // when its data is cleared (see delProgram())
+            if (ended) {
+                deref();
+            }
+        }
+
+        // the destructors run above can have saved thread-local data or entered a Program again
+        AutoLocker al(pslock);
+        if (pgm_set.empty() && tld_map.empty()) {
+            break;
         }
     }
-
-    // the destructors run above can have saved thread-local data again
-    freeAllThreadData(xsink);
 }
 
 #ifdef DEBUG
@@ -8259,7 +8267,14 @@ namespace {
                 std::unique_ptr<QoreProgram, decltype(dep_deref)> dep_pgm(btp->del(), dep_deref);
                 // the thread no longer runs the Program's code, whose data another thread can delete now (the
                 // Program's teardown deletes the thread's local data in it): the destructors run by the deletion of
-                // the thread's data are not called from that code, and do not use that data
+                // the thread's data are not called from that code, and do not use that data.  The Program stays the
+                // thread's current Program, as for every thread in its teardown: the destructors of builtin classes
+                // take its parse options and sandbox context, and the dependency reference keeps it allocated.  The
+                // destructor of a class of the Program enters it as any other thread would, with its thread count:
+                // while the Program exists, it runs, and its data in the Program is purged again by the deletion of the
+                // thread's data (ThreadProgramData::del()); once the Program has been deleted, its code cannot be
+                // entered, the destructor does not run, and the thread reports PROGRAM-ERROR, as a call into a deleted
+                // Program does (it ran in the deleted Program before)
                 td->runtime_loc = &loc_builtin;
                 td->call_site_loc = nullptr;
                 td->runtime_statement = nullptr;

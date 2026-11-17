@@ -2060,6 +2060,12 @@ public:
 #ifdef DEBUG
     //! For tests: the number of Program objects that exist (created and not yet destroyed)
     DLLLOCAL static size_t dbgGetLiveProgramCount();
+    //! returns true if the Program with the given ID exists (it has not been destroyed)
+    DLLLOCAL static bool dbgIsLiveProgram(qore_program_id_t id);
+    //! waits until the Program with the given ID has been destroyed; returns false on timeout
+    DLLLOCAL static bool dbgWaitProgramDestroyed(qore_program_id_t id, int64 timeout_ms);
+    //! signals the destruction of a Program to dbgWaitProgramDestroyed(); called with the registry lock held
+    DLLLOCAL static void dbgProgramDestroyed();
 #endif
 
     //! Marks the user variants of the Program's code when its deletion starts (UserVariantBase::pgm_deleted)

@@ -42,6 +42,65 @@ sub save_in_thread(code make, Counter saved) {
         saved.dec();
     }();
 }
+
+#! saves a value in the thread-local data
+sub save(string key, auto value) {
+    save_thread_data(key, value);
+}
+
+#! counts its destruction
+class PTracked {
+    private {
+        Counter destroyed;
+    }
+
+    constructor(Counter destroyed) {
+        self.destroyed = destroyed;
+    }
+
+    destructor() {
+        destroyed.dec();
+    }
+}
+
+#! saves an object of a class of this Program in the thread-local data of the thread that destroys it
+class SaveOnDestroy {
+    private {
+        Counter destroyed;
+    }
+
+    constructor(Counter destroyed) {
+        self.destroyed = destroyed;
+    }
+
+    destructor() {
+        save_thread_data(\"late\", new PTracked(destroyed));
+    }
+}
+
+#! starts a background thread in this Program that saves the objects that the code given creates, if any, and then
+#! an object of a class of this Program in its thread-local data, and ends
+sub save_own_in_thread(*code make, Counter destroyed, Counter saved) {
+    background sub () {
+        if (make) {
+            save_thread_data(\"a\", make());
+        }
+        save_thread_data(\"own\", new PTracked(destroyed));
+        saved.dec();
+    }();
+}
+
+#! returns an object that saves an object of a class of this Program in the thread-local data of the thread that
+#! destroys it
+SaveOnDestroy sub save_on_destroy(Counter destroyed) {
+    return new SaveOnDestroy(destroyed);
+}
+";
+
+#! the top-level code of the Program run by a thread: a top-level local variable of the thread whose value saves
+#! thread-local data when the thread's data in the Program is deleted at its end
+const TopLevelCode = "
+SaveOnDestroy keep = save_on_destroy(get_thread_data(\"counter\"));
 ";
 
 #! the destructors that the end of a background thread runs can run after another thread deleted the thread's Program
@@ -55,10 +114,18 @@ sub save_in_thread(code make, Counter saved) {
 class ThreadEndDeletedProgramTest inherits QUnit::Test {
     constructor() : Test("ThreadEndDeletedProgramTest", "1.0") {
         addTestCase("a thread's data is deleted at its end after its Program was deleted", \threadEndTest());
+        addTestCase("an object of a class of the thread's Program in its data is destroyed at its end",
+            \ownClassTest());
+        addTestCase("an object of a class of the thread's deleted Program in its data is not destroyed at its end",
+            \ownClassDeletedTest());
+        addTestCase("data saved while a thread's data in a Program is deleted at its end leaves nothing behind",
+            \lateDataTest());
         set_return_value(main());
     }
 
     threadEndTest() {
+        # the ID of the thread's Program data, in debug builds
+        *int tpd_id;
         Counter destroyed(2);
         Counter in_destructor(1);
         Queue release();
@@ -73,7 +140,12 @@ class ThreadEndDeletedProgramTest inherits QUnit::Test {
                 # a bound for a broken test only
                 release.get(120000);
             };
-            p.callFunction("save_in_thread", Tracked sub () { return new Tracked(destroyed, blocker); }, saved);
+            p.callFunction("save_in_thread", Tracked sub () {
+                if (Option::HAVE_LIBRARY_DEBUGGING && !exists tpd_id) {
+                    tpd_id = call_function("dbg_get_thread_program_data_id");
+                }
+                return new Tracked(destroyed, blocker);
+            }, saved);
             saved.waitForZero();
             # the end of the thread runs the first destructor; the Program is deleted at the end of this block
             assertEq(0, in_destructor.waitForZero(120000), "the end of the thread runs a destructor");
@@ -81,5 +153,106 @@ class ThreadEndDeletedProgramTest inherits QUnit::Test {
         release.push(True);
         release.push(True);
         assertEq(0, destroyed.waitForZero(120000), "the destructors of the thread's data ran");
+        # the thread has ended before the next test starts
+        if (exists tpd_id) {
+            assertTrue(call_function("dbg_wait_thread_program_data_released", tpd_id, 120000), "the thread has ended");
+        }
+    }
+
+    #! the destructor of an object of a class of the thread's Program runs at the thread's end, and the thread's end
+    #! leaves no reference to the Program behind
+    ownClassTest() {
+        checkDebug();
+        # the ID of the thread's Program data
+        *int tpd_id;
+        int id;
+        Counter destroyed(1);
+        Counter saved(1);
+        {
+            Program p(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES, True);
+            id = p.getProgramId();
+            p.parse(ProgramCode, "thread-end-own-class");
+            p.callFunction("save_own_in_thread", sub () {
+                tpd_id = call_function("dbg_get_thread_program_data_id");
+            }, destroyed, saved);
+            saved.waitForZero();
+            assertEq(0, destroyed.waitForZero(120000), "the destructor of the object ran");
+            # the thread has ended
+            assertTrue(call_function("dbg_wait_thread_program_data_released", tpd_id, 120000), "the thread has ended");
+        }
+        # the Program is freed when the thread has released it at its end; a leaked reference keeps it (the bound is
+        # for a broken test only)
+        assertTrue(call_function("dbg_wait_program_destroyed", id, 120000), "the Program was freed");
+    }
+
+    #! the destructor of an object of a class of the thread's Program does not run at the thread's end once the
+    #! Program has been deleted: the Program's code cannot be entered any more; nothing is left behind
+    ownClassDeletedTest() {
+        checkDebug();
+        # the ID of the thread's Program data
+        *int tpd_id;
+        int id;
+        Counter destroyed(1);
+        Counter own_destroyed(1);
+        Counter in_destructor(1);
+        Queue release();
+        Counter saved(1);
+        {
+            Program p(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES, True);
+            id = p.getProgramId();
+            p.parse(ProgramCode, "thread-end-own-class-deleted");
+            code blocker = sub () {
+                in_destructor.dec();
+                # a bound for a broken test only
+                release.get(120000);
+            };
+            p.callFunction("save_own_in_thread", Tracked sub () {
+                tpd_id = call_function("dbg_get_thread_program_data_id");
+                return new Tracked(destroyed, blocker);
+            }, own_destroyed, saved);
+            saved.waitForZero();
+            assertEq(0, in_destructor.waitForZero(120000), "the end of the thread runs a destructor");
+        }
+        release.push(True);
+        assertEq(0, destroyed.waitForZero(120000), "the destructor of the main Program's object ran");
+        assertTrue(call_function("dbg_wait_thread_program_data_released", tpd_id, 120000), "the thread has ended");
+        assertEq(1, own_destroyed.getCount(), "the destructor of the deleted Program's object did not run");
+        # the Program is freed when the thread has released it at its end; a leaked reference keeps it (the bound is
+        # for a broken test only)
+        assertTrue(call_function("dbg_wait_program_destroyed", id, 120000), "the Program was freed");
+    }
+
+    #! an object of a class of a Program saved in the thread's data while the thread's data in the Program is deleted
+    #! at its end is destroyed, and the thread's end leaves no reference to the Program behind
+    lateDataTest() {
+        checkDebug();
+        # the ID of the thread's Program data
+        *int tpd_id;
+        int id;
+        Counter destroyed(1);
+        Counter ran(1);
+        {
+            Program p(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES, True);
+            id = p.getProgramId();
+            p.parse(ProgramCode + TopLevelCode, "thread-end-late-data");
+            background sub () {
+                on_exit ran.dec();
+                tpd_id = call_function("dbg_get_thread_program_data_id");
+                p.callFunction("save", "counter", destroyed);
+                p.run();
+            }();
+            assertEq(0, ran.waitForZero(120000), "the thread ran the top-level code");
+            assertEq(0, destroyed.waitForZero(120000), "the destructor of the object saved late ran");
+            assertTrue(call_function("dbg_wait_thread_program_data_released", tpd_id, 120000), "the thread has ended");
+        }
+        # the Program is freed when the thread has released it at its end; a leaked reference keeps it (the bound is
+        # for a broken test only)
+        assertTrue(call_function("dbg_wait_program_destroyed", id, 120000), "the Program was freed");
+    }
+
+    private checkDebug() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the test needs a debug build of the library");
+        }
     }
 }
