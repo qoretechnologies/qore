@@ -267,6 +267,22 @@ ref(text: "files", count: 3);   # "3 files"
 cl(count: 2, text: "boxes");    # "boxes x 2"
     @endcode
 
+    A call of a method that a class does not have, of the name of a member whose type can hold code (a member of no
+    type, \c auto, or a member of a code type), calls the code that the member holds, and a named call binds its
+    names to the parameters of that code when the call is made, as a named call of a call reference or closure; when
+    the member does not hold code, the call is a call of the pseudo-method of objects of the same name, if there is
+    one, with the names bound to its parameters:
+    @code{.py}
+class Handler {
+    public {
+        auto callback;
+    }
+}
+Handler h();
+h.callback = string sub (string text, int count = 1) { return sprintf("%s x %d", text, count); };
+h.callback(count: 2, text: "boxes");    # "boxes x 2"
+    @endcode
+
     Other calls with named arguments must resolve to a known signature at parse time: method calls through a
     receiver without a declared class type (such as \c auto, \c object, or a class with a \c methodGate() method
     and no method of the given name) are rejected with \c NAMED-CALL-NOT-SUPPORTED; use positional arguments or give

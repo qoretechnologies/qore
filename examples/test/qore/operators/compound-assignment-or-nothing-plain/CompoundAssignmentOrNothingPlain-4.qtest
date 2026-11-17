@@ -16,7 +16,7 @@
 
 %exec-class CompoundAssignmentOrNothingPlainPart4
 
-#! runs part 4 of 4 of the cases of CompoundAssignmentOrNothingPlainBase: the default mode
+#! runs part 4 of 12 of CompoundAssignmentOrNothingPlainBase: the jit mode with the first third of the functions
 class CompoundAssignmentOrNothingPlainPart4 inherits CompoundAssignmentOrNothingPlainBase {
     constructor() : CompoundAssignmentOrNothingPlainBase("CompoundAssignmentOrNothingPlainPart4", 4) {
     }

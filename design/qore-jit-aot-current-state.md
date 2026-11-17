@@ -603,8 +603,8 @@ engines therefore mark the object an object local holds with a real reference fr
 the IR interpreter's slot cache (`IRLocalSlotCache::set()` marks, `release()` releases with
 `realDeref()`; the frame's object slots are `interpreter_real_slots`) and native code
 (`qore_rt_object_slot_replace()` for a store, `qore_rt_object_slot_release()` for a scope exit
-and the exit release, where the array form tags the cache of an object local in the lowest bit
-of its address for `qore_rt_cleanup_run_allocas()`). The object has a real reference exactly
+and the exit release, where the table form tags the entry of the cache of an object local with
+`QORE_FRAME_ENTRY_OBJECT` for `qore_rt_cleanup_run_frame()`). The object has a real reference exactly
 while the local holds it, released in the same order as the value; a parameter stays on the
 runtime stack. A body local of no type (`auto`, `any`) that is IR-only stays in `ir_only_locals`, so the
 optimizations keyed on that set still apply to it, and the object it holds is marked too
@@ -629,14 +629,15 @@ has slots for the locals of the function it belongs to, which that function's ha
 Native code builds the sequence in `QoreIRToLLVM::getExitReleaseSequence()`: body locals in
 declaration order, an owned IR-only cache as an alloca and a runtime-stack local as its `LocalVar`
 (its native cache allocas follow it, so they are released before the runtime slot is cleared by
-`qore_rt_clear_local()`). The inline form releases the sequence in reverse; the array form
-(`qore_rt_cleanup_run_allocas()`, used above `QORE_JIT_CLEANUP_PHI_BUDGET`) stores it in order
-with a runtime-stack local tagged with bit 1 and releases it last entry first. The inline form
-includes runtime-stack locals only at an exception exit; the array form, shared by every exit,
+`qore_rt_clear_local()`). The inline form releases the sequence in reverse; the table form
+(`qore_rt_cleanup_run_frame()`, used above `QORE_JIT_CLEANUP_PHI_BUDGET`) has it in order, as a
+constant table of the slots in the cleanup frame (see below) with a runtime-stack local tagged
+`QORE_FRAME_ENTRY_LOCAL`, and releases it last entry first. The inline form
+includes runtime-stack locals only at an exception exit; the table form, shared by every exit,
 includes them always, and a local already released at a normal exit is released again as no value.
 AOT code instantiates its body locals on the runtime stack at entry (`aot_body_locals`): their
-values are released at their places too, by slot (`qore_rt_clear_local_aot()`, or the variable read
-from the context at entry in the array form), before the runtime stack removes the variables; left
+values are released at their places too, by slot (`qore_rt_clear_local_aot()`, or the variable that the
+helper reads from the context by the slot that the entry gives in the table form), before the runtime stack removes the variables; left
 to the runtime stack, a closure-bound local popped at its place was still held by a closure in a
 later runtime-stack local, and closure-bound locals died in the order of their closures.
 Closure-bound body locals are in the sequence too, in JIT and AOT code: one that the frame
@@ -983,9 +984,9 @@ exit. Qore now does the same thing where it matters.
 finalization — the number of boxed exit-cleanup slots and the predecessor count
 of `error_return_block` — and, only when their product exceeds
 `getCleanupPhiBudget()` (`QORE_JIT_CLEANUP_PHI_BUDGET`, default 4096), records
-the slot addresses in an entry-block array and replaces the whole triple
-sequence with a single `qore_rt_cleanup_run_allocas()` call. Taking the slot
-addresses keeps them in memory, so no PHI is needed and code generation stays
+the slots in a table of the cleanup frame and replaces the whole triple
+sequence with a single `qore_rt_cleanup_run_frame()` call. Keeping the slots in
+the frame keeps them in memory, so no PHI is needed and code generation stays
 linear. The slot set is everything `emitPreinstantiatedCleanup()` releases, in
 emission order: pre-instantiated entry cleanup slots, fast-entry parameter
 slots, then the IR-only locals that own their value directly — covering only one
@@ -995,7 +996,7 @@ full SSA promotion of its slots, so the trade-off is confined to bodies where
 promotion could not pay off anyway.
 
 `prepareIteratorCleanupArray()` applies the identical treatment to
-`iterator_cleanup_allocas` and `qore_rt_iterator_cleanup_allocas()`. Iterator
+`iterator_cleanup_allocas` and `qore_rt_iterator_cleanup_frame()`. Iterator
 cleanup is written both in the shared error-return block and, by
 `emitLateExitCleanup()`, at every `ret`/`resume`, so its multiplier is the same
 edge count.
@@ -1006,17 +1007,57 @@ tracked local at *every* temp boundary, so a function paid
 `tracked locals x temp boundaries` basic blocks: the reflection test's
 1621-line `namedCallReflectionTests()` reached 88062 rotations — 95% of its
 184933 basic blocks and 74% of its instructions, before the optimizer ran at
-all — and could not be code-generated in half an hour. Above
+all — and could not be code-generated in half an hour. At or above
 `getReloadChainCallThreshold()` (`QORE_JIT_RELOAD_CHAIN_CALL_THRESHOLD`, default
-32 tracked locals) the same test and rotation run inside
-`qore_rt_reload_chain_rotate()` / `qore_rt_reload_chain_clear()`, which emits one
-call and no extra block. Smaller functions keep the inline form so LLVM can fold
-it away.
+32 trackers and deferred slots together) the same tests, rotations and
+valid-epoch stores run inside `qore_rt_reload_chain_flush()`: one call per
+boundary, with a constant table of the slots in the order of the inline form
+(pairs of tracker and deferred slot, then the valid epochs), which are the first
+slots of the cleanup frame (qore#6299). A call per tracked local, as the first
+helper form made, still left the code of a function growing with
+`tracked locals x temp boundaries`. Smaller functions keep the inline form so LLVM
+can fold it away. A cancelled finalization of the slot table (or of the handler
+local table, qore#6305) refuses the function: its lowering fails, and it stays on
+its previous tier.
 
 Together these took that method from an unbounded hang to 29s.
 
+**The cleanup frame.** Every helper above reads a table of stack slots: the
+invoke and exit temporaries, the boxed exit cleanup, the iterators, the reload
+chains and the records of the table-driven handler code (`qore_rt_obe_*()`).
+The tables were arrays of the addresses of the slots, written in the entry block
+of the function: a function with 100 catch blocks that have a handler stored
+about 3400 addresses there, in one region without a call, and LLVM's machine
+scheduler (`ScheduleDAGInstrs::addChainDependencies()`), its spill weights and
+its register allocator took time in more than the size of the function for it
+(qore#6299). Each alloca that a table covers is now a slot of one array, the
+cleanup frame (`QoreIRToLLVM::cleanup_frame`), and the tables are constant
+arrays that give the slots by their indexes (`QORE_FRAME_ENTRY_SHIFT`, with the
+tags of the exit release; `QoreObeLocal` records with the indexes of the
+storage of a local): the helpers take the frame as an argument. The calls
+reference a placeholder global while the function is lowered, as the slots of
+the invoke and exit tables are registered with the code;
+`finalizeCleanupFrame()`, once all of the function is emitted, gives the slots
+their indexes (the reload chain slots first, at the indexes of the flush
+tables), makes the tables, replaces each alloca with a constant GEP of the frame
+and clears the frame with one memset, which replaces the stores that cleared
+each alloca in the entry block. The GEPs stay in the entry block through the
+optimization passes, and a GEP used in another block would be a virtual register
+live from the entry block to its last use (an alloca is a frame index in every
+block): thousands of them made machine sinking (`MachineSinking`, 17G of the 78G
+of a function with 200 catch blocks) and register allocation superlinear. So
+`QoreIRToLLVM::sinkFrameSlotAddresses()`, after the optimization passes (JIT and
+AOT, beside `expandFloatToIntForTarget()`), gives each block that uses such a GEP
+a copy of its own, which folds into a frame index and offset there; it applies
+to the static allocas with at least 64 such GEPs, which leaves ordinary functions
+as they are. A slot that is not an alloca of the entry block
+of at most 8 bytes keeps the inline form (the invoke and exit tables stop at
+it), and a finalization that finds one anyway refuses the function. Only the
+allocas of the tables that are read move, so every ordinary function, which
+uses no table, keeps its allocas and their promotion.
+
 Two details matter for correctness. The runtime helper releases slots in LIFO
-order, so the addresses are stored in reverse and the values are released in
+order, so the slots are recorded in order and the values are released in
 exactly the order the inline sequence used; destruction order of locals is
 observable through destructors. And the choice is made before any cleanup is
 written, so the shared error-return block and the shared EH common-cleanup block

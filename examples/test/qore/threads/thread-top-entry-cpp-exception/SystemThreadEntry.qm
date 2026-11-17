@@ -1,0 +1,56 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test module of thread-top-entry-cpp-exception.qtest (#6233): a system thread capability can only be created while a
+# module is loaded, so this module creates it at its initialization, for a callback of a Program that has a thread
+# entry handler
+
+%new-style
+%require-types
+%strict-args
+
+module SystemThreadEntry {
+    version = "1.0";
+    desc = "starts a system thread in a Program with a thread entry handler";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () { SystemThreadEntry::init(); };
+}
+
+public namespace SystemThreadEntry {
+    #! the Program that the system thread enters
+    our Program pgm;
+    #! starts the system thread
+    our code start;
+    #! what the system thread's callback pushed
+    our Queue q;
+
+    sub init() {
+        q = new Queue();
+        pgm = new Program(PO_NEW_STYLE);
+        # the callback is a closure of this Program, which has a thread entry handler
+        pgm.parse("%new-style
+code sub get_run(Queue q) { return sub () { q.push(\"system\"); }; }
+", "system-thread-entry");
+        pgm.setThreadEntryHandler(int sub () { return 1; }, sub (auto token) {});
+        start = SandboxManager::createSystemThreadCall(pgm.callFunction("get_run", q));
+    }
+
+    #! starts the system thread; if \a fail, the next run of an entry handler throws std::bad_alloc
+    public sub start_thread(bool fail) {
+        if (fail) {
+            call_function("dbg_fail_next_program_entry", 6);
+        }
+        start();
+    }
+
+    #! returns what the system thread's callback pushed
+    public *string sub get(timeout t) {
+        return q.get(t);
+    }
+
+    #! returns the number of values the callback pushed and that were not read
+    public int sub size() {
+        return q.size();
+    }
+}

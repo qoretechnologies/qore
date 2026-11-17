@@ -10527,6 +10527,22 @@ int SocketRecvSomePollState::continuePollIntern(ExceptionSink* xsink) {
 
 SocketRecvUntilBytesPollState::SocketRecvUntilBytesPollState(ExceptionSink* xsink, qore_socket_private* sock,
         const char* bytes, size_t size) : sock(sock), bin(new QoreStringNode), bytes(bytes), size(size) {
+    // the failure table is only kept if the pattern has a proper prefix that is also a suffix of one of its prefixes
+    // (issue #6325)
+    for (size_t i = 1, k = 0; i < size; ++i) {
+        while (k && bytes[i] != bytes[k]) {
+            k = fail[k - 1];
+        }
+        if (bytes[i] == bytes[k]) {
+            ++k;
+        }
+        if (k && !fail) {
+            fail.reset(new size_t[size]());
+        }
+        if (fail) {
+            fail[i] = k;
+        }
+    }
 }
 
 /** returns:
@@ -10580,7 +10596,23 @@ int SocketRecvUntilBytesPollState::continuePollIntern(ExceptionSink* xsink) {
                 break;
             }
         } else if (matched) {
-            matched = 0;
+            // a mismatch after a partial match: the match falls back to the longest prefix of the pattern that ends
+            // here, and the byte is compared again, as it can start or continue a match (issue #6325)
+            if (!fail) {
+                // no prefix of the pattern is a suffix of another: the byte can only start a match, which cannot be
+                // complete, as a pattern of one byte never has a partial match
+                matched = c == bytes[0];
+            } else {
+                do {
+                    matched = fail[matched - 1];
+                } while (matched && c != bytes[matched]);
+                if (c == bytes[matched]) {
+                    ++matched;
+                    if (matched == size) {
+                        break;
+                    }
+                }
+            }
         }
     }
 
@@ -10613,6 +10645,13 @@ int SocketRecvUntilBytesPollState::doRecv(ExceptionSink* xsink) {
                 if (++loop >= max_nonblock_ops) {
                     return SOCK_POLLIN;
                 }
+#ifdef DEBUG
+                // tests hold the read here, after SSL_read() found no record, until the peer has sent its data and
+                // reset or closed the connection (#6315)
+                if (qore_dbg_tls_read_want_hook_t hook = qore_dbg_tls_read_want_hook.load()) {
+                    hook(io_use.getDescriptor());
+                }
+#endif
                 short revents;
                 int prc = qore_socket_poll_fd_revents_now(io_use.getDescriptor(), POLLIN | POLLERR | POLLHUP, revents,
                     "SOCKET-RECV-ERROR", "socket", xsink);
@@ -10622,7 +10661,10 @@ int SocketRecvUntilBytesPollState::doRecv(ExceptionSink* xsink) {
                 if (!prc || !(revents & (POLLIN | POLLERR | POLLHUP))) {
                     return SOCK_POLLIN;
                 }
-                if (revents & (POLLERR | POLLHUP)) {
+                // data that arrived with the peer's reset or close is still in the receive buffer: SSL_read() reads
+                // it, and reports the end of the connection only once nothing is left (#6315); without POLLIN, the
+                // connection ended with nothing to read
+                if (!(revents & POLLIN)) {
                     return 0;
                 }
                 continue;

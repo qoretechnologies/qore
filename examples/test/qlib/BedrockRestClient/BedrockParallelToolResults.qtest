@@ -1,0 +1,136 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Logger
+%requires Mime
+%requires HttpServerUtil
+%requires HttpServer
+%requires QoreLlmTypes
+%requires QoreLlmUtils
+%requires AwsRestClient
+%requires BedrockRestClient
+
+%requires json
+
+%exec-class BedrockParallelToolResultsTest
+
+#! records the body of each Converse request and answers it with a canned response; no request reaches AWS
+class RecordingConverseHandler inherits AbstractHttpRequestHandler {
+    public {
+        *hash<auto> last_body;
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        if (cx.raw_path !~ /\/converse$/) {
+            return makeResponse(404, "unknown path: " + cx.raw_path);
+        }
+        last_body = parse_json(body.typeCode() == NT_BINARY ? body.toString("UTF-8") : body);
+        return makeResponse({"Content-Type": MimeTypeJson}, 200, make_json({
+            "output": {"message": {"role": "assistant", "content": ({"text": "done"},)}},
+            "stopReason": "end_turn",
+            "usage": {"inputTokens": 1, "outputTokens": 1, "totalTokens": 2},
+        }));
+    }
+}
+
+#! Regression test for issue #6362: the results of parallel tool calls are sent in one user message
+/** Converse requires the toolResult blocks that answer the tool calls of an assistant turn in the one user message
+    that follows it (HTTP 400 "Expected toolResult blocks at messages.2.content" otherwise); BedrockLlmProvider sent
+    each tool result as a user message of its own.  The test checks the messages of the request body that a local
+    HttpServer receives.
+*/
+class BedrockParallelToolResultsTest inherits QUnit::Test {
+    private {
+        HttpServer http;
+        int port;
+        RecordingConverseHandler handler();
+    }
+
+    constructor() : QUnit::Test("BedrockLlmProvider parallel tool results", "1.0") {
+        addTestCase("two parallel tool calls", \twoCallsTest());
+        addTestCase("three parallel tool calls in the second of two tool turns", \twoTurnsTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        http = new HttpServer(<HttpServerOptionInfo>{"logger": new Logger("test", LoggerLevel::getLevelError())});
+        http.setDefaultHandler("bedrock", handler);
+        port = http.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
+    }
+
+    globalTearDown() {
+        delete http;
+    }
+
+    twoCallsTest() {
+        newProvider().chat((
+            <QoreLlmUtils::ChatMessage>{"role": "user", "content": "weather in Prague and Brno?"},
+            assistantCalls(("a1", "a2")),
+            toolResult("a1", "sunny"),
+            toolResult("a2", "rain"),
+        ));
+        list<hash<auto>> msgs = handler.last_body.messages;
+        assertEq(("user", "assistant", "user"), map $1.role, msgs);
+        assertEq(({"toolUseId": "a1", "content": ({"text": "sunny"},)},
+            {"toolUseId": "a2", "content": ({"text": "rain"},)}), map $1.toolResult, msgs[2].content);
+    }
+
+    twoTurnsTest() {
+        newProvider().chat((
+            <QoreLlmUtils::ChatMessage>{"role": "user", "content": "plan a trip"},
+            assistantCalls(("b1",)),
+            toolResult("b1", "ok"),
+            assistantCalls(("c1", "c2", "c3")),
+            toolResult("c1", "one"),
+            toolResult("c2", "two"),
+            toolResult("c3", "three"),
+            <QoreLlmUtils::ChatMessage>{"role": "assistant", "content": "summary"},
+            <QoreLlmUtils::ChatMessage>{"role": "user", "content": "thanks"},
+        ));
+        list<hash<auto>> msgs = handler.last_body.messages;
+        assertEq(("user", "assistant", "user", "assistant", "user", "assistant", "user"), map $1.role, msgs);
+        assertEq(("b1",), map $1.toolResult.toolUseId, msgs[2].content);
+        # the three results, in their order, in one user message
+        assertEq(("c1", "c2", "c3"), map $1.toolResult.toolUseId, msgs[4].content);
+        assertEq(("one", "two", "three"), map $1.toolResult.content[0].text, msgs[4].content);
+        # the assistant turn has its three tool calls
+        assertEq(("c1", "c2", "c3"), map $1.toolUse.toolUseId, msgs[3].content, $1.toolUse);
+        assertEq("thanks", msgs[6].content[0].text);
+    }
+
+    private static hash<QoreLlmUtils::ChatMessage> assistantCalls(list<string> ids) {
+        return <QoreLlmUtils::ChatMessage>{
+            "role": "assistant",
+            "tool_calls": cast<list<hash<QoreLlmUtils::ChatToolCall>>>(map <QoreLlmUtils::ChatToolCall>{
+                "id": $1,
+                "name": "get_weather",
+                "arguments": {"city": $1},
+            }, ids),
+        };
+    }
+
+    private static hash<QoreLlmUtils::ChatMessage> toolResult(string id, string content) {
+        return <QoreLlmUtils::ChatMessage>{"role": "tool", "tool_call_id": id, "content": content};
+    }
+
+    private BedrockRestClient::BedrockLlmProvider newProvider() {
+        return new BedrockRestClient::BedrockLlmProvider(<QoreLlmUtils::LlmBackendConfig>{
+            "model": "anthropic.claude-3-5-sonnet-20240620-v1:0",
+            "url": "http://localhost:" + port,
+            "max_retries": 0,
+            "provider_options": {
+                "aws_region": "us-east-1",
+                "aws_keyid": "AKIA-TEST",
+                "aws_secret": "test-secret",
+                "aws_imds_disabled": True,
+            },
+        });
+    }
+}

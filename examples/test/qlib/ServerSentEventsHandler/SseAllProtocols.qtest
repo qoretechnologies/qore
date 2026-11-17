@@ -83,6 +83,13 @@ class RecordingSseHandler inherits ServerSentEventHandler::ServerSentEventHandle
     public {
         #! Set once the stream of the connection has been released (see releaseHttp2StreamOnRegister())
         bool h2_stream_released;
+
+        #! When set, the next HTTP/3 connection binds this Queue to its QUIC session: it gets a \c {"type":"close"}
+        #! entry once the server has processed the close of the session
+        *Queue session_close_queue;
+
+        #! Deregisters the Queue bound with @ref session_close_queue
+        *code<nothing()> session_close_deregister;
     }
 
     # "data": "none" — SSE payloads are already-formed strings, no re-serialization
@@ -93,16 +100,22 @@ class RecordingSseHandler inherits ServerSentEventHandler::ServerSentEventHandle
         # Client cancellation and server deregistration complete on different threads. Preserve this
         # session's completion counter until its close hook has run, otherwise a late close can decrement
         # the next test's counter and leave an earlier connection in its registration assertions.
-        if (last_conn && deregistered.waitForZero(SseTestTimeout)) {
-            throw "SSE-TEST-CLEANUP-TIMEOUT", "previous SSE session did not finish deregistering";
-        }
+        bool stale = last_conn && deregistered.waitForZero(SseTestTimeout);
+        # the counters are replaced before the timeout is raised, so that one session that does not deregister
+        # fails one test case, not every following one
         registered = new Counter(1);
         deregistered = new Counter(1);
         last_conn = NOTHING;
-        AutoLock al(gate_lock);
-        setup_gate = NOTHING;
-        release_h2_stream = False;
-        h2_stream_released = False;
+        {
+            AutoLock al(gate_lock);
+            setup_gate = NOTHING;
+            release_h2_stream = False;
+            h2_stream_released = False;
+            session_close_queue = NOTHING;
+        }
+        if (stale) {
+            throw "SSE-TEST-CLEANUP-TIMEOUT", "previous SSE session did not finish deregistering";
+        }
     }
 
     #! Makes the next HTTP/2 connection release its stream before it is registered
@@ -147,6 +160,24 @@ class RecordingSseHandler inherits ServerSentEventHandler::ServerSentEventHandle
         }
         return ServerSentEventHandler::ServerSentEventHandler::setupAsyncSseConnectionHttp2(sock, cx, hdr, cid,
             stream_id, wake_callback);
+    }
+
+    HttpServerAsyncIo::Http3SseStream setupAsyncSseConnectionHttp3(Socket sock, hash<auto> cx, hash<auto> hdr,
+            string cid, int session_id, int stream_id, *code<nothing()> wake_callback) {
+        *Queue q;
+        {
+            AutoLock al(gate_lock);
+            q = remove session_close_queue;
+        }
+        if (q) {
+            # bound before the connection is registered (and the setup gate parks), so before the close notifier
+            string key = "session-close-" + cid;
+            cx."header-info".register_persistent_queue(key, q);
+            code deregister = cx."header-info".deregister_persistent_queue;
+            session_close_deregister = sub () { deregister(key); };
+        }
+        return ServerSentEventHandler::ServerSentEventHandler::setupAsyncSseConnectionHttp3(sock, cx, hdr, cid,
+            session_id, stream_id, wake_callback);
     }
 
     connectionRegisteredImpl(ServerSentEventHandler::ServerSentEventConnection conn) {
@@ -661,6 +692,8 @@ l50Xb2GWQesIt9k5jF5IOw==
             \testHttp2SseDeregisterOnStreamResetAfterHandler());
         addTestCase("H3 SSE stream reset before the close notifier registers is not lost",
             \testHttp3SseDeregisterOnStreamResetBeforeListener());
+        addTestCase("H3 SSE connection is deregistered when its QUIC session closes before the close notifier is "
+            "registered", \testHttp3SseDeregisterOnSessionCloseBeforeListener());
         set_return_value(main());
     }
 
@@ -1584,6 +1617,68 @@ l50Xb2GWQesIt9k5jF5IOw==
     testHttp2SseDeregisterOnStreamResetAfterHandler() {
         runSseDeregisterOnStreamResetAfterHandlerFlow("H2 SSE stream-reset-after-handler deregister",
             sprintf("https://127.0.0.1:%d", h2_port));
+    }
+
+    #! Asserts that the close of a QUIC session processed before the close notifier registers is not lost
+    /** The server ends the SSE stream (FIN) and the client then closes its QUIC session: no stream reset is sent, and
+        the close of the session is the only event left for the stream.  It is a one-shot event, which was reported
+        only to the streams whose close notifier was registered then; @ref HttpServer::HttpServer registers it one
+        step after the handler registers the connection, so a close processed in that window left the connection
+        registered forever (qore#6202: the H3 observable case on a loaded host, which failed the next three cases).
+
+        The gate parks the SSE setup thread inside \c connectionRegisteredImpl(), before the notifier is registered.
+        A Queue bound to the session receives a \c {"type":"close"} entry when the server processes the close of the
+        session, in the same step that tells the registered streams; only then is setup released, so the notifier is
+        registered strictly after the close.
+    */
+    testHttp3SseDeregisterOnSessionCloseBeforeListener() {
+        string label = "H3 SSE session-close-before-listener deregister";
+        string url = sprintf("https://127.0.0.1:%d", h3_port);
+        handler.reset();
+        Queue session_close();
+        handler.session_close_queue = session_close;
+        on_exit {
+            if (handler.session_close_deregister) {
+                handler.session_close_deregister();
+                remove handler.session_close_deregister;
+            }
+        }
+        handler.armSetupGate();
+        # never leave the parked setup thread stranded, even if an assertion throws
+        on_exit handler.releaseSetupGate();
+
+        HttpClientIo::HttpClientConnectionManager mgr = makeManager("h3");
+        HttpClientStreamingIo::SseObservable obs(mgr, url, "GET", "/");
+        RecordingSseObserver observer();
+        obs.registerObserver(observer);
+        obs.observersReady();
+
+        assertEq(0, handler.registered.waitForZero(SseTestTimeout),
+            label + ": connection should register on server");
+
+        # the server ends the stream; the setup thread is parked, so no close notifier is registered yet
+        handler.last_conn.send(<SseMessageInfo>{
+            "event": "ready",
+            "data": "payload",
+        });
+        handler.last_conn.getAsyncSseConnection().close();
+        assertTrue(observer.waitForCount(3, SseTestTimeout),
+            sprintf("%s: the client read the stream to its end; events=%s", label, observer.describeEvents()));
+
+        # the client closes its QUIC session
+        obs.stopEvents();
+        delete mgr;
+
+        # the close of the session has been processed by the server; now let setup finish
+        *hash<auto> close_entry = session_close.get(SseTestTimeout);
+        assertEq("close", close_entry.type, label + ": the server processed the close of the session");
+        handler.releaseSetupGate();
+
+        assertEq(0, handler.deregistered.waitForZero(SseTestTimeout),
+            label + ": a close notifier registered after the close of the session must still deregister the "
+            "connection");
+        assertEq((), handler.getConnectionIds() ?? (),
+            label + ": no connections remain registered");
     }
 
     testHttp3SseDeregisterOnStreamResetBeforeListener() {

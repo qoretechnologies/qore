@@ -17,7 +17,7 @@
 
 #! Regression test: as ExceptionExitLocalOrder.qtest, with the array form of native code's exit release
 /** QORE_JIT_CLEANUP_PHI_BUDGET=1 makes native code release the locals of a function at its exits with
-    qore_rt_cleanup_run_allocas() and an array of their caches and variables, which the inline form replaces in
+    qore_rt_cleanup_run_frame() and a table of their caches and variables, which the inline form replaces in
     smaller functions (see ExceptionExitLocalOrder.qtest)
 */
 class ExceptionExitLocalOrderArrayTest inherits ExecModeOutputTest {

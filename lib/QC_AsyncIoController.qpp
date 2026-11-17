@@ -664,8 +664,10 @@ static hash<auto> AsyncIoController::getInfo() {
 
     @note an exception raised by the code of a timer (@ref addTimer(), @ref addTimerDelay()), by the timer callback
     (@ref setTimerCallback()) or by a callback of an operation that the controller runs (a completion, frame or stream
-    callback, for example) is reported only to this logger, at the error level; without a logger, it is discarded.  An
-    exception raised by a task (@ref submitTask()) is reported as an unhandled exception on the standard error output
+    callback, for example) is logged by this logger at the error level, or else by the async I/O logger
+    (@ref Qore::set_async_io_logger() "set_async_io_logger()"); without a logger, it is reported as an unhandled
+    exception on the standard error output, so that the failure of a callback is never silent.  An exception raised by
+    a task (@ref submitTask()) is always reported as an unhandled exception on the standard error output
 
     @see getLogger()
 
@@ -735,8 +737,9 @@ static *LoggerInterfaceBase AsyncIoController::getLogger() {
     @throw INVALID-FUNCTION-ACCESS module code running for a restricted caller added a timer with code that is not
     its own, or with non-callable data
 
-    @note an exception that the code of the timer raises is reported only to the controller's logger
-    (@ref setLogger()); without a logger, it is discarded
+    @note an exception that the code of the timer raises is logged at the error level by the controller's logger
+    (@ref setLogger()) or else by the async I/O logger (@ref Qore::set_async_io_logger() "set_async_io_logger()");
+    without a logger, it is reported as an unhandled exception on the standard error output
 
     @since %Qore 3.0
 */
@@ -783,8 +786,9 @@ static int AsyncIoController::addTimer(date deadline, auto user_data)
     @throw INVALID-FUNCTION-ACCESS module code running for a restricted caller added a timer with code that is not
     its own, or with non-callable data
 
-    @note an exception that the code of the timer raises is reported only to the controller's logger
-    (@ref setLogger()); without a logger, it is discarded
+    @note an exception that the code of the timer raises is logged at the error level by the controller's logger
+    (@ref setLogger()) or else by the async I/O logger (@ref Qore::set_async_io_logger() "set_async_io_logger()");
+    without a logger, it is reported as an unhandled exception on the standard error output
 
     @since %Qore 3.0
 */
@@ -827,8 +831,9 @@ int timer_id = AsyncIoController::addTimerDelay(1s, sub () { checkConnection(); 
     @throw INVALID-FUNCTION-ACCESS module code running for a restricted caller added a timer with code that is not
     its own, or with non-callable data
 
-    @note an exception that the code of the timer raises is reported only to the controller's logger
-    (@ref setLogger()); without a logger, it is discarded
+    @note an exception that the code of the timer raises is logged at the error level by the controller's logger
+    (@ref setLogger()) or else by the async I/O logger (@ref Qore::set_async_io_logger() "set_async_io_logger()");
+    without a logger, it is reported as an unhandled exception on the standard error output
 
     @since %Qore 3.0
 */
@@ -869,8 +874,9 @@ int timer_id = AsyncIoController::addTimerDelay(30s, sub () { sendHeartbeat(); }
     @throw INVALID-FUNCTION-ACCESS module code running for a restricted caller added a timer with code that is not
     its own, or with non-callable data
 
-    @note an exception that the code of the timer raises is reported only to the controller's logger
-    (@ref setLogger()); without a logger, it is discarded
+    @note an exception that the code of the timer raises is logged at the error level by the controller's logger
+    (@ref setLogger()) or else by the async I/O logger (@ref Qore::set_async_io_logger() "set_async_io_logger()");
+    without a logger, it is reported as an unhandled exception on the standard error output
 
     @since %Qore 3.0
 */
@@ -934,8 +940,9 @@ static bool AsyncIoController::cancelTimer(int timer_id) [dom=NETWORK,THREAD_CON
     @param callback a callback that accepts a @ref TimerEventInfo hash argument, or
         @ref nothing to disable timer event delivery for non-callable \c user_data
 
-    @note an exception that the callback raises is reported only to the controller's logger (@ref setLogger());
-    without a logger, it is discarded
+    @note an exception that the callback raises is logged at the error level by the controller's logger
+    (@ref setLogger()) or else by the async I/O logger (@ref Qore::set_async_io_logger() "set_async_io_logger()");
+    without a logger, it is reported as an unhandled exception on the standard error output
 
     @since %Qore 3.0
 */

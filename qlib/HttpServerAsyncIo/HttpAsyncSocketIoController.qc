@@ -2450,6 +2450,8 @@ public class HttpAsyncSocketIoController {
             "keep_alive": True,
             "ssl": True,  # QUIC always uses TLS
         };
+        # the character sets and the media type of the request, as for HTTP/1.x (qore#6318, qore#6333)
+        conn_info.header_info += Priv::http_request_header_info(hdr);
 
         # Check for persistent queue — if a dedicated thread is waiting for this
         # connection, route the request to it instead of the pool
@@ -5240,6 +5242,8 @@ public class HttpAsyncSocketIoController {
             "keep_alive": True,
             "ssl": dispatch_ssl,
         };
+        # the character sets and the media type of the request, as for HTTP/1.x (qore#6318, qore#6333)
+        conn_info.header_info += Priv::http_request_header_info(hdr);
 
         # Check for persistent queue — if a dedicated thread is waiting for this
         # connection and the request matches the session filter, route the request
@@ -5553,6 +5557,8 @@ public class HttpAsyncSocketIoController {
             "keep_alive": True,
             "ssl": dispatch_ssl,
         };
+        # the character sets and the media type of the request, as for HTTP/1.x (qore#6318, qore#6333)
+        conn_info.header_info += Priv::http_request_header_info(hdr);
 
         # Apply the same pre-dispatch admission contract to extended CONNECT requests.
         try {
@@ -5935,6 +5941,42 @@ public class HttpAsyncSocketIoController {
 
 #! @cond nodoc
 namespace Priv {
+#! Returns the character sets and the media type of a request for its header information
+/** HTTP/1.x requests get them from Socket::readHTTPHeader() (\c "charset", \c "body-content-type" and
+    \c "accept-charset"); the HTTP/2 and HTTP/3 requests, whose headers the controller decodes itself, get the same
+    values from the same rules (get_http_content_type_info(), get_http_accept_charset()), so that a handler sees the
+    same \c hdr."content-type", \c cx."header-info" and \c cx."response-encoding" for every HTTP version (qore#6318,
+    qore#6333).  For a repeated header, HTTP/2 gives a list, of which the
+    last value is used, as for HTTP/1.x, which reads the header lines in turn; HTTP/3 joins the values with \c ", "
+    into one, which is used as it is, so the result for a repeated header can differ from that of HTTP/1.x (the
+    boundaries of the values are lost).
+
+    @param hdr the request headers
+
+    @return the \c "accept-charset" key of the header information, and the \c "charset" and
+    \c "body-content-type" keys with a Content-Type
+*/
+hash<auto> sub http_request_header_info(hash<auto> hdr) {
+    auto ac = hdr."accept-charset";
+    if (ac.typeCode() == NT_LIST) {
+        ac = ac.last();
+    }
+    hash<auto> rv = {"accept-charset": get_http_accept_charset(ac.typeCode() == NT_STRING ? ac : NOTHING)};
+    auto ct = hdr."content-type";
+    if (ct.typeCode() == NT_LIST) {
+        ct = ct.last();
+    }
+    if (ct.typeCode() != NT_STRING) {
+        return rv;
+    }
+    hash<HttpContentTypeInfo> info = get_http_content_type_info(ct);
+    rv.charset = info.charset;
+    if (exists info.body_content_type) {
+        rv."body-content-type" = info.body_content_type;
+    }
+    return rv;
+}
+
 #! Counts one connection for a drain (see design/http-server-drain.md)
 /** The token is carried in the connection's entry (HttpActiveConnectionInfo), which every state change of the
     connection copies, so it is released, and the drain's Counter decremented, when the connection is gone

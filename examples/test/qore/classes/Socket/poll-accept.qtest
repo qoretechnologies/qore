@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - poll() readiness of listening sockets (the accept queue after connect), non-blocking accept
 
 %modern
 %enable-all-warnings
@@ -213,9 +214,10 @@ class PollAcceptTest inherits QUnit::Test {
         assertEq(0, failures, sprintf("poll() should detect all pending accepts (%d iterations)", Iterations));
     }
 
-    #! Test that verifies non-blocking accept works without relying on poll()
-    /** This test demonstrates the expected behavior after the fix:
-        non-blocking accept() should work regardless of poll() result
+    #! Test that verifies a non-blocking accept() returns NOTHING without a connection and a pending connection
+    /** accept(0) must not block when no connection is pending, and must return a connection that is pending; the
+        connection is pending once the listener reports it as readable (the poll() detection of a pending accept
+        itself is checked by the other cases)
     */
     testNonBlockingAcceptWithoutPoll() {
         Socket listener();
@@ -242,9 +244,12 @@ class PollAcceptTest inherits QUnit::Test {
         client.setNoDelay(True);
         client.connectINET(info.address, info.port, 10s, info.family);
 
-        usleep(10000);  # 10ms
+        # connectINET() returns when the client side is established; the connection can be accepted only when the
+        # kernel has processed the client's final ACK, which on a loaded machine can take any time: wait until the
+        # listener is readable (a pending connection); the timeout only guards against a hang (issue #6408)
+        assertTrue(listener.isDataAvailable(30s), "the listener reports the pending connection");
 
-        # Accept should succeed now (without using poll)
+        # accept(0) must return the pending connection without blocking
         *Socket accepted;
         try {
             accepted = listener.accept(0);

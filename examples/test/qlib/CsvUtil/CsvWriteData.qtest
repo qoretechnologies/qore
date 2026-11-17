@@ -33,6 +33,7 @@ class CsvWriteDataTest inherits QUnit::Test {
         addTestCase("no records", \testNoRecords());
         addTestCase("the read-data action reads the data back", \testReadBack());
         addTestCase("a path or stream is completed and no data is returned", \testDestination());
+        addTestCase("quoting by type and fields without a value (issue #3113)", \testQuoting());
         set_return_value(main());
     }
 
@@ -123,5 +124,31 @@ class CsvWriteDataTest inherits QUnit::Test {
         map prov.createRecord($1), Records;
         assertEq(NOTHING, prov.finishCreate());
         assertEq(binary(Csv), out.getData());
+    }
+
+    # the quote_types and quote_null options and the quote attribute of a field are given to the writer: strings are
+    # quoted, numbers are not, and a field without a value is written without quotes, so that it can be told apart
+    # from an empty string (issue #3113)
+    testQuoting() {
+        foreach hash<auto> c in ((
+                {"opts": {"quote_types": ("string",), "quote_null": False},
+                    "csv": "sku,name,qty\n\"A-1\",\"\",5\n\"B-2\",,\n"},
+                # a string option value is a list of one type
+                {"opts": {"quote_types": "string", "quote_null": True},
+                    "csv": "sku,name,qty\n\"A-1\",\"\",5\n\"B-2\",\"\",\"\"\n"},
+                {"opts": {"fields": {"sku": "string", "name": "*string", "qty": {"type": "*int", "quote": True}}},
+                    "csv": "sku,name,qty\nA-1,,\"5\"\nB-2,,\n"},
+            )) {
+            # the options are checked and given to the writer
+            AbstractDataProvider prov = getProvider(c.opts);
+            prov.createRecord({"sku": "A-1", "name": "", "qty": 5});
+            prov.createRecord({"sku": "B-2", "name": NOTHING, "qty": NULL});
+            hash<GeneratedDataInfo> output = prov.finishCreate();
+            assertEq(c.csv, output.data.toString(), sprintf("%y", c.opts));
+        }
+        hash<DataProviderActionInfo> action = DataProviderActionCatalog::getAppActionEx(CsvUtil::AppName, "write-data");
+        assertTrue(action.options.hasKey("quote_types"));
+        assertTrue(action.options.hasKey("quote_null"));
+        assertThrows("CSVSTREAMWRITER-ERROR", "unknown type", sub () { getProvider({"quote_types": ("foo",)}); });
     }
 }

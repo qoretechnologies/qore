@@ -3894,9 +3894,9 @@ int main() {
             SwitchStatement* sw = new SwitchStatement(first);
             sw->setSwitch(QoreValue(3));
             sw->addCase(new CaseNodeWithOperator(stmt_loc, QoreValue(5), case_gt,
-                QoreLogicalGreaterThanOperatorNode::doGreaterThan));
+                QoreSwitchCaseOperator::GreaterThan, LexicalSemanticPolicy()));
             sw->addCase(new CaseNodeWithOperator(stmt_loc, QoreValue(3), nullptr,
-                QoreLogicalEqualsOperatorNode::softEqual));
+                QoreSwitchCaseOperator::Equals, LexicalSemanticPolicy()));
             sw->addCase(new CaseNodeRegex(stmt_loc, regex->refSelf(), case_re));
             sw->addCase(new CaseNodeNegRegex(stmt_loc, regex->refSelf(), nullptr));
             sw->addCase(new CaseNode(stmt_loc, QoreValue(), case_def, true));
@@ -4029,9 +4029,9 @@ int main() {
             SwitchStatement* sw = new SwitchStatement(first);
             sw->setSwitch(QoreValue(3));
             sw->addCase(new CaseNodeWithOperator(stmt_loc, QoreValue(2), case_soft,
-                QoreLogicalEqualsOperatorNode::softEqual));
+                QoreSwitchCaseOperator::Equals, LexicalSemanticPolicy()));
             sw->addCase(new CaseNodeWithOperator(stmt_loc, QoreValue(5), case_gt,
-                QoreLogicalGreaterThanOperatorNode::doGreaterThan));
+                QoreSwitchCaseOperator::GreaterThan, LexicalSemanticPolicy()));
             StatementBlock* try_body = new StatementBlock(1, 1);
             try_body->addStatement(sw);
             StatementBlock* catch_body = new StatementBlock(1, 1);

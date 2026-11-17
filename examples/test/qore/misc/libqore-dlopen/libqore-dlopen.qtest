@@ -1,0 +1,112 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - loading libqore with dlopen() in a process that does not link it
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../TestBuildTools.qm
+%requires ../../../TestInterpreter.qm
+
+%exec-class LibqoreDlopenTest
+
+#! libqore can be loaded with dlopen() in a process that does not link it, as an embedding runtime loads it
+/** A thread-local variable with the initial-exec TLS model makes the linker mark the whole library STATIC_TLS; glibc
+    then refuses to load it with dlopen() ("cannot allocate memory in static TLS block"), as libqore's TLS is larger
+    than the static TLS that glibc keeps in reserve for such libraries, which broke the Python module (qoreloader) and
+    the JVM hosts of the jni module.
+*/
+public class LibqoreDlopenTest inherits QUnit::Test {
+    constructor() : Test("LibqoreDlopenTest", "1.0") {
+        addTestCase("dlopen() of libqore", \dlopenTest());
+        addTestCase("libqore needs no static TLS", \staticTlsTest());
+        set_return_value(main());
+    }
+
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+
+    #! Returns the library of the qore under test, if any: that of QORE_LIBDIR (the build tree), of LIBQORE_BINARY (set
+    #! by run_tests.sh), or of the qore binary (QORE_BINARY or QORE_ARGV[0], a bare name found in the PATH)
+    private static *string findLibrary() {
+        list<string> candidates;
+        if (ENV.QORE_LIBDIR) {
+            push candidates, realpath(ENV.QORE_LIBDIR);
+        }
+        if (ENV.LIBQORE_BINARY && is_file(ENV.LIBQORE_BINARY)) {
+            push candidates, dirname(realpath(ENV.LIBQORE_BINARY));
+        }
+        string qore = TestInterpreter::qore_interpreter();
+        if (qore !~ /\//) {
+            *string found;
+            foreach string dir in ((ENV.PATH ?? "").split(":")) {
+                if (dir && is_executable(dir + "/" + qore)) {
+                    found = dir + "/" + qore;
+                    break;
+                }
+            }
+            qore = found ?? "";
+        }
+        if (qore && is_file(qore)) {
+            push candidates, dirname(realpath(qore));
+        }
+        foreach string dir in (candidates) {
+            foreach string name in (("libqore.so", "libqore.dylib")) {
+                if (is_file(dir + "/" + name)) {
+                    return realpath(dir + "/" + name);
+                }
+            }
+        }
+    }
+
+    private string getLibrary() {
+        *string lib = findLibrary();
+        if (!lib) {
+            testSkip("the qore under test is not in a build tree: set QORE_LIBDIR to the build tree, or run the test "
+                "with the qore of a build tree");
+        }
+        return lib;
+    }
+
+    dlopenTest() {
+        string lib = getLibrary();
+        TmpDir dir("qore-libqore-dlopen-");
+        string exe = dir.path + "/libqore-dlopen";
+        # CC can be a command line, such as "ccache cc": its words are the first arguments
+        list<string> cc = TestBuildTools::command_words(ENV.CC, "cc");
+        # only a missing compiler skips the test: a compiler that cannot build the program is a failure
+        if (!TestBuildTools::find_command(cc[0])) {
+            testSkip(sprintf("no C compiler to build the program: %y is not available", cc[0]));
+        }
+        int status;
+        string output = backquote(sprintf("%s -o %s %s -ldl 2>&1", (map quote($1), cc).join(" "), quote(exe),
+            quote(get_script_dir() + "/libqore_dlopen.c")), \status);
+        assertEq(0, status, output);
+        output = backquote(quote(exe) + " " + quote(lib) + " 2>&1", \status);
+        assertEq(0, status, output);
+        assertEq("loaded\n", output);
+    }
+
+    staticTlsTest() {
+        string lib = getLibrary();
+        if (PlatformOS != "Linux") {
+            testSkip("STATIC_TLS is an ELF flag");
+        }
+        if (!TestBuildTools::find_command("readelf")) {
+            testSkip("readelf is not available");
+        }
+        int status;
+        string output = backquote("readelf -dW " + quote(lib) + " 2>&1", \status);
+        assertEq(0, status, output);
+        # the FLAGS entry of the dynamic section, if any (ex: " 0x000000000000001e (FLAGS)              STATIC_TLS")
+        *list<*string> flags = (output =~ x/\(FLAGS\)\s+([^\n]*)/);
+        string desc = flags ? flags[0] : "none";
+        assertFalse(desc =~ /STATIC_TLS/, "the FLAGS entry of the dynamic section: " + desc);
+    }
+}

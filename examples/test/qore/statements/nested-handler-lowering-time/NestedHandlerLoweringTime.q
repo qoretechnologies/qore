@@ -4,7 +4,7 @@
 
 # on_exit handlers nested 16 deep in the bodies of other handlers, and 12 deep in a function whose handlers raise
 # exceptions and run out of line (#6087): their lowering took time exponential in the nesting; the output is the same
-# in every execution mode
+# in every execution mode and compiled with qcc
 
 %modern
 %new-style

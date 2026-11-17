@@ -759,6 +759,31 @@ bool QoreNumberNode::zero() const {
     return priv->zero();
 }
 
+// documented in QoreLibIntern.h
+bool qore_number_divisor_is_zero(const QoreValue& v) {
+    switch (v.getType()) {
+        case NT_NUMBER:
+            return v.get<const QoreNumberNode>()->zero();
+        // their conversion to a number is zero exactly when their float is
+        case NT_INT:
+        case NT_FLOAT:
+        case NT_BOOLEAN:
+        case NT_NOTHING:
+        case NT_NULL:
+            return v.getAsFloat() == 0.0;
+        default: {
+            // the number that the division converts the value to (ex: a string)
+            SimpleRefHolder<QoreNumberNode> n(new QoreNumberNode(v));
+            return n->zero();
+        }
+    }
+}
+
+// documented in QoreLibIntern.h
+bool qore_constant_divisor_is_zero(const QoreValue& v) {
+    return v.getAsFloat() == 0.0 && qore_number_divisor_is_zero(v);
+}
+
 int QoreNumberNode::sign() const {
     return priv->sign();
 }

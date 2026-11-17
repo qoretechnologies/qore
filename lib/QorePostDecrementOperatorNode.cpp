@@ -60,7 +60,10 @@ QoreValue QorePostDecrementOperatorNode::evalImpl(bool& needs_deref, ExceptionSi
 
     if (n.getType() == NT_FLOAT) {
         double f = n.postDecrementFloat("<-- (post) operator>");
-        assert(!*xsink);
+        // the lvalue's type can refuse the result (ex: a float or number enum, qore#6197)
+        if (*xsink) {
+            return QoreValue();
+        }
         return f;
     }
 

@@ -1,0 +1,91 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - each case runs in a child process that sets its own --exec-mode
+# test-platform: macos - HTTP/1.1 client connections and their poll operations released at the end of the process
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    A connection of HttpClientConnectionManager and its poll operation reference each other; once the connection is
+    closed (by an error, by the server, or with its manager), the cycle is broken, so that the HttpClientIo module's
+    Program does not outlive the library (issue #6286).  Each case makes a request in a child process, which deletes
+    its manager and ends; a debug libqore then reports the number of declarations of Programs left after
+    qore_cleanup() when QORE_TEARDOWN_REPORT is set, which must be 0.
+*/
+
+%modern
+
+%requires QUnit
+%requires Util
+%requires ../../TestInterpreter.qm
+
+%exec-class ConnectionManagerTeardownTest
+
+class ConnectionManagerTeardownTest inherits QUnit::Test {
+    public {
+        const ExecModes = ("ast", "ir", "jit");
+
+        #! case: the expected result printed by the child
+        const Cases = {
+            "close": "200",
+            "keepalive": "200",
+            "refused": "HTTPCLIENT-CONNECT-ERROR",
+            "proxy": "HTTPCLIENT-CONNECT-ERROR",
+        };
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+    }
+
+    constructor() : QUnit::Test("ConnectionManagerTeardownTest", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        foreach string mode in (ExecModes) {
+            foreach hash<auto> i in (Cases.pairIterator()) {
+                string name = i.key;
+                string expected = i.value;
+                addTestCase(sprintf("%s: %s: no Program is left after the cleanup", mode, name), sub () {
+                    runCase(mode, name, expected, "h1");
+                });
+            }
+            addTestCase(sprintf("%s: auto protocol through an unconnectable proxy (issue #6286)", mode), sub () {
+                runCase(mode, "proxy", "HTTPCLIENT-CONNECT-ERROR", "auto");
+            });
+        }
+        set_return_value(main());
+    }
+
+    private runCase(string mode, string name, string expected, string protocol) {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the count of the declarations left after qore_cleanup() is only built with DEBUG");
+        }
+        int status;
+        string out = backquote(sprintf("QORE_TEARDOWN_REPORT=1 QORE_JIT_SYNC_COMPILE=1 LD_LIBRARY_PATH=%s "
+            "DYLD_LIBRARY_PATH=%s %s --exec-mode=%s %s/ConnectionManagerTeardown/requests.qr %s %s 2>&1",
+            libqore_dir, libqore_dir, qore_bin, mode, get_script_dir(), name, protocol), \status);
+        assertEq(0, status, out);
+        # warnings of the load path (ex: a stale AOT module) can precede the output
+        assertRegex("(^|\n)" + expected + "\n", out, "the request's result");
+        assertRegex("\\[TEARDOWN\\] declarations of Programs left after qore_cleanup\\(\\): 0\n", out, out);
+    }
+}
