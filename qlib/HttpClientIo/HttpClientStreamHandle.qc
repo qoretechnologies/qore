@@ -254,17 +254,20 @@ public class HttpClientStreamHandle {
         releaseReservationIfHeld();
     }
 
-    #! Surfaces the connection's transport-level error after a failed readiness wait
+    #! Ends a readiness wait that expired: closes the connection and raises the error of its connect phase
     /** Readiness waits are bounded by the request budget, and the transport's own
         connect-phase deadline (armed with \c connect_timeout at connection
         creation) normally fails the connection first, making
         @ref HttpClientConnection::waitForReady() "waitForReady()" throw the
         transport error directly.  This backstop only runs when the wait itself
-        expired; any transport error recorded before or during the caller's
-        synchronous close() is preserved (first error wins) and surfaced here so
-        protocol-specific connect failures (e.g. \c QUIC-HANDSHAKE-TIMEOUT) stay
-        diagnosable and keep driving the connection manager's connection-error
-        retry/fallback logic instead of being masked by a generic timeout.
+        expired.  The connection's error is read before the connection is closed: a transport error recorded by then
+        is surfaced so protocol-specific connect failures (e.g. \c QUIC-HANDSHAKE-TIMEOUT) stay diagnosable and keep
+        driving the connection manager's connection-error retry/fallback logic.  The close aborts the connect
+        operation, and the error that the abort records (\c HTTP2-ABORT for HTTP/2) is no transport error: without
+        an error before the close, the request ran out of its time in the connect phase, which is
+        \c HTTPCLIENT-TIMEOUT for every protocol (#6427).
+
+        The stream reservation is released.
 
         @throw HTTPCLIENT-CONNECT-ERROR the connection failed with a transport-level
         error
@@ -275,8 +278,13 @@ public class HttpClientStreamHandle {
         @throw HTTPCLIENT-TIMEOUT no transport error was recorded; the readiness wait
         genuinely timed out
     */
-    private throwConnectNotReady() {
+    private throwConnectWaitExpired() {
+        # read before the close, which records an error of its own (see above)
         *hash<auto> err = conn.getPollOperation().getError();
+        # Close the stale connect operation through the connection so
+        # the controller cancels the poll op and closes its socket.
+        try { conn.close(); } catch () {}
+        releaseReservationIfHeld();
         if (http_is_terminal_connection_error(err)) {
             throw err.err, err.desc, err;
         }
@@ -606,11 +614,7 @@ public class HttpClientStreamHandle {
                 throw "HTTPCLIENT-TIMEOUT", "connection establishment timed out";
             }
             if (!conn.waitForReady(timeout_ms: remaining)) {
-                # Close the stale connect operation through the connection so
-                # the controller cancels the poll op and closes its socket.
-                try { conn.close(); } catch () {}
-                releaseReservationIfHeld();
-                throwConnectNotReady();
+                throwConnectWaitExpired();
             }
         }
 
@@ -706,17 +710,13 @@ public class HttpClientStreamHandle {
         # mask its diagnosable error with a generic timeout.
         if (!conn.isReady()) {
             if (!conn.waitForReady(timeout_ms: getConnectWait())) {
-                # Close the stale connect operation through the connection so
-                # the controller cancels the poll op and closes its socket.
-                try { conn.close(); } catch () {}
                 {
                     AutoLock al(lock);
                     if (state == HttpClientStreamState::Open) {
                         state = HttpClientStreamState::Pending;
                     }
                 }
-                releaseReservationIfHeld();
-                throwConnectNotReady();
+                throwConnectWaitExpired();
             }
         }
 
@@ -922,17 +922,13 @@ public class HttpClientStreamHandle {
         # mask its diagnosable error with a generic timeout.
         if (!conn.isReady()) {
             if (!conn.waitForReady(timeout_ms: getConnectWait())) {
-                # Close the stale connect operation through the connection so
-                # the controller cancels the poll op and closes its socket.
-                try { conn.close(); } catch () {}
                 {
                     AutoLock al(lock);
                     if (state == HttpClientStreamState::Open) {
                         state = HttpClientStreamState::Pending;
                     }
                 }
-                releaseReservationIfHeld();
-                throwConnectNotReady();
+                throwConnectWaitExpired();
             }
         }
 
