@@ -1,0 +1,119 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+%requires ../../../TestInterpreter.qm
+
+%exec-class InheritedMethodVariantsTest
+
+#! Tests that each parent method is in the inheritance list of a method once (qore#6466)
+/** A method that a class declares with the name of a parent class's method has the parent's method in its inheritance
+    list; the hierarchy of the class was initialized again for each of its subclasses, which added the parent's method
+    again each time, so a call tested its variants and RUNTIME-OVERLOAD-ERROR listed them once more for each
+    subclass.  The worker runs in every execution mode, in the default execution mode and as a qcc-compiled
+    executable.  An invalid hierarchy (circular, or with an unknown parent class) stays a parse error with more than
+    one subclass.
+*/
+class InheritedMethodVariantsTest inherits QUnit::Test {
+    public {
+        #! the output expected from the worker
+        const Expected = (
+            "B::id: {::B::id(string s): 1, ::A::id(int v): 1}",
+            "C::id: {::B::id(string s): 1, ::A::id(int v): 1}",
+            "E::id: {::D::id(float f): 1, ::B::id(string s): 1, ::A::id(int v): 1}",
+            "B.m: {::B::m(string s): 1, ::A::m(int v): 1}",
+            "C.m: {::B::m(string s): 1, ::A::m(int v): 1}",
+            "HX::gid: {::HX::gid(string s): 1, ::G::gid(float v): 1}",
+            "calls: [1, \"B x\", 2, \"B y\", 6.0, 3.0, \"B z\", 4, \"B w\", 5, \"HX v\"]",
+        );
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+        string worker;
+    }
+
+    constructor() : QUnit::Test("InheritedMethodVariants", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = TestInterpreter::qcc_compiler() ?? "qcc";
+        worker = get_script_dir() + DirSep + "inherited-method-variants-worker.q";
+
+        addTestCase("each execution mode", \testExecModes());
+        addTestCase("default execution mode", \testDefaultMode());
+        addTestCase("compiled executable", \testCompiled());
+        addTestCase("invalid hierarchies", \testInvalidHierarchies());
+
+        set_return_value(main());
+    }
+
+    testExecModes() {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            checkOutput(mode, ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s "
+                "--exec-mode=%s %s", libqore_dir, libqore_dir, qore_bin, mode, worker)));
+        }
+    }
+
+    testDefaultMode() {
+        checkOutput("default", ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s %s",
+            libqore_dir, libqore_dir, qore_bin, worker)));
+    }
+
+    testCompiled() {
+        TmpDir tmp("qore-inherited-method-variants-");
+        string exe = tmp.path + DirSep + "variants";
+        string out = backquote(sprintf("QORE_LIBDIR=%s LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s -o %s %s 2>&1",
+            libqore_dir, libqore_dir, libqore_dir, qcc_bin, exe, worker));
+        assertTrue(is_file(exe), "compiled the executable: " + out);
+        checkOutput("executable", ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s",
+            libqore_dir, libqore_dir, exe)));
+    }
+
+    #! a hierarchy that is a parse error is an error for every subclass of a class whose hierarchy was initialized
+    #! before them, which therefore does not walk the invalid hierarchy (a circular one has no end)
+    testInvalidHierarchies() {
+        TmpDir tmp("qore-inherited-method-variants-invalid-");
+        list<auto> cases = (
+            ("cycle", "class A inherits B {}\nclass B inherits A {}\n"
+                "class C inherits B { int m() { return 1; } }\nclass D inherits B { int m() { return 1; } }\n"
+                "class E inherits B { int m() { return 1; } }\n", "circular reference in class hierarchy"),
+            ("cycle-static", "class A inherits B {}\nclass B inherits A {}\n"
+                "class C inherits B { static int m() { return 1; } }\n"
+                "class D inherits B { static int m() { return 1; } }\n"
+                "class E inherits B { static int m() { return 1; } }\n", "circular reference in class hierarchy"),
+            ("unknown-parent", "class B inherits Unknown { int m() { return 1; } static int s() { return 1; } }\n"
+                "class C inherits B { int m() { return 1; } static int s() { return 1; } }\n"
+                "class D inherits B { int m() { return 1; } static int s() { return 1; } }\n"
+                "class E inherits B { int m() { return 1; } static int s() { return 1; } }\n",
+                "reference to undefined class 'Unknown'"),
+        );
+        foreach list<auto> c in (cases) {
+            string file = tmp.path + DirSep + c[0] + ".q";
+            File f();
+            f.open2(file, O_CREAT | O_WRONLY | O_TRUNC);
+            f.write("%modern\n" + c[1] + "printf(\"ran\\n\");\n");
+            f.close();
+            # the address space is limited, so that a parse that does not end fails instead of using all memory
+            string out = backquote(sprintf("ulimit -v 4000000 2>/dev/null; LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s "
+                "%s %s 2>&1", libqore_dir, libqore_dir, qore_bin, file));
+            assertTrue(out =~ /PARSE-EXCEPTION/, c[0] + ": " + out);
+            assertTrue(out.find(c[2]) >= 0, c[0] + ": " + out);
+            assertFalse(out =~ /^ran$/m, c[0] + ": " + out);
+        }
+    }
+
+    private checkOutput(string label, string out) {
+        list<string> lines = (select out.split("\n"), $1);
+        assertEq(Expected, lines, label + ": " + out);
+    }
+}

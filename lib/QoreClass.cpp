@@ -2919,8 +2919,23 @@ int BCNode::initializeHierarchy(QoreClass* cls, qcp_set_t& qcp_set) {
             rc = -1;
         }
 
-        if (sclass->priv->scl && sclass->priv->initializeHierarchy(qcp_set) && !rc) {
-            rc = -1;
+        // a class being parsed initializes its hierarchy once, as parseResolveHierarchy() does: another subclass of the
+        // same class, or the class's own resolution, must not add the base class methods to the inheritance lists of
+        // its methods again (issue #6466); a committed class adds nothing, as its methods are not new
+        qore_class_private* spriv = sclass->priv;
+        if (spriv->scl) {
+            if (spriv->committed || !spriv->parse_resolve_hierarchy) {
+                if (!spriv->committed) {
+                    spriv->parse_resolve_hierarchy = true;
+                }
+                if (spriv->initializeHierarchy(qcp_set) && !rc) {
+                    rc = -1;
+                }
+            } else if (!spriv->scl->valid && !rc) {
+                // the class's hierarchy was rejected when it was initialized (ex: a circular hierarchy): the subclass
+                // fails too, so that it does not walk the invalid hierarchy to set up its own inheritance lists
+                rc = -1;
+            }
         }
     }
     return rc;
