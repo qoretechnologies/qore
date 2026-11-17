@@ -110,6 +110,11 @@ printf("%y: header word b: %y\n", mime_decode_header(mime_encode_header_word_b(s
 
 
     @section mime_1_9 v1.9
+    - added @ref Mime::mime_get_header_text() "mime_get_header_text()" and
+      @ref Mime::mime_get_header_block_charset() "mime_get_header_block_charset()";
+      @ref Mime::MultiPartMessage::parseBody() "MultiPartMessage::parseBody()" reads a raw 8-bit part header line
+      that is not valid in the default encoding as UTF-8 or in a single-byte charset; the parse failed with
+      \c INVALID-ENCODING (<a href="https://github.com/qoretechnologies/qore/issues/6326">issue 6326</a>)
     - <b>changes that can affect backwards compatibility</b>: @ref Mime::MimeTypeYaml "MimeTypeYaml" is the RFC 9512
       type \c "application/yaml"; it was \c "text/x-yaml", which peers of %Qore releases before 3.0 require (see
       @ref qore_3_0_0_compatibility "Changes That Can Affect Backwards-Compatibility")
@@ -153,6 +158,10 @@ printf("%y: header word b: %y\n", mime_decode_header(mime_encode_header_word_b(s
       @ref Mime::MultiPartMessage::parseBody() "MultiPartMessage::parseBody()", which returns lower-case header
       names) was serialized twice; part headers are now normalized to a single value per field, and the
       \c Content-Length part header, which is generated automatically, is rejected in any case
+    - @ref Mime::MultiPartMessage::getBoundary() "MultiPartMessage::getBoundary()" returns a random boundary,
+      and a message's boundary is replaced when a part added to it contains the boundary, as the boundary must not
+      occur in the parts (RFC 2046 section 5.1.1); the boundary was made from the current time and was not checked
+      against the parts (<a href="https://github.com/qoretechnologies/qore/issues/6307">issue 6307</a>)
     - multipart boundary parameters are quoted as required by RFC 2046, including generated
       boundaries containing a timezone colon; invalid boundary characters and lengths are rejected
     - added \c "application/fhir+json" to @ref Mime::MimeTypesJson "MimeTypesJson"
@@ -197,8 +206,11 @@ printf("%y: header word b: %y\n", mime_decode_header(mime_encode_header_word_b(s
       was encoded; one space was dropped before every encoded word after the first, and an encoded word was decoded
       wherever the same word appeared
     - @ref Mime::MultiPartMessage::parseBody() "MultiPartMessage::parseBody()" decodes a text part written as it is
-      (\c 7bit, \c 8bit or \c binary) in the charset that it declares; it was decoded in the default encoding, so
-      text in another charset was not converted
+      (\c 7bit, \c 8bit or \c binary) in the charset that it declares, with its type in any case (ex:
+      \c "TEXT/PLAIN"); it was decoded in the default encoding, so text in another charset was not converted
+    - @ref Mime::MultiPartMessage::parseBody() "MultiPartMessage::parseBody()" finds the \c boundary parameter of a
+      nested multipart part in any case (RFC 2045 section 5.1); a part with \c "BOUNDARY=" could not be parsed
+      (<a href="https://github.com/qoretechnologies/qore/issues/114">issue 114</a>)
     - the \c charset parameter of a \c Content-Type value is read without the parameters after it; with
       \c "text/plain; charset=ISO-8859-1; format=flowed", the charset was \c "ISO-8859-1; format=flowed", which
       names no character encoding
@@ -1458,7 +1470,95 @@ public namespace Mime {
     *string sub mime_get_charset(*string ct) {
         return (ct =~ x/charset="?([^";\s]+)"?/i)[0];
     }
+
+    # returns True if the name is that of a character encoding with one byte per character
+    bool sub mime_is_single_byte_charset(string enc) {
+        string name = enc.upr();
+        name =~ s/[^A-Z0-9]//g;
+        return name =~ /^(USASCII|ASCII|ISO8859|LATIN|WINDOWS125|CP125|KOI8|KOI7|WINDOWS874|CP874)/;
+    }
+
+    # returns the bytes as text in the given encoding if they are valid in it, otherwise nothing
+    *string sub mime_get_valid_text(binary b, string enc) {
+        string str = binary_to_string(b, enc);
+        try {
+            # the conversion checks the bytes
+            string utf8 = convert_encoding(str, enc == "UTF-8" ? "UTF-16LE" : "UTF-8");
+            return enc == "UTF-8" ? str : utf8;
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "ENCODING-CONVERSION-ERROR" && ex.err != "INVALID-ENCODING") {
+                rethrow;
+            }
+        }
+    }
     #! @endcond
+
+    #! Returns the charset parameter of the Content-Type field in a block of header lines, if any
+    /** @param hdr the header lines, separated by \c "\r\n"; the Content-Type field can be folded
+
+        @return the value of the charset parameter of the first Content-Type field (the field name and the parameter
+        name are matched in any case), or @ref nothing if there is none
+
+        @since %Mime 1.9
+    */
+    public *string sub mime_get_header_block_charset(string hdr) {
+        if (scan_counting) {
+            MimeScanCounter::bytes += hdr.size();
+        }
+        return (hdr =~ x/(?:^|\r\n)content-type:(?:[^\r\n]|\r\n[ \t])*?charset\s*=\s*"?([^";\s]+)/i)[0];
+    }
+
+    #! Returns the text of a raw header line, given as bytes, that can contain 8-bit characters
+    /** Header fields should be ASCII (RFC 5322) and give other characters in encoded words (RFC 2047), but UTF-8
+        header text is allowed (RFC 6532), and mailers write header text in other charsets as well; the bytes are read
+        as the first of the following that can read them:
+        - \a encoding, if it is a multi-byte encoding other than UTF-8 (ex: \c "SHIFT_JIS"): the encoding of the
+          text that the bytes were taken from
+        - UTF-8
+        - \a charset, if it is a single-byte charset (ex: \c "ISO-8859-15"): the charset declared by the message or
+          the part
+        - \a encoding, if it is a single-byte encoding
+        - Windows-1252, then ISO-8859-1, which can read any bytes, so that no exception is raised and no byte is lost
+
+        @param hdr the bytes of the header line
+        @param charset the charset declared by the \c Content-Type of the message or the part, if any
+        @param encoding the encoding of the text that the header was taken from, if any
+
+        @return the text of the header line; ASCII bytes are returned in \a encoding (or the
+        @ref default_encoding "default encoding"), text read as UTF-8 or a single-byte charset in UTF-8, and text read
+        in a multi-byte \a encoding in that encoding
+
+        @since %Mime 1.9
+    */
+    public string sub mime_get_header_text(binary hdr, *string charset, *string encoding) {
+        if (scan_counting) {
+            # each candidate encoding converts the bytes once
+            MimeScanCounter::bytes += 4 * hdr.size();
+        }
+        string ascii = binary_to_string(hdr, "ISO-8859-1");
+        if (ascii.isDataAscii()) {
+            return force_encoding(ascii, encoding ?? get_default_encoding());
+        }
+        if (encoding && encoding != "UTF-8" && !mime_is_single_byte_charset(encoding)) {
+            *string str = mime_get_valid_text(hdr, encoding);
+            if (exists str) {
+                return binary_to_string(hdr, encoding);
+            }
+        }
+        *string str = mime_get_valid_text(hdr, "UTF-8");
+        if (exists str) {
+            return str;
+        }
+        foreach *string enc in ((charset, encoding)) {
+            if (enc && mime_is_single_byte_charset(enc)) {
+                str = mime_get_valid_text(hdr, enc);
+                if (exists str) {
+                    return str;
+                }
+            }
+        }
+        return mime_get_valid_text(hdr, "WINDOWS-1252") ?? convert_encoding(ascii, "UTF-8");
+    }
 
     #! decodes data according to the given encoding
     /** @param mime_data the data to decode
@@ -2093,7 +2193,9 @@ hash<MimeHeaderValueInfo> h = mime_parse_header_value("attachment; filename=\"a 
 
         #! creates the object
         /** @param mptype the type of multi-part message: see @ref MultiPartConstants for possible values
-            @param boundary the boundary to use between parts, following RFC 2046 section 5.1.1
+            @param boundary the boundary to use between parts, following RFC 2046 section 5.1.1; it is replaced with
+            a random boundary (see @ref getBoundary()) when a part added to the message contains it, as the boundary
+            must not occur in the parts
             @throw MULTIPART-BOUNDARY-ERROR the boundary is empty, exceeds 70 characters, contains
             invalid characters, or ends in a space
          */
@@ -2133,7 +2235,8 @@ hash<MimeHeaderValueInfo> h = mime_parse_header_value("attachment; filename=\"a 
         }
 
         #! returns the message boundary string used
-        /** @return the message boundary string used
+        /** @return the message boundary string used; it is replaced when a part that contains it is added to the
+            message, so it must be read after the parts are added
 
             @since %Mime 1.4
         */
@@ -2181,9 +2284,15 @@ hash<MimeHeaderValueInfo> h = mime_parse_header_value("attachment; filename=\"a 
         }
         #! @endcond
 
-        #! returns a string embedded with the current timestamp designed to be used as MultiPart boundary string
+        #! returns a random string designed to be used as a MultiPart boundary string
+        /** @return a boundary string of 62 characters with 128 random bits from @ref Qore::get_random_bytes(), the
+            generator of the crypto library, so that a boundary cannot be predicted or repeated
+
+            @since %Mime 1.9 the boundary is random; it was made from the current time, so it could be predicted
+            and was repeated by the messages created at the same time
+        */
         static string getBoundary() {
-            return "------Qore-MIME-Boundary" + now_us().format("YYYYMMDDHHmmSS.usZ") + "------";
+            return "------Qore-MIME-Boundary" + make_hex_string(get_random_bytes(16)) + "------";
         }
 
         #! returns a string of random characters
@@ -2334,11 +2443,26 @@ hash: (2 members)
                         "boundary", pnum, ranges.size());
                 }
 
-                # get header string
+                # get the header lines; a line with 8-bit bytes that are not valid in the default encoding (ex: a
+                # Latin-1 file name) is read as UTF-8 or in a single-byte charset, preferably the one that the
+                # Content-Type of the part declares; the parse failed with INVALID-ENCODING (issue #6326)
                 string phdr = pstr.substr(0, i).toString();
+                list<string> pl;
+                if (phdr.isDataAscii()) {
+                    pl = phdr.split("\r\n");
+                } else {
+                    string view = force_encoding(phdr, "ISO-8859-1");
+                    if (scan_counting) {
+                        # the lines split, and the Content-Type searched
+                        MimeScanCounter::bytes += 3 * view.size();
+                    }
+                    *string charset = mime_get_header_block_charset(view);
+                    string denc = get_default_encoding();
+                    pl = map mime_get_header_text(binary($1), charset, denc), view.split(force_encoding("\r\n",
+                        "ISO-8859-1"));
+                }
                 # parse header
                 hash<auto> h;
-                list<string> pl = phdr.split("\r\n");
                 for (int k = 0; k < pl.size(); ++k) {
                     string phl = pl[k];
                     (*string hdr, *string val) = (phl =~ x/([^:]+):\s*(.*)$/);
@@ -2409,16 +2533,19 @@ hash: (2 members)
 
                     # decode the part's body
                     pstr = mime_decode_transfer_data(pstr, pcte, pct, True);
-                    if (pstr.typeCode() == NT_BINARY && pct =~ /text/) {
+                    if (pstr.typeCode() == NT_BINARY && pct =~ /text/i) {
                         # the text is in the charset that the part declares; it was taken as text in the default
-                        # encoding, so text in another charset written as it is (8bit) was not converted
+                        # encoding, so text in another charset written as it is (8bit) was not converted; the type
+                        # is matched in any case, as are the parameter names (RFC 2045 section 5.1): a part of type
+                        # "TEXT/PLAIN" was returned as binary data (issue #114)
                         *string charset = mime_get_charset(pct);
                         pstr = charset ? binary_to_string(pstr, charset) : binary_to_string(pstr);
                     }
 
                     # see if the part has parts itself
                     if (pct =~ /multipart\//i) {
-                        *string part_boundary = (pct =~ x/[Bb]oundary="?([^"]+)"?/)[0];
+                        # the parameter name is matched in any case (RFC 2045 section 5.1; issue #114)
+                        *string part_boundary = (pct =~ x/boundary="?([^"]+)"?/i)[0];
                         if (!exists part_boundary)
                             throw "MULTIPART-PARSEBODY-ERROR", sprintf("cannot parse part %d Content-Type: %y; could "
                                 "not find message boundary", pnum, pct);
@@ -2545,12 +2672,42 @@ hash: (2 members)
 
         # don't reimplement this method; fix/enhance it in the module
         private splicePartIntern(data mime_data, hash<auto> hdr) {
-            splice l, 0, 0, MultiPartMessage::getPart(mime_data, hdr);
+            hash<MessagePartInfo> part = MultiPartMessage::getPart(mime_data, hdr);
+            splice l, 0, 0, part;
+            checkBoundary(part);
         }
 
         # don't reimplement this method; fix/enhance it in the module
         private addPartIntern(data mime_data, hash<auto> hdr) {
-            l += MultiPartMessage::getPart(mime_data, hdr);
+            hash<MessagePartInfo> part = MultiPartMessage::getPart(mime_data, hdr);
+            l += part;
+            checkBoundary(part);
+        }
+
+        #! replaces the boundary with a new random one if it occurs in the given part
+        /** RFC 2046 section 5.1.1: the boundary must not occur in the encapsulated parts, or a part containing it
+            (for example a nested multipart with the same boundary) would end the part when the message is parsed;
+            the boundary is replaced if a part contains a dash-boundary (\c "--" + the boundary), including a
+            boundary given to the constructor, and the new boundary is checked against all the parts
+        */
+        private checkBoundary(hash<MessagePartInfo> part) {
+            if (!MultiPartMessage::partContains(part, binary("--" + boundary))) {
+                return;
+            }
+            while (True) {
+                boundary = MultiPartMessage::getBoundary();
+                binary dash = binary("--" + boundary);
+                if (!(select l, MultiPartMessage::partContains($1, dash))) {
+                    break;
+                }
+            }
+            ct = sprintf("multipart/%s; boundary=\"%s\"", mptype, boundary);
+        }
+
+        #! returns True if the data or the headers of the part contain the given dash-boundary
+        private static bool partContains(hash<MessagePartInfo> part, binary dash) {
+            binary bd = part.data.typeCode() == NT_STRING ? binary(part.data) : part.data;
+            return bd.find(dash) >= 0 || MultiPartMessage::serializeHeaders(part.hdr).find(dash) >= 0;
         }
 
         #! collapses case variants of the same part header field to a single value

@@ -200,6 +200,9 @@ hash<auto> desc = {
 
 
     @section mysqlsqlutilv16 MysqlSqlUtil v1.6
+    - the \c "intersect" and \c "except" @ref select_option_set_operators "set operators" of a select need MySQL
+      8.0.31 or MariaDB 10.3 or later; with an older server they raise \c SET-OPERATOR-ERROR
+      (<a href="https://github.com/qoretechnologies/qore/issues/2961">issue 2961</a>)
     - documented that a server with binary logging enabled, as MySQL 8.0 and later by default, creates the function
       that emulates sequences only when \c log_bin_trust_function_creators is 1 (see @ref mysql_sequences), and
       a refusal to create it with @ref SqlUtil::AbstractDatabase::tryExecRaw() "AbstractDatabase::tryExecRaw()", as
@@ -276,6 +279,12 @@ hash<auto> desc = {
       generic @ref SqlUtil::AbstractTable "AbstractTable" partition APIs
     - implemented the generic validated named-partition select qualifier for primary and joined table references
     - added targeted canonical-name partition metadata lookup with the preceding range bound
+    - table comments (the \c COMMENT table option) are created, read and aligned; a comment with a backslash raises
+      \c VALUE-ERROR, as for column comments
+      (<a href="https://github.com/qoretechnologies/qore/issues/1483">issue 1483</a>)
+    - the views of a schema description are aligned, their queries compared as MySQL keeps them (see
+      @ref schema_views); MySQL views have no comments
+      (<a href="https://github.com/qoretechnologies/qore/issues/1427">issue 1427</a>)
 
     @section mysqlsqlutilv15 MysqlSqlUtil v1.5
     - fixed the prepend and append column operators
@@ -1528,6 +1537,33 @@ end";
             return new MysqlView(name, row.view_definition, row.table_catalog,
                                  row.table_schema, row.check_option, row.definer,
                                  row.security_type, row.is_updatable == "YES");
+        }
+
+        #! Returns a view object for a view of a schema description; MySQL views have no comments
+        private AbstractView makeViewImpl(string name, string src) {
+            return new MysqlView(name, src, NOTHING, schema, NOTHING, NOTHING, NOTHING, False);
+        }
+
+        #! Compares the query of a view with the query of a view of a schema description as MySQL normalizes them
+        /** MySQL keeps the query of a view in a form of its own (with qualified, quoted names), which it gives for
+            the query of the view of the description as well, made as a view with a name of its own on another
+            connection, so that its DDL does not commit the transaction of this connection, and dropped
+        */
+        private bool viewSourceEqualImpl(AbstractView live, AbstractView tmpl) {
+            string live_src = AbstractDatabase::normalizeViewSource(live.src);
+            if (live_src == AbstractDatabase::normalizeViewSource(tmpl.src)) {
+                return True;
+            }
+            Datasource pds(ds.getConfigHash());
+            string probe = "qore_view_probe_" + get_random_string(12).lwr();
+            on_exit {
+                pds.execRaw(sprintf("drop view if exists %s", mysql_get_sql_object_name(probe)));
+                pds.commit();
+            }
+            pds.execRaw(sprintf("create view %s as %s", mysql_get_sql_object_name(probe), tmpl.src));
+            *string src = pds.selectRow("select view_definition from information_schema.views where table_schema = "
+                "database() and table_name = %v", probe).view_definition;
+            return live_src == AbstractDatabase::normalizeViewSource(src ?? "");
         }
 
         private MysqlFunction makeFunctionImpl(string name, string src, *hash opts) {
@@ -3052,6 +3088,33 @@ end";
         private *list getCreateMiscSqlImpl(*hash opt, bool cache) {
         }
 
+        #! Returns @ref True: MySQL and MariaDB have table comments
+        /** @since MysqlSqlUtil 1.6
+        */
+        bool supportsTableComments() {
+            return True;
+        }
+
+        #! Reads the comment of the table
+        private *string getCommentImpl() {
+            return ds.selectRow("select table_comment from information_schema.tables where table_schema = %v and "
+                "table_name = %v", schema, name).table_comment;
+        }
+
+        #! Returns the SQL that sets or removes the comment of the table
+        /** @throw VALUE-ERROR the comment has a backslash, which a MySQL comment cannot have, as for column comments
+        */
+        private softlist<string> getTableCommentSqlImpl(*string comment) {
+            # the COMMENT option takes a string literal only, in which a backslash is read according to the sql_mode
+            # of the session
+            if (comment && comment.find("\\") >= 0) {
+                throw "VALUE-ERROR", sprintf("table %y: the comment %y has a backslash, which a MySQL comment cannot "
+                    "have: the COMMENT option takes a string literal only, which reads a backslash according to the "
+                    "sql_mode of the session", name, comment);
+            }
+            return sprintf("alter table %s comment = %s", getSqlName(), getSqlValue(comment ?? ""));
+        }
+
         private *list getAlignSqlImpl(AbstractTable table, *hash opt) {
         }
 
@@ -3907,6 +3970,25 @@ string str = table.getSqlValue(date);
                 sql += " offset %v";
                 info.args += info.query_hash.offset.toInt();
             }
+        }
+
+        #! Returns the SQL keyword of a set operator
+        /** \c INTERSECT and \c EXCEPT need MySQL 8.0.31 or MariaDB 10.3 or later
+
+            @throw SET-OPERATOR-ERROR the server does not support the set operator
+
+            @since MysqlSqlUtil 1.6
+        */
+        private string getSetOperatorSql(string op) {
+            if (op == "intersect" || op == "except") {
+                int version = ds.getServerVersion();
+                # MariaDB's versions are 10.0 and later; MySQL's are before 10.0
+                if (version >= 100000 ? version < 100300 : version < 80031) {
+                    throw "SET-OPERATOR-ERROR", sprintf("%s: the %y set operator needs MySQL 8.0.31 or MariaDB 10.3 "
+                        "or later; the server's version is %d", getDesc(), op, version);
+                }
+            }
+            return AbstractTable::getSetOperatorSql(op);
         }
 
         #! returns @ref True if the database requires a wildcard \c "*" to be prefixed with the table name when it appears with other column arguments in a select statement

@@ -90,8 +90,8 @@ enum Bad {
     Conversions between an enum and its base type are implicit in one direction only:
 
     |!Conversion|!Result
-    |an enum value to its base type, or to a type that the base type converts to (ex: <tt>int i = Color::Red;</tt>)|allowed; the value takes the target type (here \c int), also when it is passed to a parameter of the base type or returned from code declared to return the base type
-    |an enum value to a variable without a type, or of type \c auto|allowed; the value keeps its enum type
+    |an enum value to its base type, or to a type that the base type converts to (ex: <tt>int i = Color::Red;</tt>)|allowed; the value takes the target type (here \c int), also when it is passed to a parameter of the base type, returned from code declared to return the base type, or stored in a container whose value type is the base type (ex: an element of a \c list<int> or a member of a \c hash<string, int> or of a hashdecl, also when it is given in a list or hash literal)
+    |an enum value to a variable without a type, or of type \c auto|allowed; the value keeps its enum type, as it does in a container whose value type is \c auto (ex: a \c list<auto>)
     |a value of the base type to an enum-typed variable or parameter (ex: <tt>Color c = 2;</tt>)|not allowed, even when the value equals the value of a member: a \c PARSE-TYPE-ERROR exception is raised at parse time when the parser knows the value's type; otherwise (ex: an \c auto variable) a \c RUNTIME-TYPE-ERROR exception is raised at run time by an assignment, and a \c RUNTIME-OVERLOAD-ERROR exception by a call
     |a value of another enum type to an enum-typed variable or parameter|not allowed, with the same errors, even when both enums have the same base type
     |a value of the base type with @ref enum_cast "cast<enum<EnumName>>()"|allowed when the value is a member of the enum; otherwise a \c RUNTIME-CAST-ERROR exception is raised at run time
@@ -102,6 +102,22 @@ enum Bad {
 
     An enum value is equal to its base type value with the @ref logical_equality_operator "== operator", but not
     with the @ref logical_absolute_equality_operator "=== operator", as the types differ.
+
+    @par Enum Values in Containers
+    @parblock
+    A container whose value type is declared stores an enum value as an assignment to a variable of that type
+    stores it: a \c list<int>, a \c hash<string, int>, an \c int member of a hashdecl or a class (also when it
+    is initialized with a default value), and the same containers nested, hold the base value of an enum value
+    stored in them, however the value was given: by an assignment to an element, in a list or hash literal, or as
+    the result of an operator such as \c +, @ref map "map" or @ref select "select".  A container whose value type is
+    the enum type, an or-nothing enum type or \c auto keeps the enum value.
+
+    The value type of a container that is not declared, such as that of a list or hash literal stored in an
+    \c auto variable, or of the result of an operator, is the common type of its values: an enum type and any
+    other type (another enum type, or the enum's base type) have no common type, so that such a container keeps its
+    enum values: <tt>("x", Status::Active)</tt> is a \c list<auto>, while
+    <tt>(Status::Active, Status::Inactive)</tt> is a \c list<enum<Status>>.
+    @endparblock
 
     @par Example: Type Compatibility
     @code{.py}
@@ -186,6 +202,42 @@ Status st = cast<enum<Status>>(v);  # RUNTIME-CAST-ERROR: cannot cast from type 
 
 *string s2 = "active";
 *Status st2 = cast<*enum<Status>>(s2);  # OK: st2 is Status::Active
+    @endcode
+
+    @section enum_lvalue_modification Modifying Enum Lvalues
+    An lvalue declared with an enum type (a variable, a parameter, an object or hashdecl member, or the element of a
+    list or hash whose element type is an enum) holds only the members of its enum.  An operator that changes such an
+    lvalue in place computes a plain value of the enum's base type, which the enum type refuses as it refuses its
+    assignment: the operator raises a \c RUNTIME-TYPE-ERROR exception and leaves the lvalue unchanged, also if the
+    result is the value of a member.  This applies to the compound assignment operators (@ref plus_equals_operator
+    "+=" and the others), @ref pre_increment_operator "++" and @ref pre_decrement_operator "--",
+    @ref splice "splice", @ref extract "extract", @ref trim "trim", @ref chomp "chomp", the @ref remove "remove" and
+    @ref delete "delete" of a list or a range of characters of a string (of a single character, which they only
+    read, they raise no error), the @ref regex_subst_operator "regular expression substitution"
+    operator and the @ref transliteration_operator "transliteration" operator; @ref trim "trim" and @ref chomp "chomp"
+    of a list or hash whose elements have a string enum type raise the error before changing any element.  An enum
+    lvalue with no value is left without one.
+
+    An lvalue with no type (or of type \c auto) that holds an enum value is changed as an lvalue holding the base
+    value is: it then holds a plain value of the base type.  The value of the enum member itself never changes.
+
+    @par Example
+    @code{.py}
+enum Suffix : string {
+    Long = "long",
+}
+
+Suffix s = Suffix::Long;
+try {
+    s += "er";
+} catch (hash<ExceptionInfo> ex) {
+    # RUNTIME-TYPE-ERROR: <+= operator> expects type 'enum<Suffix>', but got type 'string' instead
+    printf("%s: %s\n", ex.err, ex.desc);
+}
+# s is still Suffix::Long
+
+auto a = Suffix::Long;
+a += "er";  # a is the plain string "longer"; Suffix::Long is still "long"
     @endcode
 
     @section enum_namespaces Namespaced Enums

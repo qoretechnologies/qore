@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore DbDataProviderBase class definition
 
-/** DbDataProviderBase.qc Copyright 2019 - 2024 Qore Technologies, s.r.o.
+/** DbDataProviderBase.qc Copyright 2019 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -262,16 +262,20 @@ public class DbDataProviderBase inherits AbstractDataProvider {
     #! Returns an AbstractDatasource object from the given string
     /** @param ds_string the name of a datasource that the datasource lookup gives, or a connection string
 
-        @throw PERMISSION-DENIED code that a sandbox governs gives a connection string (since DbDataProvider 2.5)
+        @throw PERMISSION-DENIED the calling code gives a connection string and is restricted from the \c DATABASE
+        domain (@ref Qore::PO_NO_DATABASE "PO_NO_DATABASE"); a name that the datasource lookup gives is allowed (since
+        DbDataProvider 2.5)
     */
     static AbstractDatasource getDatasource(string ds_string) {
         if (datasource_lookup && (ds_string !~ /:/)) {
             return DbDataProvider::datasource_lookup(ds_string);
         }
-        # a connection string opens a connection of its own: sandboxed code may use only the datasources that the host
-        # provides (qorus#856)
-        if (SandboxManager::isSandboxed()) {
-            throw "PERMISSION-DENIED", "code that a sandbox governs cannot open a database connection from a connection string or configuration; use a datasource that the host provides";
+        # a connection string opens a connection of its own: code restricted from the DATABASE domain uses only the
+        # datasources that the host provides, also through other module code, a closure or a callback (qorus#856,
+        # qore#6257)
+        if (SandboxManager::isCallerRestricted(DOM_DATABASE)) {
+            throw "PERMISSION-DENIED", "code that is restricted from the DATABASE domain cannot open a database "
+                "connection from a connection string or configuration; use a datasource that the host provides";
         }
         return new Datasource(ds_string);
     }

@@ -69,6 +69,10 @@
 // the rule's action runs (see QORE_GENERIC_STATIC_REF_CUT())
 #define YY_USER_ACTION { yylloc->update(yylineno, yyleng, yytext); \
     set_native_token_info(yylloc, yyextra); \
+    if (yyextra->line_start_directive_active && (YY_START == INITIAL || YY_START == generic_rescan) && yyleng == 1 \
+            && (yytext[0] == ';' || yytext[0] == '{' || yytext[0] == '}')) { \
+        yyextra->line_start_directive_active = false; \
+    } \
     if (YY_START == generic_rescan) { BEGIN(INITIAL); } }
 
 int yyparse(yyscan_t yyscanner);
@@ -81,9 +85,14 @@ static const QoreProgramLocation* get_loc(YYLTYPE* yylloc) {
 // Capture token context, not the options in effect when bison eventually reduces a statement: lookahead may
 // already have consumed a restoring directive, and an expression may contain several option changes.
 static void set_native_token_info(YYLTYPE* loc, QoreParseState* state) {
-    const QoreParseOptions& po = qore_program_private::getParseOptions(*getProgram());
+    // the options in effect for the parse, with the scoped options of the parsing thread (issue #6207)
+    const QoreParseOptions po = qore_program_private::getViewParseOptions(*getProgram());
     loc->semantic_policy = state->semantic_policy = LexicalSemanticPolicy(po);
     loc->has_semantic_policy = true;
+    // %modern options never include a compatibility option (qore#5682; asserted where they are applied); the check
+    // below is redundant then, and is kept so that a release build keeps legacy tokens out of compiled code even if
+    // an embedder breaks the precondition of QoreProgram(const QoreParseOptions&)
+    assert(!qore_parse_options_support_ir(po) || !(po & qore_program_private_base::modernIncompatibleOptions()));
     if (qore_parse_options_support_ir(po) && !(po & qore_program_private_base::modernIncompatibleOptions())) {
         state->native_parse_info = {};
         loc->native_parse_info = {nullptr, nullptr, true};
@@ -668,7 +677,11 @@ static void parse_time(const char*& p, int &hour, int &minute, int &second, int 
     }
 }
 
-static DateTimeNode *makeDateTime(char* str, bool has_time) {
+//! Makes an absolute date literal: YYYY-MM-DD, with an optional time after T or - and an optional zone
+/** A leap second (second 60) cannot be represented, as with a string converted to a date; it raises a parse
+    exception (issue #503)
+*/
+static DateTimeNode* makeDateTime(YYLTYPE* yylloc, const char* str, bool has_time) {
     const char* p = str;
 
     // get year
@@ -688,6 +701,11 @@ static DateTimeNode *makeDateTime(char* str, bool has_time) {
     if (*p == 'T' || (*p == '-' && has_time)) {
         ++p;
         parse_time(p, hour, minute, second, us);
+        if (second == 60) {
+            parse_error(*get_loc(yylloc), "date literal '%s' provides an invalid second value: 60; expecting 0 - 59 "
+                "inclusive (a leap second cannot be represented)", str);
+            second = 59;
+        }
     }
 
     // get zone if present, otherwise assume local zone
@@ -1103,7 +1121,7 @@ static bool is_identifier(const char *str) {
 static void parse_set_parse_options_intern(YYLTYPE* yylloc, QoreParseState* state, const char* text,
         const QoreParseOptions& po) {
     bool was_modern = qore_parse_options_support_ir(getProgram()->getParseOptions());
-    if (!qore_program_private::get(*getProgram())->parseSetParseOptions(get_loc(yylloc), po)) {
+    if (!qore_program_private::get(*getProgram())->parseSetParseOptions(get_loc(yylloc), po, true)) {
         record_native_directive(yylloc, state, text, was_modern);
     }
 }
@@ -1111,7 +1129,7 @@ static void parse_set_parse_options_intern(YYLTYPE* yylloc, QoreParseState* stat
 static void parse_disable_parse_options_intern(YYLTYPE* yylloc, QoreParseState* state, const char* text,
         const QoreParseOptions& po) {
     bool was_modern = qore_parse_options_support_ir(getProgram()->getParseOptions());
-    if (!qore_program_private::get(*getProgram())->parseDisableParseOptions(get_loc(yylloc), po)) {
+    if (!qore_program_private::get(*getProgram())->parseDisableParseOptions(get_loc(yylloc), po, true)) {
         record_native_directive(yylloc, state, text, was_modern);
     }
 }
@@ -1266,8 +1284,234 @@ static GenericStaticRefCut generic_static_ref_cut(const char* text, size_t leng,
     } \
 }
 
-#define DO_DOT_KW_IDENTIFIER(kw) { yylval->String = new QoreStringNode(kw); size_t pos = yylval->String->size() + 1; if (yytext[pos]) unput(yytext[pos]); return DOT_KW_IDENTIFIER; }
-#define DO_DOT_HARD_KEYWORD(kw) { yylval->String = new QoreStringNode(kw); size_t pos = yylval->String->size() + 1; if (yytext[pos]) unput(yytext[pos]); return DOT_HARD_KEYWORD; }
+//! returns true if the code scanned is the code of an expression (Expression, Program::parseExpression())
+static bool qore_parse_in_expression() {
+    QoreProgram* pgm = getProgram();
+    return pgm && qore_program_private::get(*pgm)->expression_mode;
+}
+
+//! the names of the parse directives (the rules of the scanner that start with ^%; see unknown-directive.qtest)
+static const char* const qore_parse_directive_names[] = {
+    "allow-bare-refs",
+    "allow-debugger",
+    "allow-injection",
+    "allow-opaque-references",
+    "allow-reparse",
+    "allow-returns",
+    "allow-statement-no-effect",
+    "allow-weak-references",
+    "append-include-path",
+    "append-module-path",
+    "assume-global",
+    "assume-local",
+    "broken-auto-cast",
+    "broken-cast",
+    "broken-int-assignments",
+    "broken-list-parsing",
+    "broken-list-range",
+    "broken-logic-precedence",
+    "broken-loop-statement",
+    "broken-namespace-resolution",
+    "broken-narrowed-types",
+    "broken-operators",
+    "broken-range",
+    "broken-references",
+    "broken-soft-types",
+    "broken-sprintf",
+    "broken-varargs",
+    "correct-cast",
+    "correct-int-assignments",
+    "correct-list-parsing",
+    "correct-list-range",
+    "correct-logic-precedence",
+    "correct-loop-statement",
+    "correct-namespace-resolution",
+    "correct-narrowed-types",
+    "correct-operators",
+    "correct-range",
+    "correct-references",
+    "correct-soft-types",
+    "correct-sprintf",
+    "correct-varargs",
+    "define",
+    "disable-all-warnings",
+    "disable-debug",
+    "disable-warning",
+    "elif",
+    "else",
+    "enable-all-warnings",
+    "enable-debug",
+    "enable-warning",
+    "endif",
+    "endtry",
+    "exec-class",
+    "fp-fast-math",
+    "if",
+    "ifdef",
+    "ifndef",
+    "include",
+    "lock-options",
+    "lock-warnings",
+    "lockdown",
+    "loose-args",
+    "loose-types",
+    "modern",
+    "module-cmd",
+    "negative-offsets",
+    "new-style",
+    "no-all-operator",
+    "no-any-operator",
+    "no-char-type",
+    "no-child-restrictions",
+    "no-class-defs",
+    "no-constant-defs",
+    "no-count",
+    "no-database",
+    "no-debugging",
+    "no-drop",
+    "no-enum",
+    "no-external-access",
+    "no-external-info",
+    "no-external-process",
+    "no-filesystem",
+    "no-find-modifiers",
+    "no-first",
+    "no-global-vars",
+    "no-gui",
+    "no-io",
+    "no-iterate",
+    "no-locale-control",
+    "no-module-path-directives",
+    "no-modules",
+    "no-namespace-defs",
+    "no-negative-offsets",
+    "no-network",
+    "no-new",
+    "no-process-control",
+    "no-reflection",
+    "no-stream-fusion",
+    "no-streaming-operators",
+    "no-strict-parse-errors",
+    "no-string-index-char",
+    "no-subroutine-defs",
+    "no-summarize",
+    "no-take",
+    "no-takeuntil",
+    "no-takewhile",
+    "no-terminal-io",
+    "no-thread-classes",
+    "no-thread-control",
+    "no-thread-info",
+    "no-threads",
+    "no-top-level",
+    "no-transient",
+    "no-typedef",
+    "no-uncontrolled-apis",
+    "old-style",
+    "perl-bool-eval",
+    "prepend-module-path",
+    "push-parse-options",
+    "require-dollar",
+    "require-our",
+    "require-prototypes",
+    "require-types",
+    "requires",
+    "set-time-zone",
+    "streaming-any",
+    "strict-args",
+    "strict-bool-eval",
+    "strict-parse-errors",
+    "strict-types",
+    "strict-warnings",
+    "strong-encapsulation",
+    "try-child-module",
+    "try-module",
+    "try-reexport-module",
+};
+
+//! returns the edit distance of two strings
+static size_t qore_directive_distance(const std::string& a, const std::string& b) {
+    std::vector<size_t> prev(b.size() + 1), cur(b.size() + 1);
+    for (size_t j = 0; j <= b.size(); ++j) {
+        prev[j] = j;
+    }
+    for (size_t i = 1; i <= a.size(); ++i) {
+        cur[0] = i;
+        for (size_t j = 1; j <= b.size(); ++j) {
+            size_t sub = prev[j - 1] + (a[i - 1] == b[j - 1] ? 0 : 1);
+            cur[j] = std::min(std::min(prev[j] + 1, cur[j - 1] + 1), sub);
+        }
+        std::swap(prev, cur);
+    }
+    return prev[b.size()];
+}
+
+bool qore_parse_directive_known(const std::string& name) {
+    for (const char* known : qore_parse_directive_names) {
+        if (name == known) {
+            return true;
+        }
+    }
+    return false;
+}
+
+std::string qore_parse_directive_error(const std::string& name) {
+    const char* best = nullptr;
+    size_t best_dist = SIZE_MAX;
+    for (const char* known : qore_parse_directive_names) {
+        if (name == known) {
+            // a directive whose rule does not match: an argument it does not take, or one it needs
+            return "invalid syntax for parse directive '%" + name + "'";
+        }
+        size_t d = qore_directive_distance(name, known);
+        if (d < best_dist) {
+            best_dist = d;
+            best = known;
+        }
+    }
+    std::string desc = "unknown parse directive '%" + name + "'";
+    // a name close enough to a directive's is probably a misspelling of it
+    // (and shares more than half of it: a name of one or two letters suggests nothing)
+    if (best && best_dist <= std::max<size_t>(2, name.size() / 3) && best_dist * 2 < name.size()) {
+        desc += "; did you mean '%";
+        desc += best;
+        desc += "'?";
+    }
+    return desc;
+}
+
+//! Refuses a parse directive in the code of an expression (issue #6258)
+/** An expression adds no code to its Program and does not change its parse state: a parse directive in it (a parse
+    option, %requires, %define, %include, a conditional, etc.) is a parse error and is not applied.  Used first in the
+    action of every rule of a directive; the "break" ends the action, so that the rest of the line is scanned as code
+    of the expression, which fails anyway.
+*/
+#define QORE_EXPR_DIRECTIVE() { \
+    if (qore_parse_in_expression()) { \
+        parse_error(*get_loc(yylloc), "parse directives cannot be used in the code of an expression"); \
+        break; \
+    } \
+}
+
+// a dot, white space, a keyword and the character after it, which is given back unless the match ends at the keyword
+// (at the end of a line), so that the token's location ends with the keyword; white space between the dot and the
+// keyword is allowed, as after any other dot (issue #525)
+#define DO_DOT_KEYWORD_TOKEN(kw, tok) { yylval->String = new QoreStringNode(kw); \
+    if (!scanner_match_ends_with(yytext, yyleng, kw)) { \
+        yylloc->revertUpdate(); \
+        yyless(yyleng - 1); \
+        yylloc->update(yylineno, yyleng, yytext); \
+        set_native_token_info(yylloc, yyextra); \
+    } \
+    return tok; }
+#define DO_DOT_KW_IDENTIFIER(kw) DO_DOT_KEYWORD_TOKEN(kw, DOT_KW_IDENTIFIER)
+#define DO_DOT_HARD_KEYWORD(kw) DO_DOT_KEYWORD_TOKEN(kw, DOT_HARD_KEYWORD)
+
+//! returns true if the text matched ends with the given keyword
+static bool scanner_match_ends_with(const char* text, size_t len, const char* kw) {
+    size_t kl = strlen(kw);
+    return len >= kl && !memcmp(text + len - kl, kw, kl);
+}
 
 #define QORE_FLEX_DO_EOF { /* delete current buffer */ yy_delete_buffer(YY_CURRENT_BUFFER, yyscanner); \
     /* get last parse state */ YY_BUFFER_STATE yybs = (YY_BUFFER_STATE)endParsing(); \
@@ -1304,6 +1548,8 @@ OCTAL_CONST     \\[0-7]{1,3}
 DIGIT           [0-9]
 WORD            [a-zA-Z_][a-zA-Z0-9_]*
 WS              [ \t\r]
+ /* the white space between a dot and a keyword that is the name of a member or method after it (issue #525) */
+DOTWS           [ \t\r\n]
 WSNL            [ \t\r\n]
 SOFT_IDENTIFIER_FOLLOW \+|-|{WSNL}*(\+\+|--|\+=|-=|\+{WSNL}+|-{WSNL}+|\*=|\/=|%=|&=|\|=|\^=|>>=|<<=|==|!=|<>|<=|>=|<=>|&&|\|\||{WSNL}+(instanceof|in)[^a-zA-Z0-9_]|[=;,\)\]\}\{\*\/%&\|\^<>?:\.\[\~])
 TYPE_ARG_START  [a-zA-Z_*:?]
@@ -1321,6 +1567,8 @@ MONTH           (0[1-9])|(1[012])
 DAY             ((0[1-9])|([12][0-9])|(3[01]))
 HOUR            ([01][0-9])|(2[0-3])
 MSEC            [0-5][0-9]
+ /* the seconds of a date literal with a time: 60, a leap second, is matched to be reported (issue #503) */
+DSEC            ({MSEC}|60)
 US              [0-9]{1,6}
 D2              [0-9]{2}
 BINARY          <({HEX_DIGIT}{HEX_DIGIT})+>
@@ -1337,125 +1585,189 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[YMWDHSu])+
         yyterminate();
     }
 %}
-^%no-global-vars{WS}*$                  parse_set_parse_options(yylloc, PO_NO_GLOBAL_VARS);
-^%no-subroutine-defs{WS}*$              parse_set_parse_options(yylloc, PO_NO_SUBROUTINE_DEFS);
-^%no-threads{WS}*$                      parse_set_parse_options(yylloc, PO_NO_THREADS);
-^%no-thread-classes{WS}*$               parse_set_parse_options(yylloc, PO_NO_THREAD_CLASSES);
-^%no-thread-control{WS}*$               parse_set_parse_options(yylloc, PO_NO_THREAD_CONTROL);
-^%no-thread-info{WS}*$                  parse_set_parse_options(yylloc, PO_NO_THREAD_INFO);
-^%no-top-level{WS}*$                    parse_set_parse_options(yylloc, PO_NO_TOP_LEVEL_STATEMENTS);
-^%allow-reparse{WS}*$                   parse_set_parse_options(yylloc, PO_ALLOW_REPARSE);
-^%no-external-process{WS}*$             parse_set_parse_options(yylloc, PO_NO_EXTERNAL_PROCESS);
-^%no-external-info{WS}*$                parse_set_parse_options(yylloc, PO_NO_EXTERNAL_INFO);
-^%no-external-access{WS}*$              parse_set_parse_options(yylloc, PO_NO_EXTERNAL_ACCESS);
-^%no-filesystem{WS}*$                   parse_set_parse_options(yylloc, PO_NO_FILESYSTEM);
-^%no-io{WS}*$                           parse_set_parse_options(yylloc, PO_NO_IO);
-^%lockdown{WS}*$                        parse_set_parse_options(yylloc, PO_LOCKDOWN);
-^%lock-options{WS}*$                    getProgram()->lockOptions();
-^%lock-warnings{WS}*$                   parse_set_parse_options(yylloc, PO_LOCK_WARNINGS);
-^%no-locale-control{WS}*$               parse_set_parse_options(yylloc, PO_NO_LOCALE_CONTROL);
-^%no-process-control{WS}*$              parse_set_parse_options(yylloc, PO_NO_PROCESS_CONTROL);
-^%no-network{WS}*$                      parse_set_parse_options(yylloc, PO_NO_NETWORK);
-^%no-child-restrictions{WS}*$           parse_set_parse_options(yylloc, PO_NO_CHILD_PO_RESTRICTIONS);
-^%allow-injection{WS}*$                 parse_set_parse_options(yylloc, PO_ALLOW_INJECTION);
-^%no-database{WS}*$                     parse_set_parse_options(yylloc, PO_NO_DATABASE);
-^%no-gui{WS}*$                          parse_set_parse_options(yylloc, PO_NO_GUI);
-^%no-terminal-io{WS}*$                  parse_set_parse_options(yylloc, PO_NO_TERMINAL_IO);
-^%no-modules{WS}*$                      parse_set_parse_options(yylloc, PO_NO_MODULES);
-^%require-our{WS}*$                     parse_set_parse_options(yylloc, PO_REQUIRE_OUR);
-^%require-types{WS}*$                   parse_set_parse_options(yylloc, PO_REQUIRE_TYPES);
-^%require-prototypes{WS}*$              parse_set_parse_options(yylloc, PO_REQUIRE_PROTOTYPES);
-^%strict-args{WS}*$                     parse_set_parse_options(yylloc, PO_STRICT_ARGS);
-^%allow-bare-refs{WS}*$                 parse_set_parse_options(yylloc, PO_ALLOW_BARE_REFS);
-^%require-dollar{WS}*$                  parse_disable_parse_options(yylloc, PO_ALLOW_BARE_REFS);
-^%assume-local{WS}*$                    parse_set_parse_options(yylloc, PO_ASSUME_LOCAL);
-^%assume-global{WS}*$                   parse_disable_parse_options(yylloc, PO_ASSUME_LOCAL);
-^%new-style{WS}*$                       parse_set_parse_options(yylloc, PO_NEW_STYLE);
-^%old-style{WS}*$                       parse_disable_parse_options(yylloc, PO_NEW_STYLE);
-^%modern{WS}*$                          {
+^%no-global-vars{WS}*$                  { QORE_EXPR_DIRECTIVE(); parse_set_parse_options(yylloc, PO_NO_GLOBAL_VARS); }
+^%no-subroutine-defs{WS}*$              { QORE_EXPR_DIRECTIVE();
+                                            parse_set_parse_options(yylloc, PO_NO_SUBROUTINE_DEFS); }
+^%no-threads{WS}*$                      { QORE_EXPR_DIRECTIVE(); parse_set_parse_options(yylloc, PO_NO_THREADS); }
+^%no-thread-classes{WS}*$               { QORE_EXPR_DIRECTIVE();
+                                            parse_set_parse_options(yylloc, PO_NO_THREAD_CLASSES); }
+^%no-thread-control{WS}*$               { QORE_EXPR_DIRECTIVE();
+                                            parse_set_parse_options(yylloc, PO_NO_THREAD_CONTROL); }
+^%no-thread-info{WS}*$                  { QORE_EXPR_DIRECTIVE(); parse_set_parse_options(yylloc, PO_NO_THREAD_INFO); }
+^%no-top-level{WS}*$                    { QORE_EXPR_DIRECTIVE();
+                                            parse_set_parse_options(yylloc, PO_NO_TOP_LEVEL_STATEMENTS); }
+^%allow-reparse{WS}*$                   { QORE_EXPR_DIRECTIVE(); parse_set_parse_options(yylloc, PO_ALLOW_REPARSE); }
+^%no-external-process{WS}*$             { QORE_EXPR_DIRECTIVE();
+                                            parse_set_parse_options(yylloc, PO_NO_EXTERNAL_PROCESS); }
+^%no-external-info{WS}*$                { QORE_EXPR_DIRECTIVE(); parse_set_parse_options(yylloc, PO_NO_EXTERNAL_INFO); }
+^%no-external-access{WS}*$              { QORE_EXPR_DIRECTIVE();
+                                            parse_set_parse_options(yylloc, PO_NO_EXTERNAL_ACCESS); }
+^%no-filesystem{WS}*$                   { QORE_EXPR_DIRECTIVE(); parse_set_parse_options(yylloc, PO_NO_FILESYSTEM); }
+^%no-io{WS}*$                           { QORE_EXPR_DIRECTIVE(); parse_set_parse_options(yylloc, PO_NO_IO); }
+^%lockdown{WS}*$                        { QORE_EXPR_DIRECTIVE(); parse_set_parse_options(yylloc, PO_LOCKDOWN); }
+^%lock-options{WS}*$                    { QORE_EXPR_DIRECTIVE(); getProgram()->lockOptions(); }
+^%lock-warnings{WS}*$                   { QORE_EXPR_DIRECTIVE(); parse_set_parse_options(yylloc, PO_LOCK_WARNINGS); }
+^%no-locale-control{WS}*$               { QORE_EXPR_DIRECTIVE();
+                                            parse_set_parse_options(yylloc, PO_NO_LOCALE_CONTROL); }
+^%no-process-control{WS}*$              { QORE_EXPR_DIRECTIVE();
+                                            parse_set_parse_options(yylloc, PO_NO_PROCESS_CONTROL); }
+^%no-network{WS}*$                      { QORE_EXPR_DIRECTIVE(); parse_set_parse_options(yylloc, PO_NO_NETWORK); }
+^%no-child-restrictions{WS}*$           { QORE_EXPR_DIRECTIVE();
+                                            parse_set_parse_options(yylloc, PO_NO_CHILD_PO_RESTRICTIONS); }
+^%allow-injection{WS}*$                 { QORE_EXPR_DIRECTIVE(); parse_set_parse_options(yylloc, PO_ALLOW_INJECTION); }
+^%no-database{WS}*$                     { QORE_EXPR_DIRECTIVE(); parse_set_parse_options(yylloc, PO_NO_DATABASE); }
+^%no-gui{WS}*$                          { QORE_EXPR_DIRECTIVE(); parse_set_parse_options(yylloc, PO_NO_GUI); }
+^%no-terminal-io{WS}*$                  { QORE_EXPR_DIRECTIVE(); parse_set_parse_options(yylloc, PO_NO_TERMINAL_IO); }
+^%no-modules{WS}*$                      { QORE_EXPR_DIRECTIVE(); parse_set_parse_options(yylloc, PO_NO_MODULES); }
+^%require-our{WS}*$                     { QORE_EXPR_DIRECTIVE(); parse_set_parse_options(yylloc, PO_REQUIRE_OUR); }
+^%require-types{WS}*$                   { QORE_EXPR_DIRECTIVE(); parse_set_parse_options(yylloc, PO_REQUIRE_TYPES); }
+^%require-prototypes{WS}*$              { QORE_EXPR_DIRECTIVE();
+                                            parse_set_parse_options(yylloc, PO_REQUIRE_PROTOTYPES); }
+^%strict-args{WS}*$                     { QORE_EXPR_DIRECTIVE(); parse_set_parse_options(yylloc, PO_STRICT_ARGS); }
+^%allow-bare-refs{WS}*$                 { QORE_EXPR_DIRECTIVE(); parse_set_parse_options(yylloc, PO_ALLOW_BARE_REFS); }
+^%require-dollar{WS}*$                  { QORE_EXPR_DIRECTIVE();
+                                            parse_disable_parse_options(yylloc, PO_ALLOW_BARE_REFS); }
+^%assume-local{WS}*$                    { QORE_EXPR_DIRECTIVE(); parse_set_parse_options(yylloc, PO_ASSUME_LOCAL); }
+^%assume-global{WS}*$                   { QORE_EXPR_DIRECTIVE(); parse_disable_parse_options(yylloc, PO_ASSUME_LOCAL); }
+^%new-style{WS}*$                       { QORE_EXPR_DIRECTIVE(); parse_set_parse_options(yylloc, PO_NEW_STYLE); }
+^%old-style{WS}*$                       { QORE_EXPR_DIRECTIVE(); parse_disable_parse_options(yylloc, PO_NEW_STYLE); }
+^%modern{WS}*$                          { QORE_EXPR_DIRECTIVE();
                                            parse_set_parse_options(yylloc, PO_MODERN);
                                            getProgram()->setWarningMask(QP_WARN_ALL);
                                         }
-^%perl-bool-eval{WS}*$                  parse_disable_parse_options(yylloc, PO_STRICT_BOOLEAN_EVAL);
-^%strict-bool-eval{WS}*$                parse_set_parse_options(yylloc, PO_STRICT_BOOLEAN_EVAL);
-^%strong-encapsulation{WS}*$            parse_set_parse_options(yylloc, PO_STRONG_ENCAPSULATION);
-^%no-uncontrolled-apis{WS}*$            parse_set_parse_options(yylloc, PO_NO_UNCONTROLLED_APIS);
-^%no-debugging{WS}*$                    parse_set_parse_options(yylloc, PO_NO_DEBUGGING);
-^%allow-weak-references{WS}*$           parse_set_parse_options(yylloc, PO_ALLOW_WEAK_REFERENCES);
-^%allow-opaque-references{WS}*$         parse_set_parse_options(yylloc, QoreParseOptions::ALLOW_OPAQUE_REFERENCES);
-^%allow-debugger{WS}*$                  parse_set_parse_options(yylloc, PO_ALLOW_DEBUGGER);
-^%broken-list-parsing{WS}*$             parse_set_parse_options(yylloc, PO_BROKEN_LIST_PARSING);
-^%broken-logic-precedence{WS}*$         parse_set_parse_options(yylloc, PO_BROKEN_LOGIC_PRECEDENCE);
-^%broken-loop-statement{WS}*$           parse_set_parse_options(yylloc, PO_BROKEN_LOOP_STATEMENT);
-^%broken-int-assignments{WS}*$          parse_set_parse_options(yylloc, PO_BROKEN_INT_ASSIGNMENTS);
-^%broken-operators{WS}*$                parse_set_parse_options(yylloc, PO_BROKEN_OPERATORS);
-^%broken-narrowed-types{WS}*$           parse_set_parse_options(yylloc, PO_BROKEN_NARROWED_TYPES);
-^%broken-namespace-resolution{WS}*$     parse_set_parse_options(yylloc, PO_BROKEN_NAMESPACE_RESOLUTION);
-^%correct-list-parsing{WS}*$            parse_disable_parse_options(yylloc, PO_BROKEN_LIST_PARSING);
-^%correct-logic-precedence{WS}*$        parse_disable_parse_options(yylloc, PO_BROKEN_LOGIC_PRECEDENCE);
-^%correct-loop-statement{WS}*$          parse_disable_parse_options(yylloc, PO_BROKEN_LOOP_STATEMENT);
-^%correct-int-assignments{WS}*$         parse_disable_parse_options(yylloc, PO_BROKEN_INT_ASSIGNMENTS);
-^%correct-operators{WS}*$               parse_disable_parse_options(yylloc, PO_BROKEN_OPERATORS);
-^%correct-narrowed-types{WS}*$          parse_disable_parse_options(yylloc, PO_BROKEN_NARROWED_TYPES);
-^%correct-namespace-resolution{WS}*$    parse_disable_parse_options(yylloc, PO_BROKEN_NAMESPACE_RESOLUTION);
-^%loose-args{WS}*$                      parse_disable_parse_options(yylloc, PO_STRICT_ARGS);
-^%broken-range{WS}*$                    parse_set_parse_options(yylloc, PO_BROKEN_RANGE);
-^%correct-range{WS}*$                   parse_disable_parse_options(yylloc, PO_BROKEN_RANGE);
-^%broken-references{WS}*$               parse_set_parse_options(yylloc, PO_BROKEN_REFERENCES);
-^%correct-references{WS}*$              parse_disable_parse_options(yylloc, PO_BROKEN_REFERENCES);
-^%broken-sprintf{WS}*$                  parse_set_parse_options(yylloc, PO_BROKEN_SPRINTF);
-^%correct-sprintf{WS}*$                 parse_disable_parse_options(yylloc, PO_BROKEN_SPRINTF);
-^%broken-cast{WS}*$                     parse_set_parse_options(yylloc, PO_BROKEN_CAST);
-^%correct-cast{WS}*$                    parse_disable_parse_options(yylloc, PO_BROKEN_CAST);
-^%broken-varargs{WS}*$                  parse_set_parse_options(yylloc, PO_BROKEN_VARARGS);
-^%correct-varargs{WS}*$                 parse_disable_parse_options(yylloc, PO_BROKEN_VARARGS);
-^%broken-list-range{WS}*$               parse_set_parse_options(yylloc, PO_BROKEN_LIST_RANGE);
-^%correct-list-range{WS}*$              parse_disable_parse_options(yylloc, PO_BROKEN_LIST_RANGE);
-^%allow-returns{WS}*$                   parse_set_parse_options(yylloc, PO_ALLOW_RETURNS);
-^%allow-statement-no-effect{WS}*$       parse_set_parse_options(yylloc, PO_ALLOW_STATEMENT_NO_EFFECT);
-^%strict-types{WS}*$                    parse_set_parse_options(yylloc, PO_STRICT_TYPES);
-^%loose-types{WS}*$                     parse_disable_parse_options(yylloc, PO_STRICT_TYPES);
-^%enable-debug{WS}*$                    parse_set_parse_options(yylloc, PO_ENABLE_DEBUG);
-^%disable-debug{WS}*$                   parse_disable_parse_options(yylloc, PO_ENABLE_DEBUG);
-^%no-reflection{WS}*$                   parse_set_parse_options(yylloc, PO_NO_REFLECTION);
-^%no-transient{WS}*$                    parse_set_parse_options(yylloc, PO_NO_TRANSIENT);
-^%no-typedef{WS}*$                      parse_set_parse_options(yylloc, PO_NO_TYPEDEF);
-^%no-enum{WS}*$                         parse_set_parse_options(yylloc, PO_NO_ENUM);
-^%no-class-defs{WS}*$                   parse_set_parse_options(yylloc, QoreParseOptions::NO_CLASS_DEFS);
-^%no-constant-defs{WS}*$                parse_set_parse_options(yylloc, QoreParseOptions::NO_CONSTANT_DEFS);
-^%no-namespace-defs{WS}*$               parse_set_parse_options(yylloc, QoreParseOptions::NO_NAMESPACE_DEFS);
-^%no-new{WS}*$                          parse_set_parse_options(yylloc, QoreParseOptions::NO_NEW);
-^%broken-soft-types{WS}*$               parse_set_parse_options(yylloc, QoreParseOptions::BROKEN_SOFT_TYPES);
-^%no-summarize{WS}*$                    parse_set_parse_options(yylloc, QoreParseOptions::NO_SUMMARIZE);
-^%strict-parse-errors{WS}*$             {
+^%perl-bool-eval{WS}*$                  { QORE_EXPR_DIRECTIVE();
+                                            parse_disable_parse_options(yylloc, PO_STRICT_BOOLEAN_EVAL); }
+^%strict-bool-eval{WS}*$                { QORE_EXPR_DIRECTIVE();
+                                            parse_set_parse_options(yylloc, PO_STRICT_BOOLEAN_EVAL); }
+^%strong-encapsulation{WS}*$            { QORE_EXPR_DIRECTIVE();
+                                            parse_set_parse_options(yylloc, PO_STRONG_ENCAPSULATION); }
+^%no-uncontrolled-apis{WS}*$            { QORE_EXPR_DIRECTIVE();
+                                            parse_set_parse_options(yylloc, PO_NO_UNCONTROLLED_APIS); }
+^%no-debugging{WS}*$                    { QORE_EXPR_DIRECTIVE(); parse_set_parse_options(yylloc, PO_NO_DEBUGGING); }
+^%allow-weak-references{WS}*$           { QORE_EXPR_DIRECTIVE();
+                                            parse_set_parse_options(yylloc, PO_ALLOW_WEAK_REFERENCES); }
+^%allow-opaque-references{WS}*$         { QORE_EXPR_DIRECTIVE();
+        parse_set_parse_options(yylloc, QoreParseOptions::ALLOW_OPAQUE_REFERENCES); }
+^%allow-debugger{WS}*$                  { QORE_EXPR_DIRECTIVE(); parse_set_parse_options(yylloc, PO_ALLOW_DEBUGGER); }
+^%broken-list-parsing{WS}*$             { QORE_EXPR_DIRECTIVE();
+                                            parse_set_parse_options(yylloc, PO_BROKEN_LIST_PARSING); }
+^%broken-logic-precedence{WS}*$         { QORE_EXPR_DIRECTIVE();
+                                            parse_set_parse_options(yylloc, PO_BROKEN_LOGIC_PRECEDENCE); }
+^%broken-loop-statement{WS}*$           { QORE_EXPR_DIRECTIVE();
+                                            parse_set_parse_options(yylloc, PO_BROKEN_LOOP_STATEMENT); }
+^%broken-int-assignments{WS}*$          { QORE_EXPR_DIRECTIVE();
+                                            parse_set_parse_options(yylloc, PO_BROKEN_INT_ASSIGNMENTS); }
+^%broken-operators{WS}*$                { QORE_EXPR_DIRECTIVE(); parse_set_parse_options(yylloc, PO_BROKEN_OPERATORS); }
+^%broken-narrowed-types{WS}*$           { QORE_EXPR_DIRECTIVE();
+                                            parse_set_parse_options(yylloc, PO_BROKEN_NARROWED_TYPES); }
+^%broken-namespace-resolution{WS}*$     { QORE_EXPR_DIRECTIVE();
+                                            parse_set_parse_options(yylloc, PO_BROKEN_NAMESPACE_RESOLUTION); }
+^%correct-list-parsing{WS}*$            { QORE_EXPR_DIRECTIVE();
+                                            parse_disable_parse_options(yylloc, PO_BROKEN_LIST_PARSING); }
+^%correct-logic-precedence{WS}*$        { QORE_EXPR_DIRECTIVE();
+                                            parse_disable_parse_options(yylloc, PO_BROKEN_LOGIC_PRECEDENCE); }
+^%correct-loop-statement{WS}*$          { QORE_EXPR_DIRECTIVE();
+                                            parse_disable_parse_options(yylloc, PO_BROKEN_LOOP_STATEMENT); }
+^%correct-int-assignments{WS}*$         { QORE_EXPR_DIRECTIVE();
+                                            parse_disable_parse_options(yylloc, PO_BROKEN_INT_ASSIGNMENTS); }
+^%correct-operators{WS}*$               { QORE_EXPR_DIRECTIVE();
+                                            parse_disable_parse_options(yylloc, PO_BROKEN_OPERATORS); }
+^%correct-narrowed-types{WS}*$          { QORE_EXPR_DIRECTIVE();
+                                            parse_disable_parse_options(yylloc, PO_BROKEN_NARROWED_TYPES); }
+^%correct-namespace-resolution{WS}*$    { QORE_EXPR_DIRECTIVE();
+                                            parse_disable_parse_options(yylloc, PO_BROKEN_NAMESPACE_RESOLUTION); }
+^%loose-args{WS}*$                      { QORE_EXPR_DIRECTIVE(); parse_disable_parse_options(yylloc, PO_STRICT_ARGS); }
+^%broken-range{WS}*$                    { QORE_EXPR_DIRECTIVE(); parse_set_parse_options(yylloc, PO_BROKEN_RANGE); }
+^%correct-range{WS}*$                   { QORE_EXPR_DIRECTIVE(); parse_disable_parse_options(yylloc, PO_BROKEN_RANGE); }
+^%broken-references{WS}*$               { QORE_EXPR_DIRECTIVE();
+                                            parse_set_parse_options(yylloc, PO_BROKEN_REFERENCES); }
+^%correct-references{WS}*$              { QORE_EXPR_DIRECTIVE();
+                                            parse_disable_parse_options(yylloc, PO_BROKEN_REFERENCES); }
+^%broken-sprintf{WS}*$                  { QORE_EXPR_DIRECTIVE(); parse_set_parse_options(yylloc, PO_BROKEN_SPRINTF); }
+^%correct-sprintf{WS}*$                 { QORE_EXPR_DIRECTIVE();
+                                            parse_disable_parse_options(yylloc, PO_BROKEN_SPRINTF); }
+^%broken-cast{WS}*$                     { QORE_EXPR_DIRECTIVE(); parse_set_parse_options(yylloc, PO_BROKEN_CAST); }
+^%correct-cast{WS}*$                    { QORE_EXPR_DIRECTIVE(); parse_disable_parse_options(yylloc, PO_BROKEN_CAST); }
+^%broken-varargs{WS}*$                  { QORE_EXPR_DIRECTIVE(); parse_set_parse_options(yylloc, PO_BROKEN_VARARGS); }
+^%correct-varargs{WS}*$                 { QORE_EXPR_DIRECTIVE();
+                                            parse_disable_parse_options(yylloc, PO_BROKEN_VARARGS); }
+^%broken-list-range{WS}*$               { QORE_EXPR_DIRECTIVE();
+                                            parse_set_parse_options(yylloc, PO_BROKEN_LIST_RANGE); }
+^%correct-list-range{WS}*$              { QORE_EXPR_DIRECTIVE();
+                                            parse_disable_parse_options(yylloc, PO_BROKEN_LIST_RANGE); }
+^%allow-returns{WS}*$                   { QORE_EXPR_DIRECTIVE(); parse_set_parse_options(yylloc, PO_ALLOW_RETURNS); }
+^%allow-statement-no-effect{WS}*$       { QORE_EXPR_DIRECTIVE();
+                                            parse_set_parse_options(yylloc, PO_ALLOW_STATEMENT_NO_EFFECT); }
+^%strict-types{WS}*$                    { QORE_EXPR_DIRECTIVE(); parse_set_parse_options(yylloc, PO_STRICT_TYPES); }
+^%loose-types{WS}*$                     { QORE_EXPR_DIRECTIVE(); parse_disable_parse_options(yylloc, PO_STRICT_TYPES); }
+^%enable-debug{WS}*$                    { QORE_EXPR_DIRECTIVE(); parse_set_parse_options(yylloc, PO_ENABLE_DEBUG); }
+^%disable-debug{WS}*$                   { QORE_EXPR_DIRECTIVE(); parse_disable_parse_options(yylloc, PO_ENABLE_DEBUG); }
+^%no-reflection{WS}*$                   { QORE_EXPR_DIRECTIVE(); parse_set_parse_options(yylloc, PO_NO_REFLECTION); }
+^%no-transient{WS}*$                    { QORE_EXPR_DIRECTIVE(); parse_set_parse_options(yylloc, PO_NO_TRANSIENT); }
+^%no-typedef{WS}*$                      { QORE_EXPR_DIRECTIVE(); parse_set_parse_options(yylloc, PO_NO_TYPEDEF); }
+^%no-enum{WS}*$                         { QORE_EXPR_DIRECTIVE(); parse_set_parse_options(yylloc, PO_NO_ENUM); }
+^%no-class-defs{WS}*$                   { QORE_EXPR_DIRECTIVE();
+                                            parse_set_parse_options(yylloc, QoreParseOptions::NO_CLASS_DEFS); }
+^%no-constant-defs{WS}*$                { QORE_EXPR_DIRECTIVE();
+                                            parse_set_parse_options(yylloc, QoreParseOptions::NO_CONSTANT_DEFS); }
+^%no-namespace-defs{WS}*$               { QORE_EXPR_DIRECTIVE();
+                                            parse_set_parse_options(yylloc, QoreParseOptions::NO_NAMESPACE_DEFS); }
+^%no-new{WS}*$                          { QORE_EXPR_DIRECTIVE();
+                                            parse_set_parse_options(yylloc, QoreParseOptions::NO_NEW); }
+^%broken-soft-types{WS}*$               { QORE_EXPR_DIRECTIVE();
+                                            parse_set_parse_options(yylloc, QoreParseOptions::BROKEN_SOFT_TYPES); }
+^%no-summarize{WS}*$                    { QORE_EXPR_DIRECTIVE();
+                                            parse_set_parse_options(yylloc, QoreParseOptions::NO_SUMMARIZE); }
+^%strict-parse-errors{WS}*$             { QORE_EXPR_DIRECTIVE();
                                            parse_disable_parse_options(yylloc,
                                                QoreParseOptions::NO_STRICT_PARSE_ERRORS);
                                            parse_set_parse_options(yylloc, QoreParseOptions::STRICT_PARSE_ERRORS);
                                         }
-^%no-strict-parse-errors{WS}*$          parse_set_parse_options(yylloc, QoreParseOptions::NO_STRICT_PARSE_ERRORS);
-^%fp-fast-math{WS}*$                    parse_set_parse_options(yylloc, QoreParseOptions::FP_FAST_MATH);
-^%no-iterate{WS}*$                      parse_set_parse_options(yylloc, QoreParseOptions::NO_ITERATE);
-^%no-first{WS}*$                        parse_set_parse_options(yylloc, QoreParseOptions::NO_FIRST);
-^%no-any-operator{WS}*$                 parse_set_parse_options(yylloc, QoreParseOptions::NO_ANY_OPERATOR);
-^%no-all-operator{WS}*$                 parse_set_parse_options(yylloc, QoreParseOptions::NO_ALL_OPERATOR);
-^%no-count{WS}*$                        parse_set_parse_options(yylloc, QoreParseOptions::NO_COUNT);
-^%no-take{WS}*$                         parse_set_parse_options(yylloc, QoreParseOptions::NO_TAKE);
-^%no-drop{WS}*$                         parse_set_parse_options(yylloc, QoreParseOptions::NO_DROP);
-^%no-takewhile{WS}*$                    parse_set_parse_options(yylloc, QoreParseOptions::NO_TAKEWHILE);
-^%no-takeuntil{WS}*$                    parse_set_parse_options(yylloc, QoreParseOptions::NO_TAKEUNTIL);
-^%no-find-modifiers{WS}*$               parse_set_parse_options(yylloc, QoreParseOptions::NO_FIND_MODIFIERS);
-^%no-stream-fusion{WS}*$                parse_set_parse_options(yylloc, QoreParseOptions::NO_STREAM_FUSION);
-^%streaming-any{WS}*$                   parse_set_parse_options(yylloc, QoreParseOptions::STREAMING_ANY);
-^%no-char-type{WS}*$                    parse_set_parse_options(yylloc, QoreParseOptions::NO_CHAR_TYPE);
-^%no-string-index-char{WS}*$            parse_set_parse_options(yylloc, QoreParseOptions::NO_STRING_INDEX_CHAR);
-^%negative-offsets{WS}*$                parse_set_parse_options(yylloc, PO_NEGATIVE_OFFSETS);
-^%no-negative-offsets{WS}*$             parse_disable_parse_options(yylloc, PO_NEGATIVE_OFFSETS);
-^%no-streaming-operators{WS}*$          parse_set_parse_options(yylloc, QoreParseOptions::NO_STREAMING_OPERATORS);
-^%broken-auto-cast{WS}*$                parse_set_parse_options(yylloc, QoreParseOptions::BROKEN_AUTO_CAST);
-^%correct-soft-types{WS}*$              parse_disable_parse_options(yylloc, QoreParseOptions::BROKEN_SOFT_TYPES);
-^%push-parse-options{WS}*$              push_parse_options(get_loc(yylloc));
-^%append-include-path{WS}*$             { parse_error(*get_loc(yylloc), "missing argument to %%append-include-path"); }
-^%append-include-path{WS}+              BEGIN(append_path_state);
+^%no-strict-parse-errors{WS}*$          { QORE_EXPR_DIRECTIVE();
+                                            parse_set_parse_options(yylloc, QoreParseOptions::NO_STRICT_PARSE_ERRORS); }
+^%fp-fast-math{WS}*$                    { QORE_EXPR_DIRECTIVE();
+                                            parse_set_parse_options(yylloc, QoreParseOptions::FP_FAST_MATH); }
+^%no-iterate{WS}*$                      { QORE_EXPR_DIRECTIVE();
+                                            parse_set_parse_options(yylloc, QoreParseOptions::NO_ITERATE); }
+^%no-first{WS}*$                        { QORE_EXPR_DIRECTIVE();
+                                            parse_set_parse_options(yylloc, QoreParseOptions::NO_FIRST); }
+^%no-any-operator{WS}*$                 { QORE_EXPR_DIRECTIVE();
+                                            parse_set_parse_options(yylloc, QoreParseOptions::NO_ANY_OPERATOR); }
+^%no-all-operator{WS}*$                 { QORE_EXPR_DIRECTIVE();
+                                            parse_set_parse_options(yylloc, QoreParseOptions::NO_ALL_OPERATOR); }
+^%no-count{WS}*$                        { QORE_EXPR_DIRECTIVE();
+                                            parse_set_parse_options(yylloc, QoreParseOptions::NO_COUNT); }
+^%no-take{WS}*$                         { QORE_EXPR_DIRECTIVE();
+                                            parse_set_parse_options(yylloc, QoreParseOptions::NO_TAKE); }
+^%no-drop{WS}*$                         { QORE_EXPR_DIRECTIVE();
+                                            parse_set_parse_options(yylloc, QoreParseOptions::NO_DROP); }
+^%no-takewhile{WS}*$                    { QORE_EXPR_DIRECTIVE();
+                                            parse_set_parse_options(yylloc, QoreParseOptions::NO_TAKEWHILE); }
+^%no-takeuntil{WS}*$                    { QORE_EXPR_DIRECTIVE();
+                                            parse_set_parse_options(yylloc, QoreParseOptions::NO_TAKEUNTIL); }
+^%no-find-modifiers{WS}*$               { QORE_EXPR_DIRECTIVE();
+                                            parse_set_parse_options(yylloc, QoreParseOptions::NO_FIND_MODIFIERS); }
+^%no-stream-fusion{WS}*$                { QORE_EXPR_DIRECTIVE();
+                                            parse_set_parse_options(yylloc, QoreParseOptions::NO_STREAM_FUSION); }
+^%streaming-any{WS}*$                   { QORE_EXPR_DIRECTIVE();
+                                            parse_set_parse_options(yylloc, QoreParseOptions::STREAMING_ANY); }
+^%no-char-type{WS}*$                    { QORE_EXPR_DIRECTIVE();
+                                            parse_set_parse_options(yylloc, QoreParseOptions::NO_CHAR_TYPE); }
+^%no-string-index-char{WS}*$            { QORE_EXPR_DIRECTIVE();
+                                            parse_set_parse_options(yylloc, QoreParseOptions::NO_STRING_INDEX_CHAR); }
+^%negative-offsets{WS}*$                { QORE_EXPR_DIRECTIVE(); parse_set_parse_options(yylloc, PO_NEGATIVE_OFFSETS); }
+^%no-negative-offsets{WS}*$             { QORE_EXPR_DIRECTIVE();
+                                            parse_disable_parse_options(yylloc, PO_NEGATIVE_OFFSETS); }
+^%no-streaming-operators{WS}*$          { QORE_EXPR_DIRECTIVE();
+                                            parse_set_parse_options(yylloc, QoreParseOptions::NO_STREAMING_OPERATORS); }
+^%broken-auto-cast{WS}*$                { QORE_EXPR_DIRECTIVE();
+                                            parse_set_parse_options(yylloc, QoreParseOptions::BROKEN_AUTO_CAST); }
+^%correct-soft-types{WS}*$              { QORE_EXPR_DIRECTIVE();
+                                            parse_disable_parse_options(yylloc, QoreParseOptions::BROKEN_SOFT_TYPES); }
+^%push-parse-options{WS}*$              { QORE_EXPR_DIRECTIVE(); push_parse_options(get_loc(yylloc)); }
+^%append-include-path{WS}*$             { QORE_EXPR_DIRECTIVE();
+        parse_error(*get_loc(yylloc), "missing argument to %%append-include-path"); }
+^%append-include-path{WS}+              { QORE_EXPR_DIRECTIVE(); BEGIN(append_path_state); }
 <append_path_state>[^\n\r]+             {
                                            if (!parse_check_no_filesystem_path_directive(yylloc,
                                                    "append-include-path")) {
@@ -1466,8 +1778,9 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[YMWDHSu])+
 <append_path_state><<EOF>>              {
                                            QORE_FLEX_DO_EOF
                                         }
-^%append-module-path{WS}*$              { parse_error(*get_loc(yylloc), "missing argument to %%append-module-path"); }
-^%append-module-path{WS}+               BEGIN(append_module_state);
+^%append-module-path{WS}*$              { QORE_EXPR_DIRECTIVE();
+                                            parse_error(*get_loc(yylloc), "missing argument to %%append-module-path"); }
+^%append-module-path{WS}+               { QORE_EXPR_DIRECTIVE(); BEGIN(append_module_state); }
 <append_module_state>[^\n\r]+           {
                                            if (!parse_check_no_filesystem_path_directive(yylloc,
                                                    "append-module-path")) {
@@ -1508,8 +1821,9 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[YMWDHSu])+
 <append_module_state><<EOF>>            {
                                            QORE_FLEX_DO_EOF
                                         }
-^%prepend-module-path{WS}*$             { parse_error(*get_loc(yylloc), "missing argument to %%prepend-module-path"); }
-^%prepend-module-path{WS}+              BEGIN(prepend_module_state);
+^%prepend-module-path{WS}*$             { QORE_EXPR_DIRECTIVE();
+        parse_error(*get_loc(yylloc), "missing argument to %%prepend-module-path"); }
+^%prepend-module-path{WS}+              { QORE_EXPR_DIRECTIVE(); BEGIN(prepend_module_state); }
 <prepend_module_state>[^\n\r]+          {
                                            if (!parse_check_no_filesystem_path_directive(yylloc,
                                                    "prepend-module-path")) {
@@ -1532,9 +1846,11 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[YMWDHSu])+
 <prepend_module_state><<EOF>>           {
                                            QORE_FLEX_DO_EOF
                                         }
-^%no-module-path-directives{WS}*$       parse_set_parse_options(yylloc, QoreParseOptions::NO_MODULE_PATH_DIRECTIVES);
-^%set-time-zone{WS}*$                   { parse_error(*get_loc(yylloc), "missing argument to %%set-time-zone"); }
-^%set-time-zone{WS}+                    BEGIN(set_zone);
+^%no-module-path-directives{WS}*$       { QORE_EXPR_DIRECTIVE();
+        parse_set_parse_options(yylloc, QoreParseOptions::NO_MODULE_PATH_DIRECTIVES); }
+^%set-time-zone{WS}*$                   { QORE_EXPR_DIRECTIVE();
+                                            parse_error(*get_loc(yylloc), "missing argument to %%set-time-zone"); }
+^%set-time-zone{WS}+                    { QORE_EXPR_DIRECTIVE(); BEGIN(set_zone); }
 <set_zone>[^\n\r]+                      {
                                            yytext = trim_inplace(yytext);
                                            if (!yytext)
@@ -1546,11 +1862,11 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[YMWDHSu])+
 <set_zone><<EOF>>                       {
                                            QORE_FLEX_DO_EOF
                                         }
-^%enable-all-warnings{WS}*$             {
+^%enable-all-warnings{WS}*$             { QORE_EXPR_DIRECTIVE();
                                            if (getProgram()->setWarningMask(QP_WARN_ALL))
                                               qore_program_private::makeParseWarning(getProgram(), *get_loc(yylloc), QP_WARN_WARNING_MASK_UNCHANGED, "CANNOT-UPDATE-WARNING-MASK", "this program has its warning mask locked; cannot enable all warnings");
                                         }
-^%strict-warnings{WS}*$                 {
+^%strict-warnings{WS}*$                 { QORE_EXPR_DIRECTIVE();
                                            int warn_mask = getProgram()->getWarningMask() | QP_WARN_STRICT;
                                            if (getProgram()->setWarningMask(warn_mask)) {
                                               qore_program_private::makeParseWarning(getProgram(), *get_loc(yylloc),
@@ -1558,12 +1874,13 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[YMWDHSu])+
                                                  "this program has its warning mask locked; cannot enable strict warnings");
                                            }
                                         }
-^%disable-all-warnings{WS}*$            {
+^%disable-all-warnings{WS}*$            { QORE_EXPR_DIRECTIVE();
                                            if (getProgram()->setWarningMask(0))
                                               qore_program_private::makeParseWarning(getProgram(), *get_loc(yylloc), QP_WARN_WARNING_MASK_UNCHANGED, "CANNOT-UPDATE-WARNING-MASK", "this program has its warning mask locked; cannot disable all warnings");
                                         }
-^%disable-warning{WS}*$                 { parse_error(*get_loc(yylloc), "missing argument to %%disable-warning"); }
-^%disable-warning{WS}+                  BEGIN(disable_warning);
+^%disable-warning{WS}*$                 { QORE_EXPR_DIRECTIVE();
+                                            parse_error(*get_loc(yylloc), "missing argument to %%disable-warning"); }
+^%disable-warning{WS}+                  { QORE_EXPR_DIRECTIVE(); BEGIN(disable_warning); }
 <disable_warning>[^\n\r]+               {
                                            char* cn = trim(yytext);
                                            //printd(5, "scanner: disable warning '%s'\n", cn);
@@ -1579,8 +1896,9 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[YMWDHSu])+
 <disable_warning><<EOF>>                {
                                            QORE_FLEX_DO_EOF
                                         }
-^%enable-warning{WS}*$                  { parse_error(*get_loc(yylloc), "missing argument to %%enable-warning"); }
-^%enable-warning{WS}+                   BEGIN(enable_warning);
+^%enable-warning{WS}*$                  { QORE_EXPR_DIRECTIVE();
+                                            parse_error(*get_loc(yylloc), "missing argument to %%enable-warning"); }
+^%enable-warning{WS}+                   { QORE_EXPR_DIRECTIVE(); BEGIN(enable_warning); }
 <enable_warning>[^\n\r]+                {
                                            char* cn = trim(yytext);
                                            //printd(5, "scanner: enable warning '%s'\n", cn);
@@ -1595,12 +1913,13 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[YMWDHSu])+
 <enable_warning><<EOF>>                 {
                                            QORE_FLEX_DO_EOF
                                         }
-^%exec-class{WS}*$                      { parse_error(*get_loc(yylloc), "missing argument to %%exec-class"); }
-^%exec-class{WS}+                       BEGIN(exec_class_state);
-^%try-child-module{WS}*$                {
+^%exec-class{WS}*$                      { QORE_EXPR_DIRECTIVE();
+                                            parse_error(*get_loc(yylloc), "missing argument to %%exec-class"); }
+^%exec-class{WS}+                       { QORE_EXPR_DIRECTIVE(); BEGIN(exec_class_state); }
+^%try-child-module{WS}*$                { QORE_EXPR_DIRECTIVE();
                                            parse_error(*get_loc(yylloc), "missing argument to %%try-child-module");
                                         }
-^%try-child-module                      BEGIN(try_child_module);
+^%try-child-module                      { QORE_EXPR_DIRECTIVE(); BEGIN(try_child_module); }
 <try_child_module>[^\n\r]+              {
                                            QoreString str(yytext);
 
@@ -1625,19 +1944,19 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[YMWDHSu])+
 <try_child_module><<EOF>>               {
                                            QORE_FLEX_DO_EOF
                                         }
-^%try-reexport-module{WS}*$             {
+^%try-reexport-module{WS}*$             { QORE_EXPR_DIRECTIVE();
                                            parse_error(*get_loc(yylloc), "missing argument to %%try-reexport-module");
                                            BEGIN(p_skip_to_endtry);
                                         }
-^%try-reexport-module                   {
+^%try-reexport-module                   { QORE_EXPR_DIRECTIVE();
                                            parse_set_try_reexport(true);
                                            BEGIN(try_module);
                                         }
-^%try-module{WS}*$                      {
+^%try-module{WS}*$                      { QORE_EXPR_DIRECTIVE();
                                            parse_error(*get_loc(yylloc), "missing argument to %%try-module");
                                            BEGIN(p_skip_to_endtry);
                                         }
-^%try-module                            {
+^%try-module                            { QORE_EXPR_DIRECTIVE();
                                            parse_set_try_reexport(false);
                                            BEGIN(try_module);
                                         }
@@ -1771,9 +2090,10 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[YMWDHSu])+
                                            QORE_FLEX_DO_EOF
                                         }
 }
-^%endtry{WS}*$                          parse_try_module_dec(get_loc(yylloc));
-^%requires{WS}*$                        { parse_error(*get_loc(yylloc), "missing argument to %%requires"); }
-^%requires                              BEGIN(requires_state);
+^%endtry{WS}*$                          { QORE_EXPR_DIRECTIVE(); parse_try_module_dec(get_loc(yylloc)); }
+^%requires{WS}*$                        { QORE_EXPR_DIRECTIVE();
+                                            parse_error(*get_loc(yylloc), "missing argument to %%requires"); }
+^%requires                              { QORE_EXPR_DIRECTIVE(); BEGIN(requires_state); }
 <requires_state>[^\n\r]+                {
                                            char* cn = trim_inplace(yytext);
                                            QoreProgram* pgm = getProgram();
@@ -1807,8 +2127,9 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[YMWDHSu])+
 <requires_state><<EOF>>                 {
                                            QORE_FLEX_DO_EOF
                                         }
-^%module-cmd{WS}*$                      { parse_error(*get_loc(yylloc), "missing argument to %%module-cmd"); }
-^%module-cmd                            BEGIN(module_cmd);
+^%module-cmd{WS}*$                      { QORE_EXPR_DIRECTIVE();
+                                            parse_error(*get_loc(yylloc), "missing argument to %%module-cmd"); }
+^%module-cmd                            { QORE_EXPR_DIRECTIVE(); BEGIN(module_cmd); }
 <module_cmd>{WS}*                       // ignore white space
 <module_cmd>[^\n\r]+                    {
                                             QoreString str(yytext);
@@ -1843,15 +2164,17 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[YMWDHSu])+
 <module_cmd><<EOF>>                     {
                                             QORE_FLEX_DO_EOF
                                         }
-^%define{WS}*$                          { parse_error(*get_loc(yylloc), "missing argument to %%define"); }
-^%define{WS}+                           BEGIN(p_def);
+^%define{WS}*$                          { QORE_EXPR_DIRECTIVE();
+                                            parse_error(*get_loc(yylloc), "missing argument to %%define"); }
+^%define{WS}+                           { QORE_EXPR_DIRECTIVE(); BEGIN(p_def); }
 <p_def>{WS}*                            // ignore white space
 <p_def>[^\n\r]+                         {
                                             qore_parse_define(yylloc, yytext);
                                             BEGIN(INITIAL);
                                         }
-^%ifdef{WS}*$                           { parse_error(*get_loc(yylloc), "missing argument to %%ifdef"); }
-^%ifdef{WS}+                            BEGIN(p_ifdef);
+^%ifdef{WS}*$                           { QORE_EXPR_DIRECTIVE();
+                                            parse_error(*get_loc(yylloc), "missing argument to %%ifdef"); }
+^%ifdef{WS}+                            { QORE_EXPR_DIRECTIVE(); BEGIN(p_ifdef); }
 <p_ifdef>{
    [^\n\r]+$                            {
                                             parse_cond_push(true);
@@ -1868,8 +2191,9 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[YMWDHSu])+
                                             QORE_FLEX_DO_EOF
                                         }
 }
-^%ifndef{WS}*$                          { parse_error(*get_loc(yylloc), "missing argument to %%ifndef"); }
-^%ifndef{WS}+                           BEGIN(p_ifndef);
+^%ifndef{WS}*$                          { QORE_EXPR_DIRECTIVE();
+                                            parse_error(*get_loc(yylloc), "missing argument to %%ifndef"); }
+^%ifndef{WS}+                           { QORE_EXPR_DIRECTIVE(); BEGIN(p_ifndef); }
 <p_ifndef>{
    [^\n\r]+$                            {
                                             parse_cond_push(true);
@@ -1886,8 +2210,9 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[YMWDHSu])+
                                             QORE_FLEX_DO_EOF
                                         }
 }
-^%if{WS}*$                              { parse_error(*get_loc(yylloc), "missing expression in %%if"); }
-^%if{WS}+                               BEGIN(p_if);
+^%if{WS}*$                              { QORE_EXPR_DIRECTIVE();
+                                            parse_error(*get_loc(yylloc), "missing expression in %%if"); }
+^%if{WS}+                               { QORE_EXPR_DIRECTIVE(); BEGIN(p_if); }
 <p_if>{
    [^\n\r]+$                            {
                                             parse_cond_push(true);
@@ -1910,7 +2235,7 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[YMWDHSu])+
                                             QORE_FLEX_DO_EOF
                                         }
 }
-^%elif{WS}*$                            {
+^%elif{WS}*$                            { QORE_EXPR_DIRECTIVE();
                                             // %elif without expression
                                             if (!parse_cond_else()) {
                                                 parse_error(*get_loc(yylloc), "%%elif found without %%if");
@@ -1922,7 +2247,7 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[YMWDHSu])+
                                                 BEGIN(p_skip_to_endif);
                                             }
                                         }
-^%elif{WS}+[^\n\r]+$                    {
+^%elif{WS}+[^\n\r]+$                    { QORE_EXPR_DIRECTIVE();
                                             // We're in a true branch, skip remaining elif/else to endif
                                             if (!parse_cond_else()) {
                                                 parse_error(*get_loc(yylloc), "%%elif found without %%if");
@@ -1933,7 +2258,7 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[YMWDHSu])+
                                                 BEGIN(p_skip_to_endif);
                                             }
                                         }
-^%else({WS}+[^\n\r]*)?$                              {
+^%else({WS}+[^\n\r]*)?$                              { QORE_EXPR_DIRECTIVE();
                                             check_cond_directive_tail(yylloc, yytext, "%else");
                                             if (!parse_cond_can_else(get_loc(yylloc))) {
                                                 if (!parse_cond_else()) {
@@ -2128,12 +2453,31 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[YMWDHSu])+
                                             QORE_FLEX_DO_EOF
                                         }
 }
-^%endif({WS}+[^\n\r]*)?$                             {
+^%endif({WS}+[^\n\r]*)?$                             { QORE_EXPR_DIRECTIVE();
                                             check_cond_directive_tail(yylloc, yytext, "%endif");
                                             parse_cond_pop(get_loc(yylloc));
                                         }
-^%include{WS}*$                         { parse_error(*get_loc(yylloc), "missing argument to %%include"); }
-^%include{WS}+                          BEGIN(incl);
+^%include{WS}*$                         { QORE_EXPR_DIRECTIVE();
+                                            parse_error(*get_loc(yylloc), "missing argument to %%include"); }
+^%include{WS}+                          { QORE_EXPR_DIRECTIVE(); BEGIN(incl); }
+^%[A-Za-z][A-Za-z0-9_-]*                {
+        // a line that starts with % and a name that no parse directive's rule matches: scanned as before, as a
+        // context reference (the part of the name that is a word), which is valid in the code of a context
+        // statement; a syntax error on the line reports the name as an unknown or invalid parse directive (issue #56)
+        yyextra->line_start_directive.assign(yytext + 1, yyleng - 1);
+        yyextra->line_start_directive_loc = get_loc(yylloc);
+        yyextra->line_start_directive_active = true;
+        int word = 1;
+        while (word < yyleng && (isalnum(static_cast<unsigned char>(yytext[word])) || yytext[word] == '_')) {
+            ++word;
+        }
+        if (word < yyleng) {
+            yyless(word);
+            yylloc->last_col = yylloc->first_col + word;
+        }
+        yylval->string = strdup(yytext + 1);
+        return CONTEXT_REF;
+    }
 <exec_class_state>{
    [^\n\r]+                             {
                                            char* cn = trim(yytext);
@@ -3158,88 +3502,88 @@ returns{WS}*\(                          yylval->string = strdup("returns"); retu
 public{WS}*\(                           yylval->string = strdup("public"); return KW_IDENTIFIER_OPENPAREN;
 deprecated{WS}*\(                       yylval->string = strdup("deprecated"); return KW_IDENTIFIER_OPENPAREN;
 module{WS}*\(                           yylval->string = strdup("module"); return KW_IDENTIFIER_OPENPAREN;
-\.enum([^A-Za-z_0-9]|$)                 {
+\.{DOTWS}*enum([^A-Za-z_0-9]|$)                 {
                                             if (getProgram()->getParseOptions() & PO_NO_ENUM) {
                                                 DO_DOT_KW_IDENTIFIER("enum")
                                             }
                                             DO_DOT_HARD_KEYWORD("enum")
                                         }
-\.returns[^A-Za-z_0-9]                  DO_DOT_KW_IDENTIFIER("returns")
-\.new[^A-Za-z_0-9]                      DO_DOT_KW_IDENTIFIER("new")
-\.private[^A-Za-z_0-9]                  DO_DOT_KW_IDENTIFIER("private")
-\.public[^A-Za-z_0-9]                   DO_DOT_KW_IDENTIFIER("public")
-\.class[^A-Za-z_0-9]                    DO_DOT_KW_IDENTIFIER("class")
-\.elements[^A-Za-z_0-9]                 DO_DOT_KW_IDENTIFIER("elements")
-\.delete[^A-Za-z_0-9]                   DO_DOT_KW_IDENTIFIER("delete")
-\.case[^A-Za-z_0-9]                     DO_DOT_KW_IDENTIFIER("case")
-\.default[^A-Za-z_0-9]                  DO_DOT_KW_IDENTIFIER("default")
-\.map[^A-Za-z_0-9]                      DO_DOT_KW_IDENTIFIER("map")
-\.select[^A-Za-z_0-9]                   DO_DOT_KW_IDENTIFIER("select")
-\.keys[^A-Za-z_0-9]                     DO_DOT_KW_IDENTIFIER("keys")
-\.chomp[^A-Za-z_0-9]                    DO_DOT_KW_IDENTIFIER("chomp")
-\.trim[^A-Za-z_0-9]                     DO_DOT_KW_IDENTIFIER("trim")
-\.push[^A-Za-z_0-9]                     DO_DOT_KW_IDENTIFIER("push")
-\.pop[^A-Za-z_0-9]                      DO_DOT_KW_IDENTIFIER("pop")
-\.splice[^A-Za-z_0-9]                   DO_DOT_KW_IDENTIFIER("splice")
-\.shift[^A-Za-z_0-9]                    DO_DOT_KW_IDENTIFIER("shift")
-\.unshift[^A-Za-z_0-9]                  DO_DOT_KW_IDENTIFIER("unshift")
-\.background[^A-Za-z_0-9]               DO_DOT_KW_IDENTIFIER("background")
-\.find[^A-Za-z_0-9]                     DO_DOT_KW_IDENTIFIER("find")
-\.exists[^A-Za-z_0-9]                   DO_DOT_KW_IDENTIFIER("exists")
-\.foldr[^A-Za-z_0-9]                    DO_DOT_KW_IDENTIFIER("foldr")
-\.foldl[^A-Za-z_0-9]                    DO_DOT_KW_IDENTIFIER("foldl")
-\.iterate[^A-Za-z_0-9]                  DO_DOT_KW_IDENTIFIER("iterate")
-\.first[^A-Za-z_0-9]                    DO_DOT_KW_IDENTIFIER("first")
-\.any[^A-Za-z_0-9]                      DO_DOT_KW_IDENTIFIER("any")
-\.all[^A-Za-z_0-9]                      DO_DOT_KW_IDENTIFIER("all")
-\.count[^A-Za-z_0-9]                    DO_DOT_KW_IDENTIFIER("count")
-\.take[^A-Za-z_0-9]                     DO_DOT_KW_IDENTIFIER("take")
-\.drop[^A-Za-z_0-9]                     DO_DOT_KW_IDENTIFIER("drop")
-\.takewhile[^A-Za-z_0-9]                DO_DOT_KW_IDENTIFIER("takewhile")
-\.takeuntil[^A-Za-z_0-9]                DO_DOT_KW_IDENTIFIER("takeuntil")
-\.static[^A-Za-z_0-9]                   DO_DOT_KW_IDENTIFIER("static")
-\.abstract[^A-Za-z_0-9]                 DO_DOT_KW_IDENTIFIER("abstract")
-\.deprecated[^A-Za-z_0-9]               DO_DOT_KW_IDENTIFIER("deprecated")
-\.summarize[^A-Za-z_0-9]                DO_DOT_KW_IDENTIFIER("summarize")
-\.sub[^A-Za-z_0-9]                      DO_DOT_KW_IDENTIFIER("sub")
-\.subcontext[^A-Za-z_0-9]               DO_DOT_KW_IDENTIFIER("subcontext")
-\.sortBy[^A-Za-z_0-9]                   DO_DOT_KW_IDENTIFIER("sortBy")
-\.sortDescendingBy[^A-Za-z_0-9]         DO_DOT_KW_IDENTIFIER("sortDescendingBy")
-\.by[^A-Za-z_0-9]                       DO_DOT_KW_IDENTIFIER("by")
-\.switch[^A-Za-z_0-9]                   DO_DOT_KW_IDENTIFIER("switch")
-\.return[^A-Za-z_0-9]                   DO_DOT_KW_IDENTIFIER("return")
-\.rethrow[^A-Za-z_0-9]                  DO_DOT_KW_IDENTIFIER("rethrow")
-\.break[^A-Za-z_0-9]                    DO_DOT_KW_IDENTIFIER("break")
-\.catch[^A-Za-z_0-9]                    DO_DOT_KW_IDENTIFIER("catch")
-\.const[^A-Za-z_0-9]                    DO_DOT_KW_IDENTIFIER("const")
-\.context[^A-Za-z_0-9]                  DO_DOT_KW_IDENTIFIER("context")
-\.continue[^A-Za-z_0-9]                 DO_DOT_KW_IDENTIFIER("continue")
-\.do[^A-Za-z_0-9]                       DO_DOT_KW_IDENTIFIER("do")
-\.else[^A-Za-z_0-9]                     DO_DOT_KW_IDENTIFIER("else")
-\.final[^A-Za-z_0-9]                    DO_DOT_KW_IDENTIFIER("final")
-\.for[^A-Za-z_0-9]                      DO_DOT_KW_IDENTIFIER("for")
-\.foreach[^A-Za-z_0-9]                  DO_DOT_KW_IDENTIFIER("foreach")
-\.if[^A-Za-z_0-9]                       DO_DOT_KW_IDENTIFIER("if")
-\.in[^A-Za-z_0-9]                       DO_DOT_KW_IDENTIFIER("in")
-\.inherits[^A-Za-z_0-9]                 DO_DOT_KW_IDENTIFIER("inherits")
-\.instanceof[^A-Za-z_0-9]               DO_DOT_KW_IDENTIFIER("instanceof")
-\.namespace[^A-Za-z_0-9]                DO_DOT_KW_IDENTIFIER("namespace")
-\.my[^A-Za-z_0-9]                       DO_DOT_KW_IDENTIFIER("my")
-\.on_error[^A-Za-z_0-9]                 DO_DOT_KW_IDENTIFIER("on_error")
-\.on_exit[^A-Za-z_0-9]                  DO_DOT_KW_IDENTIFIER("on_exit")
-\.on_success[^A-Za-z_0-9]               DO_DOT_KW_IDENTIFIER("on_success")
-\.our[^A-Za-z_0-9]                      DO_DOT_KW_IDENTIFIER("our")
-\.synchronized[^A-Za-z_0-9]             DO_DOT_KW_IDENTIFIER("synchronized")
-\.thread_exit[^A-Za-z_0-9]              DO_DOT_KW_IDENTIFIER("thread_exit")
-\.throw[^A-Za-z_0-9]                    DO_DOT_KW_IDENTIFIER("throw")
-\.try[^A-Za-z_0-9]                      DO_DOT_KW_IDENTIFIER("try")
-\.where[^A-Za-z_0-9]                    DO_DOT_KW_IDENTIFIER("where")
-\.while[^A-Za-z_0-9]                    DO_DOT_KW_IDENTIFIER("while")
-\.module[^A-Za-z_0-9]                   DO_DOT_KW_IDENTIFIER("module")
+\.{DOTWS}*returns[^A-Za-z_0-9]                  DO_DOT_KW_IDENTIFIER("returns")
+\.{DOTWS}*new[^A-Za-z_0-9]                      DO_DOT_KW_IDENTIFIER("new")
+\.{DOTWS}*private[^A-Za-z_0-9]                  DO_DOT_KW_IDENTIFIER("private")
+\.{DOTWS}*public[^A-Za-z_0-9]                   DO_DOT_KW_IDENTIFIER("public")
+\.{DOTWS}*class[^A-Za-z_0-9]                    DO_DOT_KW_IDENTIFIER("class")
+\.{DOTWS}*elements[^A-Za-z_0-9]                 DO_DOT_KW_IDENTIFIER("elements")
+\.{DOTWS}*delete[^A-Za-z_0-9]                   DO_DOT_KW_IDENTIFIER("delete")
+\.{DOTWS}*case[^A-Za-z_0-9]                     DO_DOT_KW_IDENTIFIER("case")
+\.{DOTWS}*default[^A-Za-z_0-9]                  DO_DOT_KW_IDENTIFIER("default")
+\.{DOTWS}*map[^A-Za-z_0-9]                      DO_DOT_KW_IDENTIFIER("map")
+\.{DOTWS}*select[^A-Za-z_0-9]                   DO_DOT_KW_IDENTIFIER("select")
+\.{DOTWS}*keys[^A-Za-z_0-9]                     DO_DOT_KW_IDENTIFIER("keys")
+\.{DOTWS}*chomp[^A-Za-z_0-9]                    DO_DOT_KW_IDENTIFIER("chomp")
+\.{DOTWS}*trim[^A-Za-z_0-9]                     DO_DOT_KW_IDENTIFIER("trim")
+\.{DOTWS}*push[^A-Za-z_0-9]                     DO_DOT_KW_IDENTIFIER("push")
+\.{DOTWS}*pop[^A-Za-z_0-9]                      DO_DOT_KW_IDENTIFIER("pop")
+\.{DOTWS}*splice[^A-Za-z_0-9]                   DO_DOT_KW_IDENTIFIER("splice")
+\.{DOTWS}*shift[^A-Za-z_0-9]                    DO_DOT_KW_IDENTIFIER("shift")
+\.{DOTWS}*unshift[^A-Za-z_0-9]                  DO_DOT_KW_IDENTIFIER("unshift")
+\.{DOTWS}*background[^A-Za-z_0-9]               DO_DOT_KW_IDENTIFIER("background")
+\.{DOTWS}*find[^A-Za-z_0-9]                     DO_DOT_KW_IDENTIFIER("find")
+\.{DOTWS}*exists[^A-Za-z_0-9]                   DO_DOT_KW_IDENTIFIER("exists")
+\.{DOTWS}*foldr[^A-Za-z_0-9]                    DO_DOT_KW_IDENTIFIER("foldr")
+\.{DOTWS}*foldl[^A-Za-z_0-9]                    DO_DOT_KW_IDENTIFIER("foldl")
+\.{DOTWS}*iterate[^A-Za-z_0-9]                  DO_DOT_KW_IDENTIFIER("iterate")
+\.{DOTWS}*first[^A-Za-z_0-9]                    DO_DOT_KW_IDENTIFIER("first")
+\.{DOTWS}*any[^A-Za-z_0-9]                      DO_DOT_KW_IDENTIFIER("any")
+\.{DOTWS}*all[^A-Za-z_0-9]                      DO_DOT_KW_IDENTIFIER("all")
+\.{DOTWS}*count[^A-Za-z_0-9]                    DO_DOT_KW_IDENTIFIER("count")
+\.{DOTWS}*take[^A-Za-z_0-9]                     DO_DOT_KW_IDENTIFIER("take")
+\.{DOTWS}*drop[^A-Za-z_0-9]                     DO_DOT_KW_IDENTIFIER("drop")
+\.{DOTWS}*takewhile[^A-Za-z_0-9]                DO_DOT_KW_IDENTIFIER("takewhile")
+\.{DOTWS}*takeuntil[^A-Za-z_0-9]                DO_DOT_KW_IDENTIFIER("takeuntil")
+\.{DOTWS}*static[^A-Za-z_0-9]                   DO_DOT_KW_IDENTIFIER("static")
+\.{DOTWS}*abstract[^A-Za-z_0-9]                 DO_DOT_KW_IDENTIFIER("abstract")
+\.{DOTWS}*deprecated[^A-Za-z_0-9]               DO_DOT_KW_IDENTIFIER("deprecated")
+\.{DOTWS}*summarize[^A-Za-z_0-9]                DO_DOT_KW_IDENTIFIER("summarize")
+\.{DOTWS}*sub[^A-Za-z_0-9]                      DO_DOT_KW_IDENTIFIER("sub")
+\.{DOTWS}*subcontext[^A-Za-z_0-9]               DO_DOT_KW_IDENTIFIER("subcontext")
+\.{DOTWS}*sortBy[^A-Za-z_0-9]                   DO_DOT_KW_IDENTIFIER("sortBy")
+\.{DOTWS}*sortDescendingBy[^A-Za-z_0-9]         DO_DOT_KW_IDENTIFIER("sortDescendingBy")
+\.{DOTWS}*by[^A-Za-z_0-9]                       DO_DOT_KW_IDENTIFIER("by")
+\.{DOTWS}*switch[^A-Za-z_0-9]                   DO_DOT_KW_IDENTIFIER("switch")
+\.{DOTWS}*return[^A-Za-z_0-9]                   DO_DOT_KW_IDENTIFIER("return")
+\.{DOTWS}*rethrow[^A-Za-z_0-9]                  DO_DOT_KW_IDENTIFIER("rethrow")
+\.{DOTWS}*break[^A-Za-z_0-9]                    DO_DOT_KW_IDENTIFIER("break")
+\.{DOTWS}*catch[^A-Za-z_0-9]                    DO_DOT_KW_IDENTIFIER("catch")
+\.{DOTWS}*const[^A-Za-z_0-9]                    DO_DOT_KW_IDENTIFIER("const")
+\.{DOTWS}*context[^A-Za-z_0-9]                  DO_DOT_KW_IDENTIFIER("context")
+\.{DOTWS}*continue[^A-Za-z_0-9]                 DO_DOT_KW_IDENTIFIER("continue")
+\.{DOTWS}*do[^A-Za-z_0-9]                       DO_DOT_KW_IDENTIFIER("do")
+\.{DOTWS}*else[^A-Za-z_0-9]                     DO_DOT_KW_IDENTIFIER("else")
+\.{DOTWS}*final[^A-Za-z_0-9]                    DO_DOT_KW_IDENTIFIER("final")
+\.{DOTWS}*for[^A-Za-z_0-9]                      DO_DOT_KW_IDENTIFIER("for")
+\.{DOTWS}*foreach[^A-Za-z_0-9]                  DO_DOT_KW_IDENTIFIER("foreach")
+\.{DOTWS}*if[^A-Za-z_0-9]                       DO_DOT_KW_IDENTIFIER("if")
+\.{DOTWS}*in[^A-Za-z_0-9]                       DO_DOT_KW_IDENTIFIER("in")
+\.{DOTWS}*inherits[^A-Za-z_0-9]                 DO_DOT_KW_IDENTIFIER("inherits")
+\.{DOTWS}*instanceof[^A-Za-z_0-9]               DO_DOT_KW_IDENTIFIER("instanceof")
+\.{DOTWS}*namespace[^A-Za-z_0-9]                DO_DOT_KW_IDENTIFIER("namespace")
+\.{DOTWS}*my[^A-Za-z_0-9]                       DO_DOT_KW_IDENTIFIER("my")
+\.{DOTWS}*on_error[^A-Za-z_0-9]                 DO_DOT_KW_IDENTIFIER("on_error")
+\.{DOTWS}*on_exit[^A-Za-z_0-9]                  DO_DOT_KW_IDENTIFIER("on_exit")
+\.{DOTWS}*on_success[^A-Za-z_0-9]               DO_DOT_KW_IDENTIFIER("on_success")
+\.{DOTWS}*our[^A-Za-z_0-9]                      DO_DOT_KW_IDENTIFIER("our")
+\.{DOTWS}*synchronized[^A-Za-z_0-9]             DO_DOT_KW_IDENTIFIER("synchronized")
+\.{DOTWS}*thread_exit[^A-Za-z_0-9]              DO_DOT_KW_IDENTIFIER("thread_exit")
+\.{DOTWS}*throw[^A-Za-z_0-9]                    DO_DOT_KW_IDENTIFIER("throw")
+\.{DOTWS}*try[^A-Za-z_0-9]                      DO_DOT_KW_IDENTIFIER("try")
+\.{DOTWS}*where[^A-Za-z_0-9]                    DO_DOT_KW_IDENTIFIER("where")
+\.{DOTWS}*while[^A-Za-z_0-9]                    DO_DOT_KW_IDENTIFIER("while")
+\.{DOTWS}*module[^A-Za-z_0-9]                   DO_DOT_KW_IDENTIFIER("module")
 
-{YEAR}-{MONTH}-{DAY}T{HOUR}:{MSEC}(:{MSEC}(\.{US})?)?{TZ}?   yylval->datetime = makeDateTime(yytext, true); return DATETIME;
-{YEAR}-{MONTH}-{DAY}-{HOUR}:{MSEC}:{MSEC}(\.{US})?{TZ}?      yylval->datetime = makeDateTime(yytext, true); return DATETIME;
-{YEAR}-{MONTH}-{DAY}?{TZ}?                                   yylval->datetime = makeDateTime(yytext, false); return DATETIME;
+{YEAR}-{MONTH}-{DAY}T{HOUR}:{MSEC}(:{DSEC}(\.{US})?)?{TZ}?   yylval->datetime = makeDateTime(yylloc, yytext, true); return DATETIME;
+{YEAR}-{MONTH}-{DAY}-{HOUR}:{MSEC}:{DSEC}(\.{US})?{TZ}?      yylval->datetime = makeDateTime(yylloc, yytext, true); return DATETIME;
+{YEAR}-{MONTH}-{DAY}{TZ}?                                    yylval->datetime = makeDateTime(yylloc, yytext, false); return DATETIME;
 {HOUR}:{MSEC}(:{MSEC}(\.{US})?)?{TZ}?   yylval->datetime = makeTime(yytext); return DATETIME;
 P{YEAR}-{D2}-{D2}(T{D2}:{D2}(:{D2}(\.{US})?)?)?   yylval->datetime = makeIso8601Duration(yylloc, yytext); return DATETIME;
 P{YEAR}{D2}{D2}(T{D2}{D2}({D2}(\.{US})?)?)?       yylval->datetime = makeIso8601Duration(yylloc, yytext); return DATETIME;

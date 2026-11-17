@@ -241,6 +241,9 @@ hash<auto> desc = {
 
 
     @section sqlite3sqlutilv12 Sqlite3SqlUtil_1_2 Sqlite3SqlUtil Module v1.2
+    - fixed a column declared with \c "default null" in lower case or \c "default (null)", which was
+      described with a default value (the string \c 'null' or \c 0)
+      (<a href="https://github.com/qoretechnologies/qore/issues/1746">issue 1746</a>)
     - fixed @ref SqlUtil::op_substr() "op_substr()" in where clauses, which generated the ANSI
       <tt>substring(... from ... for ...)</tt> syntax that SQLite does not have, so the query failed with
       \c SQLITE3-PREPARE-ERROR; SQLite's \c substr() function is now used
@@ -1219,6 +1222,20 @@ string sql = pk.getTableConstraintSql();
             return new Sqlite3View(name, row.sql);
         }
 
+        #! Returns a view object for a view of a schema description
+        private AbstractView makeViewImpl(string name, string src) {
+            return new Sqlite3View(name, src);
+        }
+
+        #! Compares the query of a view with the query of a view of a schema description
+        /** SQLite keeps the statement that created the view as it was given, of which the query follows \c AS
+        */
+        private bool viewSourceEqualImpl(AbstractView live, AbstractView tmpl) {
+            string src = live.src;
+            src =~ s/^\s*create\s+(temp\s+|temporary\s+)?view\s+(if\s+not\s+exists\s+)?("(?:[^"]|"")*"|`[^`]*`|\[[^\]]*\]|\S+)\s+as\s+//is;
+            return AbstractDatabase::normalizeViewSource(src) == AbstractDatabase::normalizeViewSource(tmpl.src);
+        }
+
         private AbstractFunction makeFunctionImpl(string name, string src, *hash<auto> opts) {
             throw "UNSUPPORTED";
         }
@@ -1726,7 +1743,9 @@ string sql = pk.getTableConstraintSql();
             hash<string, AbstractColumn> rv;
             foreach hash<auto> row in (qh.contextIterator()) {
                 row.type = row.type.lwr();
-                auto defval = exists row.dflt_value && row.dflt_value !== NULL && row.dflt_value != "NULL"
+                # issue #1746: SQLite keeps the text of a "default null" declaration as given (ex: null, (NULL))
+                auto defval = exists row.dflt_value && row.dflt_value !== NULL
+                        && row.dflt_value !~ /^\(*\s*null\s*\)*$/i
                     ? row.dflt_value
                     : NOTHING;
                 *hash<auto> th = Sqlite3TypeMap{row.type};

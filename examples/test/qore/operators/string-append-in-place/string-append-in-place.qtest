@@ -26,6 +26,10 @@
     memory-limited sandbox shows without depending on timing (see the worker), and describes the string; every run
     must give the results below, which are those of the AST interpreter.  A string that another variable holds and a
     string appended to itself must still be copied.
+
+    The "try-" checks append in a try block, where the append is an invoke with an exception edge, which was not
+    paired with the local's load and store and so copied the string for every append (issue #6280), as did an append in
+    a catch block; an append that raises an exception must leave the string as it was for the handler.
 */
 class StringAppendInPlaceTest inherits QUnit::Test {
     public {
@@ -56,6 +60,16 @@ class StringAppendInPlaceTest inherits QUnit::Test {
             "list-lvalue": "in-place|5000:UTF-8:abababababab",
             "reference": "in-place|5000:UTF-8:abababababab",
             "reference-parameter": "in-place|5000:UTF-8:abababababab",
+            "try-literal": "in-place|5000:UTF-8:abababababab",
+            "try-variable": "in-place|5000:UTF-8:abababababab",
+            "try-call": "in-place|5000:UTF-8:abababababab",
+            "try-int": "in-place|7890:UTF-8:199719981999",
+            "try-mixed": "in-place|2779:UTF-8:3ab12.513ab1",
+            "try-nested": "in-place|5000:UTF-8:abababababab",
+            "try-exception": "in-place|4998:ISO-8859-1:éaéaéaéaéaéa:ENCODING-CONVERSION-ERROR:4998:éaéa",
+            "catch": "in-place|5000:UTF-8:abababababab",
+            "try-shared": "copied|5000:UTF-8:abababababab:1000",
+            "try-after": "in-place|5000:UTF-8:abababababab:AFTER:abab:5000",
             "enum": "a long string value that is not shortabababababababababab"
                 "|a long string value that is not shortabababababababababab"
                 "|a long string value that is not short",

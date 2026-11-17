@@ -10558,7 +10558,26 @@ int sub refprobe(int i) {
     return h.(cast<string>(-i));
 }
 
-printf(\"%d\\n\", refprobe(3));
+# unary plus, binary not and comparison expressions as slot expressions (qore#6229)
+int sub refprobe2(int i) {
+    hash<auto> h = {};
+    reference<auto> r1 = \\h.(cast<string>(+i));
+    r1 = i;
+    reference<auto> r2 = \\h.(cast<string>(~i));
+    r2 = i + 1;
+    reference<auto> r3 = \\h.(cast<string>(i <=> 2));
+    r3 = i + 2;
+    int a;
+    int b;
+    reference<auto> r4 = \\h.(cast<string>(((a, b) = (i, 2)).size() + 100));
+    r4 = a + b;
+    # a backquote as a slot expression (qore#6302)
+    reference<auto> r5 = \\h.(`printf k105`);
+    r5 = 1;
+    return h.(cast<string>(+i)) + h.(cast<string>(~i)) + h.(cast<string>(i <=> 2)) + h.\"102\" + h.k105;
+}
+
+printf(\"%d %d\\n\", refprobe(3), refprobe2(3));
 ");
         on_exit {
             unlink(paths.src);
@@ -10580,6 +10599,16 @@ printf(\"%d\\n\", refprobe(3));
             "qcc dump reports no malformed slot expression payloads: " + dump_out);
         assertTrue(dump_out.regex("UNARY_MINUS\\s+\\(104\\)"),
             "qcc dump reports unary-minus expression kind from the slot registry: " + dump_out);
+        assertTrue(dump_out.regex("UNARY_PLUS\\s+\\(129\\)"),
+            "qcc dump reports unary-plus expression kind from the slot registry: " + dump_out);
+        assertTrue(dump_out.regex("BIT_NOT\\s+\\(130\\)"),
+            "qcc dump reports binary-not expression kind from the slot registry: " + dump_out);
+        assertTrue(dump_out.regex("LOG_CMP\\s+\\(131\\)"),
+            "qcc dump reports comparison expression kind from the slot registry: " + dump_out);
+        assertTrue(dump_out.regex("LIST_ASSIGN\\s+\\(132\\)"),
+            "qcc dump reports list assignment expression kind from the slot registry: " + dump_out);
+        assertTrue(dump_out.regex("BACKQUOTE\\s+\\(133\\)"),
+            "qcc dump reports backquote expression kind from the slot registry: " + dump_out);
     }
 
     testQccDumpCompoundSlotExprKinds() {

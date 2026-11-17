@@ -35,6 +35,9 @@
 #include <qore/common.h>
 
 #include <cstddef>
+#include <cstdint>
+#include <map>
+#include <string>
 #include <vector>
 
 class QoreTypeInfo;
@@ -275,6 +278,10 @@ private:
 
 //! Returns the number of declarations retired and not freed yet (see QoreTypeOwner)
 DLLLOCAL size_t qore_retired_type_owner_count();
+
+//! Counts the declarations and derived types kept until library cleanup, by kind, and the cache entries, for debug
+//! checks (issue #6419)
+DLLLOCAL void qore_type_retention_breakdown(std::map<std::string, int64_t>& out);
 
 //! Returns the number of groups of declarations that survived their Program and are not collected yet
 DLLLOCAL size_t qore_type_owner_group_count();

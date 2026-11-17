@@ -412,7 +412,7 @@ public class AssemblyAiAudioUpload {
     private {
         AssemblyAiRestClientIo client;
         HttpClientIo::HttpClientStreamHandle stream;
-        string boundary = sprintf("qore-assemblyai-%d-%d", now_us(), rand());
+        string boundary = "qore-assemblyai-" + make_hex_string(get_random_bytes(16));
         bool finished = False;
         Mutex state_lock();
     }

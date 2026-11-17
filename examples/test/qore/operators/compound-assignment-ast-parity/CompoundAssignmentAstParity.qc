@@ -2,8 +2,8 @@
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
 # the cases of the CompoundAssignmentAstParity-<n>.qtest tests: the compound-assignment parity matrix, split by
-# operator family and by execution mode; each test runs one part of them, so that each takes a short time, and together
-# they run every case (see addPartCase())
+# operator family, by execution mode and by function slice; each test runs one part of them, so that each takes a short
+# time, and together they run every case (see addPartCase())
 
 #! Tests that every compound assignment gives the AST interpreter's result in every execution mode
 /** The AST interpreter is the reference: a compound assignment operates on the lvalue's current value by its type,
@@ -11,12 +11,18 @@
     operand as a string, a hash lvalue merges a hash or removes keys, and so on.  The other execution modes and
     compiled code must give the same value or raise the same exception.
 
-    The matrix is split by operator family (see OperatorFamilies), and each family is checked in four parts (the
-    CompoundAssignmentAstParity-<n>.qtest tests, qore#6226): every part generates the family's program and runs it
-    with the AST interpreter, whose output is the expected result, and checks one group of the other modes against
-    it: the ir mode and the qcc-compiled executable, the jit mode, the tiered mode, or the default mode.  The tests
-    of a family used to run every mode in one test, which took 160 s and more in a debug build (more than 300 s,
-    the limit of a test, when the machine was busy); each part takes about a minute.
+    The matrix is split by operator family (see OperatorFamilies), and each family is checked in several parts (the
+    CompoundAssignmentAstParity-<n>.qtest tests, qore#6226, qore#6410).  The time of a family is in the native
+    compilation of its program (33-90 functions): the jit, tiered and default runs compile every function
+    synchronously (ExecModeHarness::TraceEnv; 18-50 s a run), and qcc compiles all of them (5-18 s), while the AST and
+    IR interpreters take less than a second.  The first part of a family checks the AST interpreter's output of the
+    whole program, runs the whole program in the ir mode and as a qcc-compiled executable, and checks that the AST
+    interpreter's outputs of the slices of the functions that the other parts run, in order, are its output of the
+    whole program; each other part runs a third of the functions (by the cost of their native compilation, see
+    sliceBounds()) in the jit, tiered or default mode.  A slice runs a program with all
+    the declarations and only its functions, checked against the AST interpreter's output of the same program; the
+    functions are independent of each other, so a function gives the same output in either program.  Each part takes
+    well under a minute.
 
     The test generates a program that applies each compound operator to lvalues of many declared types and values:
     - with operands of many types whose type is not known at parse time, looping over the values at runtime, in
@@ -103,6 +109,9 @@ class CompoundAssignmentAstParityBase inherits QUnit::Test {
         string qore_bin;
         string libqore_dir;
         string qcc_bin;
+
+        #! the generated programs by family, made once by generate()
+        hash<string, hash<auto>> programs;
     }
 
     constructor(string name, int part) : QUnit::Test(name, "1.0", \ARGV) {
@@ -111,36 +120,79 @@ class CompoundAssignmentAstParityBase inherits QUnit::Test {
         libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
         qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
 
-        # the AST interpreter is the reference of every part; each other mode is checked by one part of each family
+        # the AST interpreter is the reference of every part; the first part of a family runs the ir mode and the
+        # executable, and each other part runs a slice of the functions in the jit, tiered or default mode
         addPartCase(1, "the parts check every execution mode", \testPartsCoverModes());
-        addPartCase(1, familyName(0) + ": ir and the executable", \testParity(), (0, ("ir",), False, True));
-        addPartCase(2, familyName(0) + ": jit", \testParity(), (0, ("jit",), False, False));
-        addPartCase(3, familyName(0) + ": tiered", \testParity(), (0, ("tiered",), False, False));
-        addPartCase(4, familyName(0) + ": the default mode", \testParity(), (0, (), True, False));
-        addPartCase(5, familyName(1) + ": ir and the executable", \testParity(), (1, ("ir",), False, True));
-        addPartCase(6, familyName(1) + ": jit", \testParity(), (1, ("jit",), False, False));
-        addPartCase(7, familyName(1) + ": tiered", \testParity(), (1, ("tiered",), False, False));
-        addPartCase(8, familyName(1) + ": the default mode", \testParity(), (1, (), True, False));
-        addPartCase(9, familyName(2) + ": ir and the executable", \testParity(), (2, ("ir",), False, True));
-        addPartCase(10, familyName(2) + ": jit", \testParity(), (2, ("jit",), False, False));
-        addPartCase(11, familyName(2) + ": tiered", \testParity(), (2, ("tiered",), False, False));
-        addPartCase(12, familyName(2) + ": the default mode", \testParity(), (2, (), True, False));
-        addPartCase(13, familyName(3) + ": ir and the executable", \testParity(), (3, ("ir",), False, True));
-        addPartCase(14, familyName(3) + ": jit", \testParity(), (3, ("jit",), False, False));
-        addPartCase(15, familyName(3) + ": tiered", \testParity(), (3, ("tiered",), False, False));
-        addPartCase(16, familyName(3) + ": the default mode", \testParity(), (3, (), True, False));
-        addPartCase(17, familyName(4) + ": ir and the executable", \testParity(), (4, ("ir",), False, True));
-        addPartCase(18, familyName(4) + ": jit", \testParity(), (4, ("jit",), False, False));
-        addPartCase(19, familyName(4) + ": tiered", \testParity(), (4, ("tiered",), False, False));
-        addPartCase(20, familyName(4) + ": the default mode", \testParity(), (4, (), True, False));
-        addPartCase(21, familyName(5) + ": ir and the executable", \testParity(), (5, ("ir",), False, True));
-        addPartCase(22, familyName(5) + ": jit", \testParity(), (5, ("jit",), False, False));
-        addPartCase(23, familyName(5) + ": tiered", \testParity(), (5, ("tiered",), False, False));
-        addPartCase(24, familyName(5) + ": the default mode", \testParity(), (5, (), True, False));
-        addPartCase(25, familyName(6) + ": ir and the executable", \testParity(), (6, ("ir",), False, True));
-        addPartCase(26, familyName(6) + ": jit", \testParity(), (6, ("jit",), False, False));
-        addPartCase(27, familyName(6) + ": tiered", \testParity(), (6, ("tiered",), False, False));
-        addPartCase(28, familyName(6) + ": the default mode", \testParity(), (6, (), True, False));
+        addPartCase(1, familyName(0) + ": the AST output, ir and the executable", \testFamily(), (0, 3));
+        addPartCase(2, familyName(0) + ": jit (1/3)", \testMode(), (0, "jit", 1, 3));
+        addPartCase(3, familyName(0) + ": jit (2/3)", \testMode(), (0, "jit", 2, 3));
+        addPartCase(4, familyName(0) + ": jit (3/3)", \testMode(), (0, "jit", 3, 3));
+        addPartCase(5, familyName(0) + ": tiered (1/3)", \testMode(), (0, "tiered", 1, 3));
+        addPartCase(6, familyName(0) + ": tiered (2/3)", \testMode(), (0, "tiered", 2, 3));
+        addPartCase(7, familyName(0) + ": tiered (3/3)", \testMode(), (0, "tiered", 3, 3));
+        addPartCase(8, familyName(0) + ": default (1/3)", \testMode(), (0, "default", 1, 3));
+        addPartCase(9, familyName(0) + ": default (2/3)", \testMode(), (0, "default", 2, 3));
+        addPartCase(10, familyName(0) + ": default (3/3)", \testMode(), (0, "default", 3, 3));
+        addPartCase(11, familyName(1) + ": the AST output, ir and the executable", \testFamily(), (1, 3));
+        addPartCase(12, familyName(1) + ": jit (1/3)", \testMode(), (1, "jit", 1, 3));
+        addPartCase(13, familyName(1) + ": jit (2/3)", \testMode(), (1, "jit", 2, 3));
+        addPartCase(14, familyName(1) + ": jit (3/3)", \testMode(), (1, "jit", 3, 3));
+        addPartCase(15, familyName(1) + ": tiered (1/3)", \testMode(), (1, "tiered", 1, 3));
+        addPartCase(16, familyName(1) + ": tiered (2/3)", \testMode(), (1, "tiered", 2, 3));
+        addPartCase(17, familyName(1) + ": tiered (3/3)", \testMode(), (1, "tiered", 3, 3));
+        addPartCase(18, familyName(1) + ": default (1/3)", \testMode(), (1, "default", 1, 3));
+        addPartCase(19, familyName(1) + ": default (2/3)", \testMode(), (1, "default", 2, 3));
+        addPartCase(20, familyName(1) + ": default (3/3)", \testMode(), (1, "default", 3, 3));
+        addPartCase(21, familyName(2) + ": the AST output, ir and the executable", \testFamily(), (2, 3));
+        addPartCase(22, familyName(2) + ": jit (1/3)", \testMode(), (2, "jit", 1, 3));
+        addPartCase(23, familyName(2) + ": jit (2/3)", \testMode(), (2, "jit", 2, 3));
+        addPartCase(24, familyName(2) + ": jit (3/3)", \testMode(), (2, "jit", 3, 3));
+        addPartCase(25, familyName(2) + ": tiered (1/3)", \testMode(), (2, "tiered", 1, 3));
+        addPartCase(26, familyName(2) + ": tiered (2/3)", \testMode(), (2, "tiered", 2, 3));
+        addPartCase(27, familyName(2) + ": tiered (3/3)", \testMode(), (2, "tiered", 3, 3));
+        addPartCase(28, familyName(2) + ": default (1/3)", \testMode(), (2, "default", 1, 3));
+        addPartCase(29, familyName(2) + ": default (2/3)", \testMode(), (2, "default", 2, 3));
+        addPartCase(30, familyName(2) + ": default (3/3)", \testMode(), (2, "default", 3, 3));
+        addPartCase(31, familyName(3) + ": the AST output, ir and the executable", \testFamily(), (3, 3));
+        addPartCase(32, familyName(3) + ": jit (1/3)", \testMode(), (3, "jit", 1, 3));
+        addPartCase(33, familyName(3) + ": jit (2/3)", \testMode(), (3, "jit", 2, 3));
+        addPartCase(34, familyName(3) + ": jit (3/3)", \testMode(), (3, "jit", 3, 3));
+        addPartCase(35, familyName(3) + ": tiered (1/3)", \testMode(), (3, "tiered", 1, 3));
+        addPartCase(36, familyName(3) + ": tiered (2/3)", \testMode(), (3, "tiered", 2, 3));
+        addPartCase(37, familyName(3) + ": tiered (3/3)", \testMode(), (3, "tiered", 3, 3));
+        addPartCase(38, familyName(3) + ": default (1/3)", \testMode(), (3, "default", 1, 3));
+        addPartCase(39, familyName(3) + ": default (2/3)", \testMode(), (3, "default", 2, 3));
+        addPartCase(40, familyName(3) + ": default (3/3)", \testMode(), (3, "default", 3, 3));
+        addPartCase(41, familyName(4) + ": the AST output, ir and the executable", \testFamily(), (4, 3));
+        addPartCase(42, familyName(4) + ": jit (1/3)", \testMode(), (4, "jit", 1, 3));
+        addPartCase(43, familyName(4) + ": jit (2/3)", \testMode(), (4, "jit", 2, 3));
+        addPartCase(44, familyName(4) + ": jit (3/3)", \testMode(), (4, "jit", 3, 3));
+        addPartCase(45, familyName(4) + ": tiered (1/3)", \testMode(), (4, "tiered", 1, 3));
+        addPartCase(46, familyName(4) + ": tiered (2/3)", \testMode(), (4, "tiered", 2, 3));
+        addPartCase(47, familyName(4) + ": tiered (3/3)", \testMode(), (4, "tiered", 3, 3));
+        addPartCase(48, familyName(4) + ": default (1/3)", \testMode(), (4, "default", 1, 3));
+        addPartCase(49, familyName(4) + ": default (2/3)", \testMode(), (4, "default", 2, 3));
+        addPartCase(50, familyName(4) + ": default (3/3)", \testMode(), (4, "default", 3, 3));
+        addPartCase(51, familyName(5) + ": the AST output, ir and the executable", \testFamily(), (5, 3));
+        addPartCase(52, familyName(5) + ": jit (1/3)", \testMode(), (5, "jit", 1, 3));
+        addPartCase(53, familyName(5) + ": jit (2/3)", \testMode(), (5, "jit", 2, 3));
+        addPartCase(54, familyName(5) + ": jit (3/3)", \testMode(), (5, "jit", 3, 3));
+        addPartCase(55, familyName(5) + ": tiered (1/3)", \testMode(), (5, "tiered", 1, 3));
+        addPartCase(56, familyName(5) + ": tiered (2/3)", \testMode(), (5, "tiered", 2, 3));
+        addPartCase(57, familyName(5) + ": tiered (3/3)", \testMode(), (5, "tiered", 3, 3));
+        addPartCase(58, familyName(5) + ": default (1/3)", \testMode(), (5, "default", 1, 3));
+        addPartCase(59, familyName(5) + ": default (2/3)", \testMode(), (5, "default", 2, 3));
+        addPartCase(60, familyName(5) + ": default (3/3)", \testMode(), (5, "default", 3, 3));
+        addPartCase(61, familyName(6) + ": the AST output, ir and the executable", \testFamily(), (6, 3));
+        addPartCase(62, familyName(6) + ": jit (1/3)", \testMode(), (6, "jit", 1, 3));
+        addPartCase(63, familyName(6) + ": jit (2/3)", \testMode(), (6, "jit", 2, 3));
+        addPartCase(64, familyName(6) + ": jit (3/3)", \testMode(), (6, "jit", 3, 3));
+        addPartCase(65, familyName(6) + ": tiered (1/3)", \testMode(), (6, "tiered", 1, 3));
+        addPartCase(66, familyName(6) + ": tiered (2/3)", \testMode(), (6, "tiered", 2, 3));
+        addPartCase(67, familyName(6) + ": tiered (3/3)", \testMode(), (6, "tiered", 3, 3));
+        addPartCase(68, familyName(6) + ": default (1/3)", \testMode(), (6, "default", 1, 3));
+        addPartCase(69, familyName(6) + ": default (2/3)", \testMode(), (6, "default", 2, 3));
+        addPartCase(70, familyName(6) + ": default (3/3)", \testMode(), (6, "default", 3, 3));
 
         set_return_value(main());
     }
@@ -162,36 +214,110 @@ class CompoundAssignmentAstParityBase inherits QUnit::Test {
             "the execution modes that the parts check: update the parts when the harness has another mode");
     }
 
-    #! runs the program of an operator family in the modes given (and in the default mode, and as a qcc-compiled
-    #! executable) and checks the output against the AST interpreter's
-    testParity(int family, list<string> modes, bool default_mode, bool executable) {
-        Operators = OperatorFamilies[family];
+    #! checks the AST interpreter's output of the whole program of a family and its slices, and runs the whole program
+    #! in the ir mode and as a qcc-compiled executable
+    /** @param family the operator family
+        @param slices the number of slices that the parts of the family run in the other modes
+    */
+    testFamily(int family, int slices) {
         TmpDir tmp("qore-compound-ast-parity-");
         string file = tmp.path + DirSep + "parity.q";
-        int combinations = writeProgram(file);
+        hash<auto> p = generate(family);
+        writeProgram(file, family, 0, p.funcs.size());
 
         list<string> expected = runMode("ast", file);
         # the runtime matrix gives a result for every combination
-        assertTrue(combinations > 1000, sprintf("runtime combinations: %d", combinations));
-        assertEq(combinations, (select expected, $1 =~ /^rt /).size(), "runtime combinations");
+        assertTrue(p.combinations > 1000, sprintf("runtime combinations: %d", p.combinations));
+        assertEq(p.combinations, (select expected, $1 =~ /^rt /).size(), "runtime combinations");
         assertTrue((select expected, $1 =~ /^lit /).size() > 50, "literal statements");
+        # a line for each try block that the functions run
+        int lines = (foldl $1 + $2, p.lines);
+        assertEq(lines, expected.size(), "AST output lines");
 
-        foreach string mode in (modes) {
-            compare(mode, expected, runMode(mode, file));
+        compare("ir", expected, runMode("ir", file));
+
+        string exe = tmp.path + DirSep + "parity";
+        string out = backquote(sprintf("QORE_LIBDIR=%s %s -o %s %s 2>&1", libqore_dir, qcc_bin, exe, file));
+        assertTrue(is_file(exe), "compiled the executable: " + out);
+        compare("executable", expected, ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s "
+            "DYLD_LIBRARY_PATH=%s %s", libqore_dir, libqore_dir, exe)).split("\n"));
+
+        # the slices that the other parts run give the output of the whole program; each output ends with a newline,
+        # which leaves no empty line in the list of its lines
+        list<string> joined = ();
+        for (int slice = 1; slice <= slices; ++slice) {
+            list<int> b = sliceBounds(family, slice, slices);
+            writeProgram(file, family, b[0], b[1]);
+            joined += runMode("ast", file);
         }
+        compare(sprintf("%d slices", slices), expected, joined);
+    }
 
-        if (default_mode) {
-            # the default execution mode
-            compare("default", expected, ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s "
-                "DYLD_LIBRARY_PATH=%s %s %s", libqore_dir, libqore_dir, qore_bin, file)).split("\n"));
+    #! returns the bounds of a slice of the functions of a family: the first function and the one after the last
+    /** The slices have about the same cost of native compilation, which follows the number of try blocks of a
+        function (qore#6392): a function of the literal matrix has 40 try blocks of one statement each, and one of the
+        runtime matrix a try block in two loops for each operator, which costs about three of them
+
+        @param family the operator family
+        @param slice the slice of the functions, from 1
+        @param slices the number of slices that the functions are divided into
+    */
+    private list<int> sliceBounds(int family, int slice, int slices) {
+        list<string> funcs = generate(family).funcs;
+        list<int> cumulative = ();
+        int total = 0;
+        foreach string func in (funcs) {
+            total += (func =~ x/(try \{)/g).size() + 2 * (func =~ x/(for \(int j = 0;)/g).size();
+            cumulative += total;
         }
+        # the first function whose cumulative weight reaches the start of the slice and the end of the slice
+        code bound = int sub (int k) {
+            if (k == 0) {
+                return 0;
+            }
+            if (k == slices) {
+                return funcs.size();
+            }
+            for (int i = 0; i < funcs.size(); ++i) {
+                if (cumulative[i] * slices >= total * k) {
+                    return i + 1;
+                }
+            }
+            return funcs.size();
+        };
+        int first = bound(slice - 1);
+        int end = bound(slice);
+        assertTrue(end > first, sprintf("slice %d of %d of %d functions: %d-%d", slice, slices, funcs.size(), first,
+            end - 1));
+        return (first, end);
+    }
 
-        if (executable) {
-            string exe = tmp.path + DirSep + "parity";
-            string out = backquote(sprintf("QORE_LIBDIR=%s %s -o %s %s 2>&1", libqore_dir, qcc_bin, exe, file));
-            assertTrue(is_file(exe), "compiled the executable: " + out);
-            compare("executable", expected, ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s "
-                "DYLD_LIBRARY_PATH=%s %s", libqore_dir, libqore_dir, exe)).split("\n"));
+    #! runs a slice of the functions of a family in a mode and checks the output against the AST interpreter's output
+    #! of the same functions
+    /** @param family the operator family
+        @param mode an execution mode, or \c "default" for the default execution mode
+        @param slice the slice of the functions, from 1
+        @param slices the number of slices that the functions are divided into
+    */
+    testMode(int family, string mode, int slice, int slices) {
+        TmpDir tmp("qore-compound-ast-parity-");
+        string file = tmp.path + DirSep + "parity.q";
+        int count = generate(family).funcs.size();
+        list<int> b = sliceBounds(family, slice, slices);
+        int first = b[0];
+        int end = b[1];
+        writeProgram(file, family, first, end);
+        string label = sprintf("%s (functions %d-%d of %d)", mode, first, end - 1, count);
+
+        list<string> expected = runMode("ast", file);
+        # a line for each try block that the functions of the slice run
+        int lines = (foldl $1 + $2, generate(family).lines[first..end - 1]);
+        assertEq(lines, expected.size(), label + ": AST output lines");
+        if (mode == "default") {
+            compare(label, expected, ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s %s",
+                libqore_dir, libqore_dir, qore_bin, file)).split("\n"));
+        } else {
+            compare(label, expected, runMode(mode, file));
         }
     }
 
@@ -269,11 +395,20 @@ class CompoundAssignmentAstParityBase inherits QUnit::Test {
         return body;
     }
 
-    #! writes the program and returns the number of runtime combinations
-    private int writeProgram(string file) {
+    #! generates the program of a family once and returns it
+    /** @return a hash: \c decls: the declarations, \c funcs: the functions (\c f<n> is element n), \c lines: the
+        number of lines that each function prints, one for each try block that it runs, \c combinations: the number of
+        runtime combinations
+    */
+    private hash<auto> generate(int family) {
+        if (programs{family}) {
+            return programs{family};
+        }
+        Operators = OperatorFamilies[family];
         int combinations = 0;
         list<string> decls = ();
         list<string> funcs = ();
+        list<int> lines = ();
 
         decls += valueFunction("operand", Operands);
         decls += sprintf("const operand_src = %s;", sourceList(Operands));
@@ -301,10 +436,13 @@ class CompoundAssignmentAstParityBase inherits QUnit::Test {
                 kinds += (("list element", "list<auto> l = (x,);", "l[0]", ""),);
             }
             foreach list<string> k in (kinds) {
+                int before = combinations;
                 string loop = runtimeLoop(k[0], type, values, n, k[1], k[2], k[3], \combinations);
                 if (loop) {
                     funcs += sprintf("string sub f%d() {\n    string out;\n%s    return out;\n}\n",
                         funcs.size(), loop);
+                    # a line for each combination
+                    lines += combinations - before;
                 }
             }
         }
@@ -331,20 +469,33 @@ class CompoundAssignmentAstParityBase inherits QUnit::Test {
         for (int i = 0; i < body.size(); i += StatementsPerFunction) {
             funcs += sprintf("string sub f%d() {\n    string out;\n%s\n    return out;\n}\n", funcs.size(),
                 body[i..(i + StatementsPerFunction - 1)].join("\n"));
+            # a line for each statement
+            lines += min(StatementsPerFunction, body.size() - i);
         }
 
+        programs{family} = {
+            "decls": decls,
+            "funcs": funcs,
+            "lines": lines,
+            "combinations": combinations,
+        };
+        return programs{family};
+    }
+
+    #! writes a program with the declarations and the functions f<first> to f<end - 1> of a family's program
+    private writeProgram(string file, int family, int first, int end) {
+        hash<auto> p = generate(family);
         # the functions are called by name, so that the top-level code stays small; they run three times, so that
         # tiered execution compiles them, and the last run's results are printed
-        string main = sprintf("string sub run_all() {\n    string out;\n    for (int i = 0; i < %d; ++i) {\n"
+        string main = sprintf("string sub run_all() {\n    string out;\n    for (int i = %d; i < %d; ++i) {\n"
             "        out += call_function(\"f\" + i);\n    }\n    return out;\n}\n"
             "string out;\nfor (int run = 0; run < 3; ++run) {\n    out = run_all();\n}\nprint(out);\n",
-            funcs.size());
+            first, end);
 
         File f();
         f.open2(file, O_CREAT | O_WRONLY | O_TRUNC);
-        f.write(Prelude + decls.join("\n") + "\n" + funcs.join("\n") + main);
+        f.write(Prelude + p.decls.join("\n") + "\n" + p.funcs[first..end - 1].join("\n") + main);
         f.close();
-        return combinations;
     }
 
     #! returns True if the statement parses in a function

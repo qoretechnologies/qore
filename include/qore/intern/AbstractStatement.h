@@ -49,7 +49,7 @@
 #define PF_TOP_LEVEL             (1 << 5) //!< parsing at the top-level of the program
 #define PF_BREAK_OK              (1 << 6)
 #define PF_CONTINUE_OK           (1 << 7)
-#define PF_NO_TOP_LEVEL_LVARS    (1 << 8)
+// (1 << 8) was PF_NO_TOP_LEVEL_LVARS
 #define PF_NARROWED_TYPE         (1 << 9) //!< current expression involves a narrowed auto type
 #define PF_CONST_METHOD          (1 << 10) //!< parsing a const method body
 #define PF_EXISTENCE_CHECK       (1 << 11) //!< parsing the operand of exists; an unassigned value is intentional
@@ -59,7 +59,7 @@
 //! the new thread only, not for the arguments of its calls)
 #define PF_BACKGROUND_EXPR       (1 << 13)
 //! parsing code that an operator or a foreach statement runs for each element with the element's index as the
-//! implicit element (\c $#); a \c $# parsed without it is unset (qore#5690)
+//! implicit element (\c $#); a \c $# parsed without it is a parse error (qore#5690, qore#803)
 #define PF_IMPLICIT_ELEMENT      (1 << 14)
 //! parsing the operand of the reference (\\x), delete or remove operator, which does not read a variable that is the
 //! operand (qore#5937)

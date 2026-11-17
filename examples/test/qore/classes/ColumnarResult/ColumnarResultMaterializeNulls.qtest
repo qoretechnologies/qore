@@ -1,0 +1,47 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class ColumnarResultMaterializeNullsTest
+
+#! toMaterializedColumnHash() gives a nullable date, timestamp or duration column with nulls as list<*date> with
+#! NOTHING for each null (qore#6218)
+class ColumnarResultMaterializeNullsTest inherits QUnit::Test {
+    constructor() : QUnit::Test("ColumnarResultMaterializeNulls", "1.0", \ARGV) {
+        addTestCase("nullable temporal columns", \nullableTemporal());
+        addTestCase("temporal columns without nulls", \notNullable());
+        set_return_value(main());
+    }
+
+    private nullableTemporal() {
+        ColumnarResult r = ColumnarResult::fromColumnHash({
+            "ts": (2024-01-01T00:00:00Z, NOTHING),
+            "d": (NOTHING, 2024-01-02),
+            "u": (1s, NOTHING),
+        }, {
+            "ts": {"native_type": "timestamp", "nullable": True},
+            "d": {"native_type": "date", "nullable": True},
+            "u": {"native_type": "interval", "nullable": True},
+        });
+        hash<auto> h = r.toMaterializedColumnHash();
+        foreach string col in (("ts", "d", "u")) {
+            assertEq("list<*date>", h{col}.fullType(), col);
+            assertEq((map $1{col}, r.toRows()), h{col}, col);
+        }
+        assertEq(NOTHING, h.ts[1]);
+        assertEq(2024-01-01T00:00:00Z, h.ts[0]);
+        assertEq(1s, h.u[0]);
+    }
+
+    private notNullable() {
+        ColumnarResult r = ColumnarResult::fromColumnHash({"ts": (2024-01-01T00:00:00Z, 2024-01-02T00:00:00Z)},
+            {"ts": {"native_type": "timestamp"}});
+        hash<auto> h = r.toMaterializedColumnHash();
+        assertEq("list<date>", h.ts.fullType());
+        assertEq((2024-01-01T00:00:00Z, 2024-01-02T00:00:00Z), h.ts);
+    }
+}

@@ -944,10 +944,24 @@ static inline bool qore_parse_infer_candidate_type_args(const AbstractQoreFuncti
     higher parse score, has the higher score at run time for every value of the arguments' types: it is committed at
     parse time instead of resolving the call at run time.  An argument without a value is handled by
     QoreFunction::parseOtherVariantMayMatch().
+
+    That holds only if the chosen variant can take the call at run time at all: with more arguments than it has
+    parameters, and no use of extra arguments, a call in a Program with strict arguments is an error for it (see
+    QoreFunction::runtimeFindVariant()), so the call selects a variant that takes extra arguments instead, such as the
+    variant of a Java method that takes its variable arguments as separate arguments (module jni), whose parameters
+    have no types.  The Program of the call is not known at parse time: such a call is resolved at run time.
 */
+bool qore_variant_takes_call_arity(unsigned num_args, unsigned nparams, bool uses_extra_args) {
+    return num_args <= nparams || uses_extra_args;
+}
+
 static bool qore_untyped_variant_cannot_win(const AbstractQoreFunctionVariant* chosen, bool variant_untyped,
-        int variant_pmatch, int pmatch, int max_pscore, int score) {
-    return chosen && variant_untyped && variant_pmatch == pmatch && max_pscore < score;
+        int variant_pmatch, int pmatch, int max_pscore, int score, unsigned num_args) {
+    if (!chosen || !variant_untyped || variant_pmatch != pmatch || max_pscore >= score) {
+        return false;
+    }
+    return qore_variant_takes_call_arity(num_args, chosen->getSignature()->numParams(),
+        chosen->getFlags() & QCF_USES_EXTRA_ARGS);
 }
 
 static bool qore_infer_signature_type_args_runtime(const AbstractQoreFunctionVariant* variant,
@@ -1768,6 +1782,53 @@ static int check_sandbox_uncontrolled_api(const QoreFunction* func, const Abstra
 thread_local bool qore_dbg_runtime_chosen_variant = false;
 #endif
 
+//! Returns the receiver whose unbound type parameters take the type arguments inferred from a call's arguments
+/** The type arguments that \a receiver binds are kept: only an argument that is a type parameter left unbound takes
+    the inferred one (G2<X, int> with A inferred as float is G2<float, int>); nullptr if there is no inference or an
+    unbound argument is not a bare type parameter (G<list<X>>), whose inference from the method's class is not the
+    type parameter's
+*/
+static const QoreTypeInfo* qore_merge_inferred_class_receiver(const QoreTypeInfo* receiver,
+        const QoreTypeInfo* inferred) {
+    const QoreParameterizedClassTypeInfo* rpti = QoreTypeInfo::getParameterizedClassType(receiver);
+    const QoreParameterizedClassTypeInfo* ipti = QoreTypeInfo::getParameterizedClassType(inferred);
+    if (!rpti || !ipti || !qore_class_private::sameDeclaration(rpti->getBaseClass(), ipti->getBaseClass())
+            || rpti->getArgCount() != ipti->getArgCount()) {
+        return nullptr;
+    }
+    type_vec_t args;
+    args.reserve(rpti->getArgCount());
+    for (size_t i = 0, e = rpti->getArgCount(); i < e; ++i) {
+        const QoreTypeInfo* arg = rpti->getTypeArgs()[i];
+        if (qore_type_contains_type_parameter(arg)) {
+            if (!qore_get_type_parameter_type_info(arg)) {
+                return nullptr;
+            }
+            arg = ipti->getTypeArgs()[i];
+        }
+        args.push_back(arg);
+    }
+    return qore_get_parameterized_class_type(rpti->getBaseClass(), args, rpti->isOrNothing());
+}
+
+void CodeEvaluationHelper::substituteCallerReceiverTypeParams(const QoreFunction* func) {
+    assert(receiver_type_info);
+    // the type's cached flag decides it after its first test
+    if (receiver_type_info->getContainsTypeParameterCache()
+            && qore_type_contains_type_parameter(receiver_type_info)) {
+        receiver_type_info = qore_substitute_type_params_if_needed(receiver_type_info);
+        // code that runs without an instantiation of its type parameters (a static method of G<T> called as G::m(),
+        // whose code calls id(v)) binds those of the method's class to the types of the arguments, as G::id(v)
+        // made there does (qore#6186)
+        if (qore_type_contains_type_parameter(receiver_type_info)) {
+            if (const QoreTypeInfo* inferred = qore_merge_inferred_class_receiver(receiver_type_info,
+                    func->runtimeInferClassReceiverTypeInfo(getArgs(), receiver_type_info))) {
+                receiver_type_info = inferred;
+            }
+        }
+    }
+}
+
 template <bool LexicalInvocation, bool NAMED>
 QORE_INTERN_ALWAYS_INLINE void CodeEvaluationHelper::initImpl(const QoreFunction* func,
         const AbstractQoreFunctionVariant*& variant, bool is_copy, const qore_class_private* cctx,
@@ -1784,7 +1845,10 @@ QORE_INTERN_ALWAYS_INLINE void CodeEvaluationHelper::initImpl(const QoreFunction
     //    func->getName(), loc->getFile(), loc->start_line, variant, cctx, cctx ? cctx->name.c_str() : "n/a");
 
     // the callee's receiver is made current after the variant search below (qore#5892)
-    if (!receiver_type_info && self) {
+    if (receiver_type_info) {
+        // out of line, so that the calls without a receiver keep their code (qore#6308)
+        substituteCallerReceiverTypeParams(func);
+    } else if (self) {
         receiver_type_info = qore_get_object_receiver_type_info(self);
     }
 
@@ -2266,6 +2330,57 @@ int CodeEvaluationHelper::setTypeParamInstantiation(const AbstractQoreFunctionVa
     return 0;
 }
 
+//! Binds the self variable of a closure for the evaluation of its default values (qore#6417, qore#5949)
+/** The default values of a closure created in a method are parsed with the closure's own self variable, as its code
+    is, and the closure binds it to its object when its code runs (LocalVar::instantiateSelf()), after its default
+    values have been evaluated.  A read of self falls back to the current object (LocalVar::tryEval()), but an
+    assignment through self and a reference to self or to a member through it need the variable, so it is bound here
+    as the closure's code binds it: to a value of its own that holds the object, so that a write to self itself
+    through a reference leaves the closure's object unchanged, as in the closure's code.
+*/
+class ClosureSelfDefaultHelper {
+public:
+    //! Binds the variable
+    /** A valid object is referenced while the variable is bound, as the closure's code references it (its
+        CodeContextHelper): the closure only holds it weakly.  A self that is a closure variable holds a reference of
+        its own, which is released without an exception sink when it is unbound and so must not be the last one; a
+        self that is a plain local variable holds no reference.
+    */
+    DLLLOCAL ClosureSelfDefaultHelper(const LocalVar* selfid, QoreObject* obj, ExceptionSink* xsink)
+            : selfid(selfid), obj(obj->isValid() ? obj : nullptr), xsink(xsink) {
+        // bound first, so that the reference is not taken if binding fails
+        selfid->instantiateSelf(obj);
+        if (this->obj) {
+            this->obj->ref();
+        }
+    }
+
+    DLLLOCAL ~ClosureSelfDefaultHelper() {
+        selfid->uninstantiateSelf();
+        if (obj) {
+            obj->deref(xsink);
+        }
+    }
+
+    //! Returns the self variable of the closure's default values, if any
+    DLLLOCAL static const LocalVar* getSelfId(const QoreClosureBase& closure) {
+        const QoreClosureParseNode* pn = closure.getClosureParseNode();
+        if (!pn) {
+            return nullptr;
+        }
+        const UserClosureFunction* uf = pn->getFunction();
+        if (!uf || !uf->numVariants()) {
+            return nullptr;
+        }
+        return uf->first()->getSelfId();
+    }
+
+private:
+    const LocalVar* selfid;
+    QoreObject* obj;
+    ExceptionSink* xsink;
+};
+
 //! Evaluates a default value of a closure's parameter with the variables that the closure captured and its object
 /** They can be gone from the stack of the code that created the closure when it is called (issue #5923); the call's
     Program is the closure's here, whose closure variables they are.  The self of a closure created in a method is its
@@ -2283,8 +2398,15 @@ static __attribute__((noinline, cold)) QoreValue qore_eval_closure_default_arg(c
     // the closure's object and class context, as for the closure's code: a closure created by the default value takes
     // the object of the closure and not that of the caller (issue #5931)
     std::optional<ObjectSubstitutionHelper> closure_self;
+    // the self variable of the closure, which its default values use as its code does: an assignment through it
+    // (qore#5949) and a reference to it or to a member through it (qore#6417) need the variable itself, which the
+    // closure's code binds only when it runs, after its default values
+    std::optional<ClosureSelfDefaultHelper> closure_self_var;
     if (QoreObject* obj = closure.getObject()) {
         closure_self.emplace(obj, closure.getClassCtx());
+        if (const LocalVar* selfid = ClosureSelfDefaultHelper::getSelfId(closure)) {
+            closure_self_var.emplace(selfid, obj, xsink);
+        }
     }
     QoreScopedEvalHolder dv(exp, true, xsink);
     if (*xsink) {
@@ -2773,7 +2895,7 @@ void UserSignature::setupFromAOTMetadata(
     qore_program_private* pp = qore_program_private::get(*pgm);
     qore_program_private* local_pp = localOwnerPgm
         ? qore_program_private::get(*localOwnerPgm) : pp;
-    // Override the default `loc = getLocation(0, 0)` (null-file, line 0)
+    // Override the default `loc = getLocation(0, 0)` (line 0, with the file of the thread's parse, if any)
     // with a program-interned `(file, first_line, last_line)` location when
     // the caller knows the declaring source path.  The parser sets this to
     // the function's real file+line via getLocation(first_line, last_line);
@@ -2781,14 +2903,19 @@ void UserSignature::setupFromAOTMetadata(
     // (see QORE_AOT_FEAT_SIG_LINES) so `xsink->overrideLocation()` reports
     // `<file>:<line> (Qore)` instead of `:0 (Qore)` with no filename.
     if (parseLocFile && *parseLocFile) {
-        // Intern the file string in the program's string pool — `parseLocFile`
+        // Intern the file string in the program's runtime pool — `parseLocFile`
         // typically points into the AOT binary reader's decompressed body,
         // which is freed when the deserializer returns.  QoreProgramLocation
         // stores a raw `const char*`, so without interning the location's
-        // `file` dangles.
-        const char* interned = pp->addString(parseLocFile);
-        QoreProgramLocation tmp(interned, parseLocFirstLine, parseLocLastLine);
-        loc = pp->getLocation(tmp, parseLocFirstLine, parseLocLastLine);
+        // `file` dangles.  The runtime pool is never rolled back with a failed
+        // parse, which did not add the location (issue #6354).
+        QoreProgramLocation tmp(parseLocFile, parseLocFirstLine, parseLocLastLine);
+        loc = pp->getRuntimeLocation(tmp, parseLocFirstLine, parseLocLastLine);
+    } else {
+        // the default location of the constructor (lines 0, with the file of the thread's parse) is in the pool of
+        // parsed code, which a failed parse can roll back: the code deserialized from AOT data takes the same location
+        // from the runtime pool, without reading the old one (issue #6354)
+        loc = pp->getRuntimeLocation(0, 0);
     }
     paramReadOnlyList.assign(nparams, false);
     for (size_t i = 0, e = std::min(nparams, paramFlags.size()); i < e; ++i) {
@@ -3860,6 +3987,10 @@ static bool qore_finalize_class_type_args(const QoreProgramLocation* loc, const 
     bindings.resize(cls->getTypeParameterCount(), nullptr);
     for (size_t i = 0, e = cls->getTypeParameterCount(); i < e; ++i) {
         if (!bindings[i]) {
+            // the default resolved where the class is declared, once it is initialized (qore#6285)
+            bindings[i] = qore_class_private::get(*cls)->getTypeParamDefaultTypeInfo(i);
+        }
+        if (!bindings[i]) {
             const char* default_type = cls->getTypeParameterDefaultType(i);
             if (default_type) {
                 bindings[i] = qore_resolve_class_type_param_type(loc, cls, i, default_type, "default", err);
@@ -4151,6 +4282,96 @@ const QoreTypeInfo* QoreFunction::parseInferClassReceiverTypeInfo(const QoreProg
     }
 
     return best.type_info;
+}
+
+const QoreTypeInfo* QoreFunction::runtimeInferClassReceiverTypeInfo(const QoreListNode* args,
+        const QoreTypeInfo* bound) const {
+    const QoreClass* cls = getClass();
+    if (!cls || !cls->hasTypeParameters()) {
+        return nullptr;
+    }
+    const qore_class_private* cp = qore_class_private::get(*cls);
+    size_t count = cls->getTypeParameterCount();
+    if (cp->rawConstructionDefaultsToAuto()) {
+        type_vec_t raw_args(count, autoTypeInfo);
+        return cls->getTypeInfo(raw_args);
+    }
+
+    size_t nargs = args ? args->size() : 0;
+    type_vec_t arg_types;
+    arg_types.reserve(nargs);
+    for (size_t i = 0; i < nargs; ++i) {
+        arg_types.push_back(args->retrieveEntry(i).getFullTypeInfo());
+    }
+
+    // the first variant whose parameters bind the type parameters to the types of the arguments and then accept the
+    // arguments; the variant search of the call selects the variant
+    for (vlist_t::const_iterator i = vlist.begin(), e = vlist.end(); i != e; ++i) {
+        AbstractFunctionSignature* sig = (*i)->getSignature();
+        if (nargs > sig->numParams() && !(*i)->hasVarargs()) {
+            continue;
+        }
+        type_vec_t bindings(count, nullptr);
+        // the type arguments that the receiver binds
+        if (const QoreParameterizedClassTypeInfo* bpti = QoreTypeInfo::getParameterizedClassType(bound)) {
+            if (qore_class_private::sameDeclaration(bpti->getBaseClass(), cls) && bpti->getArgCount() == count) {
+                for (size_t ti = 0; ti < count; ++ti) {
+                    if (!qore_type_contains_type_parameter(bpti->getTypeArgs()[ti])) {
+                        bindings[ti] = bpti->getTypeArgs()[ti];
+                    }
+                }
+            }
+        }
+        bool ok = true;
+        for (unsigned pi = 0, pe = sig->numParams(); pi < pe && pi < nargs; ++pi) {
+            const QoreTypeInfo* actual = arg_types[pi];
+            if (!actual || !QoreTypeInfo::hasType(actual)) {
+                continue;
+            }
+            if (!qore_infer_class_type_args_from_type(cls, sig->getParamTypeInfo(pi), actual, bindings)) {
+                ok = false;
+                break;
+            }
+        }
+        if (!ok) {
+            continue;
+        }
+        for (size_t ti = 0; ti < count; ++ti) {
+            if (!bindings[ti]) {
+                // the default resolved in the class's own Program when the class was initialized
+                bindings[ti] = cp->getTypeParamDefaultTypeInfo(ti);
+                if (!bindings[ti]) {
+                    bindings[ti] = cp->runtimeResolveTypeParamDefault(ti);
+                }
+                if (!bindings[ti]) {
+                    ok = false;
+                    break;
+                }
+            }
+            if (!qore_class_type_arg_satisfies_bound(cp->getTypeParamBoundTypeInfo(ti), bindings[ti])) {
+                ok = false;
+                break;
+            }
+        }
+        if (!ok) {
+            continue;
+        }
+        const QoreTypeInfo* receiver = cls->getTypeInfo(bindings);
+        for (unsigned pi = 0, pe = sig->numParams(); pi < pe && pi < nargs; ++pi) {
+            const QoreTypeInfo* param = qore_substitute_type_params_if_needed(sig->getParamTypeInfo(pi), receiver,
+                nullptr);
+            // a parameter with a type parameter of the method is checked by the call
+            if (!qore_type_contains_type_parameter(param)
+                    && QoreTypeInfo::runtimeAcceptsValue(param, args->retrieveEntry(pi)) == QTI_NOT_EQUAL) {
+                ok = false;
+                break;
+            }
+        }
+        if (ok) {
+            return receiver;
+        }
+    }
+    return nullptr;
 }
 
 //! Returns true if a noop variant is skipped at run time for a caller with the given parse options
@@ -4659,6 +4880,13 @@ bool QoreFunction::hasInheritedVariants() const {
         return true;
     }
     return false;
+}
+
+QORE_INTERN_NOINLINE void QoreFunction::noteAncestor(const QoreFunction& ancestor) {
+    const QoreClass* qc = ancestor.getClass();
+    if (qc && qc->hasTypeParameters()) {
+        has_generic_class_ancestor = true;
+    }
 }
 
 // finds a variant at runtime
@@ -5209,7 +5437,7 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariantNamed(const Qor
                 best_binding = std::move(cb);
             } else if (variant_pmatch && (variant_pmatch >= pmatch || max_pscore >= max_score)
                     && !qore_untyped_variant_cannot_win(variant, variant_untyped, variant_pmatch, pmatch, max_pscore,
-                        score)) {
+                        score, 0)) {
                 if (variant_soft_match && variant) {
                     has_possible_match = true;
                 } else {
@@ -5715,7 +5943,7 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariantNoDiagnostics(c
                     }
                 } else if (variant_pmatch && (variant_pmatch >= pmatch || max_pscore >= max_score)
                         && !qore_untyped_variant_cannot_win(variant, variant_untyped, variant_pmatch, pmatch,
-                            max_pscore, score)) {
+                            max_pscore, score, num_args)) {
                     if (variant_soft_match && variant) {
                         has_possible_match = true;
                     } else {
@@ -6614,7 +6842,7 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariant(const QoreProg
                     }
                 } else if (variant_pmatch && (variant_pmatch >= pmatch || max_pscore >= max_score)
                         && !qore_untyped_variant_cannot_win(variant, variant_untyped, variant_pmatch, pmatch,
-                            max_pscore, score)) {
+                            max_pscore, score, num_args)) {
                     if (variant_soft_match && variant) {
                         // soft-match variant (union type partial match) cannot override a
                         // definitively-selected variant — the definitive variant handles ALL
@@ -8283,7 +8511,9 @@ QoreIRFunction* UserVariantBase::lowerIRFunction(const char* name, const std::st
     func->reserveLocalSlot(signature.selfid);
 
     // Compute slot IDs, max_value_id, and embed pre-computed fields in instructions
-    // This must happen BEFORE compileAllHandlerIRs() to ensure parent slots are populated
+    // This must happen BEFORE compileAllHandlerIRs() to ensure parent slots are populated; qore_ir_optimize() below
+    // prunes the release checks (qore#6072)
+    func->defer_release_check_prune = true;
     func->computeSlotIdsAndEmbed();
 
     // Phase A4: Compile all handler bodies to separate IR functions and attach to OnBlockExit instructions
@@ -9325,7 +9555,7 @@ void UserVariantBase::SpecializedIRCache::evictDeadTypes(const std::set<const Qo
 
 QORE_INTERN_ALWAYS_INLINE void QoreConstructorCompletion::capture(ExceptionSink* xsink) const {
     const qore_es_private* es = qore_es_private::get(*xsink);
-    completed = !es->head && !es->thread_exit;
+    completed = !es->isPending();
 }
 
 template <typename Completion>

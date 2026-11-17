@@ -1560,6 +1560,14 @@ HAVE_USELOCALE)
 include(CheckIncludeFiles)
 check_include_files("sys/types.h;sys/socket.h;net/if_dl.h" HAVE_NET_IF_DL_H)
 
+# the debug hook dbg_reset_socket() reads the receive window that the peer of a TCP socket last advertised: the
+# tcpi_snd_wnd member of struct tcp_info (Linux) or of struct tcp_connection_info (macOS)
+include(CheckStructHasMember)
+check_struct_has_member("struct tcp_info" tcpi_snd_wnd "sys/types.h;sys/socket.h;netinet/in.h;netinet/tcp.h"
+    HAVE_TCP_INFO_TCPI_SND_WND LANGUAGE CXX)
+check_struct_has_member("struct tcp_connection_info" tcpi_snd_wnd
+    "sys/types.h;sys/socket.h;netinet/in.h;netinet/tcp.h" HAVE_TCP_CONNECTION_INFO_TCPI_SND_WND LANGUAGE CXX)
+
 qore_search_libs(LIBQORE_LIBS setsockopt socket)
 qore_search_libs(LIBQORE_LIBS gethostbyname nsl)
 qore_search_libs(LIBQORE_LIBS clock_gettime rt)
@@ -1868,6 +1876,7 @@ set(LIBQORE_CPP_SRC
     lib/QoreIRAnalysis.cpp
     lib/QoreIRLowering.cpp
     lib/QoreIRToLLVM.cpp
+    lib/QoreIRFrameCheck.cpp
     lib/QoreIRVerifier.cpp
     lib/QoreIRTakeOver.cpp
     lib/QoreAOT.cpp
@@ -2513,6 +2522,7 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreParseContext.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreIRLowering.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreIRToLLVM.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreIRFrameCheck.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreIRVerifier.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreAOT.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreAOTBatchMemory.cpp\"
@@ -2887,6 +2897,10 @@ add_executable(qore-ascii-string-index-test examples/test/qore/strings/ascii_str
 target_include_directories(qore-ascii-string-index-test PRIVATE
     ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include)
 target_link_libraries(qore-ascii-string-index-test PRIVATE libqore)
+add_executable(qore-ir-pointer-slot-test examples/test/ir/ir-pointer-slot/ir_pointer_slot.cpp)
+target_include_directories(qore-ir-pointer-slot-test PRIVATE
+    ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include)
+target_link_libraries(qore-ir-pointer-slot-test PRIVATE libqore)
 add_executable(qore-number-round-trip-test EXCLUDE_FROM_ALL
     examples/test/qore/vars/number_round_trip.cpp)
 target_include_directories(qore-number-round-trip-test PRIVATE
@@ -2908,6 +2922,10 @@ add_executable(qore-aot-ir-instruction-test examples/test/ir/aot_ir_instruction_
 target_include_directories(qore-aot-ir-instruction-test PRIVATE
     ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include)
 target_link_libraries(qore-aot-ir-instruction-test PRIVATE libqore)
+add_executable(qore-aot-lvalue-path-ref-rv-test examples/test/ir/aot_lvalue_path_ref_rv.cpp)
+target_include_directories(qore-aot-lvalue-path-ref-rv-test PRIVATE
+    ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include)
+target_link_libraries(qore-aot-lvalue-path-ref-rv-test PRIVATE libqore)
 add_executable(qore-aot-builtin-type-path-test examples/test/ir/aot_builtin_type_path_cache.cpp)
 target_include_directories(qore-aot-builtin-type-path-test PRIVATE
     ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include)
@@ -2941,6 +2959,11 @@ target_include_directories(qore-stream-peek-test PRIVATE
     ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include ${OPENSSL_INCLUDE_DIR} ${ICONV_INCLUDE_DIR})
 # the readers keep an IconvHelper for text in stateful encodings, which is inline
 target_link_libraries(qore-stream-peek-test PRIVATE libqore ${ICONV_LIBRARY})
+add_executable(qore-stream-writer-ints-test examples/test/qore/streams/stream_writer_ints.cpp)
+target_include_directories(qore-stream-writer-ints-test PRIVATE
+    ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include ${OPENSSL_INCLUDE_DIR} ${ICONV_INCLUDE_DIR})
+# the readers keep an IconvHelper for text in stateful encodings, which is inline
+target_link_libraries(qore-stream-writer-ints-test PRIVATE libqore ${ICONV_LIBRARY})
 add_executable(qore-string-offset-bounds-test examples/test/qore/strings/string_offset_bounds.cpp)
 target_include_directories(qore-string-offset-bounds-test PRIVATE
     ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include)
@@ -3201,6 +3224,11 @@ set(_qcc_format_sources
     ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreIRExprRegistry.h
     ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreIRLowering.h
     ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreIRToLLVM.h
+    ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreIRFrameCheck.h
+    # the NaN-boxing constants that the code generators emit
+    ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreValueEncoding.h
+    # generated code tests qore_es_private::pending at its offset (QoreIRToLLVM::emitPendingExceptionTest(), #6370)
+    ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreException.h
     ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreIRVerifier.h
     ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreOpcodeRegistry.h
     # the layout of the data that generated code reads by index (QoreNativeEntrySlots) and the runtime helpers it calls
@@ -3229,6 +3257,7 @@ set(_qcc_format_sources
     ${CMAKE_SOURCE_DIR}/lib/QoreIRExprRegistry.cpp
     ${CMAKE_SOURCE_DIR}/lib/QoreIRLowering.cpp
     ${CMAKE_SOURCE_DIR}/lib/QoreIRToLLVM.cpp
+    ${CMAKE_SOURCE_DIR}/lib/QoreIRFrameCheck.cpp
     ${CMAKE_SOURCE_DIR}/lib/QoreIRVerifier.cpp
     # the analysis of the parameters that take their arguments over, compiled from QoreIRVerifier.cpp
     ${CMAKE_SOURCE_DIR}/lib/QoreIRTakeOver.cpp
@@ -3253,6 +3282,11 @@ set(_qcc_format_sources
 #                      calls that give their temporary arguments) in a unit of
 #                      its own, and is out for the same reason.
 #   QoreIRPrinter      diagnostic IR dumps to stderr behind a debug flag.
+#   QoreIRPointerSlot  how the IR interpreter keeps the addresses of the objects
+#                      that a frame owns in its value slots, at run time; native
+#                      code keeps these handles in SSA values, and the runtime
+#                      functions that allocate them only check that their types
+#                      are aligned for it.
 #   QoreAOTBatchMemory the memory admission of batch codegen workers: it decides
 #                      how many objects are compiled at once, never what they
 #                      contain (the objects are the same with any worker count).
@@ -3260,6 +3294,7 @@ set(_qcc_format_excluded_sources
     ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreAOTBatchMemory.h
     ${CMAKE_SOURCE_DIR}/lib/QoreAOTBatchMemory.cpp
     ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreIRInterpreter.h
+    ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreIRPointerSlot.h
     ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreIRPrinter.h
     ${CMAKE_SOURCE_DIR}/lib/QoreIRInterpreter.cpp
     ${CMAKE_SOURCE_DIR}/lib/QoreIRInterpreterGivenArgs.cpp
@@ -4584,6 +4619,34 @@ endif()
     if (MONGOC_FOUND)
         add_dependencies(docs-lang-final docs-mongodb)
     endif()
+
+    # Tag files imported by each bundled native module's final documentation pass: the modules whose pages the
+    # module's documentation links to (see qore_bundled_module_two_phase_docs()); importing every module's tag
+    # file instead copies all their symbols into the module's search index (#6350).  A missing entry fails the
+    # module's final pass with an error that names the module to add here (doxygen/check-module-doc-references.py,
+    # #6367); do not widen the set.  A name that is not a module fails the configure.  Like
+    # QORE_DOC_EXTRA_MODULES_<mod> for user modules, these are the documentation references.
+    set(QORE_DOC_REFERENCE_MODULES_astparser Qdx QoreApiMetadata QoreCodeFormat)
+    set(QORE_DOC_REFERENCE_MODULES_avro AvroUtil DataProvider)
+    set(QORE_DOC_REFERENCE_MODULES_dataframe DataProvider DataProviderDataFrame SqlUtil ml)
+    set(QORE_DOC_REFERENCE_MODULES_i18n ParseOptions Util)
+    set(QORE_DOC_REFERENCE_MODULES_json A2aClient A2aClientDataProvider A2aServerHandler AgUi Connect DataProvider
+        FhirRestClient FhirRestDataProvider HttpClientIo HttpServerUtil JsonFileDataProvider JsonLd JsonPatch
+        JsonRpcClientIo JsonRpcConnection JsonRpcHandler McpClient McpClientDataProvider McpServerHandler
+        NdjsonDataProvider OneRecordClient OneRecordServerHandler QUnit Schema dataframe)
+    set(QORE_DOC_REFERENCE_MODULES_krb5 Krb5Util)
+    set(QORE_DOC_REFERENCE_MODULES_linenoise DebugLinenoiseCmdLine QoreHistory)
+    set(QORE_DOC_REFERENCE_MODULES_logger_bin Logger Util)
+    set(QORE_DOC_REFERENCE_MODULES_ml DataProvider DataProviderML QoreMLUtils QoreModelRegistry QoreOnnxExport
+        QoreOnnxTools QoreRagUtils QoreTokenizerUtils dataframe tokenizer)
+    set(QORE_DOC_REFERENCE_MODULES_mongodb MongoDbDataProvider)
+    set(QORE_DOC_REFERENCE_MODULES_ocr QoreOcrUtils)
+    set(QORE_DOC_REFERENCE_MODULES_protobuf Connect QoreOnnxExport Schema)
+    set(QORE_DOC_REFERENCE_MODULES_reflection ConnectionProvider DataProvider QoreApiMetadata)
+    set(QORE_DOC_REFERENCE_MODULES_tokenizer DataProviderML QoreTokenizerUtils ml)
+    set(QORE_DOC_REFERENCE_MODULES_yaml Connect ConnectDataProvider DataProvider DataStreamClient
+        DataStreamClientIo DataStreamRequestHandler DataStreamUtil HttpClientIo HttpServerUtil RestClient Schema
+        YamlDocumentDataProvider YamlRpcClient YamlRpcClientIo YamlRpcHandler YamlSchema YamlTagHandler)
 
     # Native module landing pages link back into qlib. Keep their final rendering
     # behind all initial indexes, and keep the shared language index immutable.

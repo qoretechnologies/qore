@@ -1,0 +1,264 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: parent - parses code into Programs that the test creates, and runs scripts in child processes in every execution mode and as AOT executables
+# test-platform: macos - scripts run in the native execution modes and AOT executables built with qcc
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../TestInterpreter.qm
+%requires ../../ExecModeHarness.qm
+
+%exec-class ModernApiCompatDefaultTest
+
+#! A compatibility option that the host sets through the API is a default that an in-source %modern resets (#6382)
+/** An application can give legacy code a compatibility option (\c %broken-*) through the API: when the Program is
+    created, with Program::setParseOptions() or with -p on the command line.  Code whose own source declares %modern
+    does not get the option: %modern resets it, and the code has the semantics of %modern.  %modern is still refused
+    when a parse directive set the option, in either order, and when the options were locked while the option was in
+    effect.
+
+    The code used has a function \c abs() of its own: with %broken-namespace-resolution, an unqualified call reaches
+    it (1234), with %modern the call reaches Qore::abs() (20).
+*/
+class ModernApiCompatDefaultTest inherits QUnit::Test {
+    public {
+        #! legacy options without %modern, with the compatibility option given through the API
+        const LegacyCompat = PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS | PO_BROKEN_NAMESPACE_RESOLUTION
+            | PO_NO_CHILD_PO_RESTRICTIONS;
+
+        #! the code that tells the namespace resolution in effect
+        const Code = "int sub abs(int i) { return 1234; }\nint sub call() { return abs(-20); }\n";
+
+        #! the result with %modern
+        const ModernResult = 20;
+        #! the result with %broken-namespace-resolution
+        const BrokenResult = 1234;
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string env;
+    }
+
+    constructor() : QUnit::Test("modern API compatibility default", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir, libqore_dir);
+        addTestCase("an option of the Program constructor", \constructorOption());
+        addTestCase("an option set with ParseOptions and setParseOptions()", \setOption());
+        addTestCase("a Program locked by its creation", \creationLock());
+        addTestCase("%modern in a file with %push-parse-options", \pushedFile());
+        addTestCase("the parse cycle of an application that restores its options", \restoringApplication());
+        addTestCase("a directive that completes %modern", \completingDirective());
+        addTestCase("the option and %modern in the same source", \sameSource());
+        addTestCase("the option set by a directive of an earlier parse", \earlierDirective());
+        addTestCase("locked options", \lockedOptions());
+        addTestCase("scripts in every execution mode", \scriptModes());
+        addTestCase("AOT executables", \aot());
+        set_return_value(main());
+    }
+
+    #! the legacy code of the Program has the option, the code with %modern does not
+    constructorOption() {
+        Program legacy(LegacyCompat);
+        legacy.parse(Code, "legacy");
+        assertEq(BrokenResult, legacy.callFunction("call"));
+
+        Program p(LegacyCompat);
+        p.parse("%modern\n" + Code, "modern");
+        assertEq(ModernResult, p.callFunction("call"));
+        assertTrue(p.getFullParseOptions().hasAll(PO_MODERN));
+        assertFalse(p.getFullParseOptions().hasAny(PO_BROKEN_NAMESPACE_RESOLUTION));
+    }
+
+    setOption() {
+        Program p(new ParseOptions(("new-style", "require-types", "strict-args", "broken-namespace-resolution",
+            "no-child-restrictions")));
+        p.parse("%modern\n" + Code, "parse-options");
+        assertEq(ModernResult, p.callFunction("call"));
+
+        p = new Program(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.setParseOptions(PO_BROKEN_NAMESPACE_RESOLUTION);
+        p.parse("%modern\n" + Code, "set-parse-options");
+        assertEq(ModernResult, p.callFunction("call"));
+        assertFalse(p.getFullParseOptions().hasAny(PO_BROKEN_NAMESPACE_RESOLUTION));
+    }
+
+    #! a Program that is locked because it was created without PO_NO_CHILD_PO_RESTRICTIONS, as an application's
+    #! Programs for user code are: the option is a default of the application
+    creationLock() {
+        Program p(LegacyCompat & ~PO_NO_CHILD_PO_RESTRICTIONS);
+        p.parse("%modern\n" + Code, "creation-lock");
+        assertEq(ModernResult, p.callFunction("call"));
+    }
+
+    #! %modern in a file with %push-parse-options resets the option for the file only
+    pushedFile() {
+        Program p(LegacyCompat);
+        p.parsePending("%push-parse-options\n%modern\n" + Code, "pushed");
+        p.parsePending("int sub abs2(int i) { return 1234; }\nint sub call2() { return abs2(-20); }\n", "after");
+        p.parseCommit();
+        assertEq(ModernResult, p.callFunction("call"));
+        # the reset ends with the file
+        assertEq(BrokenResult, p.callFunction("call2"));
+        # the Program keeps its option after the file
+        assertTrue(p.getFullParseOptions().hasAny(PO_BROKEN_NAMESPACE_RESOLUTION));
+        assertFalse(p.getFullParseOptions().hasAll(PO_MODERN));
+    }
+
+    #! an application that gives its Programs a compatibility option and restores their options after each parse, as
+    #! Qorus does: each source with %modern has the semantics of %modern, each legacy source has the option
+    restoringApplication() {
+        Program p(LegacyCompat);
+        parseRestoring(p, "%modern\n" + nsCode("M1"), "modern-1");
+        parseRestoring(p, nsCode("L1"), "legacy");
+        parseRestoring(p, "%modern\n" + nsCode("M2"), "modern-2");
+        p.parseCommit();
+        assertEq(ModernResult, p.callFunction("M1::call"), "first %modern source");
+        assertEq(BrokenResult, p.callFunction("L1::call"), "legacy source");
+        assertEq(ModernResult, p.callFunction("M2::call"), "second %modern source");
+        assertTrue(p.getFullParseOptions().hasAny(PO_BROKEN_NAMESPACE_RESOLUTION));
+    }
+
+    #! only %modern resets the option: a directive that completes %modern with options that the application set is
+    #! refused
+    completingDirective() {
+        Program p(PO_REQUIRE_TYPES | PO_STRICT_ARGS | PO_STRONG_ENCAPSULATION | PO_BROKEN_NAMESPACE_RESOLUTION
+            | PO_NO_CHILD_PO_RESTRICTIONS);
+        assertThrows("PARSE-OPTION-ERROR", "cannot be used while %broken-namespace-resolution is in effect",
+            \p.parse(), ("%new-style\n" + Code, "new-style"));
+        assertFalse(p.getFullParseOptions().hasAll(PO_MODERN));
+    }
+
+    #! a compatibility option set by a directive of the source and %modern are refused, in either order
+    sameSource() {
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        assertThrows("PARSE-OPTION-ERROR", "%modern cannot be used while %broken-namespace-resolution is in effect",
+            \p.parse(), ("%broken-namespace-resolution\n%modern\n" + Code, "option-first"));
+        p = new Program(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        assertThrows("PARSE-OPTION-ERROR", "%broken-namespace-resolution cannot be used while %modern is in effect",
+            \p.parse(), ("%modern\n%broken-namespace-resolution\n" + Code, "modern-first"));
+        # also when the option was given through the API as well
+        p = new Program(LegacyCompat);
+        assertThrows("PARSE-OPTION-ERROR", "%modern cannot be used while %broken-namespace-resolution is in effect",
+            \p.parse(), ("%broken-namespace-resolution\n%modern\n" + Code, "api-and-directive"));
+        # and in a file with %push-parse-options
+        p = new Program(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        assertThrows("PARSE-OPTION-ERROR", "%modern cannot be used while %broken-namespace-resolution is in effect",
+            \p.parse(), ("%push-parse-options\n%broken-namespace-resolution\n%modern\n" + Code, "pushed"));
+    }
+
+    #! an option that a directive of an earlier parse of the Program set is not a default of the application
+    earlierDirective() {
+        Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.parsePending("%broken-namespace-resolution\n" + Code, "legacy");
+        assertThrows("PARSE-OPTION-ERROR", "%modern cannot be used while %broken-namespace-resolution is in effect",
+            \p.parsePending(), ("%modern\nint sub f() { return 1; }\n", "modern"));
+    }
+
+    #! options locked while the option was in effect keep it
+    lockedOptions() {
+        Program p(LegacyCompat);
+        p.lockOptions();
+        assertThrows("PARSE-OPTION-ERROR", "%modern cannot be used while %broken-namespace-resolution is in effect",
+            \p.parse(), ("%modern\n" + Code, "lock-options-api"));
+
+        p = new Program(LegacyCompat);
+        assertThrows("PARSE-OPTION-ERROR", "%modern cannot be used while %broken-namespace-resolution is in effect",
+            \p.parse(), ("%lock-options\n%modern\n" + Code, "lock-options-directive"));
+
+        # a lock in a file with %push-parse-options does not lock the file's own compatibility option, which ends with
+        # the file: an option that the application sets later is a default that %modern resets
+        p = new Program(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.parsePending("%push-parse-options\n%broken-namespace-resolution\n%lock-options\nint sub f() { return 1; }\n",
+            "pushed-lock");
+        p.setParseOptions(PO_BROKEN_NAMESPACE_RESOLUTION);
+        p.parsePending("%modern\n" + Code, "after-lock");
+        p.parseCommit();
+        assertEq(ModernResult, p.callFunction("call"));
+    }
+
+    #! a legacy script (a .q file) with %modern of its own, run with the option given on the command line
+    scriptModes() {
+        TmpDir tmp("modern-api-compat-default-");
+        string script = writeScript(tmp.path);
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            string out = ExecModeHarness::run(sprintf("%s %s -pbroken-namespace-resolution --exec-mode=%s %s", env,
+                qore_bin, mode, script));
+            assertEq(ModernResult + "\n", out, mode);
+        }
+        # without %modern, the option applies
+        string legacy = tmp.path + "/legacy.q";
+        File f();
+        f.open2(legacy, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write("%new-style\n%require-types\n%strict-args\n" + Code + "printf(\"%d\\n\", call());\n");
+        f.close();
+        assertEq(BrokenResult + "\n", ExecModeHarness::run(sprintf("%s %s -pbroken-namespace-resolution "
+            "--exec-mode=ast %s", env, qore_bin, legacy)), "legacy");
+    }
+
+    #! the same script compiled ahead of time, with the option given to qcc and to qore --compile
+    aot() {
+        if (!is_file(qcc_bin)) {
+            testSkip("qcc is not available at " + qcc_bin);
+        }
+        TmpDir tmp("modern-api-compat-default-aot-");
+        string script = writeScript(tmp.path);
+        string exe = tmp.path + "/modern-qcc";
+        string out = ExecModeHarness::run_any(sprintf("%s %s --parse-option=PO_BROKEN_NAMESPACE_RESOLUTION -o %s %s",
+            env, qcc_bin, exe, script));
+        assertTrue(is_file(exe), "qcc compiled the script: " + out);
+        if (is_file(exe)) {
+            assertEq(ModernResult + "\n", ExecModeHarness::run_any(sprintf("%s %s", env, exe)), "qcc");
+        }
+        exe = tmp.path + "/modern-compile";
+        out = ExecModeHarness::run_any(sprintf("%s %s --compile -pbroken-namespace-resolution --output=%s %s", env,
+            qore_bin, exe, script));
+        assertTrue(is_file(exe), "qore --compile compiled the script: " + out);
+        if (is_file(exe)) {
+            assertEq(ModernResult + "\n", ExecModeHarness::run_any(sprintf("%s %s", env, exe)), "qore --compile");
+        }
+    }
+
+    #! returns the code in a namespace of its own
+    private static string nsCode(string ns) {
+        return sprintf("namespace %s {\nint sub abs(int i) { return 1234; }\n"
+            "public int sub call() { return abs(-20); }\n}\n", ns);
+    }
+
+    #! parses code pending in the Program and restores its options as they were before, as Qorus does
+    /** The options set since the parse began are disabled, and the options that it had are set again, through the API
+    */
+    private static parseRestoring(Program p, string code, string label) {
+        ParseOptions saved = p.getFullParseOptions();
+        p.parsePending(code, label);
+        ParseOptions cur = p.getFullParseOptions();
+        ParseOptions to_disable = cur.mask(saved.invert());
+        if (!to_disable.empty()) {
+            p.disableParseOptions(to_disable);
+        }
+        ParseOptions to_set = saved.mask(cur.invert());
+        if (!to_set.empty()) {
+            p.setParseOptions(to_set);
+        }
+    }
+
+    #! writes the legacy script with %modern of its own and returns its path
+    private string writeScript(string dir) {
+        string script = dir + "/modern.q";
+        File f();
+        f.open2(script, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write("%modern\n" + Code + "printf(\"%d\\n\", call());\n");
+        f.close();
+        return script;
+    }
+}

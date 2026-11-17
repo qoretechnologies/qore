@@ -61,6 +61,18 @@ QoreValue QoreDotEvalOperatorNode::evalCommon(bool& needs_deref, ExceptionSink* 
     return evalWithBaseCommon<Lexical>(*op, xsink);
 }
 
+//! calls the method of the object of a weak reference
+/** Out of line: GCC inlined MethodCallNode::exec() here depending on the size of the rest of the single compilation
+    unit, which took another callee-saved register and more frame in evalWithBaseCommon(), paid by every call of a
+    method of an object (issue #6381).  The measured case is evalWithBaseCommon<false>(); the helper is out of line
+    for <true> as well, which is harmless, as a call through a weak reference is rare
+*/
+template <bool Lexical>
+static QORE_INTERN_NOINLINE QoreValue qore_dot_eval_weakref_call(const MethodCallNode* m,
+        LexicalSemanticPolicy policy, QoreValue base, ExceptionSink* xsink) {
+    return m->execWithPolicy<Lexical>(policy, base.get<WeakReferenceNode>()->get(), xsink);
+}
+
 template <bool Lexical>
 QoreValue QoreDotEvalOperatorNode::evalWithBaseCommon(QoreValue base, ExceptionSink* xsink) const {
     LexicalSemanticPolicy policy;
@@ -68,7 +80,7 @@ QoreValue QoreDotEvalOperatorNode::evalWithBaseCommon(QoreValue base, ExceptionS
     switch (base.getType()) {
         case NT_WEAKREF: {
             // FIXME: inefficient
-            return m->execWithPolicy<Lexical>(policy, base.get<WeakReferenceNode>()->get(), xsink);
+            return qore_dot_eval_weakref_call<Lexical>(m, policy, base, xsink);
         }
 
         case NT_WEAKREF_HASH: {
@@ -437,11 +449,16 @@ int QoreDotEvalOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& par
             ClassAccess member_access = Public;
             const QoreMemberInfo* mi = qore_class_private::get(*qc)->parseFindMember(mname, member_class_ctx,
                 member_access);
-            if (mi && (member_access <= Public || qore_class_private::parseCheckPrivateClassAccess(*qc))) {
+            // a member of the name that can hold code: at run time, the call calls the code that the member holds
+            // (qore_class_private::evalMethod()), so it is not bound to the signature of the pseudo-method of the
+            // name, and a named call binds its names at run time to the parameters of that code (qore#6361); a
+            // private member called from outside its class is called the same way at run time
+            if (mi) {
                 const QoreTypeInfo* member_type_info = mi->parseGetTypeInfo();
-                if (member_type_info && QoreTypeInfo::hasType(member_type_info)
-                    && QoreTypeInfo::parseAccepts(codeTypeInfo, member_type_info)) {
+                if (!QoreTypeInfo::hasType(member_type_info)
+                    || QoreTypeInfo::parseAccepts(member_type_info, codeTypeInfo)) {
                     member_callable = true;
+                    m->setRuntimeNamedMemberCall();
                 }
             }
 

@@ -310,13 +310,46 @@ int QoreAssignmentOperatorNode::parseInitIntern(QoreParseContext& parse_context,
     const QoreTypeInfo* prev_expected = parse_context.expected_type_info;
     parse_context.expected_type_info = ti;
     QoreParseAnalysis right_analysis;
-    {
-        // the right-hand side is the value stored in the lvalue (issue #5782)
-        QoreParseTargetHelper target(parse_context, right, ti);
-        if (parse_init_value(right, parse_context) && !err) {
-            err = -1;
+    // the variable declared by the lvalue, whose initialization expression the right-hand side is (qore#526)
+    const VarRefNode* decl = left.getType() == NT_VARREF && left.get<const VarRefNode>()->isGlobalDecl()
+        ? left.get<const VarRefNode>()
+        : nullptr;
+    // a global or thread-local variable is not checked: it keeps its value when its declaration runs again (in a
+    // function, a loop, or the top-level code of a program that is run again), so the declaration can use the value
+    const void* decl_target = nullptr;
+    const char* decl_what = nullptr;
+    if (decl) {
+        qore_var_t decl_type = decl->getType();
+        if (decl_type == VT_LOCAL || decl_type == VT_CLOSURE || decl_type == VT_LOCAL_TS) {
+            decl_target = decl->ref.id;
+            decl_what = "local variable";
         }
     }
+    // the location of the first use of the declared variable in the right-hand side; the error is raised after the
+    // type checks of the assignment, which are reported first
+    const QoreProgramLocation* decl_use_loc = nullptr;
+    {
+        QoreParseInitializerTarget init_target(decl_target);
+        {
+            // the right-hand side is the value stored in the lvalue (issue #5782)
+            QoreParseTargetHelper target(parse_context, right, ti);
+            if (parse_init_value(right, parse_context) && !err) {
+                err = -1;
+            }
+        }
+        // the identity assignment of a declared variable is reported below as for any other variable
+        if (decl_target && !(right.getType() == NT_VARREF && decl->parseEqualTo(*right.get<VarRefNode>()))) {
+            decl_use_loc = init_target.getUseLoc();
+        }
+    }
+    // raises the error for a use of the declared variable in the right-hand side; returns the error status
+    auto raise_decl_use = [&]() {
+        if (QoreParseInitializerTarget::raiseUseError(decl_use_loc, decl_what, decl ? decl->getName() : nullptr)
+                && !err) {
+            err = -1;
+        }
+        return err;
+    };
     parse_context.expected_type_info = prev_expected;
     right_analysis = parse_context.analysis;
     // a local variable that a weak reference is taken of must be changed in place (qore#5846)
@@ -357,7 +390,7 @@ int QoreAssignmentOperatorNode::parseInitIntern(QoreParseContext& parse_context,
     if (lvalue_err == -2) {
         parse_context.typeInfo = ti;
         parse_context.analysis.clear();
-        return err;
+        return raise_decl_use();
     }
 
     qore_type_result_e res;
@@ -686,6 +719,7 @@ int QoreAssignmentOperatorNode::parseInitIntern(QoreParseContext& parse_context,
     if (right_analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)) {
         parse_context.analysis.setFlag(QoreParseAnalysis::DefinitelyAssigned);
     }
+    raise_decl_use();
     if (!err && left.getType() == NT_VARREF) {
         VarRefNode* vrn = left.get<VarRefNode>();
         qore_var_t vtype = vrn->getType();

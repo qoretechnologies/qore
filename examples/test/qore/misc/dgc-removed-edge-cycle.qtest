@@ -1,0 +1,147 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class DgcRemovedEdgeCycleTest
+
+#! A connection held in its manager's pool; it references the manager and its operation, which references it back
+class Conn {
+    public {
+        *Mgr mgr;
+        *Op op;
+        static int destroyed = 0;
+        static bool mgr_ref = True;
+    }
+
+    constructor(Mgr m) {
+        if (Conn::mgr_ref) {
+            mgr = m;
+        }
+        op = new Op(self);
+    }
+
+    destructor() {
+        ++Conn::destroyed;
+    }
+}
+
+class Op {
+    public {
+        *Conn conn;
+        static int destroyed = 0;
+    }
+
+    constructor(Conn c) {
+        conn = c;
+    }
+
+    destructor() {
+        ++Op::destroyed;
+    }
+}
+
+#! The manager drops the connection from its pool in the ways HttpClientConnectionManager does, and more
+class Mgr {
+    public {
+        hash<string, list<Conn>> pool = {};
+        *Conn direct;
+    }
+
+    add(Conn c) {
+        pool{"k"} = (c,);
+    }
+
+    dropRemoveKey() {
+        remove pool{"k"};
+    }
+
+    dropAssign() {
+        pool{"k"} = ();
+    }
+
+    dropRemoveMember() {
+        remove pool;
+    }
+
+    dropAssignMember() {
+        pool = {};
+    }
+}
+
+#! A cycle whose objects were in one recursive set with the object that the removed edge started from is collected
+#! once nothing else references it (#6335)
+/** The manager, the connection and the operation form one recursive set: the connection references the manager, the
+    manager's pool references the connection, and the connection and the operation reference each other.  The manager
+    drops the connection from its pool and is released: the scan made after the write starts from the manager, which
+    no longer reaches the connection, so the connection's set kept counting the removed edge, and the connection and
+    the operation were never collected.  A removal of a member of self (remove pool) leaked the same way with the first
+    fix of #6329.  The objects that a write removed or replaced are scanned too, when the object they were removed from
+    is in a recursive set.
+*/
+class DgcRemovedEdgeCycleTest inherits QUnit::Test {
+    constructor() : QUnit::Test("DgcRemovedEdgeCycleTest", "1.0") {
+        addTestCase("remove of a hash key of a member of self", sub () { runCase("remove-key"); });
+        addTestCase("assignment of a hash key of a member of self", sub () { runCase("assign-key"); });
+        addTestCase("remove of a member of self", sub () { runCase("remove-member"); });
+        addTestCase("assignment of a member of self", sub () { runCase("assign-member"); });
+        addTestCase("remove of a hash key through the object", sub () { runCase("remove-outside"); });
+        addTestCase("a connection without a reference to the manager", \noBackReferenceTest());
+        addTestCase("a longer chain behind the removed edge", \chainTest());
+        set_return_value(main());
+    }
+
+    private run(string how) {
+        Mgr m();
+        {
+            Conn c(m);
+            m.add(c);
+        }
+        switch (how) {
+            case "remove-key": m.dropRemoveKey(); break;
+            case "assign-key": m.dropAssign(); break;
+            case "remove-member": m.dropRemoveMember(); break;
+            case "assign-member": m.dropAssignMember(); break;
+            case "remove-outside": remove m.pool{"k"}; break;
+        }
+        delete m;
+    }
+
+    private runCase(string how) {
+        int conns = Conn::destroyed;
+        int ops = Op::destroyed;
+        run(how);
+        assertEq(conns + 1, Conn::destroyed, how + ": the connection is collected");
+        assertEq(ops + 1, Op::destroyed, how + ": the operation is collected");
+    }
+
+    noBackReferenceTest() {
+        Conn::mgr_ref = False;
+        on_exit Conn::mgr_ref = True;
+        runCase("remove-key");
+    }
+
+    chainTest() {
+        int conns = Conn::destroyed;
+        int ops = Op::destroyed;
+        {
+            Mgr m();
+            {
+                # three connections, each referencing the manager, all behind one pool key
+                list<Conn> l = ();
+                for (int i = 0; i < 3; ++i) {
+                    l += new Conn(m);
+                }
+                m.pool{"k"} = l;
+            }
+            m.dropRemoveKey();
+            delete m;
+        }
+        assertEq(conns + 3, Conn::destroyed, "every connection is collected");
+        assertEq(ops + 3, Op::destroyed, "every operation is collected");
+    }
+}

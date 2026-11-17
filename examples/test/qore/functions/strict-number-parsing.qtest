@@ -1,0 +1,137 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class StrictNumberParsingTest
+
+#! Tests the strict mode of parse_int(), parse_float() and parse_number() (issue #305)
+class StrictNumberParsingTest inherits QUnit::Test {
+    public {
+        #! strings that are a number in the format, and the value of each conversion: int (or NOTHING if the string is
+        #! not an integer), float, number
+        const Valid = (
+            ("1.150.200,55", ".,", NOTHING, 1150200.55, 1150200.55n),
+            ("1.150.200", ".,", 1150200, 1150200.0, 1150200n),
+            ("1,150,200.5", ",.", NOTHING, 1150200.5, 1150200.5n),
+            ("-12e3", ",.", NOTHING, -12000.0, -12000n),
+            ("+12E-1", ",.", NOTHING, 1.2, 1.2n),
+            ("12,5e+2", ".,", NOTHING, 1250.0, 1250n),
+            (",5", ".,", NOTHING, 0.5, 0.5n),
+            ("5,", ".,", NOTHING, 5.0, 5n),
+            ("-0", ".,", 0, -0.0, -0n),
+            ("+7", ".,", 7, 7.0, 7n),
+            ("9223372036854775807", ".,", MAXINT, float(MAXINT), number(MAXINT)),
+            ("-9223372036854775808", ".,", MININT, float(MININT), number(MININT)),
+            ("1e400", ".,", NOTHING, @inf@, 1e400n),
+        );
+
+        #! strings that are not a number and nothing else in the format
+        const Invalid = (
+            ("12abc", ".,"),
+            ("", ".,"),
+            ("-", ".,"),
+            ("+", ".,"),
+            (",", ".,"),
+            (" 12", ".,"),
+            ("12 ", ".,"),
+            ("12\t", ".,"),
+            ("1e", ",."),
+            ("1e+", ",."),
+            ("e5", ",."),
+            ("--1", ",."),
+            ("1,2,3", ".,"),
+            ("1.2.3", ",."),
+            ("inf", ",."),
+            ("nan", ",."),
+            ("0x10", ",."),
+            ("12n", ",."),
+            ("1 000", ",."),
+        );
+    }
+
+    constructor() : Test("StrictNumberParsingTest", "1.0") {
+        addTestCase("a string that is a number is converted", \validTest());
+        addTestCase("a string that is not a number and nothing else raises PARSE-NUMBER-ERROR", \invalidTest());
+        addTestCase("an integer string in strict mode", \intTest());
+        addTestCase("the non-strict conversions are unchanged", \nonStrictTest());
+        addTestCase("named arguments and other encodings", \namedArgsAndEncodingTest());
+        set_return_value(main());
+    }
+
+    validTest() {
+        # run several times, so that the tiers of the execution modes that promote code run the conversions too
+        for (int run = 0; run < 12; ++run) {
+            foreach list<auto> l in (Valid) {
+                string label = sprintf("%y (format %y)", l[0], l[1]);
+                if (exists l[2]) {
+                    assertEq(l[2], parse_int(l[0], l[1], True), "parse_int " + label);
+                }
+                assertEq(l[3], parse_float(l[0], l[1], True), "parse_float " + label);
+                assertEq(l[4], parse_number(l[0], l[1], True), "parse_number " + label);
+            }
+        }
+    }
+
+    invalidTest() {
+        for (int run = 0; run < 12; ++run) {
+            foreach list<auto> l in (Invalid) {
+                string label = sprintf("%y (format %y)", l[0], l[1]);
+                # the exception gives the function and the string
+                string text = regex_escape(sprintf("(): \"%s\"", l[0]));
+                assertThrows("PARSE-NUMBER-ERROR", "^parse_int" + text, \parse_int(), (l[0], l[1], True),
+                    "parse_int " + label);
+                assertThrows("PARSE-NUMBER-ERROR", "^parse_float" + text, \parse_float(), (l[0], l[1], True),
+                    "parse_float " + label);
+                assertThrows("PARSE-NUMBER-ERROR", "^parse_number" + text, \parse_number(), (l[0], l[1], True),
+                    "parse_number " + label);
+            }
+        }
+    }
+
+    intTest() {
+        # a decimal fraction or an exponent is not an integer
+        foreach string s in (("1,5", "1e3", "1,")) {
+            assertThrows("PARSE-NUMBER-ERROR", "is not an integer", \parse_int(), (s, ".,", True), s);
+        }
+        # the range of an int
+        foreach string s in (("9223372036854775808", "-9223372036854775809", "99999999999999999999")) {
+            assertThrows("PARSE-NUMBER-ERROR", "out of the range of an int", \parse_int(), (s, ".,", True), s);
+            # without strict mode, the nearest int
+            assertEq(s =~ /^-/ ? MININT : MAXINT, parse_int(s, ".,"), s);
+        }
+    }
+
+    nonStrictTest() {
+        # the number at the start of the string is converted, and the rest ignored
+        foreach bool explicit in ((False, True)) {
+            string label = explicit ? "strict False" : "no strict argument";
+            assertEq(12.0, explicit ? parse_float("12abc", ".,", False) : parse_float("12abc", ".,"), label);
+            assertEq(12n, explicit ? parse_number("12abc", ".,", False) : parse_number("12abc", ".,"), label);
+            assertEq(12, explicit ? parse_int("12abc", ".,", False) : parse_int("12abc", ".,"), label);
+            assertEq(1, explicit ? parse_int("1,5", ".,", False) : parse_int("1,5", ".,"), label);
+            assertEq(12.5, explicit ? parse_float(" 12,5 ", ".,", False) : parse_float(" 12,5 ", ".,"), label);
+            assertEq(0.0, explicit ? parse_float("", ".,", False) : parse_float("", ".,"), label);
+        }
+    }
+
+    namedArgsAndEncodingTest() {
+        assertEq(1.5, parse_float(str: "1,5", format: ".,", strict: True));
+        assertEq(1.5n, parse_number(strict: True, format: ".,", str: "1,5"));
+        assertEq(1500, parse_int(str: "1.500", format: ".,", strict: True));
+        assertThrows("PARSE-NUMBER-ERROR", \parse_float(), ("1,5x", ".,", True));
+        # text in an encoding that is not ASCII-compatible, with a format in another encoding
+        foreach string enc in (("UTF-16LE", "UTF-16BE")) {
+            string str = convert_encoding("1.234,5", enc);
+            assertEq(1234.5, parse_float(str, ".,", True), enc);
+            assertEq(1234.5n, parse_number(str, convert_encoding(".,", enc), True), enc);
+            assertEq(1234, parse_int(convert_encoding("1.234", enc), ".,", True), enc);
+            assertThrows("PARSE-NUMBER-ERROR", "\"1.234,5x\"", \parse_float(), (convert_encoding("1.234,5x", enc),
+                ".,", True), enc);
+        }
+    }
+}

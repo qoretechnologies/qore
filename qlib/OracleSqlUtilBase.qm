@@ -392,6 +392,11 @@ hash schema = (
 /** @page ora_relnotes Release Notes
 
     @section oracle17 OracleSqlUtilBase v1.7
+    - fixed a column declared with \c "default null", which was described with the default value \c null, so
+      table alignment set it again every time
+      (<a href="https://github.com/qoretechnologies/qore/issues/1746">issue 1746</a>)
+    - the \c "except" @ref select_option_set_operators "set operator" of a select is Oracle's \c MINUS
+      (<a href="https://github.com/qoretechnologies/qore/issues/2961">issue 2961</a>)
     - fixed the \c IN operator with a driver other than \c oracle (ex: \c jdbc), which cannot bind the collection of
       values that the \c oracle driver binds, so the statement failed: each value is bound in a collection
       constructor (see @ref ora_in_operator), and a list with more values than a statement can bind raises an
@@ -476,6 +481,10 @@ hash schema = (
       Oracle cannot lock rows selected through an inline view
     - fixed a bug where the \c first_rows optimizer hint used with \c limit was placed after the \c "from" clause,
       where Oracle ignores it as a plain comment
+    - table comments (\c comment \c on \c table) are created and aligned, as well as read
+      (<a href="https://github.com/qoretechnologies/qore/issues/1483">issue 1483</a>)
+    - the views of a schema description are aligned, with their comments (see @ref schema_views)
+      (<a href="https://github.com/qoretechnologies/qore/issues/1427">issue 1427</a>)
 
     @section oracle16 OracleSqlUtilBase v1.6
     - fixed a bug in the IN operator
@@ -2198,10 +2207,33 @@ public class OracleDatabase inherits SqlUtil::AbstractDatabase {
                 row{it.getKey()} = NOTHING;
         }
 
-        return new OracleView(name, row.text, schema, row.type_text,
+        OracleView v(name, row.text, schema, row.type_text,
                                 row.oid_text, row.view_type_owner,
                                 row.view_type, row.superview_name,
                                 row.read_only == 'N', row.container_data == 'Y');
+        # issue #1427: the comment of the view
+        *string comment = ds.selectRow("select comments from all_tab_comments where owner = %v and table_name = %v",
+            schema.upr(), name.upr()).comments;
+        v.comment = comment.val() ? comment : NOTHING;
+        return v;
+    }
+
+    #! Returns a view object for a view of a schema description
+    private AbstractView makeViewImpl(string name, string src) {
+        return new OracleView(name, src, NOTHING, NOTHING, NOTHING, NOTHING, NOTHING, NOTHING, False, False);
+    }
+
+    #! Returns @ref True: Oracle has view comments
+    /** @since OracleSqlUtilBase 1.7
+    */
+    bool supportsViewComments() {
+        return True;
+    }
+
+    #! Returns the SQL that sets or removes the comment of a view: Oracle comments on a view as on a table
+    private softlist<string> getViewCommentSqlImpl(AbstractView view, *string comment, *string old_comment) {
+        return sprintf("comment on table %s is %s", oracle_get_sql_object_name(view.name),
+            "'" + replace(comment ?? "", "'", "''") + "'");
     }
 
     private OracleFunction makeFunctionImpl(string name, string src, *hash opts) {
@@ -4425,9 +4457,24 @@ public class OracleTable inherits SqlUtil::AbstractTable {
         return tablespace;
     }
 
-    #! returns any table comment or @ref nothing if none is known
-    *string getComment() {
+    #! Returns @ref True: Oracle has table comments
+    /** @since OracleSqlUtilBase 1.7
+    */
+    bool supportsTableComments() {
+        return True;
+    }
+
+    #! Reads the comment of the table
+    private *string getCommentImpl() {
+        if (!tablespace) {
+            setTableInfoIntern();
+        }
         return comment;
+    }
+
+    #! Returns the SQL that sets or removes the comment of the table; an empty comment is no comment in Oracle
+    private softlist<string> getTableCommentSqlImpl(*string comment) {
+        return sprintf("comment on table %s is %s", getSqlName(), getSqlValueImpl(comment ?? ""));
     }
 
     bool readOnly() {
@@ -4711,6 +4758,10 @@ public class OracleTable inherits SqlUtil::AbstractTable {
                 row.data_type = row.data_type.lwr();
             }
             trim row.data_default;
+            # issue #1746: a column declared with "default null" has no default value; Oracle keeps the text as given
+            if (row.data_default =~ /^\(*\s*null\s*\)*$/i) {
+                remove row.data_default;
+            }
 
             bool char_used;
             if (row.char_used == "C") {
@@ -5510,7 +5561,7 @@ group by p.index_name", schema.upr(), name.upr());
     }
 
     #! returns the Oracle server major version (e.g. 12, 19, 23)
-    /** @since OracleSqlUtilBase 1.6
+    /** @since OracleSqlUtilBase 1.7
     */
     private int getOracleServerMajorVersion() {
         return oracle_get_server_major_version(ds);
@@ -6182,6 +6233,13 @@ group by p.index_name", schema.upr(), name.upr());
     }
 
     #! returns @ref True if the database requires a wildcard \c "*" to be prefixed with the table name when it appears with other column arguments in a select statement
+    #! Returns the SQL keyword of a set operator: Oracle names \c "except" \c MINUS
+    /** @since OracleSqlUtilBase 1.7
+    */
+    private string getSetOperatorSql(string op) {
+        return op == "except" ? "minus" : AbstractTable::getSetOperatorSql(op);
+    }
+
     private bool asteriskRequiresPrefix() {
         return True;
     }

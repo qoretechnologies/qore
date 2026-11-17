@@ -1,0 +1,104 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - the IR interpreter and native code keep the addresses of heap objects in value slots, which depends on the platform's address layout
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+%requires ../../../TestInterpreter.qm
+
+%exec-class ForeachIteratorReleaseTest
+
+#! Tests that loops over iterators, context statements and foreach loops over references leave no heap values behind
+/** The IR interpreter keeps the iterator of a foreach loop or of a selector, an exception that it sets aside, and the
+    state of a context statement or of a foreach over a reference in a value slot that holds the object's address as
+    an integer.  A QoreValue holds an integer inline only within 48 bits (signed); on aarch64 Linux heap addresses are
+    above 2^47, so the slot held a heap integer, which nothing released: an iterator's when a return or break left the
+    loop, and a context's or a reference foreach's every time (issue #6345).  The interpreter now keeps the address
+    shifted right by the 4 bits that its alignment leaves clear.
+
+    The worker counts the heap integers that exist before and after each case with dbg_get_live_bigint_count(), which
+    needs library debugging, and reports how many it left behind, which must be none.  It runs in every execution
+    mode and as a qcc-compiled executable.  The leak shows only where heap addresses are above 2^47 (aarch64 Linux
+    outside valgrind); elsewhere the test checks that the cases give the same results in every mode.
+*/
+class ForeachIteratorReleaseTest inherits QUnit::Test {
+    public {
+        #! the output of the worker
+        const Expected = (
+            "xrange return: 1152921504606846977 left: 0",
+            "xrange first return: 1152921504606846977 left: 0",
+            "xrange break: 2 left: 0",
+            "range return: 1152921504606846975 left: 0",
+            "pairIterator return: 2305843009213693952 left: 0",
+            "keys return: 1152921504606846978 left: 0",
+            "map return: 1152921504606846981 left: 0",
+            "selector return: 1152921504606846982 left: 0",
+            "context end: 1152921504606846982 left: 0",
+            "context return: 1152921504606846983 left: 0",
+            "reference end: 1152921504606846982 left: 0",
+            "reference return: 1152921504606846984 left: 0",
+            "suspend return: 1152921504606846978 left: 0",
+            "list return: 1152921504606846979 left: 0",
+            "while return: 1152921504606846980 left: 0",
+        );
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+        string worker;
+    }
+
+    constructor() : QUnit::Test("ForeachIteratorRelease", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        worker = get_script_dir() + DirSep + "foreach-iterator-release-worker.q";
+
+        addTestCase("each execution mode", \testExecModes());
+        addTestCase("compiled executable", \testCompiled());
+
+        set_return_value(main());
+    }
+
+    testExecModes() {
+        checkDebugging();
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            checkOutput(mode, ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s",
+                libqore_dir, qore_bin, mode, worker)));
+        }
+    }
+
+    testCompiled() {
+        checkDebugging();
+        foreach string opt in ("-O0", "-O3") {
+            TmpDir tmp("qore-foreach-iterator-release-");
+            string exe = tmp.path + DirSep + "release";
+            string out = backquote(sprintf("QORE_LIBDIR=%s %s %s -o %s %s 2>&1", libqore_dir, qcc_bin, opt, exe,
+                worker));
+            assertTrue(is_file(exe), opt + ": compiled the executable: " + out);
+            checkOutput("executable " + opt, ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s %s -b",
+                libqore_dir, exe)));
+        }
+    }
+
+    #! skips the test without library debugging, which the live heap integer counter needs
+    private checkDebugging() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("dbg_get_live_bigint_count() requires library debugging");
+        }
+    }
+
+    private checkOutput(string label, string out) {
+        list<string> lines = (select out.split("\n"), $1);
+        assertEq(Expected, lines, label + ": " + out);
+    }
+}

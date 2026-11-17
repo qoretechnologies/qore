@@ -33,11 +33,37 @@
 
 #define QORE_LIB_DEBUG_H
 
+#include "qore/QoreThreadLock.h"
+
 #include <atomic>
 #include <string>
 #include <vector>
 
 DLLLOCAL void init_debug_functions(QoreNamespace& qns);
+
+//! Holds the lock that protects the error or another value recorded by a poll operation, for a read of it
+/** In debug builds, a read that finds the lock taken calls the "error-read" hold point
+    (QoreDbgHttpHoldPoint::ErrorRead), or "value-read" (QoreDbgHttpHoldPoint::ValueRead) for another value, before
+    it waits for the lock: a test that holds the thread recording it in its critical section ("error-record" or
+    "value-record") is then released only by a read that waits for it (issue #6428); the hold points can be armed
+    for one operation, which is identified by its Qore object
+*/
+class QoreRecordedValueReadLocker {
+public:
+    //! takes the lock
+    /** @param lck the lock
+        @param target the Qore object of the operation, which identifies it for the hold points
+        @param value false for a read of the error, true for a read of another value
+    */
+    DLLLOCAL QoreRecordedValueReadLocker(QoreThreadLock& lck, const void* target, bool value = false);
+
+    DLLLOCAL ~QoreRecordedValueReadLocker() {
+        lck.unlock();
+    }
+
+private:
+    QoreThreadLock& lck;
+};
 
 class AbstractSmartLock;
 
@@ -224,6 +250,11 @@ DLLLOCAL void qore_dbg_socket_cancel_conversion();
 typedef void (*qore_dbg_socket_send_hook_t)(int fd);
 DLLLOCAL extern std::atomic<qore_dbg_socket_send_hook_t> qore_dbg_socket_send_hook;
 
+//! called by SocketRecvUntilBytesPollState::doRecv() after SSL_read() reported SSL_ERROR_WANT_READ, before the
+//! descriptor is polled; \a fd is the socket's descriptor; set by dbg_hold_tls_read_until_hangup() (#6315)
+typedef void (*qore_dbg_tls_read_want_hook_t)(int fd);
+DLLLOCAL extern std::atomic<qore_dbg_tls_read_want_hook_t> qore_dbg_tls_read_want_hook;
+
 //! called by AbstractHttpPollConnectionPriv::setClosed() on the first close of a connection, after the close hook and
 //! before it releases the reference that it holds while running the hook; returns true if the hook released a
 //! reference of its own, in which case qore_dbg_conn_close_released() is called once setClosed() has released its
@@ -244,10 +275,66 @@ enum class QoreDbgHttpHoldPoint : unsigned char {
     Submit,
     //! an HTTP/1 or HTTP/2 client connection's closeConnection() has invalidated it and is about to close it
     CloseAfterInvalidate,
+    //! HTTPClient::startPollSendRecv() submitted the request on a ready connection, the submit raised an exception, and
+    //! the error is about to be classified (whether it is reported through the poll operation)
+    SubmitFailed,
+    //! HTTPClient::startPollSendRecv() found an ALPN-negotiating connection ready and is about to finalize it (hand it
+    //! over to a concrete connection); while this point is armed, the request waits for its connection to be ready
+    //! first, so that it reaches the point
+    Finalize,
+    //! NegotiatingHttpClientConnection::takeOver() checked the connection and holds its method guard, before it hands
+    //! the socket over to the concrete connection
+    Takeover,
+    //! HttpClientConnectionBase::drainInFlight() has to wait for a call in flight (armed with a release Counter of 0,
+    //! the point only reports that the close waits)
+    DrainWait,
+    //! HttpClientConnectionManagerBase::swapNegotiatedConnection() was given the concrete connection that took over a
+    //! negotiating connection, before it reads the negotiating connection
+    Swap,
+    //! HttpClientConnectionManagerBase::acquireConnectionImpl() found a connection in its pool and released the pool
+    //! lock, before it returns the connection
+    Acquired,
+    //! HttpClientConnectionBase::tryReservePendingStream() was called to reserve a stream of a Qore-level connection,
+    //! before it takes the reservation lock
+    ReservePending,
+    //! an HTTP/1 or HTTP/3 client, HTTP/3 server, WebSocket server or client, or HTTP client ping poll operation
+    //! records its first error: the thread holds the lock that protects the error and has not stored the error yet
+    ErrorRecord,
+    //! a read of the error of one of the poll operations of @ref ErrorRecord (getErrorInfo()) found the lock that
+    //! protects it taken, and is about to wait for it (see QoreRecordedValueReadLocker)
+    ErrorRead,
+    //! an HTTP client ping poll operation stores its output, or a WebSocket server poll operation its close reason:
+    //! the thread holds the lock that protects the value and has not stored it yet
+    ValueRecord,
+    //! a read of a value of @ref ValueRecord found the lock that protects it taken, and is about to wait for it (see
+    //! QoreRecordedValueReadLocker)
+    ValueRead,
+    //! a thread that uses state that another thread can release in a teardown (the poll operation of an HTTP/3 client
+    //! connection, read for its error; the inner operation of an HTTP client ping poll operation) has taken it, and is
+    //! about to use it
+    TeardownRead,
+    //! an HTTP/1.1 or HTTP/3 client poll operation dispatched the end of a request's response and released the
+    //! reference to the request's action that the dispatch held: on the I/O thread, or for an HTTP/3 response that
+    //! arrived before its request was registered, on the thread that registered it (armed with a release Counter of
+    //! 0, the point only reports it)
+    StreamEndDispatched,
+    //! the number of hold points
+    Count,
 };
 
 //! holds the calling thread at the given point if dbg_http_hold_at() armed it (one-shot)
-DLLLOCAL void qore_dbg_http_hold(QoreDbgHttpHoldPoint point);
+/** @param point the hold point
+    @param target the object that reaches the point (the Qore object of a poll operation), if any: a point armed for
+    an object holds only the thread that reaches it for that object
+*/
+DLLLOCAL void qore_dbg_http_hold(QoreDbgHttpHoldPoint point, const void* target = nullptr);
+
+//! holds the creation of a child Program after its options were checked and before the Program is created, if
+//! dbg_hold_child_program_create() armed it (one-shot)
+DLLLOCAL void qore_dbg_child_program_create_hold();
+
+//! returns true if dbg_http_hold_at() armed the given point and no thread has reached it yet
+DLLLOCAL bool qore_dbg_http_hold_armed(QoreDbgHttpHoldPoint point);
 
 //! records that an HTTP client connection's closeConnection() runs, for dbg_http_concurrent_closes(); destroying it
 //! records the end of the close
@@ -335,5 +422,19 @@ DLLLOCAL void qore_dbg_cares_lookup_env_read();
 typedef void (*qore_dbg_queue_push_locked_hook_t)(const QoreObject* self);
 DLLLOCAL extern std::atomic<qore_dbg_queue_push_locked_hook_t> qore_dbg_queue_push_locked_hook;
 #endif
+
+inline QoreRecordedValueReadLocker::QoreRecordedValueReadLocker(QoreThreadLock& lck, const void* target, bool value)
+        : lck(lck) {
+#ifdef DEBUG
+    if (lck.trylock()) {
+        qore_dbg_http_hold(value ? QoreDbgHttpHoldPoint::ValueRead : QoreDbgHttpHoldPoint::ErrorRead, target);
+        lck.lock();
+    }
+#else
+    (void)target;
+    (void)value;
+    lck.lock();
+#endif
+}
 
 #endif

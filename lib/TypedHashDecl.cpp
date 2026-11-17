@@ -142,8 +142,13 @@ int HashDeclMemberInfo::parseInit(const char* name, bool priv) {
     // the initializer is code of the hashdecl, whatever code makes the hashdecl parse it (qore#6268)
     DeclarationParseScopeHelper declaration_scope;
     QoreParseContext parse_context;
-    if (parse_init_value(exp, parse_context) && !err) {
-        err = -1;
+    {
+        // the expression can be parsed on demand while an initialization expression is parsed; it runs when the hash
+        // is created (qore#526)
+        QoreParseInitializerTargetBarrier init_barrier;
+        if (parse_init_value(exp, parse_context) && !err) {
+            err = -1;
+        }
     }
     const QoreTypeInfo* argTypeInfo = parse_context.typeInfo;
     if (parse_context.lvids) {
@@ -261,8 +266,14 @@ int typed_hash_decl_private::parseInit() {
         if (resolveParseParent()) {
             err = -1;
         }
+        // the parent is initialized first, which recurses to the most distant parent that is not yet initialized: a
+        // long chain of inheritance stops while enough stack remains, and the hashdecl is initialized without its
+        // parent, as for a parent that cannot be resolved (issue #6047)
+        if (parentHashDecl && parse_check_stack(loc)) {
+            releaseParentHashDecl();
+            err = -1;
+        }
         if (parentHashDecl) {
-            // Initialize parent first
             const_cast<typed_hash_decl_private*>(get(*parentHashDecl))->parseInit();
 
             // Check for circular inheritance

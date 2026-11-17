@@ -63,7 +63,7 @@ on more than 1 line";
     Internally, strings are stored as a pointer to a sequence of bytes terminated by a null (or zero byte), an unsigned integer giving the length of the string, and a pointer to an object giving the string's @ref character_encoding "character encoding".\n\n
     <string>::strlen() is a constant-time operation (ie <i>O(1)</i>), however if the string has a multi-byte encoding, then <string>::length() (returning the length of the string in characters, not bytes) computational complexity is <i>O(n)</i> (however if the character encoding is a single-byte encoding <string>::length() is also <i>O(1)</i>).\n\n
     @anchor string_views
-    Internally, %Qore strings use a copy-on-write (CoW) view layer that lets read-only operations on substrings of larger strings — most importantly <string>::substr() and the @ref string_slicing "[] slice operator" — share the original buffer instead of allocating and copying the slice.  The first write to a viewed string materialises a private copy automatically, so the optimisation is transparent to user code.  This makes byte- and codepoint-indexed scanning over large strings allocation-free; see @ref fast_text_processing for the suite of cursor- and iterator-based APIs that build on it.\n\n
+    Internally, %Qore strings use a copy-on-write (CoW) view layer that lets read-only operations on substrings of larger strings — most importantly <string>::substr() and the @ref string_slicing "[] slice operator" — share the original buffer instead of allocating and copying the slice, for a large slice that reaches the end of the string (a slice in the middle is copied, as it needs a terminator of its own).  The first write to a viewed string materialises a private copy automatically, so the optimisation is transparent to user code.  This makes byte- and codepoint-indexed scanning over large strings allocation-free; see @ref fast_text_processing for the suite of cursor- and iterator-based APIs that build on it.\n\n
 
     @anchor string_nul_characters
     A string can contain NUL (zero) bytes, since its length is stored with it.  A string passed to the operating
@@ -401,7 +401,9 @@ bool same = c'a' == "a";        # True
     Absolute date/time values can be specified with a syntax based on <a href="http://en.wikipedia.org/wiki/ISO_8601">ISO-8601</a> date formats as follows:
 
     @verbatim
-YYYY-MM-DD[THH:mm:SS[.n*]][Z|[+-]HH[:mm[:SS]]]@endverbatim
+YYYY-MM-DD[THH:mm[:SS[.n*]]][Z|[+-]HH[:mm[:SS]]]@endverbatim
+
+    After the time designator \c T, the seconds are optional (<tt>2015-11-01T10:30</tt> is 10:30:00).
 
     Note that if no time zone information is given, the local time zone will be assumed. If a time zone UTC offset is given, it is given in units of time east of UTC (i.e. \c +05:00 means five hours east of UTC).
 
@@ -448,6 +450,9 @@ YYYY-MM-DD[THH:mm:SS[.n*]][Z|[+-]HH[:mm[:SS]]]@endverbatim
     @verbatim
 YYYY-MM-DD[-HH:mm:SS[.n*]][Z|[+-]HH[:mm[:SS]]]@endverbatim
 
+    In this format the seconds are required, as without them the time cannot be told apart from a UTC offset:
+    <tt>2015-11-01-10:30</tt> is midnight at \c -10:30.
+
     for example, for just the date without a time component (assumed to be midnight on the given date in the local time zone):
     - \c <tt>2010-05-26</tt>
 
@@ -475,7 +480,12 @@ prompt% qore -X '18:35:26+08:00'
     microseconds must be two-digit numbers. If microseconds are present, at least one and up to 6 digits may be given
     after the decimal point. Pad the numbers with leading zeros if the numbers are smaller than the required number of
     digits. The hour component must be in 24-hour time format. Except for the month and day values, all other values
-    start with 0 (hour = 00 - 23, minute and second: 00 - 59).  Text that does not have this format is not a date
+    start with 0 (hour = 00 - 23, minute and second: 00 - 59); a leap second (second \c 60, as in
+    <tt>2016-12-31T23:59:60Z</tt>) cannot be represented and is a parse error, as it raises \c INVALID-DATE in a
+    string converted to a date; this includes a date with a time directly followed by \c :60 in a conditional
+    expression (<tt>c ? 2015-11-01T23:59:60</tt>), which needs a space before the \c : that separates its
+    branches.  The day is required: <tt>2015-11-</tt> followed by other text is not a date
+    literal.  Text that does not have this format is not a date
     literal: it is read as other tokens, which can form a different expression or raise a parse exception;
     <tt>12345-09-09</tt> and <tt>2010-13-01</tt> are integer subtractions, and <tt>-0004-02-29</tt> negates the date
     literal <tt>0004-02-29</tt>.

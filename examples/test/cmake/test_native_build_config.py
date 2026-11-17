@@ -195,8 +195,10 @@ public:
         ExceptionSink xsink;
         connection->deref(&xsink);
     }
-    HttpClientConnectionBase* acquireConnection(const char*, const char*, int, ExceptionSink*) override {
+    HttpClientConnectionBase* acquireConnectionRef(const char*, const char*, int, ExceptionSink*) override {
         ++acquired;
+        // the caller gets a reference of its own
+        connection->ref();
         return connection;
     }
     void releaseConnection(HttpClientConnectionBase*) override {

@@ -130,18 +130,18 @@ class G<T> {
     auto defHd2<U>(T t, U v, auto h = new hash<HD2<T, U>>()) { return h; }
 }
 
-#! returns the value that a background thread pushed, or raises an exception at once if the thread ended without one
+#! returns the value that a background thread pushed, or raises an exception if the thread ended without one
+/** The thread is joined, so the result does not depend on when the thread starts running: a thread that background
+    started is not in thread_list() before it runs, and thread_join() waits for it all the same (issue #6452)
+*/
 auto sub bg_result(Queue q, int tid) {
-    for (int i = 0; i < 300; ++i) {
-        try {
-            return q.get(100ms);
-        } catch (hash<ExceptionInfo> ex) {
-            if (!inlist(tid, thread_list()) && !q.size()) {
-                throw "BACKGROUND-ERROR", sprintf("thread %d ended without a result", tid);
-            }
-        }
+    if (!thread_join(tid, 30s)) {
+        throw "BACKGROUND-ERROR", sprintf("thread %d gave no result in 30 seconds", tid);
     }
-    throw "BACKGROUND-ERROR", sprintf("thread %d gave no result in 30 seconds", tid);
+    if (!q.size()) {
+        throw "BACKGROUND-ERROR", sprintf("thread %d ended without a result", tid);
+    }
+    return q.get();
 }
 
 #! the paths of a generic class with only the class's T, run for two instantiations of the class in one program
@@ -233,8 +233,8 @@ string sub probe(string label, code c) {
     }
 }
 
-#! runs the probes; qcc: true in qcc-compiled code, which leaves out the forms that fail there in non-generic code too
-list<string> sub probes(*bool qcc) {
+#! runs the probes
+list<string> sub probes() {
     N n();
     G<string> g();
     GT<int> gi();
@@ -343,16 +343,9 @@ list<string> sub probes(*bool qcc) {
         probe("threads", auto sub () { return thread_probe(); }),
         probe("concrete.cast", auto sub () { return concrete_cast(1); }),
         probe("concrete.new", auto sub () { return concrete_new(1); }),
+        probe("S.onListCast", auto sub () { return S::onListCast<int>(1); }),
+        probe("S.onHashCast", auto sub () { return S::onHashCast<int>(1); }),
+        probe("S.softlistCast", auto sub () { return S::softlistCast<int>(1); }),
     );
-    # in qcc-compiled code, cast<*list<int>>() and cast<*hash<string, int>>() lose the "*" of their type and
-    # cast<softlist<int>>(1) raises RUNTIME-CAST-ERROR in non-generic code as well (qcc-only bugs, qore#6174), so these
-    # forms are only checked in the interpreted modes
-    if (!qcc) {
-        l += (
-            probe("S.onListCast", auto sub () { return S::onListCast<int>(1); }),
-            probe("S.onHashCast", auto sub () { return S::onHashCast<int>(1); }),
-            probe("S.softlistCast", auto sub () { return S::softlistCast<int>(1); }),
-        );
-    }
     return l;
 }

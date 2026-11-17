@@ -70,6 +70,8 @@ public:
 DLLLOCAL QoreValue qore_call_ref_invoke_named(const ResolvedCallReferenceNode* r, const QoreListNode* args,
         const name_vec_t& arg_names, LexicalSemanticPolicy policy, ExceptionSink* xsink);
 
+class QoreListNodeEvalOptionalRefHolder;
+
 class ResolvedCallReferenceNodeIntern : public ResolvedCallReferenceNode, public CallReferenceNodeLocation {
 public:
     QoreValue dispatchValue(const QoreListNode* args, ExceptionSink* xsink) const override = 0;
@@ -161,11 +163,12 @@ public:
 //! a call reference to a static user method
 class LocalStaticMethodCallReferenceNode : public ResolvedCallReferenceNodeIntern {
 public:
-    DLLLOCAL LocalStaticMethodCallReferenceNode(const QoreProgramLocation* loc, const QoreMethod* n_method)
-            : ResolvedCallReferenceNodeIntern(loc, true), method(n_method) {
-        //printd(5, "LocalStaticMethodCallReferenceNode::LocalStaticMethodCallReferenceNode() this: %p %s::%s() "
-        //    "pgm: %p\n", this, method->getClass()->getName(), method->getName(), pgm);
-    }
+    /** @param n_scope_cls the class that the reference names (\\H::m()), if not the class of the method; a
+        reference to a static method of a generic class through a class that inherits a specialization of it calls
+        the method with the type arguments of the specialization (qore#6285)
+    */
+    DLLLOCAL LocalStaticMethodCallReferenceNode(const QoreProgramLocation* loc, const QoreMethod* n_method,
+            const QoreClass* n_scope_cls = nullptr);
 
     DLLLOCAL virtual ~LocalStaticMethodCallReferenceNode() {
     }
@@ -190,8 +193,45 @@ public:
         return method;
     }
 
+    //! Returns the class that the reference names, which a compiled reference records in place of the method's
+    DLLLOCAL const QoreClass* getScopeClass() const {
+        return scope_cls ? scope_cls : (method ? method->getClass() : nullptr);
+    }
+
+    //! Returns the receiver of the calls through a reference to the static method \a m created at run time
+    /** For a method of a generic class, it is the specialization that \a scope_cls (the class that the reference
+        names) inherits, if any, otherwise, in the code of a class that is or inherits the method's class
+        (\a code_class), the receiver of its running instantiation if it binds the type parameters of the method's
+        class (\\G::m() in G<T>); if there is none, a call through the reference binds them to the types of its
+        arguments, as a call G::m(...) does (see getCallReceiverTypeInfo(); qore#6285); for a method of a class
+        without type parameters that has variants of a generic class, the class (see
+        qore_class_private::getInheritedStaticCallReceiverTypeInfo(); qore#6448)
+    */
+    DLLLOCAL static const QoreTypeInfo* getRuntimeReceiverTypeInfo(const QoreMethod& m, const QoreClass* scope_cls,
+            const qore_class_private* code_class);
+
+    //! Returns the receiver of a call of the static method \a m with the arguments \a args
+    /** \a receiver_type_info, or else for a method of a generic class the receiver that binds the type parameters of
+        the class to the types of the arguments, if any (qore#6285), and for a method of a class without type
+        parameters that has variants of a generic class, the class (qore#6448)
+    */
+    DLLLOCAL static const QoreTypeInfo* getCallReceiverTypeInfo(const QoreMethod& m,
+            const QoreTypeInfo* receiver_type_info, const QoreListNode* args);
+
+    //! as getCallReceiverTypeInfo(), for arguments that can need evaluation
+    /** If the receiver is inferred from the arguments, unevaluated arguments are evaluated into \a eval_args first,
+        and \a args is set to the evaluated list, which the call takes then: the inference needs their values
+    */
+    DLLLOCAL static const QoreTypeInfo* getCallReceiverTypeInfo(const QoreMethod& m,
+            const QoreTypeInfo* receiver_type_info, const QoreListNode*& args,
+            QoreListNodeEvalOptionalRefHolder& eval_args, ExceptionSink* xsink);
+
 protected:
     const QoreMethod* method;
+    //! the class that the reference names, if not the class of the method
+    const QoreClass* scope_cls = nullptr;
+    //! the receiver of the calls of a static method of a generic class that the reference has from its class
+    const QoreTypeInfo* receiver_type_info = nullptr;
 
     // constructor for subclasses
     DLLLOCAL LocalStaticMethodCallReferenceNode(const QoreProgramLocation* loc, const QoreMethod* n_method,
@@ -210,8 +250,12 @@ protected:
     DLLLOCAL virtual bool derefImpl(ExceptionSink* xsink);
 
 public:
+    /** @param n_receiver_type_info the receiver of the calls of a static method of a generic class (see
+        LocalStaticMethodCallReferenceNode::getRuntimeReceiverTypeInfo())
+    */
     DLLLOCAL StaticMethodCallReferenceNode(const QoreProgramLocation* loc, const QoreMethod* n_method,
-            QoreProgram* n_pgm, const qore_class_private* n_class_ctx);
+            QoreProgram* n_pgm, const qore_class_private* n_class_ctx,
+            const QoreTypeInfo* n_receiver_type_info = nullptr);
 
     DLLLOCAL ~StaticMethodCallReferenceNode() {
         assert(!pgm);
@@ -497,8 +541,13 @@ public:
     */
     DLLLOCAL int checkObject(ExceptionSink* xsink) const;
 
+    //! creates the reference
+    /** @param n_missing true if the class of the object has no method of the name, so that a call runs a member
+        holding code or a pseudo-method of objects (issue #995): such a call runs in the class context of the code
+        that made the reference
+    */
     DLLLOCAL RunTimeObjectMethodReferenceNode(const QoreProgramLocation* loc, QoreObject* n_obj,
-            const char* n_method);
+            const char* n_method, bool n_missing = false);
 
     DLLLOCAL virtual QoreValue dispatchValue(const QoreListNode* args, ExceptionSink* xsink) const;
     DLLLOCAL QoreValue dispatchNamed(const QoreListNode* args, const name_vec_t& arg_names,
@@ -528,6 +577,8 @@ private:
     QoreObject* obj;
     std::string method;
     const qore_class_private* qc;
+    //! true if the reference was made for a method that the object's class does not have (issue #995)
+    bool missing;
     //! the Program of the code that created the reference, or nullptr if there was none, with PGM_WEAK_REF set if
     //! the reference holds a weak reference to it
     /** A call runs the method as a direct call in this Program would: called from another Program, the method runs
@@ -540,7 +591,77 @@ private:
     static constexpr uintptr_t PGM_WEAK_REF = 1;
 
     DLLLOCAL virtual ~RunTimeObjectMethodReferenceNode();
+
+    //! evaluates \a f in the class context of the code that made the reference if it was made for a method that the
+    //! object's class does not have, where a pseudo-method that depends on the class context runs (issue #995)
+    template <typename F>
+    DLLLOCAL QoreValue evalInContext(F f) const;
 };
+
+//! a run-time call reference to a pseudo-method of a value that is not an object (issue #995): \c \\l.size() for a
+//! list \c l
+/** The reference holds the value; a call calls the method as a direct call with the value does: a code member of a
+    hash with the name of the method, or the pseudo-method of the value's type (pseudo_classes_eval()).  A reference
+    to a pseudo-method of an object is a RunTimeObjectMethodReferenceNode, whose call looks the method up by name as a
+    direct call does.  The value is scanned for recursive references (qore_get_call_reference_scan_node())
+*/
+class RunTimePseudoMethodReferenceNode : public ResolvedCallReferenceNodeIntern {
+public:
+    //! creates the reference; takes a new reference to \a n_val, which is not an object
+    DLLLOCAL RunTimePseudoMethodReferenceNode(const QoreProgramLocation* loc, QoreValue n_val, const char* n_method);
+
+    DLLLOCAL virtual QoreValue dispatchValue(const QoreListNode* args, ExceptionSink* xsink) const;
+    DLLLOCAL QoreValue dispatchLexicalValue(const QoreListNode* args, ExceptionSink* xsink,
+        const LexicalSemanticPolicy& policy) const override;
+    //! a call with named arguments, bound to the parameters of the pseudo-method as a direct call does
+    DLLLOCAL QoreValue dispatchNamed(const QoreListNode* args, const name_vec_t& arg_names,
+            LexicalSemanticPolicy policy, ExceptionSink* xsink) const override;
+
+    DLLLOCAL virtual bool is_equal_soft(const AbstractQoreNode* v, ExceptionSink* xsink) const {
+        return RunTimePseudoMethodReferenceNode::is_equal_hard(v, xsink);
+    }
+
+    //! returns the value that the reference holds
+    DLLLOCAL const QoreValue& getValue() const {
+        return val;
+    }
+
+    //! two references are equal if they refer to the same pseudo-method of the same value (hard comparison)
+    DLLLOCAL virtual bool is_equal_hard(const AbstractQoreNode* v, ExceptionSink* xsink) const;
+
+    //! returns the function of the pseudo-method of the value's type, or nullptr if there is none
+    DLLLOCAL virtual QoreFunction* getFunction() const;
+
+protected:
+    //! releases the value, which can hold objects, with the ExceptionSink of the dereference
+    DLLLOCAL virtual bool derefImpl(ExceptionSink* xsink);
+
+private:
+    //! the value
+    QoreValue val;
+    std::string method;
+    //! the class context of the code that created the reference, for a call with named arguments
+    const qore_class_private* cctx;
+
+    //! returns the code member of a hash value with the name of the method, which a direct call calls, or nullptr
+    DLLLOCAL const ResolvedCallReferenceNode* getHashMember() const;
+
+    DLLLOCAL virtual ~RunTimePseudoMethodReferenceNode();
+};
+
+//! makes a call reference to the method \a method of \a val, which is not an object (issue #995)
+/** raises an exception as a direct call of the pseudo-method does if the value's type has no such pseudo-method and
+    the value is not a hash with a code member of the name
+
+    @return the reference, or no value if an exception was raised
+*/
+DLLLOCAL QoreValue qore_make_pseudo_method_reference(const QoreProgramLocation* loc, QoreValue val,
+        const char* method, ExceptionSink* xsink);
+
+//! returns true if an object of the class has a method of the name for a call reference that a class method does not
+//! provide: a pseudo-method of objects, or a member, which a direct call calls if it holds code (issue #995)
+DLLLOCAL bool qore_object_has_pseudo_or_member_method(const qore_class_private* cls, const char* method,
+        const qore_class_private* class_ctx);
 
 //! a run-time call reference to a method of a particular object where the method's class
 // is known when the method reference node object is created

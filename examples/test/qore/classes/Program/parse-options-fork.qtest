@@ -1,0 +1,48 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - fork() and the fork handlers of the parse options of Programs
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class ParseOptionsForkTest
+
+#! fork() does not copy the process while another thread changes the parse options of a Program (issue #6177)
+/** The values of a Program's parse options are kept in a set, which a change inserts into.  The child of a fork() made
+    while another thread was inside an insertion re-initialized the Program's lock but had a set left in the middle of
+    an update, which a change of the options in the child could corrupt.  The insertion is now done under a lock that
+    the fork handlers acquire before fork() ("parse_options_values").  dbg_fork_while_handler_held() (debug builds) holds
+    that lock in another thread while fork() is called: fork() must wait for it, and the child must be able to change
+    the options of a Program.
+*/
+class ParseOptionsForkTest inherits QUnit::Test {
+    constructor() : Test("ParseOptionsForkTest", "1.0") {
+        addTestCase("fork() waits for an insertion of parse options", \forkTest());
+        set_return_value(main());
+    }
+
+    forkTest() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the test needs a debug build of the library");
+        }
+        if (!Option::HAVE_FORK) {
+            testSkip("fork() is not available");
+        }
+        Program p(PO_NEW_STYLE);
+        hash<auto> r = call_function("dbg_fork_while_handler_held", "parse_options_values", int sub () {
+            # the child changes the options of the Program, which inserts a new value
+            p.setParseOptions(PO_NO_GUI);
+            return (p.getParseOptions() & PO_NO_GUI) ? 0 : 1;
+        });
+        assertTrue(r.waited, "fork() waited for the thread inside the insertion");
+        assertEq(0, r.status, "the child changed the options of the Program");
+        # the parent can still change the options too
+        p.setParseOptions(PO_NO_FILESYSTEM);
+        assertTrue(boolean(p.getParseOptions() & PO_NO_FILESYSTEM));
+    }
+}

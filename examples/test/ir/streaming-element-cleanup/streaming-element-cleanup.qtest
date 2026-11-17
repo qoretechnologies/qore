@@ -74,10 +74,10 @@ class StreamingElementCleanupTest inherits QUnit::Test {
 
         #! lines of the output of the AST interpreter for the review cases
         const ReviewAstLines = (
-            "temp_pred_select: released t0; released it2; released t1; itdone it; released t2; r 2; released it1; "
+            "temp_pred_select: released t0; released t1; released it2; released t2; itdone it; r 2; released it1; "
                 "released it3; after",
-            "temp_pred_mapsel: released it1; released t0; released it2; released t1; released m0; released it3; "
-                "itdone it; released m2; released t2; r 2; after",
+            "temp_pred_mapsel: released t0; released m0; released it1; released t1; released it2; released t2; "
+                "released m2; released it3; itdone it; r 2; after",
             "fmap_take: released it1; itdone it; after",
             "fused_two_stage: released it3; released it1; released it2; itdone it; catch SELECT/it3; after",
             "tl_map_new_raises: released n0; released h1; released h2; catch SELECT/h2; after",
@@ -107,8 +107,8 @@ class StreamingElementCleanupTest inherits QUnit::Test {
                 "after",
             "fpm_foreach_body: released it1; body p1; released it2; released p1; body p2; itdone it; released p2; "
                 "after",
-            "fpm_nested: released in1; itdone in; released out1; pred o1; released o1; released in1; itdone in; "
-                "released i1; released out2; pred o1; released o1; itdone out; released i1; c 2; after",
+            "fpm_nested: released in1; itdone in; released i1; released out1; pred o1; released o1; released in1; "
+                "itdone in; released i1; released out2; pred o1; released o1; itdone out; c 2; after",
             "strcat_try: catch ENCODING-CONVERSION-ERROR; after",
             "nh_addany: released it2; released it1; itdone it; catch ENCODING-CONVERSION-ERROR; after",
             "nh_divany_nocheck: released it2; released it1; itdone it; catch DIVISION-BY-ZERO; after",

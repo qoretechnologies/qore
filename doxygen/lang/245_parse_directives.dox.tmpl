@@ -4,6 +4,13 @@
 
     %Qore supports the use of parse directives in order to set parsing options, load modules, control warnings, and include other files.
 
+    @anchor unknown_parse_directives
+    A parse directive starts with a \c % sign at the start of a line.  A syntax error in a statement that starts with
+    a line that starts with a name that is not a parse directive (<tt>%%require mymod</tt>) names it and suggests the closest parse directive
+    (<tt>unknown parse directive '%%require'; did you mean '%%requires'?</tt>), and one with a parse directive followed
+    by text that it does not take names the directive.  Such a line is otherwise scanned as code that starts with a
+    @ref context "context" reference (\c %%name), which is valid in the code of a context statement.
+
     Parse directives that set parsing options can be used any time parse options have not been locked on a @ref Qore::Program "Program object". They are used most often when it's not possible or desirable to set the parse options in the qore command line.
 
     The recommended parse directive for %Qore programming is @ref modern "%modern", which combines all the recommended parse options into a single directive:
@@ -91,6 +98,7 @@
     |@ref lock-warnings "%lock-warnings"|Prohibits further changes to the warning mask (equivalent to the <tt>-</tt><tt>-lock-warnings</tt> command line option)
     |@ref loose-args "%loose-args"|reverts the effect of the @ref strict-args "%strict-args" parse options
     |@ref modern "%modern"|Sets @ref new-style "%new-style", @ref require-types "%require-types", @ref strict-args "%strict-args", @ref strong-encapsulation "%strong-encapsulation", @ref no-summarize "%no-summarize", @ref strict-parse-errors "%strict-parse-errors", @ref streaming-any "%streaming-any", @ref negative-offsets "%negative-offsets", and enables all non-strict warnings. This is the recommended parse directive for modern %Qore programming. Files with any extension other than <tt>.q</tt> (including no extension) automatically enable this mode; set the environment variable \c QORE_OLD_STYLE_DEFAULT to disable the auto-enable globally.<br/><br/>Since %Qore 3.0
+    |@ref module-cmd "%module-cmd"<tt>(<em>module</em>) <em>command</em></tt>|Loads the named @ref qore_modules "module" into the current @ref Qore::Program "Program" if it is not already loaded and issues the given command to it at parse time; the module defines the commands that it accepts; see also @ref Qore::Program::issueModuleCmd() "Program::issueModuleCmd()"
     |@ref loose-types "%loose-types"|Deprecated: support removed in %Qore 3.0; this directive has no effect
     |@ref new-style "%new-style"|Sets both @ref allow-bare-refs "%allow-bare-refs" and @ref assume-local "%assume-local". These two options together make programming in %Qore superficially more like programming in C++ or Java programs; use this if you dislike programming with the \c "$" sign, for example; see also @ref old-style "%old-style" <br/><br/>Since %Qore 0.8.1
     |@ref old-style "%old-style"|Resets default %Qore parsing behavior by setting @ref require-dollar "%require-dollar" and @ref assume-global "%assume-global"; this option is the opposite of @ref new-style "%new-style" <br/><br/>Since %Qore 0.8.4
@@ -156,7 +164,7 @@
     |@ref strict-parse-errors "%strict-parse-errors"|Raises the errors that the parser can prove as parse errors, such as a local variable that cannot have been assigned where its value is given to a type that does not accept @ref nothing "NOTHING"; implied by @ref modern "%modern". Set programmatically via the string \c "strict-parse-errors" on @ref Qore::ParseOptions<br/><br/>Since %Qore 3.0
     |@ref strict-types "%strict-types"|Deprecated: support removed in %Qore 3.0; this directive has no effect
     |@ref strong-encapsulation "%strong-encapsulation"|Disallows out-of-line class and namespace declarations. <br/><br/>Since %Qore 0.8.13
-    |@ref try-child-module "%try-child-module" <em>feature</em> <tt>[\<\|\<=\|=\|\>=\|\></tt> <em>version</em><tt>]</tt>|Declares an optional @ref user_module_children "child module" that extends the @ref user_modules "user module" containing the directive; the child is loaded by the module loader after the declaring module has been fully loaded and published.  The declaration is optional: a child that is absent, or that is present but cannot be loaded, never fails the declaring module's load; a child that cannot be loaded is reported and skipped.  Can only be used in a user module<br/><br/>Since %Qore 3.0
+    |@ref try-child-module "%try-child-module" <em>feature</em> <tt>[\<\|\<=\|=\|\>=\|\></tt> <em>version</em><tt>]</tt>|Declares an optional @ref user_module_children "child module" that extends the @ref user_modules "user module" containing the directive; the child is loaded by the module loader after the declaring module has been fully loaded and published.  The declaration is optional: a child that is absent, or that is present but cannot be loaded, does not fail the declaring module's load; a child that cannot be loaded is reported and skipped.  A child that cannot be loaded within the stack of the loading thread is the exception (its parse raises \c PARSE-STACK-LIMIT-EXCEEDED, or its initialization raises \c STACK-LIMIT-EXCEEDED in a thread whose stack is smaller than the default thread stack size): it fails the load with its error and is tried again by the next load (see @ref parse_nesting_limit).  Can only be used in a user module<br/><br/>Since %Qore 3.0
     |@ref try-module "%try-module" [(@ref variable_declarations "var_decl")] <em>feature</em> <tt>[\<\|\<=\|=\|\>=\|\></tt> <em>version</em><tt>]</tt>|If the named feature is not already present in %Qore, then the \c QORE_MODULE_DIR environment variable is used to provide a list of directories to seach for a module with the same name (<em>feature</em><tt>[-api-</tt><em>x</em><tt>.</tt><em>y</em><tt>].qmod</tt> for binary modules or <em>feature</em><tt>.qm</tt> for user modules). If the module is not found, then the qore default module directory is checked unless \c QORE_MODULE_DIR_ONLY is set.<br/><br/>If an error occurs loading the module, then the @ref variable_declarations "variable" declared after <tt>%%try-module</tt> is instantiated with the exception information, and the code up to the @ref endtry "%endtry" parse declaration is parsed into the program, allowing for the qore script/program to handle module loading errors at parse time for modules that must be loaded at parse time.<br/><br/>If version information is provided, then it is compared with the module's version information, and if it does not match a parse exception is raised that is handled like any other load error.<br/><br/>See also @ref Qore::load_module() for a function providing run-time module loading and @ref requires "%requires" for a similar declaration that does not allow for parse-time module loading error handling.<br/><br/>Since %Qore 0.8.6
     |@ref try-reexport-module "%try-reexport-module" [(@ref variable_declarations "var_decl")] <em>feature</em> <tt>[\<\|\<=\|=\|\>=\|\></tt> <em>version</em><tt>]</tt>|The same as @ref try-module "%try-module" except that if used in a @ref user_modules "user module", the module is reexported to the importing code<br/><br/>Since %Qore 0.8.13
     <hr>
@@ -523,7 +531,7 @@
     compatibility.  New code should use \c cast<hash>(...) / \c cast<list>(...) for hard container
     assertions instead.  Not included in @ref modern "%modern".
 
-    This option cannot be set while @ref modern "%modern" is in effect, and @ref modern "%modern" cannot be set while it is in effect (see @ref modern_option_consistency).
+    This option cannot be set while @ref modern "%modern" is in effect, and @ref modern "%modern" cannot be set while it is in effect, unless the application set it as a default for legacy code, which a @ref modern "%modern" directive resets (see @ref modern_option_consistency).
 
     @since %Qore 3.0
 
@@ -542,7 +550,7 @@
     @par Description:
     Use old pre-0.9.4 broken @ref cast "cast<>" operator handling where @ref nothing would be accepted without an error
 
-    This option cannot be set while @ref modern "%modern" is in effect, and @ref modern "%modern" cannot be set while it is in effect (see @ref modern_option_consistency).
+    This option cannot be set while @ref modern "%modern" is in effect, and @ref modern "%modern" cannot be set while it is in effect, unless the application set it as a default for legacy code, which a @ref modern "%modern" directive resets (see @ref modern_option_consistency).
 
     @see @ref correct-cast "%correct-cast"
 
@@ -563,7 +571,7 @@
     @par Description:
     Use old pre-0.8.12 broken @ref int_type "int" and @ref softint_type "softint" runtime handling where type errors were ignored at runtime.
 
-    This option cannot be set while @ref modern "%modern" is in effect, and @ref modern "%modern" cannot be set while it is in effect (see @ref modern_option_consistency).
+    This option cannot be set while @ref modern "%modern" is in effect, and @ref modern "%modern" cannot be set while it is in effect, unless the application set it as a default for legacy code, which a @ref modern "%modern" directive resets (see @ref modern_option_consistency).
 
     @see @ref correct-int-assignments "%correct-int-assignments"
 
@@ -584,7 +592,7 @@
     @par Description:
     Use old pre-0.8.12 broken list parsing where certain lists without parentheses would be rewritten to make top-level statements like <tt>list l = 1, 2, 3;</tt> valid.
 
-    This option cannot be set while @ref modern "%modern" is in effect, and @ref modern "%modern" cannot be set while it is in effect (see @ref modern_option_consistency).
+    This option cannot be set while @ref modern "%modern" is in effect, and @ref modern "%modern" cannot be set while it is in effect, unless the application set it as a default for legacy code, which a @ref modern "%modern" directive resets (see @ref modern_option_consistency).
 
     @see @ref correct-list-parsing "%correct-list-parsing"
 
@@ -606,7 +614,11 @@
     Use old pre-2.0 broken list range operator where out-of-range values would result in returning @ref NOTHING
     values, breaking strongly-typed lists and contrary to the behavior of the same operator on a string
 
-    This option cannot be set while @ref modern "%modern" is in effect, and @ref modern "%modern" cannot be set while it is in effect (see @ref modern_option_consistency).
+    A range of a list that reaches outside of the list gives a list whose element type allows @ref NOTHING (ex:
+    <tt>list&lt;*int&gt;</tt> for a <tt>list&lt;int&gt;</tt>), which is also the type of the range expression of a list
+    with this option
+
+    This option cannot be set while @ref modern "%modern" is in effect, and @ref modern "%modern" cannot be set while it is in effect, unless the application set it as a default for legacy code, which a @ref modern "%modern" directive resets (see @ref modern_option_consistency).
 
     @see @ref correct-list-range "%correct-list-range"
 
@@ -642,7 +654,7 @@
     1 \| 2 ^ 3 & 5 = 3
     @endcode
 
-    This option cannot be set while @ref modern "%modern" is in effect, and @ref modern "%modern" cannot be set while it is in effect (see @ref modern_option_consistency).
+    This option cannot be set while @ref modern "%modern" is in effect, and @ref modern "%modern" cannot be set while it is in effect, unless the application set it as a default for legacy code, which a @ref modern "%modern" directive resets (see @ref modern_option_consistency).
 
     @see @ref correct-logic-precedence "%correct-logic-precedence"
 
@@ -664,7 +676,7 @@
     Enables legacy namespace resolution behavior where symbol resolution prefers the shortest path and can
     allow user-defined symbols to shadow symbols in the @ref Qore "Qore" namespace.
 
-    This option cannot be set while @ref modern "%modern" is in effect, and @ref modern "%modern" cannot be set while it is in effect (see @ref modern_option_consistency).
+    This option cannot be set while @ref modern "%modern" is in effect, and @ref modern "%modern" cannot be set while it is in effect, unless the application set it as a default for legacy code, which a @ref modern "%modern" directive resets (see @ref modern_option_consistency).
 
     @see @ref correct-namespace-resolution "%correct-namespace-resolution"
 
@@ -686,7 +698,7 @@
     Use old pre-0.8.13 handling of break/continue: continue statements in a switch behave like a break statement,
     both @ref break "break" and @ref continue "continue" behave like @ref return "return" when used outside of a loop.
 
-    This option cannot be set while @ref modern "%modern" is in effect, and @ref modern "%modern" cannot be set while it is in effect (see @ref modern_option_consistency).
+    This option cannot be set while @ref modern "%modern" is in effect, and @ref modern "%modern" cannot be set while it is in effect, unless the application set it as a default for legacy code, which a @ref modern "%modern" directive resets (see @ref modern_option_consistency).
 
     @since %Qore 0.8.13
 
@@ -710,7 +722,7 @@
     This option is provided for backwards compatibility with code that relies on the old behavior where
     \c auto variables could be assigned values of different types without parse-time errors.
 
-    This option cannot be set while @ref modern "%modern" is in effect, and @ref modern "%modern" cannot be set while it is in effect (see @ref modern_option_consistency).
+    This option cannot be set while @ref modern "%modern" is in effect, and @ref modern "%modern" cannot be set while it is in effect, unless the application set it as a default for legacy code, which a @ref modern "%modern" directive resets (see @ref modern_option_consistency).
 
     @par Example:
     Without this option, the following code would fail at parse time:
@@ -768,7 +780,7 @@ i+ =4;
     @endcode
     When this parse directive is set; the above code is accepted.
 
-    This option cannot be set while @ref modern "%modern" is in effect, and @ref modern "%modern" cannot be set while it is in effect (see @ref modern_option_consistency).
+    This option cannot be set while @ref modern "%modern" is in effect, and @ref modern "%modern" cannot be set while it is in effect, unless the application set it as a default for legacy code, which a @ref modern "%modern" directive resets (see @ref modern_option_consistency).
 
     @see @ref correct-operators "%correct-operators"
 
@@ -789,7 +801,7 @@ i+ =4;
     @par Description:
     Include the upper limit in @ref Qore::range() "range()" and @ref Qore::xrange() "xrange()" as with %Qore before 0.9.5
 
-    This option cannot be set while @ref modern "%modern" is in effect, and @ref modern "%modern" cannot be set while it is in effect (see @ref modern_option_consistency).
+    This option cannot be set while @ref modern "%modern" is in effect, and @ref modern "%modern" cannot be set while it is in effect, unless the application set it as a default for legacy code, which a @ref modern "%modern" directive resets (see @ref modern_option_consistency).
 
     @see @ref correct-range "%correct-range"
 
@@ -810,7 +822,7 @@ i+ =4;
     @par Description:
     Do not enforce @ref reference_type "reference" and @ref reference_or_nothing_type "*reference" type restrictions as with pre-0.8.13; when this option is in effect, the @ref reference_type "reference" and @ref reference_or_nothing_type "*reference" type restrictions are ignored and have no type restrictions.
 
-    This option cannot be set while @ref modern "%modern" is in effect, and @ref modern "%modern" cannot be set while it is in effect (see @ref modern_option_consistency).
+    This option cannot be set while @ref modern "%modern" is in effect, and @ref modern "%modern" cannot be set while it is in effect, unless the application set it as a default for legacy code, which a @ref modern "%modern" directive resets (see @ref modern_option_consistency).
 
     @since %Qore 0.8.3
 
@@ -836,7 +848,7 @@ i+ =4;
     as @ref softint_or_nothing_type "*softint") accept \c NULL as @ref nothing "NOTHING" with or without this option,
     and @ref softlist_type "softlist" converts it to an empty list.
 
-    This option cannot be set while @ref modern "%modern" is in effect, and @ref modern "%modern" cannot be set while it is in effect (see @ref modern_option_consistency).
+    This option cannot be set while @ref modern "%modern" is in effect, and @ref modern "%modern" cannot be set while it is in effect, unless the application set it as a default for legacy code, which a @ref modern "%modern" directive resets (see @ref modern_option_consistency).
 
     @see @ref correct-soft-types "%correct-soft-types"
 
@@ -857,7 +869,7 @@ i+ =4;
     @par Description:
     Use pre-0.9 sprintf format handling where no argument is handled differently than @ref nothing
 
-    This option cannot be set while @ref modern "%modern" is in effect, and @ref modern "%modern" cannot be set while it is in effect (see @ref modern_option_consistency).
+    This option cannot be set while @ref modern "%modern" is in effect, and @ref modern "%modern" cannot be set while it is in effect, unless the application set it as a default for legacy code, which a @ref modern "%modern" directive resets (see @ref modern_option_consistency).
 
     @see @ref correct-sprintf "%correct-sprintf"
 
@@ -879,7 +891,7 @@ i+ =4;
     Use pre-1.17 varargs handling where varargs are detected based on the function or method body, and the vararg flag
     is set by default on all @ref abstract "abstract" methods.
 
-    This option cannot be set while @ref modern "%modern" is in effect, and @ref modern "%modern" cannot be set while it is in effect (see @ref modern_option_consistency).
+    This option cannot be set while @ref modern "%modern" is in effect, and @ref modern "%modern" cannot be set while it is in effect, unless the application set it as a default for legacy code, which a @ref modern "%modern" directive resets (see @ref modern_option_consistency).
 
     @see @ref correct-varargs "%correct-varargs"
 
@@ -1574,7 +1586,8 @@ sub validate_input(int value, int max_value) {
     n/a
 
     @par Description:
-    Prohibits further changes to parse options.
+    Prohibits further changes to parse options.  The restrictions in effect where the directive is used are locked,
+    also in a file with @ref push-parse-options "%push-parse-options", after which they stay in effect.
 
     <hr>
     @section lock-warnings %lock-warnings
@@ -1649,7 +1662,10 @@ sub validate_input(int value, int max_value) {
     - the compatibility options that change the meaning of code cannot be set: @ref broken-cast "%broken-cast", @ref broken-int-assignments "%broken-int-assignments", @ref broken-list-parsing "%broken-list-parsing", @ref broken-list-range "%broken-list-range", @ref broken-logic-precedence "%broken-logic-precedence", @ref broken-loop-statement "%broken-loop-statement", @ref broken-namespace-resolution "%broken-namespace-resolution", @ref broken-narrowed-types "%broken-narrowed-types", @ref broken-operators "%broken-operators", @ref broken-range "%broken-range", @ref broken-references "%broken-references", @ref broken-sprintf "%broken-sprintf", @ref broken-varargs "%broken-varargs", @ref broken-soft-types "%broken-soft-types", @ref broken-auto-cast "%broken-auto-cast", @ref strict-bool-eval "%strict-bool-eval" and @ref no-string-index-char "%no-string-index-char"
     - the options that it implies cannot be disabled while it stays in effect: @ref no-negative-offsets "%no-negative-offsets", and disabling @ref no-summarize "%no-summarize" or @ref streaming-any "%streaming-any" through the API
 
-    Such a parse directive raises a \c PARSE-OPTION-ERROR parse exception, and such a call of Program::setParseOptions(), Program::disableParseOptions(), Program::replaceParseOptions() or of the Program constructor (also for a child Program that has \c %%modern from its parent) raises an \c OPTION-ERROR exception.  Nor can \c %%modern be set while such an option is in effect, however it would take effect: a \c %%modern directive after the option, a file parsed in \c %%modern mode by its extension (a \c PARSE-OPTION-ERROR that names the file and the option), the <tt>-M</tt> command-line option with the option given with <tt>-p</tt>, @ref Qore::PO_MODERN given with Program::setParseOptions() or with Program::applySourceDefaults(), or a child Program created with @ref Qore::PO_MODERN whose parent has the option (the exception names the option); so an option given for legacy code, for example with <tt>-p</tt> on the command line, applies only to code that is not parsed in \c %%modern mode, such as a <tt>.q</tt> file, and an independent child Program or a module (which never inherit such options) can have \c %%modern.  The same applies to ProgramControl::createEvalProgram(), to a module parse option mask (\c MODULE-PARSE-OPTION-MASK-ERROR), to the C++ API's \c QoreProgramHelper, and to qcc and AOT artifacts: an executable, module or object compiled before this rule with both is refused when it is loaded, run or linked, with an error that says to rebuild it.  Giving \c %%modern and such an option together (Program::setParseOptions(), Program::replaceParseOptions(), the Program constructor) raises the \c OPTION-ERROR exception.  Disabling one of the options that make up \c %%modern (@ref old-style "%old-style", @ref loose-args "%loose-args", @ref require-dollar "%require-dollar", @ref assume-global "%assume-global") turns \c %%modern off for the rest of the parse context, after which the compatibility options can be used; this is how legacy code in a file that is parsed in \c %%modern mode by its extension opts out.  Options that do not change the meaning of code, such as warnings, restrictions and keyword opt-outs, can be set as before.
+    Such a parse directive raises a \c PARSE-OPTION-ERROR parse exception, and such a call of Program::setParseOptions(), Program::disableParseOptions(), Program::replaceParseOptions() or of the Program constructor (also for a child Program that has \c %%modern from its parent) raises an \c OPTION-ERROR exception.  Nor can \c %%modern be set while such an option is in effect, however it would take effect (except for the reset described below): a \c %%modern directive after a directive that set the option, a file parsed in \c %%modern mode by its extension (a \c PARSE-OPTION-ERROR that names the file and the option), the <tt>-M</tt> command-line option with the option given with <tt>-p</tt>, @ref Qore::PO_MODERN given with Program::setParseOptions() or with Program::applySourceDefaults(), or a child Program created with @ref Qore::PO_MODERN whose parent has the option (the exception names the option); so an option given for legacy code, for example with <tt>-p</tt> on the command line, applies only to code that is not parsed in \c %%modern mode, such as a <tt>.q</tt> file, and an independent child Program or a module (which never inherit such options) can have \c %%modern.  The same applies to ProgramControl::createEvalProgram(), to a module parse option mask (\c MODULE-PARSE-OPTION-MASK-ERROR), to the C++ API's \c QoreProgramHelper, and to qcc and AOT artifacts: an executable, module or object compiled before this rule with both is refused when it is loaded, run or linked, with an error that says to rebuild it.  Giving \c %%modern and such an option together (Program::setParseOptions(), Program::replaceParseOptions(), the Program constructor) raises the \c OPTION-ERROR exception.  Disabling one of the options that make up \c %%modern (@ref old-style "%old-style", @ref loose-args "%loose-args", @ref require-dollar "%require-dollar", @ref assume-global "%assume-global") turns \c %%modern off for the rest of the parse context, after which the compatibility options can be used; this is how legacy code in a file that is parsed in \c %%modern mode by its extension opts out.  Options that do not change the meaning of code, such as warnings, restrictions and keyword opt-outs, can be set as before.
+
+    @par Compatibility Defaults of the Application:
+    A \c %%modern parse directive resets such an option when the application set it through the API as a default for legacy code: with the Program constructor (also with @ref Qore::ParseOptions "ParseOptions"), with Program::setParseOptions() from any thread, before or during the parse, or with <tt>-p</tt> on the command line; the code then has the semantics of \c %%modern.  A \c %%modern directive is still refused (\c PARSE-OPTION-ERROR) when a parse directive set the option, in the same code in either order or in code parsed into the Program before while it is in effect, and when the options of the Program were locked (Program::lockOptions(), @ref lock-options "%lock-options") while it was in effect.  In a file with @ref push-parse-options "%push-parse-options", the reset ends with the file.  Only a \c %%modern directive resets: a directive that completes \c %%modern with options that the application set (such as @ref new-style "%new-style") is refused.  The refusal for locked options keeps the options consistent, it is no guarantee: compatibility options are not restrictions, and code can turn them off with their opposite directives (such as @ref correct-namespace-resolution "%correct-namespace-resolution") also when the options of its Program are locked.
 
     @par File Extension:
     Starting with %Qore 3.0, files with any extension except <tt>.q</tt> automatically enable \c %%modern mode without requiring any parse directive. This includes conventional extensions such as <tt>.qr</tt>, <tt>.qc</tt>, <tt>.qm</tt>, <tt>.qtest</tt>, <tt>.qsd</tt>, <tt>.qfd</tt>, <tt>.qrd</tt>, <tt>.qore</tt>, as well as files with no extension at all. Only files whose filename ends in exactly <tt>.q</tt> stay in legacy mode by default, preserving backward compatibility for existing scripts.
@@ -1672,6 +1688,47 @@ sub validate_input(int value, int max_value) {
     - Use \c "any (expr)" for the streaming operator in syntactically ambiguous positions such as direct function-call arguments.
 
     @since %Qore 3.0
+
+    <hr>
+    @section module-cmd %module-cmd
+
+    @par Parse Directive:
+    <tt>%%module-cmd(<em>module</em>) <em>command</em></tt>
+
+    @par Command Line:
+    n/a
+
+    @par Parse Option Constant:
+    n/a
+
+    @par Description:
+    Issues a command to a @ref qore_modules "module" at parse time: the module named in parentheses is loaded into
+    the current @ref Qore::Program "Program" if it is not already loaded, and the rest of the line, without leading
+    and trailing whitespace, is given to the module's command handler as the command when the directive is parsed, so
+    that the command can affect the parsing of the code that follows it (ex: by importing the classes that the code
+    uses).  The directive must be on a line of its own, starting at the beginning of the line.
+
+    The commands that a module accepts and what they do are defined by the module; see its documentation.  For
+    example, the \c jni module adds entries to the Program's classpath and imports Java classes into the Program with
+    commands:
+    @code{.py}
+%module-cmd(jni) add-classpath /opt/app/lib/app.jar
+%module-cmd(jni) import java.util.ArrayList
+
+ArrayList l();
+    @endcode
+
+    A directive without a module name in parentheses or without a command raises a parse exception, and a directive
+    for a module that cannot be loaded or that has no command handler raises \c PARSE-COMMAND-ERROR; an error in the
+    command itself raises an exception defined by the module.
+
+    A command issued by restricted code (sandboxed code, or code with a parse option that restricts a functional
+    domain, such as @ref no-filesystem "%no-filesystem") is given only to a module that declares that its command
+    handler honors the restrictions of the code that issues it; for any other module the directive raises
+    \c PARSE-COMMAND-ERROR (see @ref qore_modules).  A program or module compiled with \c qcc records its
+    \c %%module-cmd directives and issues them again when it is loaded.
+
+    A command can also be issued at runtime with @ref Qore::Program::issueModuleCmd() "Program::issueModuleCmd()".
 
     <hr>
     @section new-style %new-style
@@ -2360,7 +2417,7 @@ string value = c("legacy");
     @par Description:
     Preserves the historical single-index string behavior where \c string[i] returns \c *string. Without this option, \c string[i] returns \c *char while string ranges and list indexes still return strings.
 
-    This option cannot be set while @ref modern "%modern" is in effect, and @ref modern "%modern" cannot be set while it is in effect (see @ref modern_option_consistency).
+    This option cannot be set while @ref modern "%modern" is in effect, and @ref modern "%modern" cannot be set while it is in effect, unless the application set it as a default for legacy code, which a @ref modern "%modern" directive resets (see @ref modern_option_consistency).
 
     @par Example:
     @code{.py}
@@ -2859,6 +2916,13 @@ if (str)
     @ref modern "%modern" itself, so that the file's %%modern ends with the file.  The compatibility options that a
     pushed scope sets (such as @ref broken-range "%broken-range") apply only to the code parsed in it.
 
+    The options that the file's directives set are in effect only for the code of the file, in the thread that parses
+    it: other threads, including their calls into the @ref Qore::Program "Program", see the Program's own options.  A
+    change of the Program's own options that is made while the file is parsed (with
+    @ref Qore::Program::setParseOptions() "Program::setParseOptions()", for example) applies to the rest of the file
+    as well and is kept after it.  If the file locks the options with @ref lock-options "%lock-options", the
+    restrictions in effect then stay in effect after the file; its other options end with it.
+
     <hr>
     @section require-dollar %require-dollar
 
@@ -2973,6 +3037,13 @@ if (str)
     Sets the time zone for the current program from a UTC offset (with format \c "+/-00[:00[:00]]"; \c ":" characters
     are optional) or a time zone region name (ex: \c "Europe/Prague").
 
+    A program or module compiled ahead of time with \c qcc records the time zone that its code sets, also with the
+    \c -z option of <tt>qore --compile</tt>, and sets it when it is loaded, as the directive does when its source is
+    parsed: a module's time zone is not set when the restrictions of the code loading it disallow locale control
+    (@ref Qore::PO_NO_LOCALE_CONTROL "PO_NO_LOCALE_CONTROL") where the directive is, which for a directive after the
+    header of a module whose \c domains declare the locale control domain are the restrictions that the
+    declaration leaves.
+
     <hr>
     @section strict-args %strict-args
 
@@ -3019,7 +3090,7 @@ if (str)
     If <tt>%%strict-bool-eval</tt> is set, then %Qore's boolean evaluation will evaluate \c "hello" in a strict mathematical sense and convert it to 0, which is @ref False "False", so nothing would be printed out, but when <tt>%%perl-bool-eval</tt> is enabled, this will be @ref True "True" (following the rules for <string>::val()).\n\n
     %Qore's strict mathematical boolean evaluation was the default prior to %Qore 0.8.6, however it was considered non-intuitive and a design bug, and therefore the default behavior of the language was changed to a more intuitive form of boolean evaluation as documented in @ref perl-bool-eval "%perl-bool-eval".
 
-    This option cannot be set while @ref modern "%modern" is in effect, and @ref modern "%modern" cannot be set while it is in effect (see @ref modern_option_consistency).
+    This option cannot be set while @ref modern "%modern" is in effect, and @ref modern "%modern" cannot be set while it is in effect, unless the application set it as a default for legacy code, which a @ref modern "%modern" directive resets (see @ref modern_option_consistency).
 
     @note also affects the @ref Qore::boolean(auto) "boolean(auto)" function
 
@@ -3119,6 +3190,8 @@ int sub get() {
 
     @par Description:
     Disallows out-of-line namespace and class declarations which break encapsulation by allowing changes to existing namespaces and classes by external code.
+    Out-of-line method definitions are refused too, at the top level and in a namespace block (since %Qore 3.0, also
+    in a namespace block; see @ref outofline_methods_in_namespaces "out-of-line methods in namespaces").
 
     @since %Qore 0.8.13
 
@@ -3140,7 +3213,8 @@ int sub get() {
     The behavior when the module load is attempted is as follows:
     - if the child is not installed, nothing happens; the declaring module works exactly as it does without the declaration
     - if the child is installed, it is loaded and initialized after the parent module has been published; note that the child's namespace is <i>not</i> imported into any @ref Qore::Program "Program" object, so code that requires the child's classes must load it explicitly
-    - if the child is installed but cannot be loaded (for example due to a parse error, an error in its initialization code, or a version mismatch), the child is skipped and the declaring module is loaded without it; the child's own error is reported as a \c MODULE-CHILD-FAILED warning and recorded in get_module_hash(), so that a broken extension can be told from an absent one.  A child declaration is optional, so an extension that cannot be used never makes the module that declares it unusable\n\n
+    - if the child is installed but cannot be loaded (for example due to a parse error, an error in its initialization code, or a version mismatch), the child is skipped and the declaring module is loaded without it; the child's own error is reported as a \c MODULE-CHILD-FAILED warning and recorded in get_module_hash(), so that a broken extension can be told from an absent one.  A child declaration is optional, so an extension that cannot be used does not make the module that declares it unusable
+    - if the child cannot be loaded within the stack of the loading thread (its parse raises \c PARSE-STACK-LIMIT-EXCEEDED, or its initialization raises \c STACK-LIMIT-EXCEEDED in a thread whose stack is smaller than the default thread stack size), the error depends on the thread and not on the child: the declaring module's load fails with it, and the child is attached by a later load in a thread with enough stack; see @ref parse_nesting_limit\n\n
 
     A comparison operator (one of <tt>\<, \<=, =, \>=, or \></tt>) and version information can be optionally given after the module name; version numbers are compared as with @ref requires "%requires".  A child that is installed with a non-matching version is reported as a failed child, not as an absent one.\n\n
     For example:\n
@@ -3159,8 +3233,9 @@ module SalesforceRestDataProvider {
     - Child modules are attached once the outermost module load in progress has completed, so that a child that depends on any module still being loaded resolves it correctly.
     - Child modules are attached in declaration order; a child that declares child modules of its own has them attached before the next declaration in the parent.
     - The child is loaded with the parse options and module search path of the declaring module's @ref Qore::Program "Program" object; if that object was created with @ref Qore::PO_NO_MODULES "PO_NO_MODULES", no child is loaded and a \c MODULE-CHILD-SKIPPED warning is raised instead.
+    - A child that is blacklisted with @ref Qore::qore_add_module_to_blacklist() "qore_add_module_to_blacklist()" is not loaded, whether or not it is installed; it is reported as skipped, with a \c MODULE-CHILD-SKIPPED warning when warnings are enabled, and not as a child that failed to load.
     - A broken child is always reported; for a module loaded by @ref requires "%requires", the warning is a parse warning of the code with the directive (returned by Program::parse() with a warning mask, and written by \c qore with its other warnings); when no caller can receive it, as when warnings are disabled, the message is written to \c stderr (see @ref aot_module_source_fallback).
-    - A child that could not be loaded is not tried again in the same process; a child fixed on disk is picked up the next time the program is started.
+    - A child that could not be loaded is not tried again in the same process; a child fixed on disk is picked up the next time the program is started.  A child that could not be loaded within the stack of the loading thread is the exception: it stays pending and is tried again.
     - Use get_module_hash() to see the attachment status of each declared child module; see @ref user_module_children "Child Modules" for details.
 
     @see
@@ -3210,6 +3285,11 @@ module SalesforceRestDataProvider {
     @note
     - There is one special feature name: \c "qore". This pseudo-feature can be used to check the minimum %Qore version; if this feature is requested with version information, then the %Qore library's version information is used for the version number comparison.
     - No type can be given with the \c %%try-module variable declaration; the value assigned to the variable will be a @ref hash_type "hash".
+    - A module that cannot be parsed within the stack of the parsing thread, or that loads such a module, is not handled
+      as a module that is not available: its \c PARSE-STACK-LIMIT-EXCEEDED error is a parse error of the code with the
+      directive; so is a \c STACK-LIMIT-EXCEEDED raised while the module is initialized in a thread whose stack is
+      smaller than the default thread stack size, while in a thread with at least that much stack, the module is handled
+      as any other module that cannot be loaded (see @ref parse_nesting_limit)
 
     @see @ref requires "%requires" for a similar parse directive where errors are handled with the default parse exception handler
 

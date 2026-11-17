@@ -1,0 +1,155 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%prepend-module-path "${SCRIPT_DIR}"
+%requires QUnit
+%requires SqlUtil
+%requires ./PgsqlTestIsolation.qm
+
+%try-module sqlite3
+%define NoSqlite3
+%endtry
+
+%try-module pgsql
+%define NoPgsql
+%endtry
+
+%exec-class SqlUtilJoinColumnOperatorsTest
+
+#! Tests column operators in the join columns of the join functions (issue #738)
+/** A value of the join column hash can be a column operator hash; its columns given without a table alias are
+    columns of the joined table.  The tests run on SQLite and, when \c QORE_DB_CONNSTR_PGSQL is set, on PostgreSQL in
+    a schema of their own.
+*/
+class SqlUtilJoinColumnOperatorsTest inherits QUnit::Test {
+    public {
+        #! the optional schema of a table name in SQL, as a regular expression (PostgreSQL gives the run's schema)
+        const T = "(?:\\w+\\.)?";
+    }
+
+    private {
+        *Datasource sqlite;
+        *Datasource pgsql;
+    }
+
+    constructor() : Test("SqlUtilJoinColumnOperators", "1.0", \ARGV) {
+        addTestCase("SQLite: column operators in join columns", \sqliteJoins());
+        addTestCase("SQLite: invalid join columns", \sqliteErrors());
+        addTestCase("PostgreSQL: column operators in join columns", \pgsqlJoins());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+%ifndef NoSqlite3
+        sqlite = new Datasource("sqlite3:x@:memory:");
+        setupTables(sqlite);
+%endif
+%ifndef NoPgsql
+        if (ENV.QORE_DB_CONNSTR_PGSQL) {
+            PgsqlRunSchema::setup(ENV.QORE_DB_CONNSTR_PGSQL, "SqlUtilJoinColumnOperators");
+            pgsql = new Datasource(ENV.QORE_DB_CONNSTR_PGSQL);
+            setupTables(pgsql);
+        }
+%endif
+    }
+
+    globalTearDown() {
+        if (pgsql) {
+            pgsql.rollback();
+            delete pgsql;
+            PgsqlRunSchema::teardown();
+        }
+    }
+
+    private setupTables(Datasource ds) {
+        ds.exec("create table jco_main (id integer not null primary key, name varchar(20), code varchar(10))");
+        ds.exec("create table jco_other (id integer not null primary key, label varchar(20), num integer)");
+        ds.exec("insert into jco_main values (1, 'alpha', '10'), (2, 'beta', '20'), (3, 'gamma', '30')");
+        ds.exec("insert into jco_other values (1, 'ALPHA', 10), (2, 'beta', 20), (3, 'Delta', 99)");
+        ds.commit();
+    }
+
+    sqliteJoins() {
+        if (!sqlite) {
+            testSkip("no sqlite3 module");
+        }
+        checkJoins(sqlite, "cast(o.num as text)");
+    }
+
+    sqliteErrors() {
+        if (!sqlite) {
+            testSkip("no sqlite3 module");
+        }
+        Table main(sqlite, "jco_main");
+        Table other(sqlite, "jco_other");
+        # an operator that gives a column alias cannot be used
+        code do_select = auto sub (hash<auto> sh) { return main.selectRows(sh); };
+        assertThrows("SELECT-ERROR", "column alias", do_select,
+            {"join": join_inner(other, "o", {"name": cop_as("label", "x")})});
+        # a value that is neither a column name nor a column operator
+        assertThrows("SELECT-ERROR", "must be a column name", do_select, {"join": join_inner(other, "o", {"id": 1})});
+        # an unknown column of the joined table in the operator
+        assertThrows("COLUMN-ERROR", "unknown column", do_select,
+            {"join": join_inner(other, "o", {"name": cop_lower("name")})});
+    }
+
+    pgsqlJoins() {
+%ifdef NoPgsql
+        testSkip("no pgsql module");
+%endif
+        if (!pgsql) {
+            testSkip("QORE_DB_CONNSTR_PGSQL is not set");
+        }
+        on_exit pgsql.rollback();
+        checkJoins(pgsql, "cast (o.num as varchar)");
+    }
+
+    #! checks the joins on a database
+    /** @param ds the database
+        @param cast_sql the SQL of the cast of the joined column with the alias \c o
+    */
+    private checkJoins(Datasource ds, string cast_sql) {
+        Table main(ds, "jco_main");
+        Table other(ds, "jco_other");
+
+        # an inner join with an alias: the operator's column is a column of the joined table
+        string sql;
+        list<auto> rows = main.selectRows({
+            "columns": ("id", "o.label"),
+            "join": join_inner(other, "o", {"code": cop_cast("num", "string")}),
+            "orderby": "id",
+        }, \sql);
+        assertEq(({"id": 1, "label": "ALPHA"}, {"id": 2, "label": "beta"}), rows);
+        assertRegex("on \\(" + T + "jco_main\\.code = " + quote(cast_sql) + "\\)", sql);
+
+        # a left join without an alias, and an operator together with a column name
+        rows = main.selectRows({
+            "columns": ("id", "jco_other.num"),
+            "join": join_left(other, NOTHING, {"name": cop_lower("label"), "id": "id"}),
+            "orderby": "id",
+        }, \sql);
+        assertEq(({"id": 1, "num": 10}, {"id": 2, "num": 20}, {"id": 3, "num": NULL}), rows);
+        assertRegex(T + "jco_main\\.name = lower\\(" + T + "jco_other\\.label\\) and " + T + "jco_main\\.id = "
+            + T + "jco_other\\.id", sql);
+
+        # nested operators with a column of another table of the query, given with its alias, and a column of the
+        # joined table
+        rows = main.selectRows({
+            "columns": ("id",),
+            "join": join_inner(other, "o", {"id": "id"})
+                + join_inner(other, "o2", {"id": "id", "name": cop_coalesce(cop_lower("o.label"), "label")}),
+            "orderby": "id",
+        }, \sql);
+        assertEq(({"id": 1}, {"id": 2}), rows);
+        assertRegex(T + "jco_main\\.name = coalesce\\(lower\\(o\\.label\\),o2\\.label\\)", sql);
+    }
+
+    #! returns the string quoted for a regular expression
+    static string quote(string str) {
+        return regex_subst(str, "([().\\[\\]*+?^$|\\\\])", "\\\\$1", RE_Global);
+    }
+}

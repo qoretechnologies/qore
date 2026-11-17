@@ -161,10 +161,10 @@ public class Http3ClientConnection inherits HttpClientConnection {
                 && cs != HttpClientConnectionState::Connecting) {
             return False;
         }
-        int total = poll_op.getActiveStreamCount() + getPendingStreamCount();
-        if (max_concurrent_streams && total >= max_concurrent_streams) {
-            return False;
-        }
+        # the stream limit: the active streams and the reservations are counted against it under the reservation lock
+        # of the C++ connection, where a request that is being submitted, whose reservation is released after its
+        # active stream is counted, is in one of the two counts
+        int limit = max_concurrent_streams;
         if (cs == HttpClientConnectionState::Connecting) {
             # Cap pending reservations on Connecting connections to limit
             # blast radius of a handshake failure.
@@ -176,12 +176,12 @@ public class Http3ClientConnection inherits HttpClientConnection {
                 return False;
             }
             int quic_limit = poll_op.getQuicStreamLimit();
-            if (quic_limit && total >= quic_limit) {
-                return False;
+            if (quic_limit && (!limit || quic_limit < limit)) {
+                limit = quic_limit;
             }
         }
-        # counted in the C++ connection, as by the base class (#6184); the limits were checked above
-        return tryReservePendingStream(poll_op.getActiveStreamCount(), 0);
+        # counted in the C++ connection, as by the base class (#6184)
+        return tryReservePendingStream(poll_op, limit);
     }
 
     #! Wakes the async I/O controller to flush pending QUIC writes
@@ -374,7 +374,8 @@ public class Http3ClientConnection inherits HttpClientConnection {
         # a full send buffer takes nothing: the send waits for the buffer to drain and is made again, at most
         # drain_timeout, as on HTTP/2; the wait is woken when the stream's staged data is handed to the transport and
         # when the stream closes, so a reset ends it at once (a fixed retry bound was a hidden timeout)
-        *date deadline;
+        # on the monotonic clock, in microseconds
+        *int deadline;
         while (True) {
             int rv = poll_op.sendStreamData(stream_id, data, end_stream);
             if (ctl) {
@@ -388,9 +389,9 @@ public class Http3ClientConnection inherits HttpClientConnection {
                     stream_id);
             }
             if (!deadline) {
-                deadline = now_us() + milliseconds(drain_timeout);
+                deadline = clock_get_monotonic_us() + drain_timeout * 1000;
             }
-            int remaining = (deadline - now_us()).durationMilliseconds();
+            int remaining = (deadline - clock_get_monotonic_us() + 999) / 1000;
             if (remaining <= 0) {
                 throw "HTTP3-FLOW-CONTROL", sprintf("stream %d: the send buffer did not drain within %d ms; the "
                     "data was not sent", stream_id, drain_timeout);

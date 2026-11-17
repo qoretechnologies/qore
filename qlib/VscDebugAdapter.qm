@@ -102,6 +102,10 @@ module VscDebugAdapter {
     - the client is not notified when another debugger client changes a breakpoint
 
     @subsection vda_v0_3
+    - the \c "exit" event of the debug server at the end of a program run
+      (@ref DebugUtil::DebugEventCmd "DebugEventCmd::Exit", with the result of the run) is not sent to the IDE: the
+      Debug Adapter Protocol has no event for it, and the \c exited event of a launched program is sent when its thread
+      leaves the program, as before (<a href="https://github.com/qoretechnologies/qore/issues/3401">issue 3401</a>)
     - a launched program ends when the session ends, unless the \c disconnect request has \c terminateDebuggee
       \c false, and an attached program ends with \c terminateDebuggee \c true; the \c restart request ends a
       launched program and launches it again, or attaches an attached program again; integers are shown in

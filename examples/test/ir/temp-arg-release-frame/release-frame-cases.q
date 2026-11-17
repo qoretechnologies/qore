@@ -115,6 +115,48 @@ class K {
     }
 }
 
+#! a method called by its class's own code without an object (an implicit self call)
+class S {
+    m(auto a) {
+    }
+
+    callSelf() {
+        m(new Rec("a"));
+    }
+
+    throwSelf() {
+        m(new Dtor());
+    }
+}
+
+#! a method that a subclass overrides, called through a receiver of the base class's type
+class B {
+    v(auto a) {
+    }
+}
+
+class D inherits B {
+    v(auto a) {
+    }
+}
+
+#! an abstract method, called through a receiver of the abstract class's type
+class AbsB {
+    abstract am(auto a);
+}
+
+class AbsD inherits AbsB {
+    am(auto a) {
+    }
+}
+
+#! a closure stored in a member, called as a method of the object
+class M {
+    public {
+        code f = sub (auto a) {};
+    }
+}
+
 sub catch_log(hash<ExceptionInfo> ex) {
     log.add(sprintf("catch %s %y", ex.err, frames(ex.callstack)));
 }
@@ -146,6 +188,16 @@ sub case_method_call_reference() { mr(new Rec("a")); mr(new Rec("b")); }
 sub case_static_call_reference() { smr(new Rec("a")); smr(new Rec("b")); }
 sub case_constructor() { new K(new Rec("a")); }
 sub case_loop() { for (int i = 0; i < 2; ++i) { nocall(new Rec("a" + i)); } }
+# the call kinds of qore#6063
+sub case_self_call() { S s(); s.callSelf(); }
+sub case_virtual() { B b = new D(); b.v(new Rec("a")); }
+sub case_abstract() { AbsB a = new AbsD(); a.am(new Rec("a")); }
+sub case_auto_receiver() { auto o = new C(); o.m(new Rec("a")); }
+sub case_object_receiver() { object o = new C(); o.m(new Rec("a")); }
+sub case_polymorphic_loop() { foreach B o in ((new B(), new D(), new B(), new D())) { o.v(new Rec("a" + $#)); } }
+sub case_local_closure() { code f = sub (auto a) {}; f(new Rec("a")); f(new Rec("b")); }
+sub case_immediate_closure() { (sub (auto a) {})(new Rec("a")); }
+sub case_member_closure() { M mm(); mm.f(new Rec("a")); }
 
 sub case_try_function() { try { nocall(new Dtor()); } catch (hash<ExceptionInfo> ex) { catch_log(ex); } }
 sub case_try_method() { try { c.m(new Dtor()); } catch (hash<ExceptionInfo> ex) { catch_log(ex); } }
@@ -166,6 +218,10 @@ sub case_throw_call_reference() { cr(new Dtor()); }
 sub case_throw_method_call_reference() { mr(new Dtor()); }
 sub case_throw_static_call_reference() { smr(new Dtor()); }
 sub case_throw_constructor() { new K(new Dtor()); }
+sub case_throw_self_call() { S s(); s.throwSelf(); }
+sub case_throw_virtual() { B b = new D(); b.v(new Dtor()); }
+sub case_throw_local_closure() { code f = sub (auto a) {}; f(new Dtor()); }
+sub case_throw_member_closure() { M mm(); mm.f(new Dtor()); }
 
 sub begin() {
     log.lines = ();
@@ -205,6 +261,18 @@ sub main() {
     end("static call reference");
     begin(); try { case_constructor(); } catch (hash<ExceptionInfo> ex) { catch_log(ex); } end("constructor");
     begin(); try { case_loop(); } catch (hash<ExceptionInfo> ex) { catch_log(ex); } end("loop");
+    begin(); try { case_self_call(); } catch (hash<ExceptionInfo> ex) { catch_log(ex); } end("self call");
+    begin(); try { case_virtual(); } catch (hash<ExceptionInfo> ex) { catch_log(ex); } end("virtual");
+    begin(); try { case_abstract(); } catch (hash<ExceptionInfo> ex) { catch_log(ex); } end("abstract");
+    begin(); try { case_auto_receiver(); } catch (hash<ExceptionInfo> ex) { catch_log(ex); } end("auto receiver");
+    begin(); try { case_object_receiver(); } catch (hash<ExceptionInfo> ex) { catch_log(ex); }
+    end("object receiver");
+    begin(); try { case_polymorphic_loop(); } catch (hash<ExceptionInfo> ex) { catch_log(ex); }
+    end("polymorphic loop");
+    begin(); try { case_local_closure(); } catch (hash<ExceptionInfo> ex) { catch_log(ex); } end("local closure");
+    begin(); try { case_immediate_closure(); } catch (hash<ExceptionInfo> ex) { catch_log(ex); }
+    end("immediate closure");
+    begin(); try { case_member_closure(); } catch (hash<ExceptionInfo> ex) { catch_log(ex); } end("member closure");
     begin(); case_try_function(); end("try function");
     begin(); case_try_method(); end("try method");
     begin(); case_try_static_method(); end("try static method");
@@ -228,6 +296,13 @@ sub main() {
     end("throw static call reference");
     begin(); try { case_throw_constructor(); } catch (hash<ExceptionInfo> ex) { catch_log(ex); }
     end("throw constructor");
+    begin(); try { case_throw_self_call(); } catch (hash<ExceptionInfo> ex) { catch_log(ex); }
+    end("throw self call");
+    begin(); try { case_throw_virtual(); } catch (hash<ExceptionInfo> ex) { catch_log(ex); } end("throw virtual");
+    begin(); try { case_throw_local_closure(); } catch (hash<ExceptionInfo> ex) { catch_log(ex); }
+    end("throw local closure");
+    begin(); try { case_throw_member_closure(); } catch (hash<ExceptionInfo> ex) { catch_log(ex); }
+    end("throw member closure");
 }
 
 main();

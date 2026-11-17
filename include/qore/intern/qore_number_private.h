@@ -472,7 +472,14 @@ struct qore_number_private : public qore_number_private_intern {
     DLLLOCAL qore_number_private* doBinary(q_mpfr_binary_func_t func, const qore_number_private& r, ExceptionSink* xsink = 0) const {
         mpfr_prec_t prec;
         if (func == mpfr_pow) {
-            prec = mpfr_get_prec(num) * QORE_MIN(QORE_MAX_PREC, r.getAsBigInt());
+            // the precision grows with the magnitude of the integer part of the exponent; it is at least the base's,
+            // as for an exponent between -1 and 1, NaN or a negative exponent, which gave a precision that MPFR
+            // rejects by aborting the process
+            int64 e = r.getAsBigInt();
+            mpfr_prec_t m = e < -QORE_MAX_PREC || e > QORE_MAX_PREC
+                ? QORE_MAX_PREC
+                : (e < 0 ? static_cast<mpfr_prec_t>(-e) : static_cast<mpfr_prec_t>(e));
+            prec = mpfr_get_prec(num) * QORE_MAX(static_cast<mpfr_prec_t>(1), m);
         } else if (func == mpfr_mul || func == mpfr_div) {
             prec = mpfr_get_prec(num) + mpfr_get_prec(r.num);
         } else {
@@ -498,14 +505,16 @@ struct qore_number_private : public qore_number_private_intern {
         return doBinary(mpfr_mul, r);
     }
 
+    //! a division by zero (also of zero, infinity or NaN, and by -0) raises DIVISION-BY-ZERO (qore#1034)
+    /** The divisor is checked before the division, which then cannot set the MPFR divide-by-zero flag; the MPFR
+        flags, which are global to the thread and which other operations may have left set, are not read
+    */
     DLLLOCAL qore_number_private* doDivideBy(const qore_number_private& r, ExceptionSink* xsink) const {
-#ifndef HAVE_MPFR_DIVBY0
         if (r.zero()) {
             do_divide_by_zero(xsink);
-            return 0;
+            return nullptr;
         }
-#endif
-        return doBinary(mpfr_div, r, xsink);
+        return doBinary(mpfr_div, r);
     }
 
     DLLLOCAL qore_number_private* doUnary(q_mpfr_unary_func_t func, ExceptionSink* xsink = 0) const {

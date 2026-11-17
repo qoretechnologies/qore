@@ -156,16 +156,37 @@ module SqlUtil {
 
 
     @section sqlutilv3_11_0 SqlUtil v3.11.0
+    - added @ref SqlUtil::op_trunc_date() "op_trunc_date()", which compares a date column truncated as
+      @ref SqlUtil::cop_trunc_date() "cop_trunc_date()" does with a value or another where operator, with the
+      database's own truncation (<a href="https://github.com/qoretechnologies/qore/issues/2363">issue 2363</a>)
     - @ref SqlUtil::SqlUtilColumnField::setDefaultValue() "SqlUtilColumnField::setDefaultValue()" returns the object,
       as @ref DataProvider::AbstractDataField::setDefaultValue() "AbstractDataField::setDefaultValue()" does
-    - code that a @ref Qore::SandboxManager "SandboxManager" governs cannot open a database connection from a
-      connection string or a serialized configuration
+    - added table comments: the \c "comment" key of a @ref table_desc_hash "table description", which is created and
+      aligned with the table, given by @ref SqlUtil::AbstractTable::getComment() "AbstractTable::getComment()" and in
+      the table's description, on databases whose driver supports them
+      (@ref SqlUtil::AbstractTable::supportsTableComments() "AbstractTable::supportsTableComments()")
+      (<a href="https://github.com/qoretechnologies/qore/issues/1483">issue 1483</a>)
+    - added view alignment: the \c "views" and \c "view_map" keys of a @ref schema_desc_hash "schema description",
+      whose views @ref SqlUtil::AbstractDatabase::getAlignSql() "AbstractDatabase::getAlignSql()" creates, creates
+      again when their query differs as the database keeps it, renames, drops and comments, and
+      @ref SqlUtil::AbstractDatabase::getDropSchemaSql() "getDropSchemaSql()" drops (see @ref schema_views), and
+      @ref SqlUtil::AbstractView::comment "AbstractView::comment"
+      (<a href="https://github.com/qoretechnologies/qore/issues/1427">issue 1427</a>)
+    - code restricted from the \c DATABASE domain (@ref Qore::PO_NO_DATABASE "PO_NO_DATABASE") cannot open a
+      database connection from a connection string, a datasource configuration or a serialized configuration
       (@ref SqlUtil::AbstractTable::getTable() "AbstractTable::getTable()",
-      @ref SqlUtil::AbstractDatabase::getDatabase() "AbstractDatabase::getDatabase()", datasource deserialization):
-      \c PERMISSION-DENIED; it uses the datasources that its host provides
+      @ref SqlUtil::AbstractDatabase::getDatabase() "AbstractDatabase::getDatabase()", the
+      @ref SqlUtil::Table "Table" and @ref SqlUtil::Database "Database" constructors, datasource deserialization),
+      also through other code: the variants that take a connection string or configuration are in the \c DATABASE
+      domain, and \c PERMISSION-DENIED is raised when other code reaches them for it; it uses the datasources that
+      its host provides
     - @ref SqlUtil::AbstractTable::dropCommit() "AbstractTable::dropCommit()" commits each statement of the drop on
       its own, so a partitioned table that its driver drops one partition per statement stays within the database's
       lock limits however many partitions it has
+    - @ref SqlUtil::AbstractTable::update() "AbstractTable::update()", @ref SqlUtil::AbstractTable::del() "del()"
+      and their variants raise \c OPTION-ERROR for an unknown option and for the \c "returning" option, which only
+      an insert supports; they ignored them, so an update with \c "returning" returned the row count and no values
+      (<a href="https://github.com/qoretechnologies/qore/issues/757">issue 757</a>)
     - fixed @ref SqlUtil::AbstractTable::setupTable() "AbstractTable::setupTable()" and the
       @ref SqlUtil::Table "Table" constructor to accept a description from
       @ref SqlUtil::AbstractTable::getDescriptionHash() "AbstractTable::getDescriptionHash()" with an added column that
@@ -185,12 +206,27 @@ module SqlUtil {
       "AbstractDatabase::checkDriverOptions()" accepts a list of keys
     - @ref SqlUtil::generate_auto_triggers() "generate_auto_triggers()" takes \c "freetds", the name of the SQL Server
       driver, for SQL Server, as \c "mssql"
+    - fixed @ref SqlUtil::cop_seq() "cop_seq()" and @ref SqlUtil::cop_seq_currval() "cop_seq_currval()" without an
+      alias, which raised \c RUNTIME-OVERLOAD-ERROR (ex: in the columns of
+      @ref SqlUtil::AbstractTable::insertFromSelect() "AbstractTable::insertFromSelect()")
+      (<a href="https://github.com/qoretechnologies/qore/issues/2847">issue 2847</a>)
+    - fixed calling a method that takes an @ref SqlUtil::AbstractTable "AbstractTable" argument (ex:
+      \c insertFromSelect()) through a @ref SqlUtil::Table "Table" with a Table argument, which raised
+      \c RUNTIME-OVERLOAD-ERROR; the Table's AbstractTable is given to the method
+      (<a href="https://github.com/qoretechnologies/qore/issues/6321">issue 6321</a>)
     - fixed @ref SqlUtil::AbstractDatabase::getDropFunctionSqlIfExists() "AbstractDatabase::getDropFunctionSqlIfExists()",
       @ref SqlUtil::AbstractDatabase::getDropProcedureSqlIfExists() "getDropProcedureSqlIfExists()" and
       @ref SqlUtil::AbstractDatabase::getDropSequenceSqlIfExists() "getDropSequenceSqlIfExists()", which returned no
       SQL for an object that exists
+    - a @ref sql_cop_funcs "column operator" or a where operator in the set clause of
+      @ref SqlUtil::AbstractTable::update() "AbstractTable::update()" raises \c UPDATE-ERROR, which names the
+      @ref sql_uop_funcs "update operators" to use instead (ex: @ref SqlUtil::uop_plus() "uop_plus()"); it raised
+      \c INVALID-MEMBER (<a href="https://github.com/qoretechnologies/qore/issues/2962">issue 2962</a>)
     - added @ref SqlUtil::AbstractTable::getInsertArgs() "AbstractTable::getInsertArgs()", which gives the values that
       an insert of a row binds, so a statement prepared with the insert's SQL can insert more rows
+    - added the \c "union", \c "union_all", \c "intersect" and \c "except" select options, which combine a select with
+      other selects, and @ref SqlUtil::AbstractTable::SetOperatorSql "AbstractTable::SetOperatorSql" (see
+      @ref select_option_set_operators) (<a href="https://github.com/qoretechnologies/qore/issues/2961">issue 2961</a>)
     - a template table built from a description (the @ref SqlUtil::Table "Table" constructor with a description,
       @ref SqlUtil::AbstractDatabase::makeTable() "AbstractDatabase::makeTable()" and
       @ref SqlUtil::Tables::populate() "Tables::populate()") is created by the driver as a template, which reads
@@ -308,6 +344,16 @@ module SqlUtil {
       drops an index and creates it under the new name in one string, and as the \c sqlite3 driver runs one statement
       at a time, renaming an index on SQLite, as table alignment does for an index that has another name than the
       template's, dropped the index and did not create it again
+    - fixed a @ref where_clauses "where clause" key that is both a column of the table and a column alias of the
+      query (ex: <tt>cop_as(cop_distinct("ddt_number"), "ddt_number")</tt>): it names the column, as in SQL; the
+      alias's definition was used, which gave invalid SQL such as <tt>items.distinct items.ddt_number</tt>
+      (<a href="https://github.com/qoretechnologies/qore/issues/1747">issue 1747</a>)
+    - fixed a column alias of a distinct column (ex: <tt>cop_as(cop_distinct("ddt_number"), "dn")</tt>) in the
+      @ref select_option_orderby "orderby" option, which gave <tt>order by distinct ddt_number</tt>: it is ordered
+      by its name, and in a @ref where_clauses "where clause" or the @ref select_option_groupby "groupby"
+      option, which gave <tt>where distinct ddt_number ...</tt>: it stands for the column
+      (<a href="https://github.com/qoretechnologies/qore/issues/6331">issue 6331</a>,
+      <a href="https://github.com/qoretechnologies/qore/issues/6332">issue 6332</a>)
     - an index is renamed, never dropped and created again under another name: an index that the database cannot
       rename (@ref SqlUtil::AbstractIndex::supportsRename() "AbstractIndex::supportsRename()"), as on SQLite and
       Firebird, with the definition of a template index under another name is taken for the template's index by
@@ -492,6 +538,10 @@ module SqlUtil {
       are all upsert key columns, which raised an SQL error when the row existed
     - fixed @ref SqlUtil::AbstractTable::UpsertAuto "UpsertAuto", which inserted first into a table with rows and
       updated first in an empty table, the opposite of what it is documented to do
+    - a value in the join columns of a @ref sql_jop_funcs "join function" can be a
+      @ref sql_cop_funcs "column operator" applied to the joined table's columns (see @ref join_column_operators);
+      it raised \c RUNTIME-TYPE-ERROR
+      (<a href="https://github.com/qoretechnologies/qore/issues/738">issue 738</a>)
 
     @section sqlutilv1_9_3 SqlUtil v1.9.3
     - fixed support for orderby with a matching unique index
@@ -859,6 +909,8 @@ hash soh = (
     - @ref select_option_partition "partition": a canonical physical-partition name restricting the primary table
       reference on drivers advertising @ref SqlUtil::AbstractTable::supportsPartitionRead() "supportsPartitionRead()"
     - @ref select_option_superquery "superquery": (@ref hash_type "hash") specifies that the rest of the argument belong to a subquery and the hash arguments under this key will select from the subquery
+    - @ref select_option_set_operators "union", "union_all", "intersect", "except": (@ref hash_type "hash" or
+      @ref list_type "list") combine the results with those of other selects
     - @ref select_option_forupdate_no_key "forupdate_no_key": (@c bool) explicitly permits concurrent key-share locks
     - @ref select_option_forupdate "forupdate": (\c bool_type "bool") adds a \c "for update" clause to a select query
 
@@ -981,6 +1033,8 @@ hash<auto> sh = {
     - a simple string with a column name preceded by a \c "-" sign; ex: \c "-name", meaning that that column should be sorted in descending order
     - a string giving a table or table alias and a column name in dot notation (for use with @ref select_option_join "joins"); ex: \c "q.name"
     - a positive integer giving the column number for the ordering
+    - a column alias of the query (made with @ref SqlUtil::cop_as() "cop_as()"), whose definition is used, except
+      for an alias of a distinct column (@ref SqlUtil::cop_distinct() "cop_distinct()"), which is given by its name
     - a hash with the following keys:
       - \c "column" (required): a column name (string) or a column operator hash (e.g. from @ref cop_coalesce())
       - \c "desc" (optional, bool): if @ref True "True", sort this column in descending order
@@ -1161,6 +1215,55 @@ hash<auto> sh = {
 *list<auto> rows = table.vselectRows("select serviceid,service_methodid from (select serviceid,service_methodid,max(service_methodid) over (partition by serviceid) as max_methodid from schema.service_methods) subquery where max_methodid = service_methodid");
     @endcode
     @note that MySQL does not support SQL windowing functions so the above example would fail on MySQL.
+
+    @subsubsection select_option_set_operators Select Options "union", "union_all", "intersect" and "except"
+    <b>Set Operator Example:</b>
+    @code{.py}
+hash<auto> sh = {
+    "columns": ("id", "name"),
+    "where": {"type": "user"},
+    # the rows of another table with a select of their own
+    "union": {"table": archive_table, "select": {"columns": ("id", "name"), "where": {"type": "user"}}},
+    # the ordering and paging options apply to the combined result
+    "orderby": "name",
+    "limit": 100,
+};
+*list<auto> rows = table.selectRows(sh);
+    @endcode
+    The set operators combine the rows of the select with those of other selects, which must select as many columns
+    of compatible types:
+    |!Option|!SQL|!Result
+    |\c union|\c UNION|the rows of either select, without duplicates
+    |\c union_all|<tt>UNION ALL</tt>|the rows of both selects, with duplicates
+    |\c intersect|\c INTERSECT|the rows of both selects, without duplicates
+    |\c except|\c EXCEPT (\c MINUS on Oracle)|the rows of the first select that the other does not have, without duplicates
+
+    The value of an option is a select or a list of selects; each select is:
+    - a @ref select_option_hash "select option hash", which selects from the same table, or
+    - a hash with a \c "table" key, giving the other table as an @ref SqlUtil::AbstractTable "AbstractTable" or
+      @ref SqlUtil::Table "Table" object or a table name, and a \c "select" key with the select option hash; the
+      other table must use the same datasource
+
+    The operators are applied from left to right, in the order of the keys of the select option hash and of the
+    selects in a list, each to the result of the operators before it, which is selected from as a derived table; so
+    the result is the same on every database, whatever the precedence of the operators in its SQL.  The ordering and
+    paging options (@ref select_option_orderby "orderby", @ref select_option_desc "desc",
+    @ref select_option_limit "limit" and @ref select_option_offset "offset") of the select option hash apply to the
+    combined result, which is selected from as a @ref select_option_superquery "superquery"; they name the columns of
+    the result.  A select of a set operator can have ordering and paging options of its own, which apply to its own
+    rows.  The values of the selects are bound in the order of the SQL.
+
+    The above example results in SQL like the following:
+    @code{.py}
+*list<auto> rows = table.vselectRows("select * from (select id, name from users where type = %v union select id, name from archive_users where type = %v) subquery order by name limit %v", ("user", "user", 100));
+    @endcode
+
+    @note
+    - the \c "superquery", \c "forupdate" and \c "forupdate_no_key" options cannot be combined with set operators
+    - \c INTERSECT and \c EXCEPT need MySQL 8.0.31 or MariaDB 10.3 or later; Firebird has only \c UNION; a set
+      operator that the database does not support raises \c SET-OPERATOR-ERROR
+
+    @since %SqlUtil 3.11.0
 
     @subsubsection select_option_forupdate Select Option "forupdate"
     <b>For Update Example:</b>
@@ -1366,6 +1469,22 @@ return ds.vexec("delete from schema.table where record_type = %v", ("OLD-CUSTOME
     In the above example, \a table is joined with \a table2 on <tt>table.id = table2.altid</tt> and \a table2 (aliased as \c t2) is joined
     with \a table3 (aliased as \c t3) on an automatically detected primary key to foreign key relationship between the two tables.
 
+    @subsection join_column_operators Column Operators in Join Columns
+
+    A value in the join column hash of a @ref sql_jop_funcs "join function" can be a
+    @ref sql_cop_funcs "column operator" hash instead of a column name; the column of the other table is then compared
+    with the operator's result.  The columns that the operator names without a table alias are columns of the joined
+    table; a column of another table in the query is given with its alias (ex: \c "t2.name"), as in a
+    @ref where_clauses "where clause".  An operator that gives a column alias, such as @ref SqlUtil::cop_as()
+    "cop_as()", cannot be used.
+    @code{.py}
+# joins table2 on table.line_number = cast(t2.line_number as varchar)
+*list<auto> rows = table.selectRows({"join": join_inner(table2, "t2", {
+    "id": "altid",
+    "line_number": cop_cast("line_number", "string"),
+})});
+    @endcode
+
     @see @ref select_option_join "join select option"
 
     @section where_clauses Where Clauses
@@ -1390,6 +1509,12 @@ return ds.vexec("delete from schema.table where record_type = %v", ("OLD-CUSTOME
 
     The where clause is made up of a hash in the %SqlUtil API; either @ref where_clauses_advanced or
     @ref where_clauses_simple.
+
+    A key of the where clause can name a column of the table or a column alias of the query (made with
+    @ref SqlUtil::cop_as() "cop_as()"), whose definition is then used; a key that is both a column of the table and a
+    column alias names the column, as in SQL.  An alias of a distinct column (@ref SqlUtil::cop_distinct()
+    "cop_distinct()") stands for the column, as \c distinct applies to the select list; this also applies to the
+    @ref select_option_groupby "groupby" option.
 
     @subsection where_clauses_advanced Advanced Where Clauses
 
@@ -1939,10 +2064,53 @@ db.getAlignSql(schema_template, callback_opts, table_cache);
     - \c sequences: a hash of sequence description hashes keyed by sequence name; each entry describes a sequence
     - \c functions: a hash of function description hashes keyed by function name; each entry describes a function
     - \c procedures: a hash of procedure description hashes keyed by procedure name; each entry describes a procedure
+    - \c views: a hash of view descriptions keyed by view name (see @ref schema_views); since SqlUtil 3.11.0
+    - \c view_map: a hash for automatically renaming views; if the source name (key) exists and the target name
+      (value) does not exist, then the source view is renamed; since SqlUtil 3.11.0
     - \c driver: this key can optionally contain a hash keyed by driver name which contains a hash of values that will be added to the schema description hash before processing; this way a schema description hash can contain all the information required for the schema including driver-specific options; any driver-specific options will overwrite values in the top level of the hash if there are duplicate hash keys
 
     Each database driver may provide additional objects (such as types or materialized views, packages, etc); see
     driver-specific documentation for more information.
+
+    @subsection schema_views Views in Schema Descriptions
+
+    A view of the \c views key of a @ref schema_desc_hash "schema description hash" is described by the source of its
+    query or by a hash (see @ref SqlUtil::AbstractDatabase::ViewDescriptionOptions "ViewDescriptionOptions"):
+    @code{.py}
+hash<auto> schema = {
+    "tables": {...},
+    "views": {
+        "active_customers": "select id, name from customers where active = 1",
+        "big_orders": {
+            "src": "select id, customer_id from orders where amount > 1000",
+            "comment": "orders of more than 1000",
+        },
+        # dropped if it exists
+        "old_view": {"drop": True},
+    },
+};
+    @endcode
+
+    @ref SqlUtil::AbstractDatabase::getAlignSql() "AbstractDatabase::getAlignSql()" aligns the views after the
+    tables, functions and procedures:
+    - a view that does not exist is created
+    - a view whose query differs is dropped and created again; the queries are compared as the database keeps them:
+      PostgreSQL and MySQL/MariaDB keep the query of a view in a form of their own (with qualified names and casts),
+      which they are asked for the described query as well (PostgreSQL with a temporary view in a savepoint that is
+      rolled back, MySQL/MariaDB with a view of its own on another connection, which is dropped); the other databases
+      keep the query as it is given, which is compared with its whitespace collapsed
+    - a view described with \c drop is dropped if it exists
+    - the comment of a view is created, changed or removed on databases whose driver supports view comments
+      (PostgreSQL and Oracle; see @ref SqlUtil::AbstractDatabase::supportsViewComments() "supportsViewComments()"),
+      and ignored on others
+
+    Aligning a schema again gives no SQL for views that are as described.
+    @ref SqlUtil::AbstractDatabase::getDropSchemaSql() "AbstractDatabase::getDropSchemaSql()" drops the views of the
+    description that exist, before the other objects.
+
+    @note a view that another view or object depends on cannot be dropped to be created again on every database
+    (PostgreSQL refuses it); describe such views so that their queries do not change, or drop the dependent objects
+    first
 
     The following is an example of a schema description hash:
     @code{.py}
@@ -2154,6 +2322,10 @@ db_table.getAlignSql(template_table, callback_opts);
       are @ref uk_desc_hash "unique constraint hashes"
     - \c partition_strategy: (optional) a @ref SqlUtil::PartitionStrategy "partition strategy hash"; Phase 1
       supports range partitioning
+    - \c comment: (optional) the comment of the table; it is created and aligned with the table, on databases whose
+      driver supports table comments (PostgreSQL, Oracle, MySQL/MariaDB and SQL Server; see
+      @ref SqlUtil::AbstractTable::supportsTableComments() "AbstractTable::supportsTableComments()"), and ignored on
+      others (SQLite, Firebird and Sybase); since SqlUtil 3.11.0
     - \c partitions: (optional) a hash of @ref SqlUtil::PartitionSpec "partition specification hashes" keyed by
       partition name; this key is used for table creation and description only, not for alignment deltas
     - \c driver: this key can optionally contain a hash keyed by driver name which contains a hash of values that will
@@ -2886,7 +3058,7 @@ public namespace SqlUtil {
         string jop;           #!< the join operator string code
         auto table;           #!< the table to join with (either an @ref SqlUtil::AbstractTable "AbstractTable" object or a string table name)
         *string alias;        #!< optional alias for \a table in the query
-        *hash jcols;          #!< the columns to use for the join, the keys will be columns in the source table and the values are columns in the \a table argument
+        *hash jcols;          #!< the columns to use for the join, the keys will be columns in the source table and the values are columns in the \a table argument or column operator hashes applied to its columns (see @ref join_column_operators)
         *hash cond;           #!< additional conditions for the join clause for the \a table argument; see @ref where_clauses for more information
         *string ta;           #!< optional table name or alias of the other table to join with when not joining with the primary table
         *hash<auto> opt;      #!< optional join options (for example, to specify a partition for the join if supported)
@@ -3226,6 +3398,13 @@ public namespace SqlUtil {
 
         #! arguments to bind in the query generated
         list<auto> args;
+
+        #! The table alias or name in SQL for the columns given without a table alias, instead of the table's name
+        /** Set for a column operator in the join columns of a join, whose columns are columns of the joined table
+
+            @since %SqlUtil 3.11.0
+        */
+        *string column_prefix;
     }
 
     #! a hash of default column operator descriptions
@@ -3671,10 +3850,34 @@ sql: select 1 as as_int,1.2 as as_float,3.2 as as_numeric,to_timestamp('20150421
         return make_cop(COP_LOWER, column);
     }
 
-    #! returns a @ref ColumnOperatorInfo hash for the \c "distinct" operator with the given argument; returns distinct column values
+    #! returns a @ref ColumnOperatorInfo hash for the \c "distinct" operator with the given argument; returns distinct rows
     /** @par Example:
         @code{.py}
-*list<auto> rows = table.selectRows(("columns": ("id", cop_distinct("name")), "where": ("type": "user")));
+# select distinct name from table where type = 'user'
+*list<auto> rows = table.selectRows({"columns": (cop_distinct("name"),), "where": {"type": "user"}});
+        @endcode
+
+        The operator puts the SQL \c DISTINCT keyword before its column, and \c DISTINCT applies to the whole row that
+        the query selects, not only to that column: with other columns, the query returns the distinct combinations
+        of the values of all its columns.  For example, given the following rows:
+
+        |!name|!id
+        |\c A|\c 0
+        |\c A|\c 1
+        |\c A|\c 0
+
+        the following query returns two rows, <tt>A, 0</tt> and <tt>A, 1</tt>, and not one row per name:
+        @code{.py}
+# select distinct name, id from table
+*list<auto> rows = table.selectRows({"columns": (cop_distinct("name"), "id")});
+        @endcode
+
+        As \c DISTINCT is a keyword of the whole select list, the operator must be the first column of the
+        @ref select_option_columns "columns" option; after another column, it makes invalid SQL.  To count the distinct
+        values of one column, give the operator to @ref cop_count(), which makes <tt>count(distinct column)</tt>:
+        @code{.py}
+# select count(distinct name) as names from table
+*hash<auto> row = table.selectRow({"columns": (cop_as(cop_count(cop_distinct("name")), "names"),)});
         @endcode
 
         @param column the column specification for the column (string name or dot notation for use in joins)
@@ -4627,7 +4830,7 @@ int rows_updated = t.update(("counter": uop_divide(2)));
 
         @param table the table to join with
         @param alias the alias for \a table in the query
-        @param jcols the columns to use for the join, the keys will be columns in the source table and the values are columns in the \a table argument; if this argument is @ref nothing, then if there is any foreign key in one table pointing to the primary key of the other table, then this information is automatically assumed as the join condition; a foreign constraint in the current table to the primary key in \a table will be used first if it exists
+        @param jcols the columns to use for the join, the keys will be columns in the source table and the values are columns in the \a table argument or @ref sql_cop_funcs "column operator" hashes applied to its columns (see @ref join_column_operators); if this argument is @ref nothing, then if there is any foreign key in one table pointing to the primary key of the other table, then this information is automatically assumed as the join condition; a foreign constraint in the current table to the primary key in \a table will be used first if it exists
         @param cond additional conditions for the join clause for the \a table argument; see @ref where_clauses for more information
         @param opt optional join options (for example, to specify a partition for the join if supported)
 
@@ -4651,7 +4854,7 @@ int rows_updated = t.update(("counter": uop_divide(2)));
 
         @param table the table to join with
         @param alias the alias for \a table in the query
-        @param jcols the columns to use for the join, the keys will be columns in the source table and the values are columns in the \a table argument; if this argument is @ref nothing, then if there is any foreign key in one table pointing to the primary key of the other table, then this information is automatically assumed as the join condition; a foreign constraint in the current table to the primary key in \a table will be used first if it exists
+        @param jcols the columns to use for the join, the keys will be columns in the source table and the values are columns in the \a table argument or @ref sql_cop_funcs "column operator" hashes applied to its columns (see @ref join_column_operators); if this argument is @ref nothing, then if there is any foreign key in one table pointing to the primary key of the other table, then this information is automatically assumed as the join condition; a foreign constraint in the current table to the primary key in \a table will be used first if it exists
         @param cond additional conditions for the join clause for the \a table argument; see @ref where_clauses for more information
         @param opt optional join options (for example, to specify a partition for the join if supported)
 
@@ -4675,7 +4878,7 @@ int rows_updated = t.update(("counter": uop_divide(2)));
 
         @param table_name the table to join with; table will be subject to deferred resolution
         @param alias the alias for \a table in the query
-        @param jcols the columns to use for the join, the keys will be columns in the source table and the values are columns in the \a table argument; if this argument is @ref nothing, then if there is any foreign key in one table pointing to the primary key of the other table, then this information is automatically assumed as the join condition; a foreign constraint in the current table to the primary key in \a table will be used first if it exists
+        @param jcols the columns to use for the join, the keys will be columns in the source table and the values are columns in the \a table argument or @ref sql_cop_funcs "column operator" hashes applied to its columns (see @ref join_column_operators); if this argument is @ref nothing, then if there is any foreign key in one table pointing to the primary key of the other table, then this information is automatically assumed as the join condition; a foreign constraint in the current table to the primary key in \a table will be used first if it exists
         @param cond additional conditions for the join clause for the \a table argument; see @ref where_clauses for more information
         @param opt optional join options (for example, to specify a partition for the join if supported)
 
@@ -4700,7 +4903,7 @@ int rows_updated = t.update(("counter": uop_divide(2)));
         @param ta the table name or alias of the other table to join with when not joining with the primary table
         @param table the table to join with
         @param alias the alias for \a table in the query
-        @param jcols the columns to use for the join, the keys will be columns in the source table and the values are columns in the \a table argument; if this argument is @ref nothing, then if there is any foreign key in one table pointing to the primary key of the other table, then this information is automatically assumed as the join condition; a foreign constraint in the current table to the primary key in \a table will be used first if it exists
+        @param jcols the columns to use for the join, the keys will be columns in the source table and the values are columns in the \a table argument or @ref sql_cop_funcs "column operator" hashes applied to its columns (see @ref join_column_operators); if this argument is @ref nothing, then if there is any foreign key in one table pointing to the primary key of the other table, then this information is automatically assumed as the join condition; a foreign constraint in the current table to the primary key in \a table will be used first if it exists
         @param cond additional conditions for the join clause for the \a table argument; see @ref where_clauses for more information
         @param opt optional join options (for example, to specify a partition for the join if supported)
 
@@ -4727,7 +4930,7 @@ int rows_updated = t.update(("counter": uop_divide(2)));
         @param ta the table name or alias of the other table to join with when not joining with the primary table
         @param table the table to join with
         @param alias the alias for \a table in the query
-        @param jcols the columns to use for the join, the keys will be columns in the source table and the values are columns in the \a table argument; if this argument is @ref nothing, then if there is any foreign key in one table pointing to the primary key of the other table, then this information is automatically assumed as the join condition; a foreign constraint in the current table to the primary key in \a table will be used first if it exists
+        @param jcols the columns to use for the join, the keys will be columns in the source table and the values are columns in the \a table argument or @ref sql_cop_funcs "column operator" hashes applied to its columns (see @ref join_column_operators); if this argument is @ref nothing, then if there is any foreign key in one table pointing to the primary key of the other table, then this information is automatically assumed as the join condition; a foreign constraint in the current table to the primary key in \a table will be used first if it exists
         @param cond additional conditions for the join clause for the \a table argument; see @ref where_clauses for more information
         @param opt optional join options (for example, to specify a partition for the join if supported)
 
@@ -4752,7 +4955,7 @@ int rows_updated = t.update(("counter": uop_divide(2)));
         @param ta the table name or alias of the other table to join with when not joining with the primary table
         @param table_name the table to join with
         @param alias the alias for \a table in the query
-        @param jcols the columns to use for the join, the keys will be columns in the source table and the values are columns in the \a table argument; if this argument is @ref nothing, then if there is any foreign key in one table pointing to the primary key of the other table, then this information is automatically assumed as the join condition; a foreign constraint in the current table to the primary key in \a table will be used first if it exists
+        @param jcols the columns to use for the join, the keys will be columns in the source table and the values are columns in the \a table argument or @ref sql_cop_funcs "column operator" hashes applied to its columns (see @ref join_column_operators); if this argument is @ref nothing, then if there is any foreign key in one table pointing to the primary key of the other table, then this information is automatically assumed as the join condition; a foreign constraint in the current table to the primary key in \a table will be used first if it exists
         @param cond additional conditions for the join clause for the \a table argument; see @ref where_clauses for more information
         @param opt optional join options (for example, to specify a partition for the join if supported)
 
@@ -4778,7 +4981,7 @@ int rows_updated = t.update(("counter": uop_divide(2)));
 
         @param table the table to join with
         @param alias the alias for \a table in the query
-        @param jcols the columns to use for the join, the keys will be columns in the source table and the values are columns in the \a table argument; if this argument is @ref nothing, then if there is any foreign key in one table pointing to the primary key of the other table, then this information is automatically assumed as the join condition; a foreign constraint in the current table to the primary key in \a table will be used first if it exists
+        @param jcols the columns to use for the join, the keys will be columns in the source table and the values are columns in the \a table argument or @ref sql_cop_funcs "column operator" hashes applied to its columns (see @ref join_column_operators); if this argument is @ref nothing, then if there is any foreign key in one table pointing to the primary key of the other table, then this information is automatically assumed as the join condition; a foreign constraint in the current table to the primary key in \a table will be used first if it exists
         @param cond additional conditions for the join clause for the \a table argument; see @ref where_clauses for more information
         @param opt optional join options (for example, to specify a partition for the join if supported)
 
@@ -4802,7 +5005,7 @@ int rows_updated = t.update(("counter": uop_divide(2)));
 
         @param table the table to join with
         @param alias the alias for \a table in the query
-        @param jcols the columns to use for the join, the keys will be columns in the source table and the values are columns in the \a table argument; if this argument is @ref nothing, then if there is any foreign key in one table pointing to the primary key of the other table, then this information is automatically assumed as the join condition; a foreign constraint in the current table to the primary key in \a table will be used first if it exists
+        @param jcols the columns to use for the join, the keys will be columns in the source table and the values are columns in the \a table argument or @ref sql_cop_funcs "column operator" hashes applied to its columns (see @ref join_column_operators); if this argument is @ref nothing, then if there is any foreign key in one table pointing to the primary key of the other table, then this information is automatically assumed as the join condition; a foreign constraint in the current table to the primary key in \a table will be used first if it exists
         @param cond additional conditions for the join clause for the \a table argument; see @ref where_clauses for more information
         @param opt optional join options (for example, to specify a partition for the join if supported)
 
@@ -4826,7 +5029,7 @@ int rows_updated = t.update(("counter": uop_divide(2)));
 
         @param table_name the table to join with
         @param alias the alias for \a table in the query
-        @param jcols the columns to use for the join, the keys will be columns in the source table and the values are columns in the \a table argument; if this argument is @ref nothing, then if there is any foreign key in one table pointing to the primary key of the other table, then this information is automatically assumed as the join condition; a foreign constraint in the current table to the primary key in \a table will be used first if it exists
+        @param jcols the columns to use for the join, the keys will be columns in the source table and the values are columns in the \a table argument or @ref sql_cop_funcs "column operator" hashes applied to its columns (see @ref join_column_operators); if this argument is @ref nothing, then if there is any foreign key in one table pointing to the primary key of the other table, then this information is automatically assumed as the join condition; a foreign constraint in the current table to the primary key in \a table will be used first if it exists
         @param cond additional conditions for the join clause for the \a table argument; see @ref where_clauses for more information
         @param opt optional join options (for example, to specify a partition for the join if supported)
 
@@ -4853,7 +5056,7 @@ int rows_updated = t.update(("counter": uop_divide(2)));
         @param ta the table name or alias of the other table to join with when not joining with the primary table
         @param table the table to join with
         @param alias the alias for \a table in the query
-        @param jcols the columns to use for the join, the keys will be columns in the source table and the values are columns in the \a table argument; if this argument is @ref nothing, then if there is any foreign key in one table pointing to the primary key of the other table, then this information is automatically assumed as the join condition; a foreign constraint in the current table to the primary key in \a table will be used first if it exists
+        @param jcols the columns to use for the join, the keys will be columns in the source table and the values are columns in the \a table argument or @ref sql_cop_funcs "column operator" hashes applied to its columns (see @ref join_column_operators); if this argument is @ref nothing, then if there is any foreign key in one table pointing to the primary key of the other table, then this information is automatically assumed as the join condition; a foreign constraint in the current table to the primary key in \a table will be used first if it exists
         @param cond additional conditions for the join clause for the \a table argument; see @ref where_clauses for more information
         @param opt optional join options (for example, to specify a partition for the join if supported)
 
@@ -4878,7 +5081,7 @@ int rows_updated = t.update(("counter": uop_divide(2)));
         @param ta the table name or alias of the other table to join with when not joining with the primary table
         @param table the table to join with
         @param alias the alias for \a table in the query
-        @param jcols the columns to use for the join, the keys will be columns in the source table and the values are columns in the \a table argument; if this argument is @ref nothing, then if there is any foreign key in one table pointing to the primary key of the other table, then this information is automatically assumed as the join condition; a foreign constraint in the current table to the primary key in \a table will be used first if it exists
+        @param jcols the columns to use for the join, the keys will be columns in the source table and the values are columns in the \a table argument or @ref sql_cop_funcs "column operator" hashes applied to its columns (see @ref join_column_operators); if this argument is @ref nothing, then if there is any foreign key in one table pointing to the primary key of the other table, then this information is automatically assumed as the join condition; a foreign constraint in the current table to the primary key in \a table will be used first if it exists
         @param cond additional conditions for the join clause for the \a table argument; see @ref where_clauses for more information
         @param opt optional join options (for example, to specify a partition for the join if supported)
 
@@ -4903,7 +5106,7 @@ int rows_updated = t.update(("counter": uop_divide(2)));
         @param ta the table name or alias of the other table to join with when not joining with the primary table
         @param table_name the table to join with
         @param alias the alias for \a table in the query
-        @param jcols the columns to use for the join, the keys will be columns in the source table and the values are columns in the \a table argument; if this argument is @ref nothing, then if there is any foreign key in one table pointing to the primary key of the other table, then this information is automatically assumed as the join condition; a foreign constraint in the current table to the primary key in \a table will be used first if it exists
+        @param jcols the columns to use for the join, the keys will be columns in the source table and the values are columns in the \a table argument or @ref sql_cop_funcs "column operator" hashes applied to its columns (see @ref join_column_operators); if this argument is @ref nothing, then if there is any foreign key in one table pointing to the primary key of the other table, then this information is automatically assumed as the join condition; a foreign constraint in the current table to the primary key in \a table will be used first if it exists
         @param cond additional conditions for the join clause for the \a table argument; see @ref where_clauses for more information
         @param opt optional join options (for example, to specify a partition for the join if supported)
 
@@ -4929,7 +5132,7 @@ int rows_updated = t.update(("counter": uop_divide(2)));
 
         @param table the table to join with
         @param alias the alias for \a table in the query
-        @param jcols the columns to use for the join, the keys will be columns in the source table and the values are columns in the \a table argument; if this argument is @ref nothing, then if there is any foreign key in one table pointing to the primary key of the other table, then this information is automatically assumed as the join condition; a foreign constraint in the current table to the primary key in \a table will be used first if it exists
+        @param jcols the columns to use for the join, the keys will be columns in the source table and the values are columns in the \a table argument or @ref sql_cop_funcs "column operator" hashes applied to its columns (see @ref join_column_operators); if this argument is @ref nothing, then if there is any foreign key in one table pointing to the primary key of the other table, then this information is automatically assumed as the join condition; a foreign constraint in the current table to the primary key in \a table will be used first if it exists
         @param cond additional conditions for the join clause for the \a table argument; see @ref where_clauses for more information
         @param opt optional join options (for example, to specify a partition for the join if supported)
 
@@ -4953,7 +5156,7 @@ int rows_updated = t.update(("counter": uop_divide(2)));
 
         @param table the table to join with
         @param alias the alias for \a table in the query
-        @param jcols the columns to use for the join, the keys will be columns in the source table and the values are columns in the \a table argument; if this argument is @ref nothing, then if there is any foreign key in one table pointing to the primary key of the other table, then this information is automatically assumed as the join condition; a foreign constraint in the current table to the primary key in \a table will be used first if it exists
+        @param jcols the columns to use for the join, the keys will be columns in the source table and the values are columns in the \a table argument or @ref sql_cop_funcs "column operator" hashes applied to its columns (see @ref join_column_operators); if this argument is @ref nothing, then if there is any foreign key in one table pointing to the primary key of the other table, then this information is automatically assumed as the join condition; a foreign constraint in the current table to the primary key in \a table will be used first if it exists
         @param cond additional conditions for the join clause for the \a table argument; see @ref where_clauses for more information
         @param opt optional join options (for example, to specify a partition for the join if supported)
 
@@ -4977,7 +5180,7 @@ int rows_updated = t.update(("counter": uop_divide(2)));
 
         @param table_name the table to join with
         @param alias the alias for \a table in the query
-        @param jcols the columns to use for the join, the keys will be columns in the source table and the values are columns in the \a table argument; if this argument is @ref nothing, then if there is any foreign key in one table pointing to the primary key of the other table, then this information is automatically assumed as the join condition; a foreign constraint in the current table to the primary key in \a table will be used first if it exists
+        @param jcols the columns to use for the join, the keys will be columns in the source table and the values are columns in the \a table argument or @ref sql_cop_funcs "column operator" hashes applied to its columns (see @ref join_column_operators); if this argument is @ref nothing, then if there is any foreign key in one table pointing to the primary key of the other table, then this information is automatically assumed as the join condition; a foreign constraint in the current table to the primary key in \a table will be used first if it exists
         @param cond additional conditions for the join clause for the \a table argument; see @ref where_clauses for more information
         @param opt optional join options (for example, to specify a partition for the join if supported)
 
@@ -5004,7 +5207,7 @@ int rows_updated = t.update(("counter": uop_divide(2)));
         @param ta the table name or alias of the other table to join with when not joining with the primary table
         @param table the table to join with
         @param alias the alias for \a table in the query
-        @param jcols the columns to use for the join, the keys will be columns in the source table and the values are columns in the \a table argument; if this argument is @ref nothing, then if there is any foreign key in one table pointing to the primary key of the other table, then this information is automatically assumed as the join condition; a foreign constraint in the current table to the primary key in \a table will be used first if it exists
+        @param jcols the columns to use for the join, the keys will be columns in the source table and the values are columns in the \a table argument or @ref sql_cop_funcs "column operator" hashes applied to its columns (see @ref join_column_operators); if this argument is @ref nothing, then if there is any foreign key in one table pointing to the primary key of the other table, then this information is automatically assumed as the join condition; a foreign constraint in the current table to the primary key in \a table will be used first if it exists
         @param cond additional conditions for the join clause for the \a table argument; see @ref where_clauses for more information
         @param opt optional join options (for example, to specify a partition for the join if supported)
 
@@ -5029,7 +5232,7 @@ int rows_updated = t.update(("counter": uop_divide(2)));
         @param ta the table name or alias of the other table to join with when not joining with the primary table
         @param table the table to join with
         @param alias the alias for \a table in the query
-        @param jcols the columns to use for the join, the keys will be columns in the source table and the values are columns in the \a table argument; if this argument is @ref nothing, then if there is any foreign key in one table pointing to the primary key of the other table, then this information is automatically assumed as the join condition; a foreign constraint in the current table to the primary key in \a table will be used first if it exists
+        @param jcols the columns to use for the join, the keys will be columns in the source table and the values are columns in the \a table argument or @ref sql_cop_funcs "column operator" hashes applied to its columns (see @ref join_column_operators); if this argument is @ref nothing, then if there is any foreign key in one table pointing to the primary key of the other table, then this information is automatically assumed as the join condition; a foreign constraint in the current table to the primary key in \a table will be used first if it exists
         @param cond additional conditions for the join clause for the \a table argument; see @ref where_clauses for more information
         @param opt optional join options (for example, to specify a partition for the join if supported)
 
@@ -5054,7 +5257,7 @@ int rows_updated = t.update(("counter": uop_divide(2)));
         @param ta the table name or alias of the other table to join with when not joining with the primary table
         @param table_name the table to join with
         @param alias the alias for \a table in the query
-        @param jcols the columns to use for the join, the keys will be columns in the source table and the values are columns in the \a table argument; if this argument is @ref nothing, then if there is any foreign key in one table pointing to the primary key of the other table, then this information is automatically assumed as the join condition; a foreign constraint in the current table to the primary key in \a table will be used first if it exists
+        @param jcols the columns to use for the join, the keys will be columns in the source table and the values are columns in the \a table argument or @ref sql_cop_funcs "column operator" hashes applied to its columns (see @ref join_column_operators); if this argument is @ref nothing, then if there is any foreign key in one table pointing to the primary key of the other table, then this information is automatically assumed as the join condition; a foreign constraint in the current table to the primary key in \a table will be used first if it exists
         @param cond additional conditions for the join clause for the \a table argument; see @ref where_clauses for more information
         @param opt optional join options (for example, to specify a partition for the join if supported)
 
@@ -5155,6 +5358,13 @@ int rows_updated = t.update(("counter": uop_divide(2)));
     /** @see op_substr()
     */
     public const string OP_SUBSTR = "substr";
+
+    #! the operator that compares a date column truncated with @ref cop_trunc_date() for use in @ref where_clauses
+    /** @see op_trunc_date()
+
+        @since %SqlUtil 3.11.0
+    */
+    public const string OP_TRUNC_DATE = "trunc_date";
 
     #! to combine SQL expressions with \c "or" for use in @ref where_clauses
     /** @see wop_or()
@@ -7212,6 +7422,14 @@ int rows_updated = t.update(("counter": uop_divide(2)));
                 return sprintf("substring(%s from %v for %v) = %v", cn);
             },
         ),
+        # issue #2363: the column is truncated with the database's implementation of COP_TRUNC_DATE, and the
+        # result is compared as the where clause compares a column (see AbstractTable::doWhereExpressionIntern())
+        OP_TRUNC_DATE: (
+            "column_cop": COP_TRUNC_DATE,
+            "code": string sub (reference<hash<QueryInfo>> info, string cn, auto arg) {
+                throw "WHERE-ERROR", sprintf("operator %y is applied by the table", OP_TRUNC_DATE);
+            },
+        ),
         OP_OR: (
             "code": string sub (reference<hash<QueryInfo>> info, string cn, list<auto> arg) {
                 return info.table.getOrClause(\info, arg);
@@ -7227,6 +7445,7 @@ int rows_updated = t.update(("counter": uop_divide(2)));
         - op_in_select(): for the \c "in" operator with a query argument
         - op_like(): for the \c "like" operator
         - op_substr(): for the \c "substr" operator
+        - op_trunc_date(): compares a date column truncated as @ref cop_trunc_date() does
         - op_ge(): for the \c ">=" operator when comparing column values to immediate values
         - op_gt(): for the \c ">" operator when comparing column values to immediate values
         - op_le(): for the \c "<=" operator when comparing column values to immediate values
@@ -7603,6 +7822,40 @@ int rows_updated = t.update(("counter": uop_divide(2)));
         return make_op(OP_SUBSTR, (start, NOTHING, text));
     }
 
+    #! returns an @ref OperatorInfo hash that truncates a date column as @ref cop_trunc_date() does and compares the result; for use in @ref where_clauses "where clauses"
+    /** @par Example:
+        @code{.py}
+# the rows of a day; on PostgreSQL: where date_trunc('day', ts) = %v
+*list<auto> rows = table.selectRows({"where": {"ts": op_trunc_date(DT_DAY, 2020-01-01)}});
+# the rows from a month on; on PostgreSQL: where date_trunc('month', ts) >= %v
+*list<auto> rows = table.selectRows({"where": {"ts": op_trunc_date(DT_MONTH, op_ge(2020-01-01))}});
+        @endcode
+
+        The column is truncated with the database's implementation of @ref cop_trunc_date() (ex: \c date_trunc() on
+        PostgreSQL, \c trunc() on Oracle, <tt>date_format()</tt> on MySQL), so the operator is supported where
+        @ref cop_trunc_date() is.
+
+        @param mask the truncation mask, one of the values in @ref sql_cop_trunc_date_enum
+        @param arg the value that the truncated column is compared with for equality, or a where operator hash that
+        is applied to the truncated column (ex: @ref op_ge() or @ref op_between())
+
+        @return an @ref OperatorInfo hash for use in @ref where_clauses "where clauses"
+
+        @throw COP-TRUNC-DATE-ERROR the mask is not a value in @ref sql_cop_trunc_date_enum
+
+        @note a column operator given directly as the value of a column in a where clause (ex:
+        <tt>{"ts": cop_trunc_date("ts", DT_DAY)}</tt>) compares the column with the operator's result
+        (<tt>ts = date_trunc('day', ts)</tt>); use this operator to compare the truncated column
+
+        @since %SqlUtil 3.11.0
+     */
+    public hash<OperatorInfo> sub op_trunc_date(string mask, auto arg) {
+        if (!inlist(mask, DT_ALL_VALUES)) {
+            throw "COP-TRUNC-DATE-ERROR", sprintf("Not allowed format argument: %n: allowed: %n", mask, DT_ALL_VALUES);
+        }
+        return make_op(OP_TRUNC_DATE, {"cop_arg": mask, "arg": arg});
+    }
+
     #! returns an @ref OperatorInfo hash with a fake \c "_OR_" column name; the list of arguments to the function is combined such that each hash in the list generates SQL expressions combined with \a "and" logic, and each of those clauses is combined with \a "or" logic; this is for use in @ref where_clauses "where clauses"
     /** @par Example:
         @code{.py}
@@ -7754,17 +8007,26 @@ table.insert(("id": id, "ref": iop_seq("xid"), "ref2": iop_seq_currval("xid")));
         ds_do = new_ds_do;
     }
 
+    # private function: raises PERMISSION-DENIED if the calling code is restricted from the DATABASE domain
+    /* a connection string or a datasource configuration opens a connection of its own; the module's code may open one,
+       so the calling code decides: code restricted with PO_NO_DATABASE uses only the datasources that its host gives
+       it, also when it reaches this code through other module code, a closure or a callback (qore#6257)
+    */
+    sub check_caller_database() {
+        if (SandboxManager::isCallerRestricted(DOM_DATABASE)) {
+            throw "PERMISSION-DENIED", "code that is restricted from the DATABASE domain cannot open a database "
+                "connection from a connection string or configuration; use a datasource that the host provides";
+        }
+    }
+
     # private function used to deserialize datasources
     AbstractDatasource sub sqlutil_get_ds(string type, string config, *hash<auto> structured_config) {
         if (ds_get) {
             return ds_get(type, config);
         }
 
-        # a deserialized configuration opens a connection of its own: sandboxed code may use only the datasources that
-        # the host provides
-        if (SandboxManager::isSandboxed()) {
-            throw "PERMISSION-DENIED", "code that a sandbox governs cannot open a database connection from a connection string or configuration; use a datasource that the host provides";
-        }
+        # a deserialized configuration opens a connection of its own
+        check_caller_database();
         switch (type) {
             case "DatasourcePool":
                 return new DatasourcePool(structured_config ?? config);
@@ -10329,6 +10591,13 @@ string sql = constraint.getDeferrabilitySql();
 
             #! Flag showing if is the view updatable with DML commands.
             bool updatable;
+
+            #! the comment of the view, on databases whose driver supports view comments
+            /** @see @ref SqlUtil::AbstractDatabase::supportsViewComments() "AbstractDatabase::supportsViewComments()"
+
+                @since %SqlUtil 3.11.0
+            */
+            *string comment;
         }
 
         #! creates the object from the arguments

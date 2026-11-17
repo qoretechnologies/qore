@@ -45,6 +45,7 @@
 #include <qore/intern/QoreOperatorNode.h>
 #include <qore/intern/QoreExtractOperatorNode.h>
 #include <qore/intern/QoreSpliceOperatorNode.h>
+#include <qore/intern/CaseNodeWithOperator.h>
 #include <qore/intern/FindNode.h>
 #include <qore/intern/CallReferenceCallNode.h>
 #include <qore/intern/QoreDotEvalOperatorNode.h>
@@ -871,6 +872,11 @@ static void collectLocalsFromExpr(const QoreValue& expr,
         return;
     }
 
+    // the value of the switch statement in the comparison of a switch case reads no local (qore#6252)
+    if (dynamic_cast<const QoreSwitchValueOperatorNode*>(node)) {
+        return;
+    }
+
     // Dot eval operator (method call on object): left.method()
     if (auto* dot = dynamic_cast<const QoreDotEvalOperatorNode*>(node)) {
         collectLocalsFromExpr(dot->getExpression(), ast_locals, unknown_node_found, ref_created);
@@ -1098,6 +1104,10 @@ static void collectLocalSlotsFromExpr(const QoreValue& expr,
         collectLocalSlotsFromExpr(ext->getOffset(), locals, seen);
         collectLocalSlotsFromExpr(ext->getLength(), locals, seen);
         collectLocalSlotsFromExpr(ext->getNewValue(), locals, seen);
+        return;
+    }
+    // the value of the switch statement in the comparison of a switch case has no operands (qore#6252)
+    if (dynamic_cast<const QoreSwitchValueOperatorNode*>(node)) {
         return;
     }
     if (auto* spl = dynamic_cast<const QoreSpliceOperatorNode*>(node)) {
@@ -2769,6 +2779,12 @@ void QoreIRFunction::embedLocalClosureFlags() {
 }
 
 void QoreIRFunction::computeSlotIdsAndEmbed() {
+    // every function that runs passes here, also the ones that are not optimized (top-level code, handlers, closures,
+    // functions read from an image): the release checks of values that cannot hold an object go, and the containers of
+    // the others get their handler (qore#6072); qore_ir_optimize() runs it again with the facts it refines
+    if (!defer_release_check_prune) {
+        qore_ir_prune_release_checks(*this);
+    }
     // Pass 1: Compute max value ID for right-sizing interpreter value vector
     // AND compute local variable slot IDs for flat array access in interpreter
     uint32_t max_vid = 0;

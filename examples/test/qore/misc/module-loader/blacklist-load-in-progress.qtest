@@ -1,0 +1,210 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - module manager mutex released while a module initializes in another thread, and threads waiting on Queue and Counter objects
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+
+%requires QUnit
+%requires FsUtil
+
+%exec-class BlacklistLoadInProgressTest
+
+#! A module whose load is in progress cannot be blacklisted
+/** A loader checks the blacklist before it reserves the module's name for its load, and then releases the module
+    manager mutex while the module is parsed and initialized.  A module blacklisted in that time was accepted into
+    the blacklist, but its load went on and the module was registered anyway, so the blacklisting had no effect.
+
+    The test loads a module in a thread of its own whose initialization reports that it started and then waits on a
+    Counter that the test holds, so that the load is in progress, deterministically, while the test blacklists the
+    module from its own thread; it then releases the initialization and checks that the module was loaded.
+*/
+class BlacklistLoadInProgressTest inherits QUnit::Test {
+    public {
+        #! the module that holds the Queue and the Counter that the initialization of the held module uses
+        const GatesModule = "BlHoldGates6454";
+        #! the module whose initialization is held
+        const HeldModule = "BlHeld6454";
+        #! a module that is blacklisted while the held module is loaded
+        const UnrelatedModule = "BlUnrelated6454";
+        #! a module that is blacklisted before it is loaded
+        const PreModule = "BlPre6454";
+
+        #! the event that the initialization of the held module reports when it starts
+        const Entered = "entered";
+    }
+
+    private {
+        TmpDir tmp;
+    }
+
+    constructor() : QUnit::Test("blacklisting a module whose load is in progress", "1.0", \ARGV) {
+        addTestCase("a module whose load is in progress cannot be blacklisted", \testLoadInProgress());
+        addTestCase("a module blacklisted before its load is refused", \testBlacklistBeforeLoad());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        tmp = new TmpDir("qore-blacklist-load-in-progress-");
+        writeModule(GatesModule, "
+module BlHoldGates6454 {
+    version = \"1.0\";
+    desc = \"holds the objects that the initialization of the held module uses\";
+    author = \"Qore Technologies\";
+    url = \"http://qore.org\";
+    license = \"MIT\";
+}
+
+public namespace BlHoldGates6454 {
+    public class Gates {
+        public {
+            static Queue events = new Queue();
+            static Counter release = new Counter(1);
+            static *int self_rc;
+        }
+    }
+
+    public Queue sub events() { return Gates::events; }
+    public Counter sub release() { return Gates::release; }
+    public *int sub self_rc() { return Gates::self_rc; }
+}
+");
+        writeModule(HeldModule, sprintf("
+%%requires %s
+
+module BlHeld6454 {
+    version = \"1.0\";
+    desc = \"a module whose initialization waits until the test releases it\";
+    author = \"Qore Technologies\";
+    url = \"http://qore.org\";
+    license = \"MIT\";
+    init = sub () { BlHeld6454::hold(); };
+}
+
+public namespace BlHeld6454 {
+    public bool sub held_loaded() { return True; }
+
+    sub hold() {
+        # the module's own load is in progress in this thread
+        BlHoldGates6454::Gates::self_rc = qore_add_module_to_blacklist(\"BlHeld6454\", \"by its own initialization\");
+        BlHoldGates6454::Gates::events.push(\"%s\");
+        BlHoldGates6454::Gates::release.waitForZero();
+    }
+}
+", modulePath(GatesModule), Entered));
+        writeModule(UnrelatedModule, getSimpleModule(UnrelatedModule));
+        writeModule(PreModule, getSimpleModule(PreModule));
+    }
+
+    globalTearDown() {
+        delete tmp;
+    }
+
+    testLoadInProgress() {
+        # the objects that the initialization of the held module uses, from the module that holds them
+        Program gp(PO_NEW_STYLE);
+        gp.parse(sprintf("%%requires %s\n"
+            "Queue sub get_events() { return BlHoldGates6454::events(); }\n"
+            "Counter sub get_release() { return BlHoldGates6454::release(); }\n"
+            "*int sub get_self_rc() { return BlHoldGates6454::self_rc(); }\n", modulePath(GatesModule)), "gates");
+        Queue events = gp.callFunction("get_events");
+        Counter release = gp.callFunction("get_release");
+
+        Queue result();
+        string held_path = modulePath(HeldModule);
+        background sub () {
+            try {
+                # loaded into a Program of its own: a load holds the parse lock of the Program it loads into, and
+                # this test loads another module into its own Program while the held module is loaded
+                Program lp(PO_NEW_STYLE);
+                lp.parse(sprintf("%%requires %s\n", held_path), "held module loader");
+                result.push(NOTHING);
+            } catch (hash<ExceptionInfo> ex) {
+                # the load did not reach the initialization: report it in place of the event
+                events.push(ex);
+                result.push(ex);
+            }
+        }();
+
+        bool released;
+        on_exit {
+            # never leave the loading thread waiting, whatever fails
+            if (!released) {
+                release.dec();
+            }
+        }
+
+        # the held module's initialization has started and is waiting; its load is in progress
+        auto ev = events.get();
+        assertEq(Entered, ev);
+        if (ev != Entered) {
+            return;
+        }
+
+        # a module whose load is in progress in another thread cannot be blacklisted
+        assertEq(-1, qore_add_module_to_blacklist(HeldModule, "while it is loaded"));
+        assertThrows("BLACKLIST-ERROR", "load is in progress", \qore_add_module_to_blacklist_ex(),
+            (HeldModule, "while it is loaded"));
+        # nor could its own initialization, in the thread that loads it
+        assertEq(-1, gp.callFunction("get_self_rc"));
+
+        # another module can be blacklisted meanwhile, and the blacklisting is effective
+        assertEq(0, qore_add_module_to_blacklist(UnrelatedModule, "while another module is loaded"));
+        assertThrows("LOAD-MODULE-ERROR", "while another module is loaded", \load_module(),
+            modulePath(UnrelatedModule));
+        assertEq(-2, qore_add_module_to_blacklist(UnrelatedModule, "again"));
+
+        released = True;
+        release.dec();
+
+        # the held module was loaded
+        auto rv = result.get();
+        assertNothing(rv);
+        hash<auto> mh = get_module_hash();
+        assertTrue(exists mh{HeldModule});
+        assertNothing(mh{UnrelatedModule});
+        # the loaded module was not blacklisted: it cannot be blacklisted now that it is registered
+        assertEq(-1, qore_add_module_to_blacklist(HeldModule, "after its load"));
+        assertThrows("BLACKLIST-ERROR", "already loaded", \qore_add_module_to_blacklist_ex(),
+            (HeldModule, "after its load"));
+    }
+
+    testBlacklistBeforeLoad() {
+        assertEq(0, qore_add_module_to_blacklist(PreModule, "before its load"));
+        # the blacklisted name is the feature name of the module that is loaded by path
+        assertThrows("LOAD-MODULE-ERROR", "before its load", \load_module(), modulePath(PreModule));
+        assertNothing(get_module_hash(){PreModule});
+        # it stays blacklisted
+        assertEq(-2, qore_add_module_to_blacklist(PreModule, "again"));
+        assertThrows("LOAD-MODULE-ERROR", "before its load", \load_module(), modulePath(PreModule));
+    }
+
+    private string modulePath(string name) {
+        return tmp.path + DirSep + name + ".qm";
+    }
+
+    private writeModule(string name, string src) {
+        File f();
+        f.open2(modulePath(name), O_CREAT | O_TRUNC | O_WRONLY);
+        f.write("%modern\n" + src);
+        f.close();
+    }
+
+    private static string getSimpleModule(string name) {
+        return sprintf("
+module %s {
+    version = \"1.0\";
+    desc = \"a test module\";
+    author = \"Qore Technologies\";
+    url = \"http://qore.org\";
+    license = \"MIT\";
+}
+
+public namespace %s {
+    public bool sub loaded() { return True; }
+}
+", name, name);
+    }
+}

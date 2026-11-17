@@ -33,6 +33,7 @@
 
 #define _QORE_QORECLASSINTERN_H
 
+#include <mutex>
 #include "qore/safe_dslist"
 #include "qore/intern/QoreTypeOwner.h"
 #include "qore/intern/ConstantList.h"
@@ -45,6 +46,8 @@
 #include "qore/vector_map"
 #include "qore/vector_set"
 
+#include <string_view>
+#include <unordered_map>
 #include <algorithm>
 #include <atomic>
 #include <cstring>
@@ -58,6 +61,17 @@
 
 #define OTF_USER    CT_USER
 #define OTF_BUILTIN CT_BUILTIN
+
+#ifdef DEBUG
+//! the parent class edges that the checks of the generic parent instantiations of classes have visited (qore#6423)
+/** Read by the dbg_generic_parent_check_steps() debug hook, so that a test can require a bound on the steps of the
+    checks independent of the timing
+*/
+DLLLOCAL extern std::atomic<int64> qore_generic_parent_check_steps;
+#define QORE_GENERIC_PARENT_CHECK_STEP() qore_generic_parent_check_steps.fetch_add(1, std::memory_order_relaxed)
+#else
+#define QORE_GENERIC_PARENT_CHECK_STEP()
+#endif
 
 // cannot use vector_map here for performance reasons with method lookups
 #ifdef HAVE_QORE_HASH_MAP
@@ -1237,8 +1251,29 @@ protected:
             initializer_type_info(old.initializer_type_info), initializer_filter(old.initializer_filter),
             initializer_policy(old.initializer_policy), instance_initializer(old.instance_initializer),
             exp(old.exp.refSelf()),
-            loc(old.loc), parseTypeInfo(old.parseTypeInfo ? new QoreParseTypeInfo(*old.parseTypeInfo) : nullptr) {
+            loc(old.loc), parseTypeInfo(old.parseTypeInfo ? new QoreParseTypeInfo(*old.parseTypeInfo) : nullptr),
+            decl_pwo(old.decl_pwo), has_decl_po(old.has_decl_po) {
     }
+
+public:
+    //! records the parse options and warnings of the code that declares the member, which its initializer is
+    //! initialized and runs with
+    DLLLOCAL void bindDeclarationParseOptions(const ParseWarnOptions& pwo) {
+        decl_pwo = pwo;
+        has_decl_po = true;
+    }
+
+    //! the parse options and warnings of the code that declares the member, which its initializer is initialized and
+    //! runs with
+    /** Set by the parser (bindDeclarationParseOptions()) for a member or static variable declared in Qore source; a
+        member without a Qore initializer (builtin, or of a compiled class) has none; see the parseInit() methods,
+        QoreVarInfo::evalInit() and qore_class_private::initMember() (qore#6273, qore#6292)
+    */
+    ParseWarnOptions decl_pwo;
+    //! true if \a decl_pwo is set
+    bool has_decl_po = false;
+
+protected:
 
 public:
     // initialization expression
@@ -1462,6 +1497,9 @@ public:
     // accessing the object's data
     DLLLOCAL void addContextAccess(const QoreMemberInfo& mi, const qore_class_private* qc);
 
+    // issue #6393: copies the context entries of the given member, which shares the storage of this member
+    DLLLOCAL void addContextMap(const QoreMemberInfo& mi);
+
     DLLLOCAL void addContextAccessForClass(const qore_class_private* class_ctx,
             const qore_class_private* member_class_ctx);
 
@@ -1575,14 +1613,6 @@ public:
     */
     std::atomic<TrustedModuleStatic*> trusted_module{nullptr};
 
-    //! the parse options of the code that declares the variable, which its initializer runs with (see evalInit())
-    /** Set by the parser (bindDeclarationParseOptions()); a variable without a Qore initializer (a builtin variable,
-        or one of a compiled class, which its compiled initializer sets) has none
-    */
-    QoreParseOptions decl_po;
-    //! true if \a decl_po is set
-    bool has_decl_po = false;
-
     DLLLOCAL QoreVarInfo(const QoreProgramLocation* loc, const QoreTypeInfo* n_typeinfo = nullptr,
             QoreParseTypeInfo* n_parseTypeInfo = nullptr, QoreValue e = QoreValue(), ClassAccess n_access = Public) :
         QoreMemberInfoBaseAccess(loc, n_typeinfo, n_parseTypeInfo, e, n_access), finalized(false) {
@@ -1593,14 +1623,7 @@ public:
             builtin_value(old.builtin_value),
             // an imported copy reads and writes the same external storage as the original; del_cb is deliberately
             // not copied, since the module data belongs to the variable the module registered
-            get_cb(old.get_cb), set_cb(old.set_cb), cb_data(old.cb_data), cb_cls(old.cb_cls), decl_po(old.decl_po),
-            has_decl_po(old.has_decl_po) {
-    }
-
-    //! records the parse options of the code that declares the variable, which its initializer runs with
-    DLLLOCAL void bindDeclarationParseOptions(const QoreParseOptions& po) {
-        decl_po = po;
-        has_decl_po = true;
+            get_cb(old.get_cb), set_cb(old.set_cb), cb_data(old.cb_data), cb_cls(old.cb_cls) {
     }
 
     DLLLOCAL ~QoreVarInfo() {
@@ -1966,28 +1989,208 @@ public:
     }
 };
 
-class QoreMemberMap : public QoreMemberMapBase<QoreMemberInfo> {
+//! The members of a class (#6272)
+/** The members are kept in a list, whose order the AOT serializer, the signatures and reflection rely on.  Once the
+    class's members are frozen (freeze(): when the class is committed, published or copied), find() reads an index by
+    name instead of searching the list; the index is built once from the complete list and never changed afterwards,
+    and it is published with an atomic pointer, so readers that run concurrently with each other need no lock.  The
+    list is changed only through this class: each change asserts in debug builds that the members are not frozen.  A
+    change after the freeze (not expected; a module adding a member to a published class would make one) builds a
+    new index and publishes it; the replaced index is kept until the map is destroyed, so that a reader that loaded it
+    never reads freed memory.  See design/self-member-binding.md.
+*/
+class QoreMemberMap : protected QoreMemberMapBase<QoreMemberInfo> {
 public:
-    using QoreMemberMapBase<QoreMemberInfo>::moveAllTo;
+    typedef QoreMemberMapBase<QoreMemberInfo> base_t;
+    using base_t::member_list_t;
+    using base_t::member_list_element_t;
+    using base_t::iterator;
+    using base_t::const_iterator;
+    using base_t::empty;
+    using base_t::size;
+
+    //! the smallest number of members for which a frozen map builds an index; below it the linear search is cheaper
+    static constexpr size_t IndexThreshold = 8;
+
+    DLLLOCAL QoreMemberMap() = default;
+    DLLLOCAL QoreMemberMap(const QoreMemberMap&) = delete;
+    DLLLOCAL QoreMemberMap& operator=(const QoreMemberMap&) = delete;
+
+    DLLLOCAL ~QoreMemberMap() {
+        delete index.load(std::memory_order_relaxed);
+    }
+
+    //! Returns the members in their order; read-only
+    DLLLOCAL const member_list_t& getList() const {
+        return member_list;
+    }
+
+    //! Returns the member with the given name, or nullptr
+    /** Small, so that it is inlined as the linear search was: the lookup of the index, which is larger, is a call
+        (an inlined hash table lookup made the callers call find() instead, which cost each write of a member of a
+        small class about 20 instructions)
+    */
+    DLLLOCAL QoreMemberInfo* find(const char* name) const {
+        if (const MemberIndex* idx = index.load(std::memory_order_acquire)) {
+            return findIndexed(*idx, name);
+        }
+        return base_t::find(name);
+    }
+
+    DLLLOCAL bool inList(const char* name) const {
+        return (bool)find(name);
+    }
+
+    //! Freezes the members: builds the index once the list is complete (#6272)
+    /** Called when the class is committed (user classes), published (builtin classes) or copied; idempotent.
+    */
+    DLLLOCAL void freeze() {
+        if (frozen) {
+            return;
+        }
+        frozen = true;
+        publishIndex();
+    }
+
+    DLLLOCAL bool isFrozen() const {
+        return frozen;
+    }
+
+    //! Returns true if find() reads an index
+    DLLLOCAL bool isIndexed() const {
+        return index.load(std::memory_order_acquire) != nullptr;
+    }
+
+    //! Returns true if the frozen map has a private:internal member, or an entry for one of a parent class
+    /** Without one, every member of the class is held in the object's main data and is accessible from the class's
+        code, so the storage context of a member is the main data in every class context (#6272); false before the
+        freeze.
+    */
+    DLLLOCAL bool hasInternalEntries() const {
+        return has_internal_entries.load(std::memory_order_acquire);
+    }
+
+    using base_t::moveAllTo;
     DLLLOCAL void moveAllTo(QoreClass* qc, ClassAccess access);
 
-    using QoreMemberMapBase<QoreMemberInfo>::addNoCheck;
     DLLLOCAL void addNoCheck(char* name, QoreMemberInfo* info) {
         assert(info->getClass());
-        QoreMemberMapBase<QoreMemberInfo>::addNoCheck(name, info);
+        assertChangeAllowed();
+        base_t::addNoCheck(name, info);
+        afterChange();
+    }
+
+    //! adds a member of a declaration's pending map, whose info has no class yet (see MemberList in the parser)
+    DLLLOCAL void addNoCheck(std::pair<char*, QoreMemberInfo*> pair) {
+        assertChangeAllowed();
+        base_t::addNoCheck(pair.first, pair.second);
+        afterChange();
     }
 
     DLLLOCAL void addInheritedNoCheck(char* name, QoreMemberInfo* info) {
         assert(name);
         assert(info);
         assert(!inList(name));
+        assertChangeAllowed();
         member_list.insert(member_list.begin(), std::make_pair(name, info));
+        afterChange();
+    }
+
+    //! replaces the value of a member; the name, which the index refers to, is kept
+    DLLLOCAL QoreMemberInfo* replace(const char* name, QoreMemberInfo* info) {
+        assertChangeAllowed();
+        QoreMemberInfo* rv = base_t::replace(name, info);
+        afterChange();
+        return rv;
+    }
+
+    //! frees the members and empties the map, when the class is retired (no reference to it is left)
+    DLLLOCAL void clearAndFree() {
+        for (auto& i : member_list) {
+            free(i.first);
+            delete i.second;
+        }
+        member_list.clear();
+        // no reader is left (see qore_class_private::retireTypeOwner()); the index referred to the freed names
+        delete index.exchange(nullptr, std::memory_order_acq_rel);
+        retired_indexes.clear();
+        frozen = false;
+        has_internal_entries.store(false, std::memory_order_relaxed);
     }
 
     DLLLOCAL int parseInit(LocalVar& selfid);
 
+#ifdef DEBUG
+    //! debug builds: checks the index against the list; returns an error message, or an empty string
+    DLLLOCAL std::string dbgCheckIndex() const;
+
+    //! debug builds: adds a member after the freeze, to test that a new index is published (see afterChange()) while
+    //! threads read the members; returns the number of indexes replaced so far
+    DLLLOCAL size_t dbgLateAdd(char* name, QoreMemberInfo* info) {
+        base_t::addNoCheck(name, info);
+        afterChange();
+        return retired_indexes.size();
+    }
+#endif
+
 private:
+    typedef std::unordered_map<std::string_view, QoreMemberInfo*> MemberIndex;
+
+    //! Returns the member with the given name in the index, or nullptr
+    DLLLOCAL static QoreMemberInfo* findIndexed(const MemberIndex& idx, const char* name);
+
+    //! the index of a frozen map with at least IndexThreshold members, or nullptr
+    std::atomic<const MemberIndex*> index{nullptr};
+    //! indexes replaced by a change after the freeze; kept for readers that loaded them
+    std::vector<std::unique_ptr<const MemberIndex>> retired_indexes;
     bool init = false;
+    //! true once the members are frozen (freeze())
+    bool frozen = false;
+    //! true if the frozen map has an entry of a private:internal member (hasInternalEntries()); read without a lock
+    std::atomic<bool> has_internal_entries{false};
+
+    //! A change of a frozen map: legal, as a module can add a builtin member to a class it has published
+    /** module-jni adds the fields of a Java class to its QoreClass when the class is first used, after it is published
+        (QoreClass::addBuiltinMemberWithAccessors()).  The change publishes a new index (afterChange()), which readers
+        load atomically; the indexes it replaces are kept until the map is destroyed, as a reader can still hold one.
+        The member list itself is changed as it was before the index (#6272): a module adds members to a published
+        class before code that uses the new members can run, and serializes its own additions to one class.
+    */
+    DLLLOCAL void assertChangeAllowed() const {
+    }
+
+    DLLLOCAL void afterChange() {
+        if (frozen) {
+            publishIndex();
+        }
+    }
+
+    //! builds an index from the complete list and publishes it, keeping the replaced one
+    DLLLOCAL void publishIndex() {
+        bool internal = false;
+        for (auto& i : member_list) {
+            if (i.second && (i.second->access == Internal || i.second->access == Inaccessible
+                    || i.second->getContextSize())) {
+                internal = true;
+                break;
+            }
+        }
+        // published before the index that holds the new member, so that a reader that finds the member through the
+        // index also sees the flag that it requires (a fold of the lookup is only made without internal entries)
+        has_internal_entries.store(internal, std::memory_order_release);
+        MemberIndex* idx = nullptr;
+        if (member_list.size() >= IndexThreshold) {
+            idx = new MemberIndex;
+            idx->reserve(member_list.size());
+            for (auto& i : member_list) {
+                idx->emplace(std::string_view(i.first), i.second);
+            }
+        }
+        const MemberIndex* old = index.exchange(idx, std::memory_order_acq_rel);
+        if (old) {
+            retired_indexes.emplace_back(old);
+        }
+    }
 };
 
 class QoreVarMap : public QoreMemberMapBase<QoreVarInfo> {
@@ -2278,8 +2481,6 @@ public:
     DLLLOCAL const QoreVarInfo* parseFindVar(const char* name, const qore_class_private*& qc, ClassAccess& n_access,
             bool toplevel) const;
 
-    DLLLOCAL const QoreClass* findInHierarchy(const qore_class_private& qc);
-
     DLLLOCAL const QoreClass* getClass(qore_classid_t cid, ClassAccess& n_access, bool toplevel) const;
     DLLLOCAL const QoreClass* getClass(const qore_class_private& qc, ClassAccess& n_access, bool toplevel) const;
     DLLLOCAL const QoreClass* parseGetClass(const qore_class_private& qc, ClassAccess& n_access, bool toplevel) const;
@@ -2307,8 +2508,6 @@ public:
     DLLLOCAL QoreValue parseFindConstantValue(const char* cname, const QoreTypeInfo*& typeInfo, bool &found,
             const qore_class_private* class_ctx, bool allow_internal,
             const QoreProgramLocation* consumer_loc = nullptr) const;
-
-    DLLLOCAL int addBaseClassesToSubclass(QoreClass* child, bool is_virtual);
 
     DLLLOCAL void initializeBuiltin();
 };
@@ -2428,13 +2627,11 @@ public:
 
     DLLLOCAL bool isBaseClass(QoreClass* qc, bool toplevel) const;
 
-    DLLLOCAL int addBaseClassesToSubclass(QoreClass* thisparent, QoreClass* child, bool is_virtual) {
-        for (auto& i : *this) {
-            if ((*i).addBaseClassesToSubclass(child, is_virtual))
-                return -1;
-        }
-        return sml.addBaseClassesToSubclass(thisparent, child, is_virtual);
-    }
+    //! adds the classes of the hierarchy of \a thisparent, whose base classes these are, to the hierarchy of \a child
+    /** Walks the hierarchy iteratively, as it can be as long as the code declares it (issue #6047); see
+        qore_class_private::addBaseClassesToSubclass()
+    */
+    DLLLOCAL int addBaseClassesToSubclass(QoreClass* thisparent, QoreClass* child, bool is_virtual);
 
     DLLLOCAL void rescanParents(QoreClass* cls);
 
@@ -2811,6 +3008,12 @@ public:
     //! initialized (see initializeIntern()); a value of a bounded type parameter has its bound in the class's code
     //! (qore#5774)
     type_vec_t type_param_bound_types;
+    //! the resolved defaults of the type parameters (nullptr for a parameter without one), resolved with the bounds
+    //! in the class's own Program, so that a copy imported into another Program keeps them (qore#6285)
+    type_vec_t type_param_default_types;
+    //! the defaults resolved at run time for a class loaded from compiled code (runtimeResolveTypeParamDefault())
+    mutable type_vec_t runtime_default_types;
+    mutable std::mutex runtime_default_lock;
     std::vector<const QoreTypeInfo*> parameterized_vparents;
 
     int64 domain;                    // capabilities of builtin class to use in the context of parse restrictions
@@ -3296,6 +3499,15 @@ public:
         return index < type_param_bound_types.size() ? type_param_bound_types[index] : nullptr;
     }
 
+    //! Returns the resolved default of a type parameter (see initializeIntern()), or nullptr if it has none
+    DLLLOCAL const QoreTypeInfo* getTypeParamDefaultTypeInfo(size_t index) const {
+        return index < type_param_default_types.size() ? type_param_default_types[index] : nullptr;
+    }
+
+    //! Resolves the default of a type parameter of a class that was not initialized from source (a class loaded
+    //! from compiled code) in the class's own Program, or returns nullptr if it has none or it cannot be resolved
+    DLLLOCAL const QoreTypeInfo* runtimeResolveTypeParamDefault(size_t index) const;
+
     DLLLOCAL size_t getTypeParamRequiredCount() const {
         for (size_t i = 0, e = type_params.size(); i < e; ++i) {
             if (type_params[i].hasDefault()) {
@@ -3330,10 +3542,77 @@ public:
         parameterized_vparents.push_back(type_info);
     }
 
+    //! Returns the specialization of the generic class \a target_base that \a source inherits
+    /** @param source a specialization of this class
+        @param target_base a generic class
+
+        @return \a source if this class is \a target_base, else the specialization of \a target_base that this class
+        inherits, directly or through other classes (generic or not), with the type arguments of \a source substituted
+        for the type parameters of this class, or nullptr if this class does not inherit \a target_base
+    */
     DLLLOCAL const QoreTypeInfo* getParameterizedBaseTypeInfo(const QoreParameterizedClassTypeInfo* source,
             const QoreClass* target_base) const;
+
+    //! Returns the specialization of the generic class \a target_base that this class inherits
+    /** As getParameterizedBaseTypeInfo() for this class as it is: a class without type parameters, a generic class
+        that defaults to a value-erased instance for raw use as that instance (also returned for \a target_base itself
+        with \a allow_raw_self), or else a generic class with its own type parameters in the result
+    */
     DLLLOCAL const QoreTypeInfo* getConcreteParameterizedBaseTypeInfo(const QoreClass* target_base,
         bool allow_raw_self = true) const;
+
+    //! Returns the type of the specialization of the direct parent class \a parent that this class inherits
+    /** @return the type with the type parameters of this class; for a generic class that defaults to a value-erased
+        instance for raw use inherited without type arguments, that instance (\a parent with auto for each type
+        parameter); nullptr if \a parent is not generic or there is no specialization of it recorded (a parse error)
+    */
+    DLLLOCAL const QoreTypeInfo* getParameterizedParentTypeInfo(const QoreClass& parent) const;
+
+    //! Finds the specialization of \a target_base that this class inherits through its parent classes
+    /** @param source this class with type arguments, substituted in the specializations of the parent classes, or
+        nullptr for none
+        @param target_base a generic class
+    */
+    DLLLOCAL const QoreTypeInfo* findParameterizedBaseTypeInfo(const QoreParameterizedClassTypeInfo* source,
+            const QoreClass* target_base) const;
+
+    //! Returns the receiver of a call of the static method \a m of a class without type parameters
+    /** The method of a class without type parameters that declares a method of the same name as one of a generic
+        parent class (HX inherits G<float> and declares a static method id() as G<T> does) has the variants of the
+        generic class's method too, whose type parameters are those of the specialization that the class inherits
+        wherever the method is called from: the receiver is the class, which binds them (qore#6448)
+
+        @return the class's type, or nullptr if the method has no variants of a generic class
+    */
+    DLLLOCAL static const QoreTypeInfo* getInheritedStaticCallReceiverTypeInfo(const QoreMethod& m);
+
+    //! Returns the receiver of a call through this class of the static method \a m of a generic parent class
+    /** A class without type parameters that inherits a specialization of a generic class (H inherits G<float>) calls
+        the static methods of the generic class with its type parameters bound to the type arguments of the
+        specialization: H::m() is G<float>::m().  Returns nullptr if \a m is not a method of a generic class or this
+        class has type parameters of its own (qore#6186); for a method of a class without type parameters that has
+        variants of a generic class, see getInheritedStaticCallReceiverTypeInfo().
+    */
+    DLLLOCAL const QoreTypeInfo* getStaticCallReceiverTypeInfo(const QoreMethod& m) const;
+
+    //! Returns the receiver of a call of the static method \a m without type arguments of its class at parse time
+    /** @param m the static method called
+        @param scope_cls the class that the call names (C::m(), \\C::m()), or nullptr for an implicit call (m())
+        @param class_ctx the class whose code makes the call, if any
+        @param current_receiver set to true if the call's receiver is that of the running instantiation of the code
+        making it: a call in the code of a generic class of a static method of the class or of a parent class
+        (G::m() or m() in G<T> or in K<X> inherits G<list<X>>); the call does not infer the type arguments of the
+        method's class from its arguments then
+
+        @return the receiver of the call: the specialization of the method's generic class that the class named, or
+        else the class of the code making the call, inherits (H::m() and G::m() in a method of H for H inherits
+        G<float> is G<float>::m()); with \a current_receiver, the method's class with the type parameters of the
+        generic class making the call (G<T> or G<list<X>>), which the call substitutes with those of the running
+        instantiation (G<float>); nullptr if there is none, and the type arguments are then inferred from the
+        arguments, unless \a current_receiver is set (qore#6186)
+    */
+    DLLLOCAL static const QoreTypeInfo* parseGetStaticCallReceiverTypeInfo(const QoreMethod& m,
+            const QoreClass* scope_cls, const qore_class_private* class_ctx, bool& current_receiver);
 
     DLLLOCAL bool runtimeIsPrivateMemberIntern(const char* str, bool toplevel) const;
 
@@ -3547,6 +3826,19 @@ public:
         @return the class context for the member or nullptr if it should be stored in the standard object data hash
     */
     DLLLOCAL const qore_class_private* runtimeGetMemberContext(const char* mem, const qore_class_private* class_ctx) const {
+        // #6272: when neither this class nor the class context has a private:internal member (also not one of a
+        // parent class), every member is held in the object's main data, whatever the class context: the result is
+        // known without looking the member up
+        if (members.isFrozen() && !members.hasInternalEntries()
+                && (!class_ctx || class_ctx == this
+                    || (class_ctx->members.isFrozen() && !class_ctx->members.hasInternalEntries()))) {
+#ifdef DEBUG
+            // debug builds check that the full resolution agrees
+            const QoreMemberInfo* dbg_info = runtimeGetMemberInfo(mem, class_ctx);
+            assert(!dbg_info || !dbg_info->getClassContext(class_ctx));
+#endif
+            return nullptr;
+        }
         const QoreMemberInfo* info = runtimeGetMemberInfo(mem, class_ctx);
         //printd(5, "qore_class_private::runtimeGetMemberContext() this: %p '%s' mem: '%s' info: %p member class: %p '%s' ctx(%p): %p (size: %d)\n", this, name.c_str(), mem, info, info ? info->getClass() : nullptr, info ? info->getClass()->name.c_str() : "n/a", class_ctx, info ? info->getClassContext(class_ctx) : nullptr, info ? info->getContextSize() : 0);
         return info ? info->getClassContext(class_ctx) : nullptr;
@@ -3958,6 +4250,7 @@ public:
         scl->addAncestors(m);
     }
 
+    //! adds the static methods of the base classes that the method overrides, to the most distant base class
     DLLLOCAL void parseAddStaticAncestors(QoreMethod* m) {
         if (!scl) {
             return;
@@ -3966,12 +4259,14 @@ public:
         scl->parseAddStaticAncestors(m);
     }
 
+    //! adds the methods of the base classes that the method overrides, to the most distant base class
     DLLLOCAL void parseAddAncestors(QoreMethod* m) {
         //printd(5, "qore_class_private::parseAddAncestors(%p %s) this: %p cls: %p %s scl: %p\n", m, m->getName(), this, cls, name.c_str(), scl);
         assert(strcmp(m->getName(), "constructor"));
 
-        if (!scl)
+        if (!scl) {
             return;
+        }
 
         scl->parseAddAncestors(m);
     }
@@ -4457,6 +4752,12 @@ public:
     template <bool Lexical>
     DLLLOCAL QoreValue evalMethodGateImpl(LexicalSemanticPolicy policy, QoreObject* self, const char* nme, const QoreListNode* args, ExceptionSink* xsink) const;
 
+    //! returns a reference to the call reference or closure that the member of the name holds, if any
+    /** as a call of a method that the class does not have calls it (qore_class_private::evalMethod())
+    */
+    DLLLOCAL QoreValue getMemberCode(QoreObject* self, const char* nme, const qore_class_private* class_ctx,
+            ExceptionSink* xsink) const;
+
     DLLLOCAL static const QoreMethod* doParseMethodAccess(const QoreMethod* m, const qore_class_private* class_ctx);
 
     DLLLOCAL static const QoreMethod* doMethodAccess(const QoreMethod* m, ClassAccess ma, const qore_class_private* class_ctx) {
@@ -4675,10 +4976,12 @@ public:
     DLLLOCAL qore_type_result_e runtimeCheckCompatibleClass(const qore_class_private& oc) const;
     DLLLOCAL qore_type_result_e runtimeCheckCompatibleClassIntern(const qore_class_private& oc) const;
 
-    // find the given class anywhere in the hierarchy regardless of access permissions or location
+    //! finds the given class anywhere in the hierarchy regardless of access permissions or location
+    /** The hierarchy is walked iteratively (see BCList::findInHierarchy()) */
     DLLLOCAL const QoreClass* findInHierarchy(const qore_class_private& qc) {
-        if (equal(qc))
+        if (equal(qc)) {
             return cls;
+        }
         return scl ? scl->findInHierarchy(qc) : nullptr;
     }
 
@@ -5718,6 +6021,15 @@ public:
         // as eval(): the receiver of a static method called through an object is the object's type (issue #5769)
         return SMETHF(priv->func)->evalMethodGivenArgs(xsink, rc, nullptr, args, cctx, pgm_ctx,
             self ? qore_get_object_receiver_type_info(self) : nullptr);
+    }
+
+    //! as evalGivenArgs(), for a static method called with the receiver \a receiver_type_info (qore#6285)
+    DLLLOCAL static QoreValue evalStaticGivenArgs(const QoreMethod& m, ExceptionSink* xsink, RuntimeConfig& rc,
+            QoreListNode* args, const qore_class_private* cctx, QoreProgram* pgm_ctx,
+            const QoreTypeInfo* receiver_type_info) {
+        qore_method_private* priv = m.priv;
+        assert(priv->static_flag);
+        return SMETHF(priv->func)->evalMethodGivenArgs(xsink, rc, nullptr, args, cctx, pgm_ctx, receiver_type_info);
     }
 
     DLLLOCAL static QoreValue evalTmpArgs(const QoreMethod& m, ExceptionSink* xsink, RuntimeConfig& rc,

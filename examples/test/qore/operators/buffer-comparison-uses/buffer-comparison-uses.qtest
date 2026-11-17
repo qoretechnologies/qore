@@ -1,0 +1,109 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - JIT and AOT code generation of the uses of a comparison of untyped operands
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - every check runs a script in a child process that sets its own --exec-mode, or AOT
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires ../../../TestInterpreter.qm
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class BufferComparisonUsesTest
+
+#! qore#6356: every use of a comparison of untyped operands gives the result of the AST interpreter in every mode
+/** A comparison whose operands can be buffers is typed bool at parse time, but with a buffer operand it gives the
+    elementwise buffer<bool>.  The IR lowering and native code that chose a variant, a conversion or a fast path from
+    the parse type gave other results than the AST interpreter: as the condition of a statement (qore#6160), in the
+    conversions int(), float() and string() (qore#6264) and as the operator of a switch case (qore#6252).  The script
+    next to the test applies every use found in the audit of qore#6356 to a comparison with a buffer, a buffer of
+    zeros, an empty buffer and an int operand; it runs in every execution mode, on the IR tier and as AOT
+    executables, and its output must be that of the AST interpreter.
+*/
+class BufferComparisonUsesTest inherits QUnit::Test {
+    public {
+        #! the script
+        const Script = "uses";
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string env;
+    }
+
+    constructor() : QUnit::Test("uses of a buffer comparison", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        env = sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir);
+
+        addTestCase("AST semantics", \astTest());
+        addTestCase("execution modes", \modesTest());
+        addTestCase("AOT executables", \aotTest());
+        set_return_value(main());
+    }
+
+    #! checks the results of the AST interpreter that the fixed issues decided
+    private astTest() {
+        string out = astOutput();
+        # a buffer comparison is the elementwise buffer<bool>, which is true when it is not empty (qore#6160)
+        assertTrue(out =~ /^buffer gt:\n  value: buffer<bool> \[False, False, True\]\n/, "buffer gt value: " + out);
+        assertTrue(out =~ /(^|\n)buffer gt:\n(  [^\n]*\n)*  if: 1\n/, "buffer gt if");
+        assertTrue(out =~ /(^|\n)zeros gt:\n(  [^\n]*\n)*  if: 1\n/, "zeros gt if");
+        assertTrue(out =~ /(^|\n)empty gt:\n(  [^\n]*\n)*  if: 0\n/, "empty gt if");
+        # the conversions of a buffer raise (qore#6264)
+        assertTrue(out =~ /(^|\n)buffer gt:\n(  [^\n]*\n)*  int: RUNTIME-OVERLOAD-ERROR\n/, "buffer gt int");
+        assertTrue(out =~ /(^|\n)buffer gt:\n(  [^\n]*\n)*  float: RUNTIME-OVERLOAD-ERROR\n/, "buffer gt float");
+        assertTrue(out =~ /(^|\n)buffer gt:\n(  [^\n]*\n)*  string: RUNTIME-OVERLOAD-ERROR\n/, "buffer gt string");
+        # a switch case with an operator matches as the condition of an if statement does (qore#6252)
+        assertTrue(out =~ /(^|\n)buffer gt:\n(  [^\n]*\n)*  switch case operator: "gt 2"\n/, "buffer switch case");
+        assertTrue(out =~ /(^|\n)zeros gt:\n(  [^\n]*\n)*  switch case operator: "gt 2"\n/, "zeros switch case");
+        # an int operand gives a bool
+        assertTrue(out =~ /(^|\n)int gt:\n  value: True\n/, "int gt value");
+        assertTrue(out =~ /(^|\n)int not gt:\n  value: False\n/, "int not gt value");
+    }
+
+    #! runs the script in every execution mode and on the IR tier
+    private modesTest() {
+        string exp = astOutput();
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            if (mode == "ast") {
+                continue;
+            }
+            assertEq(exp, ExecModeHarness::run(sprintf("%s %s --exec-mode=%s %s", env, qore_bin, mode, scriptPath())),
+                mode);
+        }
+        assertEq(exp, ExecModeHarness::run_ir_tier(sprintf("%s %s --exec-mode=tiered %s", env, qore_bin,
+            scriptPath())), ExecModeHarness::IRTierName);
+    }
+
+    #! compiles the script with qcc -O0 and -O3 and checks that the executables give the output of the AST
+    #! interpreter
+    private aotTest() {
+        if (!is_file(qcc_bin)) {
+            testSkip("qcc is not available at " + qcc_bin);
+        }
+        string exp = astOutput();
+        TmpDir dir("buffer-comparison-uses-aot-");
+        foreach string opt in ("-O0", "-O3") {
+            string exe = sprintf("%s/%s%s", dir.path, Script, opt);
+            string out = ExecModeHarness::run_any(sprintf("%s %s %s -o %s %s", env, qcc_bin, opt, exe, scriptPath()));
+            assertTrue(is_file(exe), sprintf("%s: qcc compiles the script: %s", opt, out));
+            assertEq(exp, ExecModeHarness::run_any(sprintf("%s %s", env, exe)), "AOT " + opt);
+        }
+    }
+
+    private string scriptPath() {
+        return get_script_dir() + "/" + Script + ".q";
+    }
+
+    #! the output of the script with the AST interpreter
+    private string astOutput() {
+        return ExecModeHarness::run(sprintf("%s %s --exec-mode=ast %s", env, qore_bin, scriptPath()));
+    }
+}

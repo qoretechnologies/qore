@@ -1746,6 +1746,15 @@ QoreIRInstruction* QoreIRBuilder::createDebugBlockUnwind(uint16_t depth, const Q
     return inst;
 }
 
+QoreIRInstruction* QoreIRBuilder::createCheckReleaseException(QoreIRBasicBlock* handler,
+        const QoreProgramLocation* loc) {
+    auto inst = append<QoreIRInstruction>(QoreIROpcode::CheckException);
+    inst->loc = loc;
+    inst->exception_target = handler;
+    inst->release_check = QoreIRReleaseCheck::Pending;
+    return inst;
+}
+
 QoreIRInstruction* QoreIRBuilder::createCheckException(const QoreProgramLocation* loc) {
     auto inst = append<QoreIRInstruction>(QoreIROpcode::CheckException);
     inst->loc = loc;
@@ -1780,6 +1789,25 @@ QoreIRInstruction* QoreIRBuilder::createHandlerReturn(QoreIRValue value, const Q
     auto inst = append<QoreIRInstruction>(QoreIROpcode::HandlerReturn);
     if (value.isValid()) {
         inst->operands.push_back(value);
+    }
+    inst->loc = loc;
+    return inst;
+}
+
+QoreIRInstruction* QoreIRBuilder::createSetCodeParseOptions(const QoreParseOptions& po,
+        const QoreProgramLocation* loc) {
+    // four 32-bit words, each an integer that every tier holds inline (an int of 64 bits can be a node)
+    uint64_t lo = static_cast<uint64_t>(po.getLo());
+    uint64_t hi = static_cast<uint64_t>(po.getHi());
+    QoreIRValue words[4] = {
+        createConstInt(static_cast<int64_t>(lo & 0xffffffffu), loc)->result,
+        createConstInt(static_cast<int64_t>(lo >> 32), loc)->result,
+        createConstInt(static_cast<int64_t>(hi & 0xffffffffu), loc)->result,
+        createConstInt(static_cast<int64_t>(hi >> 32), loc)->result,
+    };
+    auto inst = append<QoreIRInstruction>(QoreIROpcode::SetCodeParseOptions);
+    for (const QoreIRValue& word : words) {
+        inst->operands.push_back(word);
     }
     inst->loc = loc;
     return inst;
@@ -2171,4 +2199,39 @@ QoreIRSwitchCaseMatchInstruction* QoreIRBuilder::createSwitchCaseMatch(const Cas
     inst->loc = loc;
     inst->result = func->createValue();
     return inst;
+}
+
+// documented in QoreIRBuilder.h
+bool qore_ir_takes_region_exception_target(QoreIROpcode opcode) {
+    switch (opcode) {
+        case QoreIROpcode::MakeList:
+        case QoreIROpcode::MakeHash:
+        case QoreIROpcode::MakeHashConstKeys:
+        case QoreIROpcode::CreateEmptyList:
+        case QoreIROpcode::CreateSizedList:
+        case QoreIROpcode::NewHashDecl:
+        case QoreIROpcode::NewHashDeclFromHash:
+        case QoreIROpcode::NewComplexHash:
+        case QoreIROpcode::NewComplexList:
+            return true;
+        default:
+            return false;
+    }
+}
+
+// documented in QoreIRBuilder.h
+void QoreIRBuilder::recordRegionInstruction(QoreIRInstruction* inst) {
+    if (qore_ir_takes_region_exception_target(inst->opcode)) {
+        if (!inst->exception_target) {
+            region_record->containers.push_back({inst, block, region_record->exception_stack->empty() ? nullptr
+                : region_record->exception_stack->back()});
+        }
+        return;
+    }
+    if (inst->opcode == QoreIROpcode::Phi && !region_record->exception_stack->empty()) {
+        region_record->phis.push_back({inst, block, region_record->exception_stack->back()});
+    }
+    if (getOpcodeProducesResult(static_cast<int>(inst->opcode))) {
+        region_record->values.push_back(inst);
+    }
 }

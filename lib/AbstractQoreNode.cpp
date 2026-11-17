@@ -37,6 +37,8 @@
 #include "qore/intern/RuntimeConfig.h"
 #include "qore/intern/AbstractStatement.h"
 #include "qore/intern/QoreDeferredRelease.h"
+#include "qore/intern/QoreClassIntern.h"
+#include "qore/intern/typed_hash_decl_private.h"
 #include "qore/intern/BackgroundLValueRootNode.h"
 #include "qore/intern/QoreSquareBracketsOperatorNode.h"
 #include "qore/intern/QoreSquareBracketsRangeOperatorNode.h"
@@ -1004,6 +1006,10 @@ struct DeferredRelease {
         SimpleNode,
         //! a statement: it is deleted
         Statement,
+        //! a subclass's reference to a base class (a QoreClass handle): it is released
+        BaseClass,
+        //! a hashdecl's reference to its parent hashdecl: it is released
+        ParentHashDecl,
     };
 
     void* ptr;
@@ -1046,6 +1052,12 @@ public:
                 break;
             case DeferredRelease::Kind::Statement:
                 delete static_cast<AbstractStatement*>(r.ptr);
+                break;
+            case DeferredRelease::Kind::BaseClass:
+                qore_class_private::derefClass(*static_cast<QoreClass*>(r.ptr), false, false, false);
+                break;
+            case DeferredRelease::Kind::ParentHashDecl:
+                static_cast<typed_hash_decl_private*>(r.ptr)->deref();
                 break;
         }
     }
@@ -1132,6 +1144,14 @@ void qore_delete_statement(AbstractStatement* statement) {
     }
 }
 
+void qore_release_base_class(QoreClass* qc) {
+    release(DeferredRelease{qc, DeferredRelease::Kind::BaseClass}, nullptr);
+}
+
+void qore_release_parent_hashdecl(typed_hash_decl_private* parent) {
+    release(DeferredRelease{parent, DeferredRelease::Kind::ParentHashDecl}, nullptr);
+}
+
 QoreValue SimpleValueQoreNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
    assert(false);
    return QoreValue();
@@ -1164,8 +1184,9 @@ bool needs_scan(const AbstractQoreNode* n) {
         case NT_OBJECT: return true;
         case NT_RUNTIME_CLOSURE: return static_cast<const QoreClosureBase*>(n)->needsScan();
         case NT_FUNCREF: {
-            const auto* callback = qore_get_sandbox_bound_callback(n);
-            return callback && needs_scan(callback);
+            // a sandbox-bound callback, or the value of a reference to a pseudo-method (issue #995)
+            const AbstractQoreNode* held = qore_get_call_reference_scan_node(n);
+            return held && needs_scan(held);
         }
         case NT_REFERENCE: return lvalue_ref::get(static_cast<const ReferenceNode*>(n))->needsScan();
     }

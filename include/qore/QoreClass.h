@@ -1288,7 +1288,9 @@ public:
         the module data
 
         @note
-        - call before the class is initialized and published, like addMember()
+        - can also be called after the class is published, as a module that adds the members of a foreign class when
+          it is first used does: the member is visible to code that runs after the call; the module serializes its
+          own additions to one class
         - %Qore serializes neither the accessors nor a read-modify-write of the member (such as <tt>obj.m++</tt>),
           since the value is not held by the object; the module must make its own storage safe for concurrent access
         - since the object holds no value for the member, it is not part of the object's member data: it is not

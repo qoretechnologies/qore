@@ -168,6 +168,8 @@ The output will be:
     @section schemareverse_relnotes SchemaReverse Module Release History
 
     @subsection schemareverse_v1_2 SchemaReverse Module v1.2
+    - the description of a table has the comment of the table, on databases whose driver supports table comments
+      (<a href="https://github.com/qoretechnologies/qore/issues/1483">issue 1483</a>)
     - fixed the comment of a column of a type without a generic description, as \c bigint, which was dropped
     - fixed a MySQL or Microsoft SQL Server \c decimal column, which was given as a column of that native type,
       without its comment, instead of as a numeric column with its precision and scale
@@ -518,6 +520,12 @@ class <X_SCHEMA_NAME> inherits AbstractSchema {
                 #printf("%n\n", cit.getValue());
                 AbstractColumn c = cit.getValue();
                 ret.columns{c.name} = columnToQore(c);
+            }
+
+            # issue #1483: the comment of the table
+            *string comment = t.getComment();
+            if (comment) {
+                ret.comment = comment;
             }
 
             # Preserve the driver's declarative index options as well as keys and uniqueness.

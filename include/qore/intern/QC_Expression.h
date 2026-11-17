@@ -39,7 +39,13 @@ public:
     DLLLOCAL QoreExpression(QoreProgram& qore_pgm, const QoreStringNode& source, const QoreStringNode& label, ExceptionSink* xsink)
         : pgm(qore_program_private::get(qore_pgm)) {
         pgm->depRef();
-        exp = pgm->createExpression(source, label, xsink);
+        // the destructor does not run if the constructor throws: the reference is released here then
+        try {
+            exp = pgm->createExpression(source, label, xsink);
+        } catch (...) {
+            pgm->depDeref();
+            throw;
+        }
     }
 
     DLLLOCAL ~QoreExpression() {

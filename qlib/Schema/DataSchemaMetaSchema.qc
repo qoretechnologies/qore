@@ -487,6 +487,10 @@ public const DataSchemaJsonSchema = {
                     "type": "object",
                     "description": "Raw trigger definitions (driver-specific)",
                 },
+                "comment": {
+                    "type": "string",
+                    "description": "The comment of the table, on databases whose driver supports table comments",
+                },
                 "driver": {
                     "type": "object",
                     "description": "Driver-specific overrides",

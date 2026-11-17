@@ -1,0 +1,177 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+#
+# the CSV writers quote fields by type: the "quote_types" option gives the types of the fields that are always quoted,
+# the "quote" attribute of a field description overrides it for the field, and the "quote_null" option sets how a
+# field without a value (NOTHING or NULL) is written, so that it can be told apart from an empty string; the writers
+# could only quote all fields or the fields that require quoting (issue #3113)
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires CsvUtil
+
+%exec-class CsvQuotingTest
+
+class CsvQuotingTest inherits QUnit::Test {
+    public {
+        #! a row with a string, an empty string, no value, NULL, an int, a float, a number, a bool, and a string that
+        #! requires quoting
+        const Row = ("a", "", NOTHING, NULL, 1, 1.5, 2.5n, True, "x,y");
+    }
+
+    constructor() : Test("CsvQuotingTest", "1.0", \ARGV) {
+        addTestCase("default quoting is unchanged", \defaultQuoting());
+        addTestCase("quote_types", \quoteTypes());
+        addTestCase("quote_null", \quoteNull());
+        addTestCase("field quote attribute", \fieldQuote());
+        addTestCase("dates and declared field types", \fieldTypes());
+        addTestCase("file writer and multi-type writer", \otherWriters());
+        addTestCase("invalid options", \invalidOptions());
+        addTestCase("round trip with the reader", \roundTrip());
+        set_return_value(main());
+    }
+
+    defaultQuoting() {
+        # without the new options, the output is as before
+        assertEq("a,,,null,1,1.5,2.5,1,\"x,y\"\n", write(Row));
+        assertEq("\"a\",\"\",\"\",\"null\",\"1\",\"1.5\",\"2.5\",\"1\",\"x,y\"\n", write(Row, {"optimal_quotes": False}));
+    }
+
+    quoteTypes() {
+        # strings are quoted, other types only if they require quoting; no value is written as an empty field
+        assertEq("\"a\",\"\",,,1,1.5,2.5,1,\"x,y\"\n", write(Row, {"quote_types": ("string",)}));
+        assertEq("a,,,,\"1\",1.5,\"2.5\",\"1\",\"x,y\"\n", write(Row, {"quote_types": ("int", "number", "bool")}));
+        assertEq("a,,,,1,\"1.5\",2.5,1,\"x,y\"\n", write(Row, {"quote_types": ("float",)}));
+        # a number that requires quoting is quoted whatever its type
+        assertEq("\"a\",\"1,5\"\n", write(("a", 1.5), {"quote_types": ("string",), "number_format": ".,1",
+            "separator": ","}));
+        # "optimal_quotes": False quotes every field; NULL is written as a field without a value
+        assertEq("\"a\",\"\",\"\",\"\",\"1\",\"1.5\",\"2.5\",\"1\",\"x,y\"\n", write(Row, {"quote_types": ("string",),
+            "optimal_quotes": False}));
+        # a list and a hash value are serialized and quoted by their types
+        assertEq("\"[1, 2]\",x\n", write((((1, 2), "x"),), {"quote_types": ("list",)}));
+    }
+
+    quoteNull() {
+        # a field without a value is quoted, or not, whatever its type
+        assertEq("\"a\",\"\",\"\",\"\",1,1.5,2.5,1,\"x,y\"\n", write(Row, {"quote_types": ("string",),
+            "quote_null": True}));
+        assertEq("a,,\"\",\"\",1,1.5,2.5,1,\"x,y\"\n", write(Row, {"quote_null": True}));
+        assertEq("a,,,,1,1.5,2.5,1,\"x,y\"\n", write(Row, {"quote_null": False}));
+        assertEq("\"a\",\"\",,,\"1\",\"1.5\",\"2.5\",\"1\",\"x,y\"\n", write(Row, {"optimal_quotes": False,
+            "quote_null": False}));
+    }
+
+    fieldQuote() {
+        hash<auto> opts = {
+            "fields": {
+                "s": "string",
+                "q": {"type": "*int", "quote": True},
+                "u": {"type": "*string", "quote": False},
+                "n": "*int",
+            },
+            "quote_types": ("string",),
+            "write_headers": False,
+        };
+        assertEq("\"x\",\"5\",y,7\n\"\",,,\n", write(({"s": "x", "q": 5, "u": "y", "n": 7},
+            {"s": "", "q": NOTHING, "u": NOTHING, "n": NOTHING}), opts));
+        # the "quote" attribute alone quotes the field
+        opts -= "quote_types";
+        assertEq("x,\"5\",y,7\n", write(({"s": "x", "q": 5, "u": "y", "n": 7},), opts));
+        # a field that requires quoting is quoted even if its "quote" attribute is False
+        assertEq("x,\"5\",\"y,z\",7\n", write(({"s": "x", "q": 5, "u": "y,z", "n": 7},), opts));
+    }
+
+    fieldTypes() {
+        # a date field is quoted by its type, also when it is formatted
+        hash<auto> opts = {
+            "fields": {
+                "d": {"type": "*date", "format": "YYYY-MM-DD"},
+                "i": "int",
+                "s": "*string",
+            },
+            "quote_types": ("date",),
+            "write_headers": False,
+        };
+        assertEq("\"2026-01-02\",3,4\n,3,z\n", write(({"d": 2026-01-02, "i": 3, "s": 4},
+            {"d": NOTHING, "i": 3, "s": "z"}), opts));
+        # a string field (the default) is quoted by the type of its value
+        opts.quote_types = ("int",);
+        assertEq("2026-01-02,\"3\",\"4\"\n", write(({"d": 2026-01-02, "i": 3, "s": 4},), opts));
+    }
+
+    otherWriters() {
+        # a file writer
+        string dir = tmp_location() + DirSep + get_random_string(12);
+        mkdir(dir);
+        on_exit {
+            unlink(dir + DirSep + "out.csv");
+            rmdir(dir);
+        }
+        {
+            CsvFileWriter w(dir + DirSep + "out.csv", {"headers": ("a", "b"), "quote_types": ("string",)});
+            w.writeLine(("x", 1));
+            w.writeLine((NOTHING, ""));
+        }
+        assertEq("a,b\n\"x\",1\n,\"\"\n", ReadOnlyFile::readTextFile(dir + DirSep + "out.csv"));
+
+        # a multi-type writer
+        hash<auto> spec = {
+            "r": {
+                "t": {"type": "string", "value": "r"},
+                "s": "*string",
+                "n": {"type": "*int", "quote": True},
+            },
+        };
+        CsvStringWriter w(spec, {"quote_types": ("string",), "quote_null": False, "write_headers": False});
+        w.writeLine("r", {"t": "r", "s": "x", "n": 1});
+        w.writeLine("r", {"t": "r", "s": NOTHING, "n": NOTHING});
+        assertEq("\"r\",\"x\",\"1\"\n\"r\",,\n", w.getContent());
+    }
+
+    invalidOptions() {
+        assertThrows("CSVSTRINGWRITER-ERROR", "unknown type \"foo\"", sub () {
+            CsvStringWriter w({"quote_types": ("foo",)});
+        });
+        assertThrows("CSVSTRINGWRITER-ERROR", "expecting a list", sub () {
+            CsvStringWriter w({"quote_types": "string"});
+        });
+        # the "quote" field attribute is for writers only
+        assertThrows("ABSTRACTCSVITERATOR-ERROR", "unknown field attribute value \"quote\"", sub () {
+            CsvDataIterator it("a\n", {"fields": {"a": {"type": "string", "quote": True}}});
+        });
+    }
+
+    roundTrip() {
+        # the reader reads an empty quoted field and an empty field without quotes the same way
+        string csv = write(({"s": "", "n": NOTHING, "t": "z"},), {"fields": {"s": "*string", "n": "*string",
+            "t": "*string"}, "quote_types": ("string",), "write_headers": False});
+        assertEq("\"\",,\"z\"\n", csv);
+        CsvDataIterator it(csv, {"fields": {"s": "*string", "n": "*string", "t": "*string"}});
+        assertTrue(it.next());
+        assertEq({"s": NOTHING, "n": NOTHING, "t": "z"}, it.getValue());
+        it = new CsvDataIterator(csv, {"fields": {"s": "string", "n": "string", "t": "string"}});
+        assertTrue(it.next());
+        assertEq({"s": "", "n": "", "t": "z"}, it.getValue());
+        # quoted fields are read back as written; an empty field is read as NOTHING, quoted or not, with the default
+        # field type ("*string")
+        csv = write(Row, {"quote_types": ("string", "int", "float", "number", "bool")});
+        assertEq("\"a\",\"\",,,\"1\",\"1.5\",\"2.5\",\"1\",\"x,y\"\n", csv);
+        it = new CsvDataIterator(csv, {"header_names": False});
+        assertTrue(it.next());
+        assertEq(("a", NOTHING, NOTHING, NOTHING, "1", "1.5", "2.5", "1", "x,y"), it.getValue().values());
+    }
+
+    # returns the CSV text of the rows
+    private static string write(list<auto> rows, *hash<auto> opts) {
+        if (rows[0].typeCode() != NT_LIST && rows[0].typeCode() != NT_HASH) {
+            rows = (rows,);
+        }
+        CsvStringWriter w({"write_headers": False} + opts);
+        map w.writeLine($1), rows;
+        return w.getContent();
+    }
+}
