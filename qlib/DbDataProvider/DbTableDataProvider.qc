@@ -504,6 +504,42 @@ public class DbTableDataProvider inherits DbDataProviderBase {
         return DbTableReadHelper::getSearchRecordType(table, search_options);
     }
 
+    #! Returns the description of the record type, if any
+    /** The record type of a search with the \c "recursive" search option has the columns of the common table
+        expression of the recursive query (see @ref SearchOptions); without it, it is the record type of the table,
+        and the search options are ignored, as the record type of the table does not depend on them
+
+        @param search_options the search options; only the \c "recursive" search option changes the record type
+
+        @return the record type of the records that a search with the given search options returns
+
+        @since DbDataProvider 2.5 the record type of a search with the \c "recursive" search option
+    */
+    *hash<string, AbstractDataField> getRecordType(*hash<auto> search_options) {
+        if (exists search_options.recursive) {
+            return getRecordTypeImpl(validateSearchOptions(search_options));
+        }
+        return AbstractDataProvider::getRecordType(search_options);
+    }
+
+    #! Returns the description of the record type in the context of the given options
+    /** The record type of a search with the \c "recursive" search option has the columns of the common table
+        expression of the recursive query (see @ref SearchOptions); without it, the search options are ignored
+
+        @param options action options that may influence the record type
+        @param search_options the search options; only the \c "recursive" search option changes the record type
+
+        @return the record type of the records that a search with the given search options returns
+
+        @since DbDataProvider 2.5 the record type of a search with the \c "recursive" search option
+    */
+    *hash<string, AbstractDataField> getRecordTypeWithOptions(*hash<auto> options, *hash<auto> search_options) {
+        if (exists search_options.recursive) {
+            return getRecordTypeWithOptionsImpl(options, validateSearchOptions(search_options));
+        }
+        return AbstractDataProvider::getRecordTypeWithOptions(options, search_options);
+    }
+
     #! Writes the given record to the data provider
     /** @param rec a hash representing a single input record
         @param create_options the create options (see @ref CreateOptions) after processing by validateCreateOptions()
