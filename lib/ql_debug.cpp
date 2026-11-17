@@ -24226,6 +24226,16 @@ static QoreValue f_dbg_http_concurrent_closes(const QoreListNode* params, Runtim
     return dbg_http_concurrent_closes.load(std::memory_order_relaxed);
 }
 
+thread_local int qore_dbg_async_action_locks_held = 0;
+
+//! returns the number of locks of completion actions of the asynchronous I/O API that the calling thread holds
+/** Called by user code that a completion action can run (the destructor of a user EventNotifier class that it
+    releases): such code must run without the action's lock (issue #6465)
+*/
+static QoreValue f_dbg_async_action_locks_held(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    return static_cast<int64>(qore_dbg_async_action_locks_held);
+}
+
 //! disarms the points armed by dbg_http_hold_at() that were not reached
 static QoreValue f_dbg_http_hold_clear(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     std::lock_guard<std::mutex> l(dbg_http_hold_m);
@@ -25968,6 +25978,8 @@ void init_debug_functions(QoreNamespace& qns) {
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, hashTypeInfo);
     qns.addBuiltinVariant("dbg_http_hold_clear", f_dbg_http_hold_clear, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         nothingTypeInfo);
+    qns.addBuiltinVariant("dbg_async_action_locks_held", f_dbg_async_action_locks_held, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_http_concurrent_closes", f_dbg_http_concurrent_closes, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_http_stream_credit_stats", f_dbg_http_stream_credit_stats, QCF_NO_FLAGS,
