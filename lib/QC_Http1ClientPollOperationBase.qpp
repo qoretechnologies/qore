@@ -1180,22 +1180,35 @@ void Http1ClientPollOperationPriv::releaseSendOp(ExceptionSink* xsink) {
     }
 }
 
+// releases request body chunks and trailers taken out of an operation under its stream lock, after the lock: the
+// trailers hash can hold values whose release runs code that uses the operation again
+static void h1_release_send_data(std::deque<QoreStringNode*>& queue, QoreHashNode* trailers, ExceptionSink* xsink) {
+    for (auto* s : queue) {
+        if (s) {
+            s->deref(xsink);
+        }
+    }
+    queue.clear();
+    if (trailers) {
+        trailers->deref(xsink);
+    }
+}
+
 void Http1ClientPollOperationPriv::resetSendState(ExceptionSink* xsink) {
     releaseSendOp(xsink);
     send_state = SendState::INACTIVE;
     send_final_pending = false;
     send_buffered_body = false;
-    AutoLocker al(stream_lock);
-    for (auto* s : send_body_queue) {
-        if (s) {
-            s->deref(xsink);
-        }
-    }
-    send_body_queue.clear();
-    if (send_trailers) {
-        send_trailers->deref(xsink);
+    // taken under stream_lock and released after it
+    std::deque<QoreStringNode*> old_send_body_queue;
+    QoreHashNode* old_send_trailers;
+    {
+        AutoLocker al(stream_lock);
+        old_send_body_queue.swap(send_body_queue);
+        old_send_trailers = send_trailers;
         send_trailers = nullptr;
     }
+    h1_release_send_data(old_send_body_queue, old_send_trailers, xsink);
 }
 
 // --- Request sub-state handlers ---
@@ -1642,10 +1655,10 @@ void Http1ClientPollOperationPriv::pushSendData(const QoreStringNode* data, Exce
 }
 
 void Http1ClientPollOperationPriv::setTrailers(const QoreHashNode* trailers, ExceptionSink* xsink) {
+    // the trailers replaced are released after stream_lock
+    ReferenceHolder<QoreHashNode> old_send_trailers(xsink);
     AutoLocker al(stream_lock);
-    if (send_trailers) {
-        send_trailers->deref(xsink);
-    }
+    old_send_trailers = send_trailers;
     send_trailers = trailers ? trailers->hashRefSelf() : nullptr;
 }
 
@@ -2916,6 +2929,9 @@ QoreHashNode* Http1ClientPollOperationPriv::dispatchStreamingEnd(ExceptionSink* 
         active_sid = 0;
         active_method.clear();
     }
+    // the completed request's action that this one replaces is released first, as when it was released under the
+    // lock
+    old_completed_channel_action = nullptr;
     req_state = ReqState::IDLE;
     releaseCurrentOp(xsink);
     resetResponseState(xsink);
@@ -2940,6 +2956,10 @@ QoreHashNode* Http1ClientPollOperationPriv::dispatchStreamingEnd(ExceptionSink* 
         if (!keep_completed_channel) {
             action->deref(xsink);
         }
+#ifdef DEBUG
+        // reports that the dispatch of the end of the response is done with the request's action
+        qore_dbg_http_hold(QoreDbgHttpHoldPoint::StreamEndDispatched, *self);
+#endif
     }
 
     if (close) {
@@ -3247,6 +3267,8 @@ void Http1ClientPollOperationPriv::notifyPendingStreams(const char* err, const c
     AbstractAsyncAction* action = nullptr;
     // released after stream_lock, as releasing an action can run code that uses this operation again
     ReferenceHolder<ChannelAction> old_completed_channel_action(xsink);
+    std::deque<QoreStringNode*> old_send_body_queue;
+    QoreHashNode* old_send_trailers;
     {
         AutoLocker al(stream_lock);
         action = stream_action;
@@ -3255,19 +3277,16 @@ void Http1ClientPollOperationPriv::notifyPendingStreams(const char* err, const c
         completed_channel_action = nullptr;
         completed_sid = 0;
         active_stream_count = 0;
-        // Clean up streaming send queue
-        for (auto* s : send_body_queue) {
-            if (s) {
-                s->deref(xsink);
-            }
-        }
-        send_body_queue.clear();
-        if (send_trailers) {
-            send_trailers->deref(xsink);
-            send_trailers = nullptr;
-        }
+        // the streaming send queue is released after the lock
+        old_send_body_queue.swap(send_body_queue);
+        old_send_trailers = send_trailers;
+        send_trailers = nullptr;
     }
 
+    // released in the order of the release under the lock before: the completed request's action and the send data
+    // first, then the active request's action is completed
+    old_completed_channel_action = nullptr;
+    h1_release_send_data(old_send_body_queue, old_send_trailers, xsink);
     if (action) {
         action->executeError(err, desc, xsink);
         action->deref(xsink);
@@ -3502,6 +3521,10 @@ int64_t Http1ClientPollOperationPriv::submitRequest(const char* method, const ch
         xsink->raiseException(refused_err.c_str(), "%s", refused_desc.c_str());
         return -1;
     }
+    // released in the order of the release under the lock before: the completed request's action, then the request
+    // data replaced
+    old_completed_channel_action = nullptr;
+    old_pending_request_data = nullptr;
     return stream_id;
 }
 

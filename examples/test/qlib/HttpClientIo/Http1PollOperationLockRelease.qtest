@@ -22,13 +22,16 @@ class OkHandler inherits AbstractHttpRequestHandler {
     }
 }
 
-#! reads the error of an operation from another thread, and records whether the read had to wait for the operation's
-#! lock
+#! reads the error of an operation from another thread, and records whether the read was done while this thread waits
+/** The read uses the operation's lock: a thread that holds that lock while it runs the check (the old order of the
+    release of a completion action) keeps the read from being done until it gives up waiting for it
+*/
 class ReentryCheck {
     public {
         #! True once the check ran
         bool ran = False;
-        #! True if the read did not wait for the lock of the operation
+        #! True if the read was done while the thread that ran the check waited for it: it did not need a lock that
+        #! that thread held
         bool lock_free = False;
         #! the error raised by the read, if any
         *hash<ExceptionInfo> read_ex;
@@ -38,21 +41,20 @@ class ReentryCheck {
         object op;
         #! the end of the reading thread
         Counter done(0);
+        #! the end of the check
+        Counter checked(1);
+        #! the longest wait for the read: a hang guard; a read that needs a lock held by the waiting thread is never
+        #! done before it ends
+        const ReadWait = 60s;
     }
 
     constructor(object op) {
         self.op = op;
     }
 
-    #! reads the error of the operation in another thread
-    /** The read releases this thread when it finds the operation's lock taken ("error-read") or when it is done:
-        a read done while this thread waits did not need the lock that this thread may hold
-    */
+    #! reads the error of the operation in another thread and waits for the read
     run() {
-        Counter reached(1);
-        call_function("dbg_http_hold_at", "error-read", reached, new Counter(0), op);
-        on_exit call_function("dbg_http_hold_clear");
-        bool read_done = False;
+        Counter read(1);
         done.inc();
         background sub () {
             on_exit done.dec();
@@ -61,17 +63,20 @@ class ReentryCheck {
             } catch (hash<ExceptionInfo> ex) {
                 read_ex = ex;
             }
-            read_done = True;
-            if (reached.getCount()) {
-                reached.dec();
-            }
+            read.dec();
         }();
-        # a hang guard only: the reading thread releases this thread either way
-        if (reached.waitForZero(60s)) {
-            throw "TEST-ERROR", "the reading thread did not finish or wait for the operation's lock";
-        }
-        lock_free = read_done;
+        lock_free = !read.waitForZero(ReadWait);
         ran = True;
+        checked.dec();
+    }
+
+    #! waits for the check to have run, in whichever thread released the object that runs it
+    /** The release can also be done by the I/O thread, if the connection is closed meanwhile
+
+        @return True if the check ran, False if it did not run in the wait: a hang guard only
+    */
+    bool waitRan() {
+        return !checked.waitForZero(ReadWait * 2);
     }
 
     #! waits for the reading thread to end
@@ -112,15 +117,17 @@ class CheckingNotifier inherits EventNotifier {
 /** The release of an action can run Qore code (the destructor of a Promise or EventNotifier object of the action),
     which can use the operation again: the cleanup of the operation and the submission of a request complete and
     release them after the operation's lock is released.  The code run by the release of a completed request's action
-    in a submission reads the operation's error in another thread, which uses the operation's lock; the "error-read"
-    hold point of debug builds reports a read that finds the lock taken.  The cleanup runs when the operation's object
-    is destroyed, which no longer has the operation for such a read: its test checks that a pending request is
-    completed with an error and its action released.
+    in a submission reads the operation's error in another thread, which uses the operation's lock, and waits for the
+    read: a read that needs a lock held by the releasing thread is not done while that thread waits for it.  The I/O
+    thread holds the action while it dispatches the end of its response; the test waits for that dispatch to be done
+    (the "stream-end-dispatched" hold point of debug builds) before the submission releases the action.  The cleanup
+    runs when the operation's object is destroyed, which no longer has the operation for such a read: its test checks
+    that a pending request is completed with an error and its action released.
 */
 class Http1PollOperationLockReleaseTest inherits QUnit::Test {
     private {
-        #! the most poll cycles that this thread runs to complete a connect that the peer has accepted
-        const MaxCycles = 50;
+        #! the longest wait for the operation's socket to be ready: a hang guard only
+        const PollWait = 60s;
     }
 
     constructor() : Test("HTTP/1.1 poll operation lock release test", "1.0") {
@@ -130,7 +137,6 @@ class Http1PollOperationLockReleaseTest inherits QUnit::Test {
     }
 
     cleanupTest() {
-        checkDebug();
         # a listener that accepts the connection and never answers: the request stays pending
         Socket listener();
         on_exit listener.close();
@@ -140,14 +146,17 @@ class Http1PollOperationLockReleaseTest inherits QUnit::Test {
         AbstractHttpPollConnection conn();
         Http1ClientPollOperationBase op(new Socket(), "127.0.0.1:" + port, "127.0.0.1", port, False, False, False,
             conn);
-        # this thread drives the operation: its first cycle starts the connect, which completes when the connection
-        # is accepted, and the operation then becomes ready
-        op.continuePoll();
-        *Socket peer = listener.accept(60s);
+        # this thread drives the operation: its first step starts the connect, which completes when the connection
+        # is accepted; each further step runs when the operation's socket is ready, until the operation is ready
+        *hash<SocketPollInfo> info = op.continuePoll();
+        *Socket peer = listener.accept(PollWait);
         on_exit if (peer) { peer.close(); }
         assertTrue(exists peer, "the connection is accepted");
-        for (int i = 0; i < MaxCycles && !op.isReady(); ++i) {
-            op.continuePoll();
+        while (!op.isReady() && info) {
+            if (!Socket::poll((info,), PollWait)) {
+                throw "TEST-ERROR", sprintf("the operation's socket did not become ready in state %y", op.getState());
+            }
+            info = op.continuePoll();
         }
         assertTrue(op.isReady(), "the operation is ready");
 
@@ -166,7 +175,9 @@ class Http1PollOperationLockReleaseTest inherits QUnit::Test {
     }
 
     submitTest() {
-        checkDebug();
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("needs a debug build of the library (dbg_http_hold_at())");
+        }
         HttpServer server(<HttpServerOptionInfo>{});
         on_exit server.stop();
         server.setDefaultHandler("ok", new OkHandler());
@@ -187,16 +198,26 @@ class Http1PollOperationLockReleaseTest inherits QUnit::Test {
 
         # a streamed request whose action is kept after its response ends; the action holds the only reference of
         # the notifier
+        # reports when the dispatch of the end of the response is done with the request's action, which it holds while
+        # it dispatches: the action is then kept only by the operation
+        Counter dispatched(1);
+        on_exit call_function("dbg_http_hold_clear");
+        call_function("dbg_http_hold_at", "stream-end-dispatched", dispatched, new Counter(0), op);
         {
             Channel ch(-1);
             conn.submitRequestStreaming("GET", "/ok", NOTHING, NOTHING, ch, True, False, new CheckingNotifier(check),
                 True);
             readToEnd(ch);
         }
+        # only the hold point decrements the Counter: a dispatch that does not reach it fails the test here
+        if (dispatched.waitForZero(60s)) {
+            throw "TEST-ERROR", "the end of the response was not dispatched";
+        }
+        assertEq(0, dispatched.getCount(), "the dispatch of the end of the response is done with the action");
         assertFalse(check.ran, "the notifier exists while the completed request's action is kept");
         # the next request releases the kept action
         hash<auto> r = conn.submitRequest("GET", "/ok");
-        assertTrue(check.ran, "the submission released the completed request's action");
+        assertTrue(check.waitRan(), "the submission released the completed request's action");
         assertEq(NOTHING, check.read_ex, "the operation's error was read");
         assertTrue(check.lock_free, "the action was released without the operation's lock");
         hash<auto> resp = r.future.get();
@@ -221,12 +242,6 @@ class Http1PollOperationLockReleaseTest inherits QUnit::Test {
             if (ch.isClosed() && ch.empty()) {
                 break;
             }
-        }
-    }
-
-    private checkDebug() {
-        if (!Option::HAVE_LIBRARY_DEBUGGING) {
-            testSkip("needs a debug build of the library (dbg_http_hold_at())");
         }
     }
 }

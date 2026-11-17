@@ -24125,12 +24125,14 @@ static QoreValue f_dbg_hold_child_program_create_clear(const QoreListNode* param
     \c "value-read": the same for the output of an HTTP client ping poll operation and the close reason of a
     WebSocket server poll operation; \c "teardown-read": a thread that uses state that another thread can release in a
     teardown (the poll operation of an HTTP/3 client connection, read for its error, or the inner operation of an HTTP
-    client ping poll operation) has taken it, and is about to use it
+    client ping poll operation) has taken it, and is about to use it; \c "stream-end-dispatched": an HTTP/1.1 or
+    HTTP/3 client poll operation dispatched the end of a request's response and released the reference to the
+    request's action that the dispatch held (with a release Counter of 0, the point only reports it)
     @param reached decremented when a thread reaches the point
     @param release the thread waits until it reaches zero
     @param target if given, only a thread that reaches the point for this object is held: the poll operation of the
-    \c "error-record", \c "error-read", \c "value-record", \c "value-read" and \c "teardown-read" points (the object
-    is compared, not referenced)
+    \c "error-record", \c "error-read", \c "value-record", \c "value-read", \c "teardown-read" and
+    \c "stream-end-dispatched" points (the object is compared, not referenced)
 
     @throw DBG-ARGUMENT-ERROR unknown point, or the point is already armed
 */
@@ -24165,6 +24167,8 @@ static QoreValue f_dbg_http_hold_at(const QoreListNode* params, RuntimeConfig& r
         point = static_cast<int>(QoreDbgHttpHoldPoint::ValueRead);
     } else if (!strcmp(name->c_str(), "teardown-read")) {
         point = static_cast<int>(QoreDbgHttpHoldPoint::TeardownRead);
+    } else if (!strcmp(name->c_str(), "stream-end-dispatched")) {
+        point = static_cast<int>(QoreDbgHttpHoldPoint::StreamEndDispatched);
     } else {
         xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_http_hold_at(): unknown point '%s'", name->c_str());
         return QoreValue();

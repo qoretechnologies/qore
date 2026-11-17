@@ -313,6 +313,10 @@ enum class QoreDbgHttpHoldPoint : unsigned char {
     //! connection, read for its error; the inner operation of an HTTP client ping poll operation) has taken it, and is
     //! about to use it
     TeardownRead,
+    //! an HTTP/1.1 or HTTP/3 client poll operation dispatched the end of a request's response and released the
+    //! reference to the request's action that the dispatch held (armed with a release Counter of 0, the point only
+    //! reports it)
+    StreamEndDispatched,
     //! the number of hold points
     Count,
 };

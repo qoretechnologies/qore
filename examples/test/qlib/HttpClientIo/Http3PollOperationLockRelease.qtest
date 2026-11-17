@@ -1,0 +1,197 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - HTTP/3 (QUIC) client poll operation completion actions released while other threads use it
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Mime
+%requires HttpServerUtil
+%requires HttpServer
+%requires HttpClientIo
+%requires ../../TestCertificates.qm
+
+%exec-class Http3PollOperationLockReleaseTest
+
+#! answers every request with "ok"
+class OkHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return makeResponse(200, "ok", {"Content-Type": MimeTypeText});
+    }
+}
+
+#! reads the error of an operation from another thread, and records whether the read was done while this thread waits
+/** The read uses the operation's lock: a thread that holds that lock while it runs the check (the old order of the
+    release of a completion action) keeps the read from being done until it gives up waiting for it
+*/
+class ReentryCheck {
+    public {
+        #! True once the check ran
+        bool ran = False;
+        #! True if the read was done while the thread that ran the check waited for it: it did not need a lock that
+        #! that thread held
+        bool lock_free = False;
+        #! the error raised by the read, if any
+        *hash<ExceptionInfo> read_ex;
+    }
+
+    private {
+        object op;
+        #! the end of the reading thread
+        Counter done(0);
+        #! the end of the check
+        Counter checked(1);
+        #! the longest wait for the read: a hang guard; a read that needs a lock held by the waiting thread is never
+        #! done before it ends
+        const ReadWait = 60s;
+    }
+
+    constructor(object op) {
+        self.op = op;
+    }
+
+    #! reads the error of the operation in another thread and waits for the read
+    run() {
+        Counter read(1);
+        done.inc();
+        background sub () {
+            on_exit done.dec();
+            try {
+                op.getError();
+            } catch (hash<ExceptionInfo> ex) {
+                read_ex = ex;
+            }
+            read.dec();
+        }();
+        lock_free = !read.waitForZero(ReadWait);
+        ran = True;
+        checked.dec();
+    }
+
+    #! waits for the check to have run, in whichever thread released the object that runs it
+    /** The release can also be done by the I/O thread, if the connection is closed meanwhile
+
+        @return True if the check ran, False if it did not run in the wait: a hang guard only
+    */
+    bool waitRan() {
+        return !checked.waitForZero(ReadWait * 2);
+    }
+
+    #! waits for the reading thread to end
+    waitDone() {
+        done.waitForZero();
+    }
+}
+
+#! an EventNotifier that runs a reentry check when it is destroyed
+class CheckingNotifier inherits EventNotifier {
+    private {
+        ReentryCheck check;
+    }
+
+    constructor(ReentryCheck check) {
+        self.check = check;
+    }
+
+    destructor() {
+        check.run();
+    }
+}
+
+#! An HTTP/3 client poll operation releases the actions of its requests without holding its lock (issue #6453)
+/** The release of an action can run Qore code (the destructor of an EventNotifier object of the action), which can use
+    the operation again: the cancellation of a stream releases the kept action of a completed request after the
+    operation's lock is released.  The code run by the release reads the operation's error in another thread, which
+    uses the operation's lock, and waits for the read: a read that needs a lock held by the releasing thread is not
+    done while that thread waits for it.  The I/O thread holds the action while it dispatches the end of its response;
+    the test waits for that dispatch to be done (the "stream-end-dispatched" hold point of debug builds) before the
+    cancellation releases the action.
+*/
+class Http3PollOperationLockReleaseTest inherits QUnit::Test {
+    constructor() : Test("HTTP/3 poll operation lock release test", "1.0") {
+        addTestCase("a cancellation releases a completed request's action without the lock", \cancelTest());
+        set_return_value(main());
+    }
+
+    cancelTest() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("needs a debug build of the library (dbg_http_hold_at())");
+        }
+        HttpServer server(<HttpServerOptionInfo>{});
+        on_exit server.stop();
+        server.setDefaultHandler("ok", new OkHandler());
+        int port;
+        try {
+            port = server.addQuicListener(<HttpListenerOptionInfo>{
+                "node": "127.0.0.1",
+                "cert": new SSLCertificate(TestCertificates::CertPem),
+                "key": new SSLPrivateKey(TestCertificates::KeyPem),
+            }).port;
+        } catch (hash<ExceptionInfo> ex) {
+            testSkip(sprintf("QUIC listener not available: %s: %s", ex.err, ex.desc));
+        }
+        server.waitForAsyncIo();
+        string url = sprintf("https://127.0.0.1:%d", port);
+        HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{
+            "protocol": "h3",
+            "accept_all_certs": True,
+            "max_streams_per_connection": 1,
+        });
+        on_exit mgr.closeAll();
+        HttpClientStreamHandle s1 = mgr.acquireStream(url);
+        assertEq(200, s1.request("GET", "/ok").status_code);
+        Http3ClientConnection conn = cast<Http3ClientConnection>(s1.getConnection());
+        Http3ClientPollOperation op = cast<Http3ClientPollOperation>(conn.getPollOperation());
+        ReentryCheck check(op);
+        on_exit check.waitDone();
+
+        # a request whose action is kept after its response ends; the action holds the only reference of the notifier
+        int sid;
+        # reports when the dispatch of the end of the response is done with the request's action, which it holds while
+        # it dispatches: the action is then kept only by the operation
+        Counter dispatched(1);
+        on_exit call_function("dbg_http_hold_clear");
+        call_function("dbg_http_hold_at", "stream-end-dispatched", dispatched, new Counter(0), op);
+        {
+            Channel ch(-1);
+            sid = conn.submitRequestStreamingWithChannel("GET", "/ok", NOTHING, NOTHING, ch, False,
+                new CheckingNotifier(check), True);
+            readToEnd(ch);
+        }
+        # only the hold point decrements the Counter: a dispatch that does not reach it fails the test here
+        if (dispatched.waitForZero(60s)) {
+            throw "TEST-ERROR", "the end of the response was not dispatched";
+        }
+        assertEq(0, dispatched.getCount(), "the dispatch of the end of the response is done with the action");
+        assertFalse(check.ran, "the notifier exists while the completed request's action is kept");
+        # the cancellation of the completed stream releases the kept action
+        assertFalse(op.cancelStream(sid), "the completed stream is not cancelled");
+        assertTrue(check.waitRan(), "the cancellation released the completed request's action");
+        assertEq(NOTHING, check.read_ex, "the operation's error was read");
+        assertTrue(check.lock_free, "the action was released without the operation's lock");
+    }
+
+    #! reads the response of a request until it ends
+    private readToEnd(Channel ch) {
+        while (True) {
+            auto v;
+            try {
+                v = ch.recv(60s);
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err == "CHANNEL-CLOSED") {
+                    break;
+                }
+                rethrow;
+            }
+            if (v.typeCode() == NT_HASH && v.end_stream) {
+                break;
+            }
+            if (ch.isClosed() && ch.empty()) {
+                break;
+            }
+        }
+    }
+}
