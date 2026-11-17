@@ -1,0 +1,22 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# a module of sqlutil-caller-database.qtest that calls CallerDbInner for its caller: the check of the calling code
+# walks past both modules to the code that calls this one (qore#6257)
+%modern
+%requires CallerDbInner
+
+module CallerDbOuter {
+    version = "1.0";
+    desc = "test module that calls another module that opens a table for its caller";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+public namespace CallerDbOuter {
+    #! opens the table \c t of the database that the connection string names, through CallerDbInner
+    public sub open_table(string conn) {
+        CallerDbInner::open_table(conn);
+    }
+}

@@ -4214,7 +4214,9 @@ public:
             {NT_ALL, [] (QoreValue& n, ExceptionSink* xsink) {
                     QoreListNode* l = new QoreListNode;
                     l->push(n, nullptr);
-                    n.assign(l);
+                    // the list owns the value now: it is replaced without being released, as assign() would release
+                    // an enum value (qore#6355)
+                    n = QoreValue(l);
                 }
             },
         }, q_return_vec_t {{NT_LIST, true}}) {
@@ -4252,7 +4254,9 @@ public:
             {NT_ALL, [] (QoreValue& n, ExceptionSink* xsink) {
                     QoreListNode* l = new QoreListNode;
                     l->push(n, nullptr);
-                    n.assign(l);
+                    // the list owns the value now: it is replaced without being released, as assign() would release
+                    // an enum value (qore#6355)
+                    n = QoreValue(l);
                 }
             },
         }, q_return_vec_t {{NT_LIST}, {NT_NOTHING}}) {
@@ -4289,7 +4293,9 @@ public:
                         default: {
                             QoreListNode* l = new QoreListNode(autoTypeInfo);
                             l->push(n, nullptr);
-                            n.assign(l);
+                            // the list owns the value now: it is replaced without being released, as assign() would release
+                            // an enum value (qore#6355)
+                            n = QoreValue(l);
                             break;
                         }
                     }
@@ -4310,7 +4316,9 @@ public:
             {NT_ALL, [] (QoreValue& n, ExceptionSink* xsink) {
                     QoreListNode* l = new QoreListNode(autoTypeInfo);
                     l->push(n, nullptr);
-                    n.assign(l);
+                    // the list owns the value now: it is replaced without being released, as assign() would release
+                    // an enum value (qore#6355)
+                    n = QoreValue(l);
                 }
             },
         }, q_return_vec_t {{QoreComplexSoftListTypeSpec(autoTypeInfo), true}}, QoreString("softlist<auto>")) {
@@ -4333,7 +4341,9 @@ public:
                         default: {
                             QoreListNode* l = new QoreListNode(autoTypeInfo);
                             l->push(n, nullptr);
-                            n.assign(l);
+                            // the list owns the value now: it is replaced without being released, as assign() would release
+                            // an enum value (qore#6355)
+                            n = QoreValue(l);
                             break;
                         }
                     }
@@ -4344,7 +4354,9 @@ public:
             {NT_ALL, [] (QoreValue& n, ExceptionSink* xsink) {
                     QoreListNode* l = new QoreListNode(autoTypeInfo);
                     l->push(n, nullptr);
-                    n.assign(l);
+                    // the list owns the value now: it is replaced without being released, as assign() would release
+                    // an enum value (qore#6355)
+                    n = QoreValue(l);
                 }
             },
         }, q_return_vec_t {{QoreComplexSoftListTypeSpec(autoTypeInfo)}, {NT_NOTHING}}, QoreString("*softlist<auto>")) {

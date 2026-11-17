@@ -396,6 +396,15 @@ static hash<auto> MemberAccessorProbe::referenceRemove(reference target, referen
     return result.release();
 }
 
+//! adds a public member held in external storage to this class, after the class has been published
+/** As module-jni adds the fields of a Java class to its QoreClass when the class is first used (#6272)
+
+    @param name the name of the member
+*/
+static nothing MemberAccessorProbe::addLateMember(string name) {
+    add_probe_member(*QC_MEMBERACCESSORPROBE, name->c_str(), Public, autoTypeInfo);
+}
+
 //! creates an object from C++ without running the Qore constructor
 /** @return a new object of this class whose storage is initialized
     @throw none */

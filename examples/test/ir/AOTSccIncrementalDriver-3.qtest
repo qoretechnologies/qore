@@ -20,7 +20,7 @@
 
 %exec-class AOTSccIncrementalDriverPart3
 
-#! runs part 3 of 3 of the cases of AOTSccIncrementalDriverBase
+#! runs part 3 of 9 of the cases of AOTSccIncrementalDriverBase
 class AOTSccIncrementalDriverPart3 inherits AOTSccIncrementalDriverBase {
     constructor() : AOTSccIncrementalDriverBase("AOTSccIncrementalDriverPart3", 3) {
     }

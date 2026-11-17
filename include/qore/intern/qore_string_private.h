@@ -107,7 +107,8 @@ public:
     const QoreEncoding* encoding = nullptr;
 
     // View support: when `view_parent` is non-null, this string is a read-only
-    // view onto `view_parent`'s buffer starting at byte `view_offset`. The `len`
+    // view onto `view_parent`'s buffer starting at byte `view_offset` and
+    // reaching the end of that buffer. The `len`
     // field is still authoritative for the view's byte length; `buffer` is
     // unused in the view state (nullptr), and `allocated` holds the ASCII prefix
     // cache instead of a capacity (see asciiPrefixStorage()). On any
@@ -371,9 +372,9 @@ public:
         return view_parent ? effective_buf_view_path() : buffer;
     }
 
-    // Out-of-line slow path for views. Guaranteed to return a null-terminated
-    // buffer: end-slice views return parent buffer + offset (terminator is the
-    // parent's own); mid-slice views materialise lazily and return the owned buffer.
+    // Out-of-line slow path for views: returns the parent's buffer + offset, terminated by the parent's own
+    // terminator, as a view always reaches the end of its parent (QoreStringNode::makeView()); a read never copies,
+    // so reads of a view shared between threads are safe (issue #6239).
     // Never inlined: the view path is cold, and a reader that inlines it needs a register for view_parent on its
     // hot path for strings that are not views as well.
     DLLLOCAL QORE_INTERN_NOINLINE const char* effective_buf_view_path() const;

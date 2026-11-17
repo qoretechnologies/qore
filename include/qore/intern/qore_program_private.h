@@ -1209,7 +1209,8 @@ public:
     // public object that owns this private implementation
     QoreProgram* pgm;
 
-    DLLLOCAL qore_program_private_base(QoreProgram* n_pgm, const QoreParseOptions& n_parse_options, QoreProgram* p_pgm = nullptr)
+    DLLLOCAL qore_program_private_base(QoreProgram* n_pgm, const QoreParseOptions& n_parse_options,
+            QoreProgram* p_pgm = nullptr, const QoreParseOptions* p_parse_options = nullptr)
             : plock(&ma_recursive),
             pwo(n_parse_options),
             sb(this),
@@ -1230,7 +1231,7 @@ public:
         pgm->priv = (qore_program_private*)this;
 
         if (p_pgm) {
-            setParent(p_pgm, n_parse_options);
+            setParent(p_pgm, n_parse_options, p_parse_options);
         } else {
             TZ = QTZM.getLocalZoneInfo();
             newProgram();
@@ -1362,8 +1363,19 @@ public:
 
         @return -1 if the options are not allowed, with the exception raised, 0 if they are
     */
-    DLLLOCAL static int checkNewProgramModernOptions(const QoreProgram* parent, const QoreParseOptions& po,
-            ExceptionSink* xsink, const char* what = "Program::constructor()");
+    /** @param parent the parent of the new Program, if any
+        @param parent_po the parent's options, read once by the caller, which creates the Program with the same value
+        (QoreProgram(QoreProgram*, const QoreParseOptions&, bool, const char*, const QoreParseOptions*)), so that the
+        check and the inherited options use one value (issue #6176); ignored without a parent
+        @param po the options of the new Program
+        @param xsink for the exception
+        @param what the API that creates the Program, for the message
+    */
+    DLLLOCAL static int checkNewProgramModernOptions(const QoreProgram* parent, const QoreParseOptions& parent_po,
+            const QoreParseOptions& po, ExceptionSink* xsink, const char* what = "Program::constructor()");
+
+    //! Returns the options of a Program, read once (see checkNewProgramModernOptions())
+    DLLLOCAL static QoreParseOptions readParseOptions(const QoreProgram& p);
 
     // apply parse-option bit implications that cannot be encoded in the int64 PO_* macros
     /** %modern implies further options; the compatibility options that change the meaning of code cannot be in
@@ -1635,6 +1647,11 @@ protected:
     //! signaled when ext_copy_count becomes 0 while ext_copy_waiting is set
     QoreCondition ext_copy_cond;
 
+    //! returns the number of copies of the external data of this Program that the current thread is making
+    /** The child of a fork() keeps only these in ext_copy_count (see qore_program_private::fixupAfterFork())
+    */
+    DLLLOCAL unsigned getOwnExtDataCopies() const;
+
     // objects captured from languages without deterministic garbage collection (e.g. jni, python);
     // each is held with a strong reference and released when this program is torn down, so the
     // captured objects' destructors run while the program is still valid (ptid == tid).  This makes
@@ -1643,7 +1660,14 @@ protected:
     typedef std::map<QoreObject*, int64> saved_obj_map_t;
     saved_obj_map_t saved_objects;
 
-    DLLLOCAL void setParent(QoreProgram* p_pgm, const QoreParseOptions& n_parse_options);
+    //! Makes this Program a child of \a p_pgm
+    /** @param p_pgm the parent
+        @param n_parse_options the options that the child was created with
+        @param p_parse_options the parent's options as the creator read them for its checks (issue #6176), so that the
+        child inherits the value that was checked; if nullptr, they are read here
+    */
+    DLLLOCAL void setParent(QoreProgram* p_pgm, const QoreParseOptions& n_parse_options,
+            const QoreParseOptions* p_parse_options = nullptr);
 
     //! Records the Program that created this Program and the Programs that created it (see creator_ids)
     /** Called once, by setParent() or for an independent Program created by %Qore code
@@ -1894,7 +1918,8 @@ public:
     typedef vector_map_t<const char*, section_sline_statement_map_t*> name_section_sline_statement_map_t;
     //typedef std::map<const char*, section_sline_statement_map_t*, ltstr> name_section_sline_statement_map_t;
 
-    DLLLOCAL qore_program_private(QoreProgram* n_pgm, const QoreParseOptions& n_parse_options, QoreProgram* p_pgm = nullptr);
+    DLLLOCAL qore_program_private(QoreProgram* n_pgm, const QoreParseOptions& n_parse_options,
+            QoreProgram* p_pgm = nullptr, const QoreParseOptions* p_parse_options = nullptr);
 
     DLLLOCAL ~qore_program_private();
 
@@ -3518,6 +3543,18 @@ public:
             return nullptr;
         }
 
+        // the thread owns the parse of the Program now (lockParsing()), so no other thread can begin one: the
+        // Program is still being parsed if it has code pending (Program::parsePending() without a commit or a
+        // rollback), or if a parse of it was rolled back without PO_ALLOW_REPARSE (it cannot be used then); the
+        // expression is refused, as its parse would end the parse state that keeps threads out of the Program, and
+        // it could refer to code that a rollback deletes (issue #6353)
+        if (parsing_in_progress) {
+            xsink->raiseException("EXPRESSION-ERROR", "an expression cannot be created in a Program that has code "
+                "pending (commit it with Program::parseCommit() or roll it back with Program::parseRollback() first) "
+                "or whose parse was rolled back without PO_ALLOW_REPARSE");
+            return nullptr;
+        }
+
         assert(!expression_mode);
         assert(!new_expression);
         expression_mode = true;
@@ -3527,7 +3564,7 @@ public:
         NonStandardParseFlagHelper nspfh(*this);
         startParsing(xsink, wS, wm);
 
-        // parse text given
+        // parse text given; the Program had no code pending, so the parse state ends with the expression's parse
         if (!internParsePending(xsink, exp_code.c_str(), label, orig_src, offset, false)) {
             internParseCommit(false);   // finalize parsing, back out or commit all changes
         } else {

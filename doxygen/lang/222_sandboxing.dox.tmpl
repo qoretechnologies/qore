@@ -355,6 +355,44 @@ authenticate();
     hashes and lists are copy-on-write values.  A module that lets such code change a value exports a function or
     method that sets it.  See @ref module_public_variables.
 
+    @subsection sandbox_caller_domains Operations That Module Code Performs for Its Caller
+
+    A module is a capability: once it is loaded, its code runs with its own %Program's options, whatever the
+    restrictions of the code that calls it (the sandbox of a sandboxed caller still applies).  A module that performs
+    an operation of a functional domain on behalf of its caller, such as opening a database connection from a
+    connection string or a datasource configuration that the caller gives, must therefore check the caller itself,
+    or a caller restricted from that domain uses the module to do what it cannot do directly:
+    - a method or function that is in a domain declares it (<tt>[dom=DATABASE]</tt>, see @ref function_domains); a
+      caller restricted from the domain cannot call it, when its code is parsed or at run time through a call
+      reference, a closure or @ref Qore::call_function() "call_function()"
+    - module code that the caller reaches through other code, such as the deserialization of an object or another
+      module, asks whether the calling code is restricted with
+      @ref Qore::SandboxManager::isCallerRestricted() "SandboxManager::isCallerRestricted()"
+      (\c qore_caller_restricts_domain() in the C++ API, \c QORE_HAVE_CALLER_RESTRICTS_DOMAIN) and refuses the
+      operation with \c PERMISSION-DENIED
+
+    The calling code is the code of the nearest %Program on the thread's call stack that is not the %Program of a
+    user module, through any number of calls between modules: its parse options decide (for example
+    @ref Qore::PO_NO_DATABASE "PO_NO_DATABASE" for @ref Qore::DOM_DATABASE "DOM_DATABASE"), as do the restrictions of
+    a sandboxed caller that the module code runs with; a sandbox that does not restrict the domain does not, so a
+    trusted %Program that a sandbox governs only for its resources or I/O policy keeps the operation.  A closure runs
+    in the %Program that created it, so a closure of restricted code that trusted code calls back is restricted code.
+
+    The \c SqlUtil and \c DbDataProvider modules refuse a connection string or datasource configuration this way: the
+    variants of @ref SqlUtil::AbstractTable::getTable() "AbstractTable::getTable()",
+    @ref SqlUtil::AbstractDatabase::getDatabase() "AbstractDatabase::getDatabase()" and the constructors of
+    @ref SqlUtil::Table "Table" and @ref SqlUtil::Database "Database" that take one are in the \c DATABASE domain and
+    check the caller when other module code calls them, and the deserialization of a table and
+    @ref DbDataProvider::DbDataProviderBase::getDatasource() "DbDataProviderBase::getDatasource()" check the caller,
+    as does a @ref DbDataProvider::DatasourceConnection "DatasourceConnection" when it is created or deserialized, so
+    the code that gives its URL decides; the datasources and connections that the host gives the code, and the names
+    that the host's datasource lookup resolves, are not affected (but code governed by a sandbox that restricts the
+    \c DATABASE domain runs the module code with that restriction, so it cannot open a connection through them
+    either: \c INVALID-FUNCTION-ACCESS).  A module that creates connection objects when they are first looked up
+    must therefore create them in the host's context, or before restricted code can look them up.
+
+    @since %Qore 3.0
+
     @subsection sandbox_module_init Module Initialization
 
     In this section, code that is not trusted is code that a sandbox governs, and code whose parse options restrict a

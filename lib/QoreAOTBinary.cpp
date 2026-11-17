@@ -7770,7 +7770,7 @@ static std::string aotClassDeclHash(const AOTSerializeState::ClassInfo& ci) {
     }
     // the class's own instance members: consumers compile member accesses against their names, types and access
     if (priv) {
-        for (auto& mi : priv->members.member_list) {
+        for (auto& mi : priv->members.getList()) {
             if (!mi.second->local()) {
                 continue;
             }
@@ -11245,7 +11245,7 @@ static bool writeClassesSection(QoreAOTBinaryWriter& writer, const AOTSerializeS
 
         // members - only serialize local (non-inherited) members
         uint32_t num_members = 0;
-        for (auto& mi : priv->members.member_list) {
+        for (auto& mi : priv->members.getList()) {
             if (mi.second->local()) {
                 ++num_members;
             }
@@ -11257,7 +11257,7 @@ static bool writeClassesSection(QoreAOTBinaryWriter& writer, const AOTSerializeS
         member_default_locals.back().type_path = getTypePath(priv->typeInfo);
         member_default_locals.back().flags = 0x04;
         member_default_locals.back().local_var_ptr = &priv->selfid;
-        for (auto& mi : priv->members.member_list) {
+        for (auto& mi : priv->members.getList()) {
             if (!mi.second->local()) {
                 continue;
             }
@@ -14217,7 +14217,9 @@ static bool classifyAndWriteExprIntern(QoreAOTBinaryWriter& writer, const QoreVa
     if (auto* scr = dynamic_cast<const LocalStaticMethodCallReferenceNode*>(node)) {
         writer.writeU8(static_cast<uint8_t>(AOTExprKind::STATIC_METHOD_REF));
         const QoreMethod* method = scr->getMethod();
-        const QoreClass* qc = method ? method->getClass() : nullptr;
+        // the class that the reference names, whose specialization of a generic class binds the method's type
+        // parameters (qore#6285)
+        const QoreClass* qc = scr->getScopeClass();
         std::string class_path = qore_aot_encode_class_ref(qc);
         writer.writeStringRef(class_path.c_str());
         writer.writeStringRef(method ? method->getName() : "");

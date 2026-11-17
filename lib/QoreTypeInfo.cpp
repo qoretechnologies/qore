@@ -4896,6 +4896,23 @@ std::shared_ptr<const QoreTypeInfo> qore_make_initializer_filter(const QoreTypeI
     return std::make_shared<QoreInitializerFilterTypeInfo>(type_info, policy, instance_member);
 }
 
+bool QoreTypeSpec::acceptsEnumDecl(const QoreEnumDecl* ed) const {
+    assert(typespec == QTS_ENUM);
+    return ed == u.ed || qore_enum_decl_private::get(*ed)->parseEqual(*qore_enum_decl_private::get(*u.ed));
+}
+
+//! returns true if the type has an enum type that accepts the enum value \a n (qore#6277)
+static bool qore_type_info_has_enum_spec_for(const QoreTypeInfo& typeInfo, const QoreValue& n) {
+    assert(n.isEnum());
+    const QoreEnumDecl* ed = n.getEnumMember()->getEnumDecl();
+    for (auto& t : typeInfo.getAcceptSpecs()) {
+        if (t.spec.getTypeSpec() == QTS_ENUM && t.spec.acceptsEnumDecl(ed)) {
+            return true;
+        }
+    }
+    return false;
+}
+
 template <typename FilterPolicy>
 bool QoreTypeSpec::acceptInputImpl(ExceptionSink* xsink, const QoreTypeInfo& typeInfo, const QoreAcceptSpec& accept,
         const char* arg_type, bool obj, int param_num, const char* param_name, QoreValue& n,
@@ -5047,6 +5064,12 @@ bool QoreTypeSpec::acceptInputImpl(ExceptionSink* xsink, const QoreTypeInfo& typ
                     return true;
                 }
             } else if (typespec == QTS_COMPLEXSOFTLIST) {
+                // an enum value is left to an enum type of the union, which keeps it as an enum value, and not
+                // wrapped in a list (qore#6277)
+                if (n.isEnum() && typeInfo.getAcceptSpecs().size() > 1
+                        && qore_type_info_has_enum_spec_for(typeInfo, n)) {
+                    break;
+                }
                 // see if value matches
                 if (policy.value(u.ti, n, true) > 0) {
                     ok = true;
@@ -5160,15 +5183,25 @@ bool QoreTypeSpec::acceptInputImpl(ExceptionSink* xsink, const QoreTypeInfo& typ
         }
         case QTS_TYPE: {
             qore_type_t t = n.getType();
-            // Unwrap TAG_ENUM to base type only for direct lvalue/parameter assignments
-            // (e.g. "string s = EnumVal"), NOT for hash key or member assignments where
-            // the TAG_ENUM must be preserved through containers for later typed retrieval
-            if (n.isEnum() && u.t != NT_ALL
-                && strcmp(arg_type, "key") && strcmp(arg_type, "member")) {
-                QoreValue base_val = n.getEnumMember()->getValue();
-                base_val.ref();
-                n.discard(xsink);
-                n = base_val;
+            if (n.isEnum()) {
+                // a union with an enum type of the value's enum keeps the value as an enum value: a base type, or a
+                // type that converts any value (softlist), does not accept it, and the enum type does (union<int, E>
+                // takes an E value as an E value, wherever E is in the union, also in an optional type, and for
+                // hash keys and members too; qore#6277); checked only for an enum value, so that the acceptance of
+                // other values does not change
+                if ((u.t != NT_ALL || accept.map) && typeInfo.getAcceptSpecs().size() > 1
+                        && qore_type_info_has_enum_spec_for(typeInfo, n)) {
+                    break;
+                }
+                // Unwrap TAG_ENUM to base type only for direct lvalue/parameter assignments
+                // (e.g. "string s = EnumVal"), NOT for hash key or member assignments where
+                // the TAG_ENUM must be preserved through containers for later typed retrieval
+                if (u.t != NT_ALL && strcmp(arg_type, "key") && strcmp(arg_type, "member")) {
+                    QoreValue base_val = n.getEnumMember()->getValue();
+                    base_val.ref();
+                    n.discard(xsink);
+                    n = base_val;
+                }
             }
             // special handling for objects; check for object validity; if it's already been deleted,
             // then we use NT_NOTHING
@@ -5190,13 +5223,8 @@ bool QoreTypeSpec::acceptInputImpl(ExceptionSink* xsink, const QoreTypeInfo& typ
 
         case QTS_ENUM: {
             // Accept TAG_ENUM values from same enum declaration
-            if (n.isEnum()) {
-                const QoreEnumMember* member = n.getEnumMember();
-                if (member->getEnumDecl() == u.ed
-                    || qore_enum_decl_private::get(*member->getEnumDecl())->parseEqual(
-                        *qore_enum_decl_private::get(*u.ed))) {
-                    ok = true;
-                }
+            if (n.isEnum() && acceptsEnumDecl(n.getEnumMember()->getEnumDecl())) {
+                ok = true;
             }
             break;
         }
@@ -6163,6 +6191,11 @@ static const QoreTypeInfo* qore_resolve_parse_parameterized_class_type(const Qor
         args.push_back(arg);
     }
     for (size_t i = actual; i < expected; ++i) {
+        // the default resolved where the class is declared, once it is initialized (qore#6285)
+        if (const QoreTypeInfo* declared = qore_class_private::get(*qc)->getTypeParamDefaultTypeInfo(i)) {
+            args.push_back(declared);
+            continue;
+        }
         const char* default_type = qc->getTypeParameterDefaultType(i);
         assert(default_type);
         args.push_back(qore_resolve_parse_default_type_arg(default_type, loc, err));
@@ -6205,7 +6238,11 @@ static const QoreTypeInfo* qore_resolve_runtime_parameterized_class_type(const Q
         args.push_back(arg);
     }
     for (size_t i = actual; i < expected; ++i) {
-        const QoreTypeInfo* arg = qore_resolve_runtime_default_type_arg(qc->getTypeParameterDefaultType(i));
+        // the default resolved where the class is declared (qore#6285)
+        const QoreTypeInfo* arg = qore_class_private::get(*qc)->getTypeParamDefaultTypeInfo(i);
+        if (!arg) {
+            arg = qore_resolve_runtime_default_type_arg(qc->getTypeParameterDefaultType(i));
+        }
         if (!arg) {
             return nullptr;
         }

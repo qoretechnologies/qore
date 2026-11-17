@@ -86,7 +86,7 @@ class CompoundAssignmentNarrowedTypeTest inherits QUnit::Test {
             "seeded type: ok \"hash<auto>\"",
             "seeded new = int: ok {a: \"b\", n: 1}",
             "kept: new /= 0: DIVISION-BY-ZERO {a: 2, n: null}",
-            "kept: new %= 0: ok {a: 2, n: null, m: 0}",
+            "kept: new %= 0: DIVISION-BY-ZERO {a: 2, n: null, m: null}",
             "kept: new elem /= 0: DIVISION-BY-ZERO [2, 3, null, null, null]",
             "kept: extract new key: EXTRACT-ERROR {a: 2, e: null}",
             "kept: extract new key value: EXTRACT-ERROR {a: 2, e: null, v: null}",

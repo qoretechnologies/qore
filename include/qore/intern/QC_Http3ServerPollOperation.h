@@ -261,11 +261,22 @@ public:
         QUIC session dies.  @ref closeSessionStreams() can only walk C++ state;
         the QoreObject member hash is not reachable from there.
 
+        A session that closed before the listener registered left no trace for the stream: its close is a one-shot
+        event that @ref closeSessionStreams() reported only to the streams registered then, and a closed session
+        sends no further events.  The stream is then recorded as peer-closed here, under the lock that
+        @ref closeSessionStreams() runs under, so that the registration's replay check (@ref isStreamPeerClosed())
+        reports it; a session that closes later finds the registered stream (qore#6202).
+
+        @param session_id the QUIC session of the stream
         @param stream_key composite key "session_id:stream_id"
     */
-    DLLLOCAL void registerStreamCloseNotify(const std::string& stream_key) {
+    DLLLOCAL void registerStreamCloseNotify(int64_t session_id, const std::string& stream_key) {
         AutoLocker al(op_lock);
         close_notify_streams.insert(stream_key);
+        // lock order: op_lock, then the socket's locks, as in deliverSessionLifecycleEvents()
+        if (sock_obj && sock_obj->isQuicSessionClosedOrGone(session_id)) {
+            peer_closed_streams.insert(stream_key);
+        }
     }
 
     //! Drops a stream key registered with @ref registerStreamCloseNotify()
@@ -275,6 +286,8 @@ public:
         AutoLocker al(op_lock);
         close_notify_streams.erase(stream_key);
         peer_closed_streams.erase(stream_key);
+        // a wakeup that arrives after the listener is gone records pending data that nothing reads any more
+        pending_stream_data.erase(stream_key);
     }
 
     //! Returns true if the given stream can no longer carry data to the peer

@@ -844,6 +844,20 @@
     function, method or closure that first uses the type-safe hash is a parse error, as it already was for class
     members; 2.2.1 evaluated it with that code's variable (issue #6268).
 
+    @par Modulo-Equals by Zero Raises DIVISION-BY-ZERO
+    @ref modulo_equals_operator "%=" with a divisor of zero raises \c DIVISION-BY-ZERO as the other division operators
+    do, following the rule for @ref undefined_arithmetic "undefined arithmetic"; 2.2.1 assigned \c 0 (issue #1034).
+
+    @par Every Number Division by Zero Raises DIVISION-BY-ZERO
+    A @ref number_type "number" dividend of \c 0, infinity or NaN divided by zero raises \c DIVISION-BY-ZERO, as any
+    other dividend does (see @ref undefined_arithmetic); 2.2.1 gave NaN or infinity (ex: <tt>0n / 0n</tt>), also for
+    constant operands, which now raise the exception when they are parsed (issue #1034).
+
+    @par pow() of a Negative Float and a Fractional Exponent Returns NaN
+    @ref Qore::pow() "pow()" of a negative float and an exponent that is not an integer returns NaN, as the other math
+    functions do for an argument outside their domain (see @ref undefined_arithmetic); 2.2.1 raised
+    \c INVALID-POW-ARGUMENTS (issue #1034).
+
     @subsection qore_3_0_0_new_features New Features in Qore
     @par Strict Number Parsing
     @ref parse_int(string, string, bool) "parse_int()", @ref parse_float(string, string, bool) "parse_float()" and
@@ -1188,6 +1202,13 @@
     method tell whether the sandbox trusts its code to use uncontrolled APIs (for a combination of sandboxes, whether
     every member does), so that a module refuses an operation for a sandboxed caller only if
     <tt>!trustsUncontrolledApis() && restricts()</tt>.
+
+    @par Asking Whether the Calling Code Is Restricted From a Domain
+    @ref Qore::SandboxManager::isCallerRestricted() "SandboxManager::isCallerRestricted()" and the C++ function
+    \c qore_caller_restricts_domain() (\c QORE_HAVE_CALLER_RESTRICTS_DOMAIN) tell module code whether the code that
+    calls it, not the module's own %Program, is restricted from a functional domain, so that it refuses an operation
+    that it performs for a restricted caller; see @ref sandbox_caller_domains
+    (<a href="https://github.com/qoretechnologies/qore/issues/6257">issue 6257</a>).
 
     @par C++ API: Module Threads and Callbacks Run Under the Caller's Sandbox
     A binary module can run work for sandboxed callers on its own worker or callback threads under each caller's
@@ -1987,6 +2008,10 @@
 
     - a sleep with @ref Qore::usleep() "usleep()" or @ref Qore::sleep() "sleep()" that a signal interrupted while
       it slept with \c nanosleep() (2) slept its whole time again instead of the time that was left (issue #6364)
+    - an out-of-line method definition in a namespace block resolves its class path relative to that namespace
+      (<tt>int I::C::m() {}</tt> in \c NS for \c NS::I::C), and a path that names no such class, which release builds
+      used to resolve by ignoring its first part, is now an error (see
+      @ref outofline_methods_in_namespaces "out-of-line methods in namespaces"; issue #6340)
     - the report of an unhandled exception or of a warning on stderr is written whole, so that the output of other
       threads is no longer mixed into its lines (see @ref exception_handling; issue #6290)
     - a range of the @ref list_element_operator "[] operator" (ex: <tt>x[-9..1]</tt>) gives only elements of its
@@ -2001,6 +2026,12 @@
       other's parse lock forever; such a wait is refused with \c PROGRAM-ERROR, and the wait of a parse action for a
       parse lock can be ended with @ref Qore::cancel_thread() "cancel_thread()"; see @ref program_parse_lock_waits
       (issue #5693)
+    - creating an @ref Qore::Expression "Expression" in a %Program with code pending, or whose parse was rolled back
+      without @ref Qore::PO_ALLOW_REPARSE "PO_ALLOW_REPARSE", raises \c EXPRESSION-ERROR; it let threads enter the
+      %Program before its code was committed, and could refer to code that a rollback deleted (issue #6353)
+    - a child process created with @ref Qore::fork() "fork()" while another thread changed the parse options of a
+      %Program or of a module, or created a %Program that copies the external data of its parent, could block when it
+      did the same, or when the %Program was destroyed (issue #6403)
     - an allocation that fails while a thread enters another %Program (ex: in a binary module's
       \c QoreExternalProgramContextHelper or a parse commit) leaves the thread in the calling %Program and releases
       its thread count in the entered %Program, which could otherwise not be deleted (issue #6198)
@@ -2975,6 +3006,10 @@
       @ref Qore::get_local_vars() "get_local_vars()" and @ref Qore::set_local_var_value() "set_local_var_value()"
       from the calls it makes or from a debugger's callbacks in the same thread
       (<a href="https://github.com/qoretechnologies/qore/issues/5871">issue 5871</a>)
+    - a call of a method that a class does not have, of the name of a member whose type can hold code (\c auto, no
+      type, or a code type), is no longer checked at parse time against the pseudo-method of objects of the same name,
+      which refused a call that the member's code accepts; the member's code is called at run time, and a named call
+      binds its names to the code's parameters (see @ref function_named_arguments; issue #6361)
     - in the C++ API, \c QoreString::replace() clamps an offset past the end of the string to its end instead of
       accessing memory outside the string, and \c QoreString::concat() with a position and a length takes only that
       many characters in a single-byte encoding instead of the rest of the string (issue #6238)
@@ -2993,6 +3028,10 @@
       where clause or the \c "groupby" option, which gave invalid SQL such as <tt>order by distinct ddt_number</tt>
       (<a href="https://github.com/qoretechnologies/qore/issues/6331">issue 6331</a>,
       <a href="https://github.com/qoretechnologies/qore/issues/6332">issue 6332</a>)
+    - @ref Qore::pow() "pow()" with @ref number_type "number" arguments and an exponent that is negative, NaN or
+      between -1 and 1 (ex: <tt>pow(2n, 0.5n)</tt>) ended the process with an MPFR assertion (issue #1034)
+    - a @ref number_type "number" division after a number operation that left an MPFR flag set (ex: <tt>nlog(0n)</tt>)
+      raised \c DIVISION-BY-ZERO for a divisor that is not zero (issue #1034)
 
     @section qore_2_2_1 Qore 2.2.1
 

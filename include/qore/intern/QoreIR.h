@@ -3999,6 +3999,8 @@ public:
     QoreValue where_exp;     //!< optional `where` filter expression (empty = no filter)
     QoreValue sort_exp;      //!< optional sort expression (empty = no sort)
     int sort_type = -1;      //!< CM_SORT_ASCENDING, CM_SORT_DESCENDING, or -1 for none
+    //! the expressions read the implicit index (\c $#) from the thread at run time (qore#6341)
+    bool reads_implicit_element = false;
 };
 
 //! Backquote expression instruction — execute command and return stdout as string.
@@ -4056,6 +4058,8 @@ public:
     QoreValue find_exp;
     QoreValue where;
     int32_t mode = 0;
+    //! the expressions read the implicit index (\c $#) from the thread at run time (qore#6341)
+    bool reads_implicit_element = false;
 };
 
 class QoreIRSummarizeInstruction : public QoreIRInstruction {

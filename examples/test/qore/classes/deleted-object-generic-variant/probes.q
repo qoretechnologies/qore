@@ -118,7 +118,8 @@ class BoundedOnly<T> {
 
 auto sub bounded_only_auto(auto a) { BoundedOnly<int> b(); return b.m(a); }
 
-#! a static method called with a receiver that names the calling code's type parameter: the bound is not satisfied
+#! a static method called with a receiver that names the calling code's type parameter, which is the type argument of
+#! the calling code's instantiation (qore#6308): the bound is satisfied
 class BoundedCaller<U> {
     public {}
 

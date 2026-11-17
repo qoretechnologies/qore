@@ -445,11 +445,11 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_raise_typed_foreach_nothing",
         reinterpret_cast<void*>(&qore_rt_raise_typed_foreach_nothing) },
     { "qore_rt_load_local_aot", reinterpret_cast<void*>(&qore_rt_load_local_aot) },
-    { "qore_rt_cleanup_run_allocas", reinterpret_cast<void*>(&qore_rt_cleanup_run_allocas) },
-    { "qore_rt_cleanup_release_slots", reinterpret_cast<void*>(&qore_rt_cleanup_release_slots) },
+    { "qore_rt_cleanup_run_frame", reinterpret_cast<void*>(&qore_rt_cleanup_run_frame) },
+    { "qore_rt_cleanup_release_frame_slots", reinterpret_cast<void*>(&qore_rt_cleanup_release_frame_slots) },
     { "qore_rt_object_slot_release", reinterpret_cast<void*>(&qore_rt_object_slot_release) },
     { "qore_rt_object_slot_replace", reinterpret_cast<void*>(&qore_rt_object_slot_replace) },
-    { "qore_rt_iterator_cleanup_allocas", reinterpret_cast<void*>(&qore_rt_iterator_cleanup_allocas) },
+    { "qore_rt_iterator_cleanup_frame", reinterpret_cast<void*>(&qore_rt_iterator_cleanup_frame) },
     { "qore_rt_reload_chain_rotate", reinterpret_cast<void*>(&qore_rt_reload_chain_rotate) },
     { "qore_rt_reload_chain_clear", reinterpret_cast<void*>(&qore_rt_reload_chain_clear) },
     { "qore_rt_reload_chain_flush", reinterpret_cast<void*>(&qore_rt_reload_chain_flush) },
@@ -1237,13 +1237,18 @@ extern "C" DLLEXPORT void qore_rt_object_slot_replace(uint64_t old_value, uint64
     qore_rt_object_slot_release(old_value, xsink);
 }
 
+//! Returns the slot of the cleanup frame that the entry of a cleanup frame table gives (see QORE_FRAME_ENTRY_SHIFT)
+static inline uint64_t* qore_rt_frame_slot(uint64_t* frame, uint64_t entry) {
+    return frame + (entry >> QORE_FRAME_ENTRY_SHIFT);
+}
+
 //! Releases the temporaries of the cleanup slots given by \a order, in its order (see
 //! QoreIRToLLVM::emitTempReleaseSequence()): as the inline sequence does for each, the value is taken from the slot,
 //! which is cleared, and released
-extern "C" DLLEXPORT void qore_rt_cleanup_release_slots(uint64_t** slots, const uint32_t* order, int32_t count,
-        ExceptionSink* xsink) {
+extern "C" DLLEXPORT void qore_rt_cleanup_release_frame_slots(uint64_t* frame, const uint64_t* slots,
+        const uint32_t* order, int32_t count, ExceptionSink* xsink) {
     for (int32_t i = 0; i < count; ++i) {
-        uint64_t* slot = slots[order[i]];
+        uint64_t* slot = qore_rt_frame_slot(frame, slots[order[i]]);
         uint64_t val = *slot;
         // NOTHING (VAL_NOTHING)
         *slot = 0;
@@ -1251,38 +1256,50 @@ extern "C" DLLEXPORT void qore_rt_cleanup_release_slots(uint64_t** slots, const 
     }
 }
 
-extern "C" DLLEXPORT void qore_rt_cleanup_run_allocas(uint64_t** alloca_ptrs, int32_t count, ExceptionSink* xsink) {
+// documented in JITRuntime.h
+extern "C" DLLEXPORT void qore_rt_cleanup_run_frame(uint64_t* frame, const uint64_t* entries, int32_t count,
+        QoreAOTContext* ctx, ExceptionSink* xsink) {
     // Cleanup slots are registered in construction order.  Destruct in LIFO
     // order so dependent temporaries (for example iterators) are released
     // before the values they reference.
+    static_assert(alignof(LocalVar) >= 4, "the exit release table tags LocalVar addresses in bits 0 and 1");
     for (int32_t i = count - 1; i >= 0; --i) {
-        // a local on the runtime stack whose value is released is given by its LocalVar tagged in bit 1 (see
-        // QoreIRToLLVM::getExitReleaseSequence()); a closure-bound variable that the frame instantiated is tagged in
-        // bits 0 and 1 and popped from the closure stack; the alloca of a foreach statement's iterator is tagged in bit
-        // 2, and the cache of an object local in bit 0, whose object is released with the real reference it has from
+        // a local on the runtime stack whose value is released is given by its LocalVar (by its slot in AOT code)
+        // tagged with QORE_FRAME_ENTRY_LOCAL (see QoreIRToLLVM::getExitReleaseSequence()); a closure-bound variable
+        // that the frame instantiated is tagged with QORE_FRAME_ENTRY_OBJECT as well and popped from the closure
+        // stack; the slot of a foreach statement's iterator is tagged with QORE_FRAME_ENTRY_ITERATOR, and the cache of
+        // an object local with QORE_FRAME_ENTRY_OBJECT, whose object is released with the real reference it has from
         // the cache (see qore_rt_object_slot_release())
-        static_assert(alignof(LocalVar) >= 4, "the exit release array tags LocalVar addresses in bits 0 and 1");
-        uintptr_t tagged = reinterpret_cast<uintptr_t>(alloca_ptrs[i]);
-        if ((tagged & 3) == 3) {
-            qore_rt_pop_closure_var(reinterpret_cast<LocalVar*>(tagged & ~static_cast<uintptr_t>(3)), xsink);
+        const uint64_t entry = entries[i];
+        const uint64_t tag = entry & QORE_FRAME_ENTRY_TAG;
+        if (tag & QORE_FRAME_ENTRY_LOCAL) {
+            LocalVar* var;
+            if (ctx) {
+                const uint64_t aot_slot = entry >> QORE_FRAME_ENTRY_SHIFT;
+                assert(aot_slot < static_cast<uint64_t>(ctx->num_locals));
+                var = ctx->locals[aot_slot];
+            } else {
+                var = reinterpret_cast<LocalVar*>(static_cast<uintptr_t>(entry
+                    & ~(QORE_FRAME_ENTRY_LOCAL | QORE_FRAME_ENTRY_OBJECT)));
+            }
+            if (tag & QORE_FRAME_ENTRY_OBJECT) {
+                qore_rt_pop_closure_var(var, xsink);
+            } else {
+                qore_rt_clear_local(var, xsink);
+            }
             continue;
         }
-        if (tagged & 2) {
-            qore_rt_clear_local(reinterpret_cast<LocalVar*>(tagged & ~static_cast<uintptr_t>(2)), xsink);
-            continue;
-        }
-        // the alloca of the iterator of a foreach statement is tagged in bit 2
-        if (tagged & 4) {
-            void** iter_slot = reinterpret_cast<void**>(tagged & ~static_cast<uintptr_t>(4));
+        if (tag & QORE_FRAME_ENTRY_ITERATOR) {
+            void** iter_slot = reinterpret_cast<void**>(qore_rt_frame_slot(frame, entry));
             void* iter = *iter_slot;
             *iter_slot = nullptr;
             qore_rt_iterator_cleanup(iter);
             continue;
         }
-        uint64_t* slot = reinterpret_cast<uint64_t*>(tagged & ~static_cast<uintptr_t>(1));
+        uint64_t* slot = qore_rt_frame_slot(frame, entry);
         uint64_t bits = *slot;
         *slot = 0;
-        if (tagged & 1) {
+        if (tag & QORE_FRAME_ENTRY_OBJECT) {
             qore_rt_object_slot_release(bits, xsink);
         } else if (qore_rt_bits_may_own_reference(bits)) {
             // most slots hold no value that owns a reference at the exit of the frame: NOTHING, as the end of the
@@ -1292,18 +1309,18 @@ extern "C" DLLEXPORT void qore_rt_cleanup_run_allocas(uint64_t** alloca_ptrs, in
     }
 }
 
-//! Release every active iterator recorded in an array of cleanup slots.
+//! Releases every active iterator of the slots of the cleanup frame that a table gives
 /** Mirrors the inline sequence QoreIRToLLVM::emitIteratorCleanup() emits per
     iterator (load the slot, release it, clear the slot), in the same order.
     emitLateExitCleanup() repeats that sequence at every return and resume in the
     function, so once SROA promotes the slots each iterator needs a PHI at the
     merged common return for every exit -- (iterators x exits) PHI operands.
-    Passing the slot addresses to this helper keeps them in memory, so the whole
+    Keeping the slots in the cleanup frame keeps them in memory, so the whole
     sequence is one call and no PHI is required.
 */
-extern "C" DLLEXPORT void qore_rt_iterator_cleanup_allocas(void*** slots, int32_t count) {
+extern "C" DLLEXPORT void qore_rt_iterator_cleanup_frame(uint64_t* frame, const uint64_t* entries, int32_t count) {
     for (int32_t i = 0; i < count; ++i) {
-        void** slot = slots[i];
+        void** slot = reinterpret_cast<void**>(qore_rt_frame_slot(frame, entries[i]));
         void* iter = *slot;
         qore_rt_iterator_cleanup(iter);
         *slot = nullptr;
@@ -1348,18 +1365,18 @@ extern "C" DLLEXPORT void qore_rt_reload_chain_clear(uint64_t* slot, ExceptionSi
 }
 
 // documented in JITRuntime.h
-extern "C" DLLEXPORT void qore_rt_reload_chain_flush(uint64_t** slots, const uint32_t* table, int32_t pairs,
+extern "C" DLLEXPORT void qore_rt_reload_chain_flush(uint64_t* frame, const uint32_t* table, int32_t pairs,
         int32_t epochs, uint64_t* epoch, ExceptionSink* xsink) {
     for (int32_t i = 0; i < pairs; ++i) {
         const uint32_t tracker = table[2 * i];
         const uint32_t deferred = table[2 * i + 1];
         if (tracker == QORE_RELOAD_CHAIN_NO_SLOT) {
             assert(deferred != QORE_RELOAD_CHAIN_NO_SLOT);
-            qore_rt_reload_chain_clear(slots[deferred], xsink);
+            qore_rt_reload_chain_clear(frame + deferred, xsink);
         } else if (deferred == QORE_RELOAD_CHAIN_NO_SLOT) {
-            qore_rt_reload_chain_clear(slots[tracker], xsink);
+            qore_rt_reload_chain_clear(frame + tracker, xsink);
         } else {
-            qore_rt_reload_chain_rotate(slots[tracker], slots[deferred], xsink);
+            qore_rt_reload_chain_rotate(frame + tracker, frame + deferred, xsink);
         }
     }
     if (!epochs) {
@@ -1372,7 +1389,7 @@ extern "C" DLLEXPORT void qore_rt_reload_chain_flush(uint64_t** slots, const uin
     *epoch = old_epoch + 1;
     const uint32_t* epoch_table = table + 2 * pairs;
     for (int32_t i = 0; i < epochs; ++i) {
-        *slots[epoch_table[i]] = old_epoch;
+        frame[epoch_table[i]] = old_epoch;
     }
 }
 
@@ -4787,7 +4804,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_create_static_method_call_ref_aot(QoreAOTC
     QoreProgram* call_pgm = rc.getProgram() ? rc.getProgram() : (current_pgm ? current_pgm : pgm);
     const qore_class_private* cls = rc.getClass() ? rc.getClass() : runtime_get_class();
     if (method->isStatic()) {
-        return toBits(QoreValue(new StaticMethodCallReferenceNode(&loc_builtin, method, call_pgm, cls)));
+        // the reference names its class, whose specialization of a generic class of the method binds the method's
+        // type parameters (qore#6285)
+        return toBits(QoreValue(new StaticMethodCallReferenceNode(&loc_builtin, method, call_pgm, cls,
+            LocalStaticMethodCallReferenceNode::getRuntimeReceiverTypeInfo(*method, qc, cls))));
     }
 
     QoreObject* obj = rc.getObject() ? rc.getObject() : runtime_get_stack_object();
@@ -15455,54 +15475,71 @@ static inline LocalVar* qore_rt_obe_var(const QoreObeLocal& e, QoreAOTContext* c
     return ctx->locals[e.slot];
 }
 
-extern "C" DLLEXPORT void qore_rt_obe_publish(QoreObeLocal* locals, const uint32_t* table, int32_t count,
-        const uint64_t* epoch, QoreAOTContext* ctx, ExceptionSink* xsink) {
+//! The slot of the cleanup frame of a field of a record of the table-driven handler code, or null if it has none
+template <typename T = uint64_t>
+static inline T* qore_rt_obe_slot(uint64_t* frame, uint32_t index) {
+    return index == QORE_OBE_NO_SLOT ? nullptr : reinterpret_cast<T*>(frame + index);
+}
+
+extern "C" DLLEXPORT void qore_rt_obe_publish(uint64_t* frame, const QoreObeLocal* locals, const uint32_t* table,
+        int32_t count, const uint64_t* epoch, QoreAOTContext* ctx, ExceptionSink* xsink) {
     for (int32_t i = 0; i < count; ++i) {
         const QoreObeLocal& e = locals[table[i] & QORE_OBE_TABLE_INDEX];
         LocalVar* var = qore_rt_obe_var(e, ctx);
+        uint64_t* cache = qore_rt_obe_slot(frame, e.cache);
+        assert(cache);
         if (table[i] & QORE_OBE_TABLE_FRESH) {
-            if (e.ref_flag) {
-                *e.ref_flag = qore_rt_reload_local_if_stale_raw(var, e.cache, e.tracker, e.deferred, e.valid_epoch,
-                    *epoch, xsink);
+            uint64_t* tracker = qore_rt_obe_slot(frame, e.tracker);
+            uint64_t* deferred = qore_rt_obe_slot(frame, e.deferred);
+            uint64_t* valid_epoch = qore_rt_obe_slot(frame, e.valid_epoch);
+            if (uint8_t* ref_flag = qore_rt_obe_slot<uint8_t>(frame, e.ref_flag)) {
+                *ref_flag = qore_rt_reload_local_if_stale_raw(var, cache, tracker, deferred, valid_epoch, *epoch,
+                    xsink);
             } else {
-                qore_rt_reload_local_if_stale(var, e.cache, e.tracker, e.deferred, e.valid_epoch, *epoch, xsink);
+                qore_rt_reload_local_if_stale(var, cache, tracker, deferred, valid_epoch, *epoch, xsink);
             }
         }
-        qore_rt_sync_local(var, *e.cache);
+        qore_rt_sync_local(var, *cache);
     }
 }
 
 //! Loads the value of the local that the inline reload of QoreIRToLLVM::emitLocalCacheLoad() loads
-static inline uint64_t qore_rt_obe_load(const QoreObeLocal& e, LocalVar* var, ExceptionSink* xsink) {
-    if (e.ref_flag) {
+static inline uint64_t qore_rt_obe_load(uint64_t* frame, const QoreObeLocal& e, LocalVar* var,
+        ExceptionSink* xsink) {
+    if (uint8_t* ref_flag = qore_rt_obe_slot<uint8_t>(frame, e.ref_flag)) {
         uint64_t loaded = qore_rt_load_local_raw(var, xsink);
-        *e.ref_flag = qore_rt_value_is_reference(loaded);
+        *ref_flag = qore_rt_value_is_reference(loaded);
         return loaded;
     }
     return qore_rt_load_local(var, xsink);
 }
 
-extern "C" DLLEXPORT void qore_rt_obe_reload(QoreObeLocal* locals, const uint32_t* table, int32_t count,
-        const uint64_t* epoch, QoreAOTContext* ctx, ExceptionSink* xsink) {
+extern "C" DLLEXPORT void qore_rt_obe_reload(uint64_t* frame, const QoreObeLocal* locals, const uint32_t* table,
+        int32_t count, const uint64_t* epoch, QoreAOTContext* ctx, ExceptionSink* xsink) {
     for (int32_t i = 0; i < count; ++i) {
         const QoreObeLocal& e = locals[table[i] & QORE_OBE_TABLE_INDEX];
         LocalVar* var = qore_rt_obe_var(e, ctx);
-        assert(e.cache && e.tracker && e.deferred);
-        uint64_t old_tracker = *e.tracker;
-        uint64_t old_deferred = *e.deferred;
-        uint64_t reloaded = qore_rt_obe_load(e, var, xsink);
-        *e.cache = reloaded;
-        *e.tracker = reloaded;
-        *e.deferred = old_tracker;
+        uint64_t* cache = qore_rt_obe_slot(frame, e.cache);
+        uint64_t* tracker = qore_rt_obe_slot(frame, e.tracker);
+        uint64_t* deferred = qore_rt_obe_slot(frame, e.deferred);
+        assert(cache && tracker && deferred);
+        uint64_t old_tracker = *tracker;
+        uint64_t old_deferred = *deferred;
+        uint64_t reloaded = qore_rt_obe_load(frame, e, var, xsink);
+        *cache = reloaded;
+        *tracker = reloaded;
+        *deferred = old_tracker;
         qore_rt_decref(old_deferred, xsink);
-        if ((table[i] & QORE_OBE_TABLE_FRESH) && e.valid_epoch) {
-            *e.valid_epoch = *epoch;
+        if (table[i] & QORE_OBE_TABLE_FRESH) {
+            if (uint64_t* valid_epoch = qore_rt_obe_slot(frame, e.valid_epoch)) {
+                *valid_epoch = *epoch;
+            }
         }
     }
 }
 
-extern "C" DLLEXPORT void qore_rt_obe_release(QoreObeLocal* locals, const uint32_t* table, int32_t count,
-        ExceptionSink* xsink) {
+extern "C" DLLEXPORT void qore_rt_obe_release(uint64_t* frame, const QoreObeLocal* locals, const uint32_t* table,
+        int32_t count, ExceptionSink* xsink) {
     auto release = [xsink](uint64_t* slot) {
         if (!slot) {
             return;
@@ -15514,26 +15551,31 @@ extern "C" DLLEXPORT void qore_rt_obe_release(QoreObeLocal* locals, const uint32
     };
     for (int32_t i = 0; i < count; ++i) {
         const QoreObeLocal& e = locals[table[i] & QORE_OBE_TABLE_INDEX];
-        release(e.entry_owner);
-        release(e.deferred);
-        release(e.tracker);
+        release(qore_rt_obe_slot(frame, e.entry_owner));
+        release(qore_rt_obe_slot(frame, e.deferred));
+        release(qore_rt_obe_slot(frame, e.tracker));
     }
 }
 
-extern "C" DLLEXPORT void qore_rt_obe_reload_released(QoreObeLocal* locals, const uint32_t* table, int32_t count,
-        const uint64_t* epoch, QoreAOTContext* ctx, ExceptionSink* xsink) {
+extern "C" DLLEXPORT void qore_rt_obe_reload_released(uint64_t* frame, const QoreObeLocal* locals,
+        const uint32_t* table, int32_t count, const uint64_t* epoch, QoreAOTContext* ctx, ExceptionSink* xsink) {
     for (int32_t i = 0; i < count; ++i) {
         const QoreObeLocal& e = locals[table[i] & QORE_OBE_TABLE_INDEX];
-        uint64_t* owner = e.tracker ? e.tracker : e.entry_owner;
+        uint64_t* tracker = qore_rt_obe_slot(frame, e.tracker);
+        uint64_t* owner = tracker ? tracker : qore_rt_obe_slot(frame, e.entry_owner);
         if (!owner) {
             continue;
         }
         LocalVar* var = qore_rt_obe_var(e, ctx);
-        uint64_t reloaded = qore_rt_obe_load(e, var, xsink);
-        *e.cache = reloaded;
+        uint64_t* cache = qore_rt_obe_slot(frame, e.cache);
+        assert(cache);
+        uint64_t reloaded = qore_rt_obe_load(frame, e, var, xsink);
+        *cache = reloaded;
         *owner = reloaded;
-        if ((table[i] & QORE_OBE_TABLE_FRESH) && e.valid_epoch) {
-            *e.valid_epoch = *epoch;
+        if (table[i] & QORE_OBE_TABLE_FRESH) {
+            if (uint64_t* valid_epoch = qore_rt_obe_slot(frame, e.valid_epoch)) {
+                *valid_epoch = *epoch;
+            }
         }
     }
 }
@@ -16987,9 +17029,9 @@ QoreValue qore_rt_apply_lvalue_compound(LValueHelper& lvh,
                         }
                         break;
                     case LVCompoundOp::ModAssign:
+                        // a divisor of zero raises DIVISION-BY-ZERO, as for % (qore#1034)
                         if (!rv) {
-                            lvh.assign(0ll, "<%= operator>");
-                            res = 0ll;
+                            qore_raise_modulo_by_zero(xsink);
                         } else {
                             res = lvh.modulaEqualsBigInt(rv, "<%= operator>");
                         }
