@@ -32,6 +32,7 @@
 */
 
 #include "qore/Qore.h"
+#include "qore/intern/QC_SocketPollOperationBase.h"
 #include "qore/intern/QC_PollPipeline.h"
 #include "qore/intern/QC_SocketPollOperation.h"
 #include "qore/intern/qore_socket_private.h"
@@ -313,6 +314,22 @@ PollPipelinePriv::~PollPipelinePriv() {
     if (current_op || sock_obj || result_action) {
         ExceptionSink xsink;
         cleanup(&xsink);
+    }
+}
+
+void PollPipelinePriv::deref(ExceptionSink* xsink) {
+    // an async I/O controller that holds the pipeline can still continue it after the destructor of its object
+    if (ROdereference()) {
+        cleanup(xsink);
+        delete this;
+    }
+}
+
+void PollPipelinePriv::deref() {
+    if (ROdereference()) {
+        ExceptionSink xsink;
+        cleanup(&xsink);
+        delete this;
     }
 }
 
@@ -1310,7 +1327,11 @@ QoreHashNode* PollPipelinePriv::continuePoll(ExceptionSink* xsink) {
                     *desc_str ? desc_str->c_str() : "step failed", xsink);
                 // Propagate the original exception to the caller
                 xsink->assimilate(poll_xsink);
-                return nullptr;
+                // a step can return its poll info with an exception (one raised after the hash was made, such as
+                // for the socket member of an operation whose object was deleted): it is returned with the exception,
+                // so that the caller releases it where it releases the poll info of a step (the async I/O controller
+                // releases it off its I/O thread)
+                return poll_info;
             }
 
             if (poll_info) {
@@ -2263,7 +2284,9 @@ PollPipeline::constructor(*string goal) [flags=NAMED_ARGS] {
 /** Releases all internal references.
 */
 PollPipeline::destructor() {
-    priv->cleanup(xsink);
+    // the operation's state is released with its last reference, which an async I/O controller that continues the
+    // operation can hold; the controller cancels the operation
+    qore_socket_poll_op_object_deleted(priv);
     priv->deref(xsink);
 }
 
