@@ -350,11 +350,12 @@ WKEuKQ7xuGuAiIESuSDBsSg=
                 }
                 # Includes shutdown before the accept thread starts, while it
                 # waits for a connection, and after a client abandons one.
+                assertTrue(proxy.isListening(), "the proxy listens before its shutdown");
                 proxy.shutdown();
                 assertEq((), proxy.getRequests(), "no incomplete request was recorded");
-                Socket probe();
-                assertThrows("SOCKET-CONNECT-ERROR", \probe.connectINET(),
-                    ("127.0.0.1", proxy.getPort(), 5s), "shutdown closed the listener");
+                # the listening socket itself is checked: a connect to the freed port would depend on no other process
+                # taking the port in the meantime, which tests running in parallel can do (qore#6374)
+                assertFalse(proxy.isListening(), "shutdown closed the listener");
             }
         }
     }

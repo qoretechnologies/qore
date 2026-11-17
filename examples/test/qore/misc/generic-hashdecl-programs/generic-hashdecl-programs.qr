@@ -2,13 +2,13 @@
 # Copyright (c) 2026 Qore Technologies, s.r.o.
 # SPDX-License-Identifier: MIT
 #
-# The fixture of generic-hashdecl-programs.qtest: a generic hashdecl of a library Program is instantiated at run time
-# for classes of a series of Programs, each destroyed after its calls; every instantiation must be the declaration for
-# its own Program's class, never the one made for a destroyed Program's class, whose type a later class can be given
-# the address of.  The type arguments are the Program's class, hashdecl and enum, their or-nothing types, and derived
-# types naming them, also nested in a concrete declaration; and threads of each Program make the same declarations
-# at the same time, so one thread's declaration is published and the others are released.  Prints one line per
-# execution mode.
+# The fixture of GenericHashdeclPrograms-<n>.qtest (GenericHashdeclPrograms.qc): a generic hashdecl of a library
+# Program is instantiated at run time for classes of a series of Programs, each destroyed after its calls; every
+# instantiation must be the declaration for its own Program's class, never the one made for a destroyed Program's
+# class, whose type a later class can be given the address of.  The type arguments are the Program's class, hashdecl
+# and enum, their or-nothing types, and derived types naming them, also nested in a concrete declaration; and threads
+# of each Program make the same declarations at the same time, so one thread's declaration is published and the others
+# are released.  Prints one line per execution mode.
 
 %modern
 %no-child-restrictions

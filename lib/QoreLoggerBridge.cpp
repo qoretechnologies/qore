@@ -116,21 +116,40 @@ void QoreLoggerBridge::logArgs(int level, const QoreStringNode* msg,
 }
 
 bool QoreLoggerBridge::isEnabledFor(int level) const {
+    ExceptionSink xsink;
+    bool rv = isEnabledFor(level, &xsink);
+    xsink.clear();
+    return rv;
+}
+
+bool QoreLoggerBridge::isEnabledFor(int level, ExceptionSink* xsink) const {
     if (!isEnabledForMethod) {
         return false;
     }
+    // a logger whose Program is being destroyed logs nothing more; this is not an error
     LoggerProgramContextHelper pch(pgm);
     if (!pch) {
         return false;
     }
-    ExceptionSink xsink;
-    ReferenceHolder<QoreListNode> call_args(new QoreListNode(autoTypeInfo), &xsink);
-    call_args->push(level, &xsink);
-    ValueHolder rv(logger_obj->evalMethod(*isEnabledForMethod, *call_args, &xsink), &xsink);
-    if (xsink) {
+    ReferenceHolder<QoreListNode> call_args(new QoreListNode(autoTypeInfo), xsink);
+    call_args->push(level, xsink);
+    ValueHolder rv(logger_obj->evalMethod(*isEnabledForMethod, *call_args, xsink), xsink);
+    if (*xsink) {
         return false;
     }
     return rv->getAsBool();
+}
+
+void QoreLoggerBridge::derefLogged(bool report) {
+    ExceptionSink xsink;
+    deref(&xsink);
+    if (xsink) {
+        if (report) {
+            xsink.handleExceptions();
+        } else {
+            xsink.clear();
+        }
+    }
 }
 
 void QoreLoggerBridge::deref(ExceptionSink* xsink) {

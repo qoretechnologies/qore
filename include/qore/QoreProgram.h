@@ -1002,7 +1002,10 @@ public:
     */
     DLLEXPORT int issueModuleCmd(const char* module, const char* cmd, ExceptionSink* xsink);
 
-    DLLLOCAL QoreProgram(QoreProgram* pgm, const QoreParseOptions& po, bool ec = false, const char* ecn = nullptr);
+    //! Creates a child Program; \a parent_po are the parent's options as the caller read them for its checks, which the
+    //! child inherits (issue #6176); if nullptr, the constructor reads them
+    DLLLOCAL QoreProgram(QoreProgram* pgm, const QoreParseOptions& po, bool ec = false, const char* ecn = nullptr,
+            const QoreParseOptions* parent_po = nullptr);
 
     DLLLOCAL LocalVar *createLocalVar(const char* name, const QoreTypeInfo *typeInfo);
 

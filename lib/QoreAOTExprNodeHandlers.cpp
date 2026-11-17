@@ -876,7 +876,10 @@ static QoreValue read_node_EN_SQUARE_BRKT(AOTExprNodeReadCtx& ctx) {
     if (num_children >= 2) {
         right = ctx.recurse(ctx);
     }
-    return QoreValue(new QoreSquareBracketsOperatorNode(&loc_builtin, left, right));
+    // compiled code is %modern: its operator has negative offsets (qore#6294)
+    QoreSquareBracketsOperatorNode* node = new QoreSquareBracketsOperatorNode(&loc_builtin, left, right);
+    node->setCompiledCodeOptions();
+    return QoreValue(node);
 }
 
 // ============================================================================
@@ -1899,7 +1902,7 @@ static QoreValue read_node_EN_STATIC_METH_REF(AOTExprNodeReadCtx& ctx) {
             m = qore_aot_find_loading_method(qc, method_name.c_str(), true);
         }
         if (m) {
-            return QoreValue(new LocalStaticMethodCallReferenceNode(&loc_builtin, m));
+            return QoreValue(new LocalStaticMethodCallReferenceNode(&loc_builtin, m, qc));
         }
     }
     printd(0, "AOT EXPR_TREE: cannot resolve static method ref '%s::%s'\n",

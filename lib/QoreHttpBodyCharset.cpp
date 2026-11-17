@@ -536,3 +536,90 @@ const QoreEncoding* qore_get_http_header_charset(const char* content_type, const
             return assumed ? assumed : QCS_ISO_8859_1;
     }
 }
+
+QoreHttpContentTypeInfo qore_get_http_content_type_info(const char* content_type, const QoreEncoding* assumed) {
+    assert(content_type);
+    assert(assumed);
+    QoreHttpContentTypeInfo rv;
+    // the encoding of the body follows the rules shared by all HTTP clients and servers, as far as they can be
+    // applied before the body is read; see qore_get_http_header_charset()
+    const QoreEncoding* hdr_enc = qore_get_http_header_charset(content_type, assumed);
+    qore_http_media_type_param charset;
+    if (qore_find_http_media_type_param(content_type, "charset", charset) && !charset.value.empty()) {
+        rv.enc = hdr_enc ? hdr_enc : QEM.findCreate(charset.value.c_str());
+        rv.charset = charset.value;
+        // the content type without the charset parameter
+        QoreString ct(content_type, charset.begin, QCS_DEFAULT);
+        ct.trim_trailing();
+        ct.concat(content_type + charset.end);
+        ct.trim();
+        if (!ct.empty()) {
+            rv.body_content_type.assign(ct.c_str(), ct.size());
+            rv.has_body_content_type = true;
+        }
+    } else {
+        // a type that is not text is read in the assumed encoding, as before
+        rv.enc = hdr_enc ? hdr_enc : assumed;
+        rv.charset = rv.enc->getCode();
+        rv.body_content_type = content_type;
+        rv.has_body_content_type = true;
+    }
+    return rv;
+}
+
+std::string qore_get_http_accept_charset(const char* t) {
+    assert(t);
+    // see if we have "*" or utf8 or utf-8, in which case set it
+    // otherwise set the first charset in the list
+    const char* a = t;
+    const char* div = nullptr;
+    bool utf8 = false;
+    bool ok = true;
+    while (*a) {
+        if (ok) {
+            if (*a == '*') {
+                utf8 = true;
+                break;
+            }
+            ok = false;
+            if (*a == 'u' || *a == 'U') {
+                ++a;
+                if (*a == 't' || *a == 'T') {
+                    ++a;
+                    if (*a == 'f' || *a == 'F') {
+                        ++a;
+                        if (*a == '-') {
+                            ++a;
+                        }
+                        if (*a == '8') {
+                            utf8 = true;
+                            break;
+                        }
+                    }
+                }
+                continue;
+            }
+        } else if (*a == ',') {
+            if (!div) {
+                div = a;
+            }
+            ok = true;
+        } else if (*a == ';') {
+            if (!div) {
+                div = a;
+            }
+        }
+        ++a;
+    }
+    if (utf8) {
+        return "utf8";
+    }
+    QoreString ac;
+    if (div) {
+        ac.concat(t, div - t);
+    } else {
+        ac.concat(t);
+    }
+    ac.trim();
+    return std::string(ac.c_str(), ac.size());
+}

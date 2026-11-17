@@ -104,7 +104,7 @@ int QoreDivisionOperatorNode::parseInitIntern(const char* name, QoreValue& val, 
             return **xsink ? -1 : 0;
         }
         // check for division by zero here
-        if (!right.getAsFloat()) {
+        if (qore_constant_divisor_is_zero(right)) {
             parse_error(*loc, "division by zero found in parse expression");
             return -1;
         }

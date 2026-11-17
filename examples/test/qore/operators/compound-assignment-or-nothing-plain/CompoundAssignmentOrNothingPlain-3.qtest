@@ -16,7 +16,7 @@
 
 %exec-class CompoundAssignmentOrNothingPlainPart3
 
-#! runs part 3 of 4 of the cases of CompoundAssignmentOrNothingPlainBase: the tiered mode
+#! runs part 3 of 12 of CompoundAssignmentOrNothingPlainBase: the qcc executable of the second half of the functions
 class CompoundAssignmentOrNothingPlainPart3 inherits CompoundAssignmentOrNothingPlainBase {
     constructor() : CompoundAssignmentOrNothingPlainBase("CompoundAssignmentOrNothingPlainPart3", 3) {
     }

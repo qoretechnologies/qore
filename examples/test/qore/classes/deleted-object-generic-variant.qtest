@@ -29,7 +29,8 @@
     type parameter and four threads.  Also a method type parameter bounded by the class's type parameter (qore#6155):
     m<X: T>() is checked with the receiver's type arguments, in the class (m<T>(a), and a static method called from a
     method of the class) and from outside it, within and outside the bound, with a default type that names T, and with
-    a receiver that names the calling code's type parameter (Bounded<U>::sm(a)), which does not satisfy the bound.
+    a receiver that names the calling code's type parameter (Bounded<U>::sm(a)), which is the calling code's type
+    argument (qore#6308) and satisfies the bound.
     The probes run in each execution mode in a child process, with tiered execution at the IR
     tier and promoted to native code, and as qcc-compiled executables (-O0, -O3).
 */
@@ -42,7 +43,7 @@ class DeletedObjectGenericVariantTest inherits QUnit::Test {
             + "|\"plain-auto\"|\"plain-auto\"|\"X\"|\"T\"|\"child-auto\"";
         const Live = Common + "|PARSE-TYPE-ERROR|PARSE-TYPE-ERROR|PARSE-TYPE-ERROR|\"X\"|\"plain\"|\"plain-T\""
             "|\"X\"|\"X\"|\"plain\"|1|1|RUNTIME-OVERLOAD-ERROR|\"plain\"|\"splain\"|\"sX\"|\"s\""
-            "|\"splain\"|RUNTIME-OVERLOAD-ERROR|\"splain\"";
+            "|\"sX\"|\"oX\"|\"sX\"";
         #! the calls through shared call sites: live and deleted objects in turn, other receivers, type arguments of
         #! the calling generic function, and four threads
         const Deleted = Common + "|base-X,base-X,base-X,base-X,base-X,base-X|base-X,override-auto,base-X,"

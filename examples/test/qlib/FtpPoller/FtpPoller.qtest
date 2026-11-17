@@ -41,6 +41,23 @@ class MyFtpPoller inherits FtpPoller {
     }
 }
 
+#! a poller created with the hash-only constructor
+class MyHostFtpPoller inherits FtpPoller {
+    public {
+        list<hash<FtpPollerFileEventInfo>> files;
+    }
+
+    constructor(hash<auto> opts) : FtpPoller(opts) {
+    }
+
+    singleFileEvent(hash<FtpPollerFileEventInfo> fih) {
+        files += fih;
+    }
+
+    postSingleFileEvent(hash<FtpPollerFileEventInfo> fih) {
+    }
+}
+
 class FtpPollerTest inherits QUnit::Test {
     public {
     }
@@ -59,6 +76,7 @@ class FtpPollerTest inherits QUnit::Test {
         addTestCase("error delay option test", \errorDelayOptionTest());
         addTestCase("error logging test", \errorLoggingTest());
         addTestCase("data provider test", \dataProviderTest());
+        addTestCase("regex mask test", \regexMaskTest());
 
         # Return for compatibility with test harness that checks return value
         set_return_value(main());
@@ -113,6 +131,64 @@ class FtpPollerTest inherits QUnit::Test {
             on_error printf("file: %y file_paths: %y\n", file - "data", keys file_paths);
             assertTrue(file.name != NOTHING);
             assertTrue(file_paths.hasKey(file.filepath));
+        }
+    }
+
+    # issue #3377: an empty "regex_mask" matches every file with both constructors
+    private regexMaskTest() {
+        int port = getPort();
+
+        # PORT only supports IPv4, so we can't use "localhost", which may resolve
+        # to an IPv6 address
+        FtpServer serv(port, m_options.verbose - 1, "127.0.0.1");
+        on_exit serv.shutdown();
+
+        TmpDir tmp_dir();
+        string dir = tmp_dir.path;
+        serv.setPwd(dir);
+
+        port = serv.getPort();
+
+        TmpFile txt1("regex_mask_test_", ".txt", dir);
+        TmpFile txt2("regex_mask_test_", ".txt", dir);
+        TmpFile dat("regex_mask_test_", ".dat", dir);
+        list<string> all = sort(map basename($1.path), (txt1, txt2, dat));
+        list<string> txt = sort(map basename($1.path), (txt1, txt2));
+
+        code get_names = list<string> sub (list<hash<FtpPollerFileEventInfo>> files) {
+            return sort(map $1.name, files);
+        };
+
+        # runs one poll with the FtpClient constructor and returns the names of the files found
+        code poll_client = list<string> sub (hash<auto> opts) {
+            FtpClient ftp_client(url: "ftp://user:pass@127.0.0.1:" + port);
+            MyFtpPoller poller(ftp_client, {"path": dir} + opts);
+            assertTrue(poller.runOnce());
+            return get_names(poller.files);
+        };
+
+        # runs one poll with the hash-only constructor and returns the names of the files found
+        code poll_host = list<string> sub (hash<auto> opts) {
+            MyHostFtpPoller poller({
+                "host": "127.0.0.1",
+                "port": port,
+                "user": "user",
+                "pass": "pass",
+                "path": dir,
+            } + opts);
+            assertTrue(poller.runOnce());
+            return get_names(poller.files);
+        };
+
+        foreach code poll in ((poll_client, poll_host)) {
+            # an empty regex mask matches every file, also when it overrides a glob mask
+            assertEq(all, poll({"regex_mask": ""}));
+            assertEq(all, poll({"regex_mask": "", "mask": "*.dat"}));
+            # a regex mask overrides the glob mask
+            assertEq(txt, poll({"regex_mask": "\\.txt$", "mask": "*.dat"}));
+            # without a regex mask, the glob mask is used
+            assertEq((basename(dat.path),), poll({"regex_mask": NOTHING, "mask": "*.dat"}));
+            assertEq(all, poll({}));
         }
     }
 

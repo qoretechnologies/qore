@@ -264,7 +264,7 @@ public class AnthropicFileUploadDataProvider inherits AnthropicDataProviderCommo
             ? file.content
             : binary(parse_base64_string(file.content));
 
-        string mpboundary = replace(make_base64_string(string(now_us())), "=", "");
+        string mpboundary = MultiPartMessage::getBoundary();
         # build multipart body
         binary msg = binary();
         msg += binary(sprintf("--%s\r\nContent-Disposition: form-data; name=\"file\"; "

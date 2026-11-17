@@ -1,0 +1,124 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own --exec-mode and in qcc executables
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../../TestInterpreter.qm
+
+%exec-class EntryCppExceptionTest
+
+#! A C++ exception from a step of an entry into another Program in a call made by Qore code is raised to that code as
+#! a Qore exception, and does not end the process (issue #6255)
+/** The C++ exception (std::bad_alloc) is made by dbg_fail_next_program_entry() (debug builds only) at the step after
+    the thread entry handler (THREAD-ENTRY-HANDLER-ERROR) or at the switch of the thread's Program before it
+    (PROGRAM-ENTRY-ERROR).  The calls run in child processes, which ended with std::terminate() before the fix, in
+    each execution mode and compiled with qcc.
+*/
+class EntryCppExceptionTest inherits QUnit::Test {
+    public {
+        #! the sites of dbg_fail_next_program_entry() (qore_dbg_program_entry_site_e) and the exception each raises
+        const Sites = {
+            "6": "THREAD-ENTRY-HANDLER-ERROR",
+            "0": "PROGRAM-ENTRY-ERROR",
+        };
+
+        #! the calls into the other Program and the value each returns
+        const Calls = {
+            "callFunction": 1,
+            "closure": 3,
+            "method": 2,
+        };
+
+        const Modes = ("ast", "ir", "jit", "tiered");
+    }
+
+    private {
+        string child = get_script_dir() + "/entry-cpp-exception-child.q";
+        FsUtil::TmpDir tmp("entry-cpp-exception-");
+    }
+
+    constructor() : Test("EntryCppExceptionTest", "1.0") {
+        addTestCase("calls from Qore code into another Program", \callTest());
+        addTestCase("an async I/O task that calls into another Program", \taskTest());
+        addTestCase("calls from compiled code into another Program", \compiledTest());
+        set_return_value(main());
+    }
+
+    callTest() {
+        checkDebug();
+        foreach string mode in (Modes) {
+            foreach hash<auto> call in (Calls.pairIterator()) {
+                foreach hash<auto> site in (Sites.pairIterator()) {
+                    checkCall(interpreter(mode), call.key, site.key, site.value, call.value,
+                        sprintf("%s, %s, site %s", mode, call.key, site.key));
+                }
+            }
+        }
+    }
+
+    taskTest() {
+        checkDebug();
+        # the step after the entry handler only: the Program of the task's closure has no entry handler, so the entry
+        # into the Program of the closure that it calls is the first that reaches the step (an earlier step would
+        # fail the worker's entry into the task's own Program, before the task runs)
+        foreach string mode in (Modes) {
+            checkCall(interpreter(mode), "submitTask", "6", Sites."6", 3, mode + ", submitTask, site 6");
+        }
+    }
+
+    compiledTest() {
+        checkDebug();
+        *string qcc = TestInterpreter::qcc_compiler();
+        if (!qcc) {
+            testSkip("no qcc");
+        }
+        foreach int opt in ((0, 3)) {
+            string exe = sprintf("%s/child-O%d", tmp.path, opt);
+            hash<auto> c = run(sprintf("%s -O%d -o %s %s", quote(qcc), opt, quote(exe), quote(child)), True);
+            assertEq(0, c.rc, sprintf("qcc -O%d: %s", opt, c.out));
+            if (c.rc) {
+                continue;
+            }
+            foreach hash<auto> call in (Calls.pairIterator()) {
+                foreach hash<auto> site in (Sites.pairIterator()) {
+                    checkCall(quote(exe), call.key, site.key, site.value, call.value,
+                        sprintf("qcc -O%d, %s, site %s", opt, call.key, site.key));
+                }
+            }
+        }
+    }
+
+    private checkCall(string cmd, string call, string site, string err, int value, string label) {
+        hash<auto> r = run(sprintf("%s %s %s", cmd, call, site));
+        assertEq(0, r.rc, sprintf("%s: the process continues: %s", label, r.out));
+        assertEq(sprintf("caught %s\nagain: %d\n", err, value), r.out, label);
+    }
+
+    private string interpreter(string mode) {
+        string opts = mode == "tiered" ? "--exec-mode=tiered --jit-ir-threshold=3 --jit-jit-threshold=10"
+            : "--exec-mode=" + mode;
+        return sprintf("%s %s %s", quote(TestInterpreter::qore_interpreter()), opts, quote(child));
+    }
+
+    private static string quote(string s) {
+        return "'" + replace(s, "'", "'\\''") + "'";
+    }
+
+    #! runs the command with no core dump: a child that ends with std::terminate() would dump core
+    private hash<auto> run(string cmd, *bool with_stderr) {
+        int rc;
+        string out = backquote(sprintf("ulimit -c 0; %s%s", cmd, with_stderr ? " 2>&1" : " 2>/dev/null"), \rc);
+        return {"rc": rc, "out": out};
+    }
+
+    private checkDebug() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("dbg_fail_next_program_entry() is only in debug builds of the library");
+        }
+    }
+}

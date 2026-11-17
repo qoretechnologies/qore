@@ -202,3 +202,8 @@ int QoreCondition::waitWithInterrupt(pthread_mutex_t* m, int64 timeout_ms, Excep
     // see qore_cond_wait_cancellable() and "Condition waits" in design/cooperative-cancellation.md
     return qore_cond_wait_cancellable(*this, m, timeout_ms, xsink, "condition wait");
 }
+
+int QoreCondition::waitWithInterrupt(QoreThreadLock& l, ExceptionSink* xsink, const char* operation,
+        int (*before_block)(void*), void* arg) {
+    return qore_cond_wait_cancellable(*this, &l.ptm_lock, -1, xsink, operation, before_block, arg);
+}

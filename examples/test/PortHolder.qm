@@ -118,4 +118,51 @@ public namespace PortHolder {
         }
         return held;
     }
+
+    #! returns the addresses on which a TCP socket listens on the given port, as the system reports them
+    /** A test that holds a port with connections only (no listener) uses this to tell a bind that fails because
+        another program bound the port by number while the test held it, which no socket can prevent: a bind with
+        \c SO_REUSEADDR of a port that only connections hold succeeds, as the bind of a server restarted on its port
+        does, and the listener of such a program then holds the port
+
+        @param port the port
+
+        @return the local addresses of the listening TCP sockets on the port (hexadecimal on Linux, as
+        \c /proc/net/tcp and \c /proc/net/tcp6 give them; as \c lsof gives them on macOS); @ref nothing if no
+        socket listens on the port or the system's sockets cannot be read
+    */
+    public *list<string> sub tcp_listeners(int port) {
+        list<string> rv();
+        try {
+            if (PlatformOS == "Linux") {
+                foreach string file in (("/proc/net/tcp", "/proc/net/tcp6")) {
+                    if (!is_readable(file)) {
+                        continue;
+                    }
+                    # "sl local_address rem_address st ...": the state of a listening socket is 0A
+                    foreach string line in (ReadOnlyFile::readTextFile(file).split("\n")) {
+                        *list<auto> f =
+                            (line =~ x/^\s*[0-9]+:\s+([0-9A-F]+):([0-9A-F]{4})\s+[0-9A-F]+:[0-9A-F]{4}\s+0A\s/);
+                        if (f && f[1].toInt(16) == port) {
+                            rv += f[0];
+                        }
+                    }
+                }
+            } else if (PlatformOS == "Darwin") {
+                # lsof gives the name of each listening socket in a line of its own: "n127.0.0.1:50123",
+                # "n[::1]:50123", "n*:50123" (netstat, run by a qore process, listed no Internet sockets on macOS 27).
+                # It reports no socket of another user's process unless it runs as root
+                string cmd = sprintf("/usr/sbin/lsof -nP -a -iTCP:%d -sTCP:LISTEN -Fn 2>/dev/null", port);
+                foreach string line in (backquote(cmd).split("\n")) {
+                    *list<auto> f = (line =~ x/^n(.*):([0-9]+)$/);
+                    if (f && f[1].toInt() == port) {
+                        rv += f[0];
+                    }
+                }
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            # the system's sockets cannot be read
+        }
+        return rv ?: NOTHING;
+    }
 }

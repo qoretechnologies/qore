@@ -33,6 +33,7 @@
 #include "qore/intern/ql_object.h"
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/QoreClassIntern.h"
+#include "qore/intern/CallReferenceNode.h"
 
 // q_get_runtime_call_program() is declared DLLLOCAL in qore_program_private.h and defined
 // once in ql_misc.cpp; the calls below resolve to that single definition.
@@ -83,9 +84,15 @@ static QoreValue q_call_static_method_args_impl(LexicalSemanticPolicy policy, Qo
             cls_path->c_str(), method_name->c_str());
         return QoreValue();
     }
+    // the receiver of a static method of a generic class called through a class that inherits a specialization of it
+    // is the specialization, otherwise that of the caller's code if it binds the type parameters of the method's
+    // class, or else the class's type arguments are inferred from the types of the arguments (qore#6285)
+    const QoreTypeInfo* receiver_type_info = LocalStaticMethodCallReferenceNode::getCallReceiverTypeInfo(*m,
+        LocalStaticMethodCallReferenceNode::getRuntimeReceiverTypeInfo(*m, cls, runtime_get_caller_class()), args);
     ObjectSubstitutionHelper osh(nullptr, class_ctx);
     RuntimeConfig& rc = rc_get_current_ref();
-    return qore_method_private::evalWithPolicy<Lexical>(policy, *m, xsink, rc, nullptr, args);
+    return qore_method_private::evalWithPolicy<Lexical>(policy, *m, xsink, rc, nullptr, args, nullptr, nullptr,
+        receiver_type_info);
 }
 
 QoreValue q_call_static_method_args(QoreProgram* pgm, const QoreStringNode* class_name, const QoreStringNode* method, const QoreListNode* args, ExceptionSink* xsink) {

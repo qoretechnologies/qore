@@ -49,10 +49,10 @@ QoreValue QoreModuloEqualsOperatorNode::evalImpl(bool& needs_deref, ExceptionSin
     if (!v)
         return QoreValue();
 
-    // do not try to execute %= 0 or a runtime exception will occur
+    // a divisor of zero raises DIVISION-BY-ZERO, as for % (qore#1034)
     if (!val) {
-        v.assign(0ll, "<%= operator>");
-        return 0ll;
+        qore_raise_modulo_by_zero(xsink);
+        return QoreValue();
     }
 
     return v.modulaEqualsBigInt(val, "<%= operator>");

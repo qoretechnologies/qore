@@ -537,6 +537,12 @@ if [ -z "$QORE" ]; then
     done
 fi
 
+if [ -n "$QORE_BINARY" ] && [ -z "$LIBQORE" ]; then
+    # a QORE_BINARY that is a wrapper script (or an installed qore) has no libqore next to it
+    echo "QORE_BINARY=$QORE_BINARY has no libqore next to it; set LIBQORE_BINARY=<build>/libqore.so when" \
+        "QORE_BINARY is a wrapper. Exiting."
+    exit 1
+fi
 if [ -z "$QORE" ] || [ -z "$LIBQORE" ]; then
     echo "Qore is not built. Exiting."
     exit 1

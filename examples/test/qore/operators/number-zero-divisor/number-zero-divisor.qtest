@@ -1,0 +1,129 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - JIT native code and qcc AOT code generation of number division and divide-equals
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires ../../../TestInterpreter.qm
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class NumberZeroDivisorTest
+
+#! A number divisor is zero only when it is zero, not when it converts to the float 0.0 (qore#6387)
+/** The divide-equals operator on a number and the parse-time check of a constant divisor of the divide operator
+    tested the divisor for zero through its float, so a divisor that is not zero but is below the smallest double
+    (\c 1e-400n, the string \c "1e-400" for a number dividend) raised DIVISION-BY-ZERO with \c /= and was a parse error
+    as a constant \c / divisor, while \c / with the same divisor in a variable divided.  The worker divides with \c /
+    and \c /= on typed, untyped, soft, hash member and object member lvalues by such divisors and by divisors that are
+    zero, in every execution mode and as qcc executables (-O0, -O3); constant divisors are checked when they are
+    parsed.
+*/
+class NumberZeroDivisorTest inherits QUnit::Test {
+    public {
+        #! the results that the worker prints, in order
+        const Results = (
+            "/ typed tiny: number 1e+400",
+            "/ untyped tiny: number 1e+400",
+            "/= typed tiny: number 1e+400",
+            "/= untyped tiny: number 1e+400",
+            "/= softnumber tiny: number 1e+400",
+            "/= member tiny: number 1e+400",
+            "/= constant tiny: number 1e+400",
+            "/= object member tiny: number 1e+400",
+            "/= untyped int tiny: number 1e+400",
+            "/= untyped number string tiny: number 1e+400",
+            "/= typed zero: DIVISION-BY-ZERO",
+            "/= typed -0: DIVISION-BY-ZERO",
+            "/= untyped float zero: DIVISION-BY-ZERO",
+            "/= untyped int zero: DIVISION-BY-ZERO",
+            "/= untyped string zero: DIVISION-BY-ZERO",
+            "/= untyped NOTHING: DIVISION-BY-ZERO",
+            "/= untyped NaN: .nan",
+            "/= member zero: DIVISION-BY-ZERO",
+            "/= object member zero: DIVISION-BY-ZERO",
+            "/ typed zero: DIVISION-BY-ZERO",
+        );
+
+        #! constant divisors of the divide operator: the code and the start of what it prints, or the parse error
+        const ConstantCases = (
+            ("number x = 1n; printf(\"%s\\n\", (x / 1e-400n).toString(NF_Scientific));", "1e+400\n"),
+            ("number x = 1n; printf(\"%s\\n\", (x / \"1e-400\").toString(NF_Scientific));", "1e+400\n"),
+            ("number x = 1n; printf(\"%y\\n\", x / 0n);", "PARSE-EXCEPTION"),
+            ("number x = 1n; printf(\"%y\\n\", x / -0.0n);", "PARSE-EXCEPTION"),
+            ("number x = 1n; printf(\"%y\\n\", x / 0);", "PARSE-EXCEPTION"),
+            ("number x = 1n; printf(\"%y\\n\", x / \"0\");", "PARSE-EXCEPTION"),
+            ("float x = 1.0; printf(\"%y\\n\", x / 0.0);", "PARSE-EXCEPTION"),
+            # a float dividend divides by the float of the string, which is 0.0
+            ("float x = 1.0; printf(\"%y\\n\", x / \"1e-400\");", "DIVISION-BY-ZERO"),
+        );
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string libqore_dir;
+        string worker;
+        string expected;
+    }
+
+    constructor() : QUnit::Test("NumberZeroDivisor", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = TestInterpreter::qcc_compiler() ?? "qcc";
+        worker = get_script_dir() + DirSep + "number-zero-divisor-worker.q";
+        for (int i = 0; i < 2; ++i) {
+            expected += sprintf("%d: %s\n", i, Results.join("; "));
+        }
+
+        addTestCase("each execution mode", \testExecModes());
+        addTestCase("compiled executables", \testCompiledExecutables());
+        addTestCase("constant divisors", \testConstants());
+
+        set_return_value(main());
+    }
+
+    testExecModes() {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            assertEq(expected, ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s %s --exec-mode=%s %s", libqore_dir,
+                qore_bin, mode, worker)), mode);
+        }
+        assertEq(expected, ExecModeHarness::run_ir_tier(sprintf("LD_LIBRARY_PATH=%s %s --exec-mode=tiered %s",
+            libqore_dir, qore_bin, worker)), "tiered, IR tier");
+    }
+
+    testCompiledExecutables() {
+        TmpDir tmp("qore-number-zero-divisor-");
+        foreach string opt in (("-O0", "-O3")) {
+            string exe = tmp.path + DirSep + "division" + opt;
+            string out = backquote(sprintf("QORE_LIBDIR=%s %s %s -o %s %s 2>&1", libqore_dir, qcc_bin, opt, exe,
+                worker));
+            assertTrue(is_file(exe), sprintf("qcc %s compiled the executable: %s", opt, out));
+            assertEq(expected, ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s %s", libqore_dir, exe)),
+                "qcc " + opt);
+        }
+    }
+
+    testConstants() {
+        TmpDir tmp("qore-number-zero-divisor-");
+        foreach list<string> c in (ConstantCases) {
+            string file = tmp.path + DirSep + sprintf("c%d.q", $#);
+            File f();
+            f.open2(file, O_CREAT | O_WRONLY | O_TRUNC);
+            f.write("%modern\n" + c[0] + "\n");
+            f.close();
+            string out = backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s %s 2>&1", libqore_dir,
+                libqore_dir, qore_bin, file));
+            if (c[1] =~ /^[A-Z]/) {
+                assertRegex(c[1], out, c[0]);
+            } else {
+                assertEq(c[1], out, c[0]);
+            }
+        }
+    }
+}

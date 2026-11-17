@@ -53,7 +53,7 @@ QoreValue QoreDivideEqualsOperatorNode::evalImpl(bool& needs_deref, ExceptionSin
     // is either side a number?
     if (res->getType() == NT_NUMBER || v.getType() == NT_NUMBER) {
         // check for divide by zero
-        if (res->getAsFloat() == 0.0) {
+        if (qore_number_divisor_is_zero(*res)) {
             xsink->raiseException("DIVISION-BY-ZERO", "division by zero in arbitrary-precision numeric expression");
             return QoreValue();
         }

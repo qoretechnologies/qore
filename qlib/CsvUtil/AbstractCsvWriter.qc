@@ -43,6 +43,8 @@ public namespace CsvUtil {
         |\c "info_log"|@ref code_type "code"|a call reference / closure for informational logging when performing bulk generation with write(Qore::SQL::SQLStatement); must take a single string argument
         |\c "optimal_quotes"|\c bool_type "bool"|set to @ref False "False" to disable optimal quoting; when optimal quoting is disabled, all fields are quoted regardless of type or content, when it is enabled, then fields are quoted only if they require quoting: if they contain the quote character, the separator, the end of line, a carriage return or a line feed, or start or end with white space, which a reader strips from unquoted fields; the default is @ref True "True"
         |\c "quote"|@ref string_type "string"|the field quote character (default: \c '\"')
+        |\c "quote_null"|\c bool_type "bool"|set to @ref True "True" to write a field without a value (@ref nothing or \c NULL, such as a \c NULL column of a @ref Qore::SQL::SQLStatement "SQLStatement") as an empty quoted field (\c '""'), or to @ref False "False" to write it as an empty field without quotes, so that it can be told apart from an empty string written with quotes (see @ref csvwriter_quoting); if not given, a field with @ref nothing is written without quotes, unless \c "optimal_quotes" is @ref False "False", and a \c NULL value as before (@since %CsvUtil 1.12)
+        |\c "quote_types"|@ref list_type "list" of @ref string_type "strings"|the types of the fields that are always quoted: \c "string", \c "int", \c "float", \c "number", \c "date", \c "bool", \c "binary", \c "hash" or \c "list"; the type of a field is the type given in its field description, if it is not \c "string" or \c "*string" (the \c "*" prefix is ignored), otherwise the type of the value; the other fields are quoted only if they require quoting; a field without a value is written as given by \c "quote_null"; ignored if \c "optimal_quotes" is @ref False "False" (see @ref csvwriter_quoting) (@since %CsvUtil 1.12)
         |\c "quote_escape"|@ref string_type "string"|the escape character(s) written before a \c "quote" character in a quoted field; if not given or an empty string (the default), the quote character itself, so a quote is escaped by doubling it, as in RFC 4180 CSV data; before %CsvUtil 1.12 the default was a backslash (\c '\\'), which a reader reads with its \c "quote_escape" option set to \c '\\'
         |\c "separator"|@ref string_type "string"|the string separating the fields in the file (default: \c ",")
         |\c "timezone"|@ref string_type "string"|the time zone region (ex: \c "Europe/Prague") whose wall-clock time dates are written in; a field's \c "timezone" attribute overrides it; if not given, dates are written in their own time zone, and dates written with a \c "mask" in the current time zone (@since %CsvUtil 1.12)
@@ -61,6 +63,34 @@ public namespace CsvUtil {
         - \c "optimal-quotes"
         - \c "verify-columns"
         - \c "write-headers"
+
+        @section csvwriter_quoting AbstractCsvWriter Field Quoting
+        By default (\c "optimal_quotes" is @ref True "True"), a field is quoted only if it requires quoting: if it
+        contains the quote character, the separator, the end of line, a carriage return or a line feed, or starts or
+        ends with white space; with \c "optimal_quotes" set to @ref False "False", every field is quoted.
+
+        Fields can also be quoted by their type, for readers or loaders that take a quoted field as text and an
+        unquoted field as another type, or an empty unquoted field as \c NULL (for example PostgreSQL's \c COPY in
+        CSV format):
+        - the \c "quote_types" option gives the types of the fields that are always quoted (ex: \c ("string") to
+          quote strings, but not numbers or dates); a field of another type is quoted only if it requires quoting
+        - the \c "quote" attribute of a field description (@ref True "True" or @ref False "False") overrides
+          \c "quote_types" for the field: @ref True "True" to quote it always, @ref False "False" to quote it only if
+          it requires quoting
+        - the \c "quote_null" option sets how a field without a value (@ref nothing or \c NULL) is written:
+          @ref False "False" as an empty field without quotes, whatever its type, and @ref True "True" as an empty
+          quoted field (\c '""'); a field with an empty string is quoted if its type is quoted, so that it can be
+          told apart from a field without a value
+
+        For example, with \c "quote_types" set to \c ("string") and \c "quote_null" set to @ref False "False", the
+        values \c "a", \c "", @ref nothing, \c NULL, \c 1 and \c 1.5 are written as:
+        @code
+"a","",,,1,1.5
+        @endcode
+
+        @note the CSV readers of this module read an empty quoted field and an empty unquoted field the same way: as an
+        empty string for a \c "string" field and as @ref nothing for a \c "*string" field, so that the difference is
+        meaningful only for other readers
      */
     public class AbstractCsvWriter inherits private CsvHelper {
         public {
@@ -96,6 +126,8 @@ public namespace CsvUtil {
                 "optimal-quotes": C_OPT1|C_OPT2,
                 "quote": C_OPT1|C_OPT2,
                 "quote_escape": C_OPT1|C_OPT2,
+                "quote_null": C_OPT1|C_OPT2,
+                "quote_types": C_OPT1|C_OPT2,
                 "separator": C_OPT1|C_OPT2,
                 "timezone": C_OPT1|C_OPT2,
                 "verify_columns": C_OPT1|C_OPT2,
@@ -140,6 +172,16 @@ public namespace CsvUtil {
             #! stores the optimal quotes option
             bool optimal_quotes = True;
 
+            #! the field types that are always quoted (the \c "quote_types" option), if any
+            /** @since %CsvUtil 1.12
+            */
+            *hash<string, bool> quote_types;
+
+            #! how a field without a value is written (the \c "quote_null" option), if set
+            /** @since %CsvUtil 1.12
+            */
+            *bool quote_null;
+
             #! a closure/call reference for informational logging when using write(SQLStatement)
             *code<nothing(string, ...)> info_log;
 
@@ -151,6 +193,41 @@ public namespace CsvUtil {
 
             #! mapping output field by index
             hash m_out_by_idx;
+        }
+
+        private {
+            #! the field types that the \c "quote_types" option takes
+            const QuoteTypes = {
+                "string": True,
+                "int": True,
+                "float": True,
+                "number": True,
+                "date": True,
+                "bool": True,
+                "binary": True,
+                "hash": True,
+                "list": True,
+            };
+
+            #! the names of the types of values for the \c "quote_types" option, if they differ from their type names
+            const QuoteValueTypes = {
+                "integer": "int",
+                "boolean": "bool",
+            };
+
+            #! True if fields are quoted by type or have the \c "quote" attribute, or if \c "quote_null" is set
+            bool quote_by_type = False;
+
+            #! how each field of the line being written is quoted, if fields are quoted by type (see QuoteAlways,
+            #! QuoteIfNeeded and QuoteNull)
+            *list<int> line_quote;
+
+            #! a field that is always quoted
+            const QuoteAlways = 1;
+            #! a field that is quoted if it requires quoting
+            const QuoteIfNeeded = 0;
+            #! a field without a value
+            const QuoteNull = -1;
         }
 
         #! Creates the AbstractCsvWriter in single-type mode
@@ -301,6 +378,26 @@ public namespace CsvUtil {
                         optimal_quotes = parse_boolean(i.value);
                         break;
                     }
+                    case "quote_null": {
+                        quote_null = parse_boolean(i.value);
+                        break;
+                    }
+                    case "quote_types": {
+                        if (i.value.typeCode() != NT_LIST) {
+                            throw errname, sprintf("expecting a list of type names for option %y; got %y (type %s) "
+                                "instead", i.key, i.value, i.value.type());
+                        }
+                        hash<string, bool> h();
+                        foreach auto t in (i.value) {
+                            if (t.typeCode() != NT_STRING || !QuoteTypes{t}) {
+                                throw errname, sprintf("unknown type %y in option %y (known types: %y)", t, i.key,
+                                    keys QuoteTypes);
+                            }
+                            h{t} = True;
+                        }
+                        quote_types = h;
+                        break;
+                    }
                     case "info_log": {
                         if (!i.value.callp())
                             throw errname, sprintf("expecting a callable value to option %y; got %y (type %s) instead", i.key, i.value, i.value.type());
@@ -332,8 +429,21 @@ public namespace CsvUtil {
             escapedQuote = (m_quoteEscapeChar.val() ? m_quoteEscapeChar : quote) + quote;
         }
 
+        #! Returns True if a field of any record type has the \c "quote" attribute
+        private bool hasFieldQuote() {
+            foreach hash<auto> t in (m_specs.pairIterator()) {
+                foreach hash<auto> f in (t.value.pairIterator()) {
+                    if (exists f.value.quote) {
+                        return True;
+                    }
+                }
+            }
+            return False;
+        }
+
         #! Process specification and set internal variable for mapping
         private processSpec() {
+            quote_by_type = quote_types.val() || exists quote_null || hasFieldQuote();
             if (write_headers && isMultiType()) {
                 throw errname, sprintf("\"write_headers\" is True but \"headers\" defined as multi-type (%y)", m_specs);
             }
@@ -400,6 +510,8 @@ public namespace CsvUtil {
                     "the \"verify_columns\" option)", lineNo, m_specs{type}.size(), values.size());
 
             list<auto> rawValues = ();
+            # how each field is quoted, if fields are quoted by type
+            *list<int> lq = quote_by_type ? () : NOTHING;
             for(int j = 0; j < values.size(); j++) {
                 int i = j;
                 #! format date to string by options. Priority: 1) column definition 2) standard format
@@ -490,6 +602,10 @@ public namespace CsvUtil {
                     }
                 }
 
+                if (quote_by_type) {
+                    push lq, getFieldQuote(spec, values[i]);
+                }
+
                 # a value written with a ValueMask mask
                 if (exists spec.mask && exists values[i]) {
                     try {
@@ -529,7 +645,40 @@ public namespace CsvUtil {
                 push rawValues, values[i];
             }
 
+            line_quote = lq;
+            on_exit remove line_quote;
             writeRawLine(rawValues);
+        }
+
+        #! Returns how a field is quoted when fields are quoted by type
+        /** @param spec the description of the field, if any
+            @param v the value of the field before it is formatted
+
+            @return QuoteAlways to quote the field, QuoteIfNeeded to quote it only if it requires quoting, or
+            QuoteNull for a field without a value
+
+            @since %CsvUtil 1.12
+        */
+        private int getFieldQuote(*hash<auto> spec, auto v) {
+            if (!exists v || v === NULL) {
+                return QuoteNull;
+            }
+            if (exists spec.quote) {
+                return spec.quote ? QuoteAlways : QuoteIfNeeded;
+            }
+            if (!quote_types) {
+                return QuoteIfNeeded;
+            }
+            # the declared type of the field, unless it is a string (the default), else the type of the value
+            *string t = spec.type;
+            if (t && t[0] == "*") {
+                t = t.substr(1);
+            }
+            if (!t || t == "string") {
+                t = v.type();
+                t = QuoteValueTypes{t} ?? t;
+            }
+            return quote_types{t} ? QuoteAlways : QuoteIfNeeded;
         }
 
         #! Write a line for a specific record from a hash to the output
@@ -635,6 +784,9 @@ public namespace CsvUtil {
         }
 
         private string prepareRawLineIntern(list<auto> values) {
+            if (line_quote) {
+                return prepareRawLineQuotedByType(values);
+            }
             if (!optimal_quotes) {
                 # every field is quoted; complex types are serialized via csvValueToString()
                 list<string> row = map quoteField(csvValueToString($1)), values;
@@ -652,6 +804,24 @@ public namespace CsvUtil {
                 }
                 string sv = v.strp() ? v.toString() : serializeValue(v);
                 l += needsQuotes(sv) ? quoteField(sv) : sv;
+            }
+            return (foldl $1 + separator + $2, l) + eol;
+        }
+
+        #! Returns a line whose fields are quoted by type (see @ref csvwriter_quoting)
+        /** @since %CsvUtil 1.12
+        */
+        private string prepareRawLineQuotedByType(list<auto> values) {
+            # how a field without a value is written: quoted if "quote_null" is set, else as without the option
+            bool qnull = quote_null ?? !optimal_quotes;
+            list<string> l = ();
+            foreach auto v in (values) {
+                if (!exists v || v === NULL || line_quote[$#] == QuoteNull) {
+                    l += qnull ? quote + quote : "";
+                    continue;
+                }
+                string sv = csvValueToString(v);
+                l += (!optimal_quotes || line_quote[$#] == QuoteAlways || needsQuotes(sv)) ? quoteField(sv) : sv;
             }
             return (foldl $1 + separator + $2, l) + eol;
         }

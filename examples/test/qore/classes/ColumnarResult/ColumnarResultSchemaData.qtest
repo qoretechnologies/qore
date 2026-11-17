@@ -1,0 +1,962 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%disable-warning return-value-ignored
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class ColumnarResultSchemaDataTest
+
+#! every entry point that accepts a ColumnarResult column schema checks it against the column data (qore#6214)
+/** The kinds and buffer types that a column can have are the ones that the library produces:
+
+    |!Kind|!Buffer storage|!List storage (values)
+    |\c bool|\c buffer<bool>|\c bool
+    |\c int|any integer buffer|\c int, \c number
+    |\c float|\c buffer<float32>, \c buffer<float64>|\c float, \c int
+    |\c string|\c buffer<string>|\c string
+    |\c decimal128|\c buffer<decimal128> (the schema has its precision and scale)|-
+    |\c date, \c timestamp, \c duration|\c buffer<int64>|-
+    |\c number|-|\c number, \c int, \c float, \c string
+    |\c binary|-|\c binary
+    |\c list, \c large_list, \c fixed_size_list|-|\c list (checked against the child schema)
+    |\c struct, \c map|-|\c hash (checked against the child schemas)
+    |\c dictionary|the buffer of its value kind|the values of its value kind
+    |\c auto|completed from the buffer type|any
+
+    NOTHING and NULL values make the column (or child) schema nullable.
+*/
+class ColumnarResultSchemaDataTest inherits QUnit::Test {
+    public {
+        const Kinds = ("auto", "int", "float", "bool", "number", "string", "date", "binary", "timestamp", "duration",
+            "decimal128", "list", "large_list", "fixed_size_list", "struct", "map", "dictionary");
+
+        const BufferTypes = ("int8", "int16", "int32", "int64", "float32", "float64", "bool", "string",
+            "decimal128");
+
+        const IntBufferTypes = ("int8", "int16", "int32", "int64");
+        const FloatBufferTypes = ("float32", "float64");
+
+        #! the kind of each buffer type, as a column with no kind gets it
+        const BufferTypeKind = {
+            "int8": "int", "int16": "int", "int32": "int", "int64": "int",
+            "float32": "float", "float64": "float",
+            "bool": "bool", "string": "string", "decimal128": "decimal128",
+        };
+
+        #! the default buffer type of each scalar kind
+        const KindBufferType = {
+            "bool": "bool", "int": "int64", "float": "float64", "string": "string",
+        };
+
+        #! the value types of each kind in a list (see the class documentation)
+        const KindValueTypes = {
+            "bool": ("bool",),
+            "int": ("int", "number"),
+            "float": ("float", "int"),
+            "number": ("number", "int", "float", "string"),
+            "decimal128": ("number", "int", "float"),
+            "string": ("string",),
+            "binary": ("binary",),
+            "date": ("date",),
+            "timestamp": ("date",),
+            "duration": ("date",),
+            "list": ("list",),
+            "large_list": ("list",),
+            "fixed_size_list": ("list",),
+            "struct": ("hash",),
+            "map": ("hash",),
+        };
+    }
+
+    private {
+        # the column data of the matrix
+        hash<string, auto> data;
+    }
+
+    constructor() : QUnit::Test("ColumnarResultSchemaData", "1.0", \ARGV) {
+        data = {
+            "int8": new buffer<*int8>((1, NOTHING, 3)),
+            "int16": new buffer<*int16>((1, NOTHING, 3)),
+            "int32": new buffer<*int32>((1, NOTHING, 3)),
+            "int64": new buffer<*int64>((1, NOTHING, 3)),
+            "float32": new buffer<*float32>((1.5, NOTHING, 3.0)),
+            "float64": new buffer<*float64>((1.5, NOTHING, 3.0)),
+            "bool": new buffer<*bool>((True, NOTHING, False)),
+            "string": new buffer<*string>(("a", NOTHING, "c")),
+            "decimal128": new buffer<*decimal128>((1n, NOTHING, 3n)),
+            "lbool": (True, NOTHING, False),
+            "lint": (1, NOTHING, 3),
+            "lfloat": (1.5, NOTHING, 3.0),
+            "lnum": (1.5n, NOTHING, 2n),
+            "lstr": ("a", NOTHING, "c"),
+            "ldate": (2026-01-01T00:00:00Z, NOTHING, 2026-01-02T00:00:00Z),
+            "lbin": (<0102>, NOTHING, <0304>),
+            "llist": ((1, 2), NOTHING, (3, 4)),
+            "lhash": ({"a": 1}, NOTHING, {"key": "x", "value": 2}),
+            "lmixed": (1, "x", NOTHING),
+        };
+
+        addTestCase("the case of the issue", \issueCase());
+        addTestCase("fromColumnHash() kind x storage x buffer type matrix", \fromColumnHashMatrix());
+        addTestCase("deserialize() kind x storage x buffer type matrix", \deserializeMatrix());
+        addTestCase("deserialize() decimal precision and scale", \deserializeDecimal());
+        addTestCase("nested child kinds", \nestedMatrix());
+        addTestCase("deserialize() nested child kinds", \deserializeNested());
+        addTestCase("fromRows()", \fromRowsCase());
+        addTestCase("nullability", \nullability());
+        addTestCase("library-produced columns round trip", \validRoundTrip());
+        addTestCase("deserialize() raises DESERIALIZATION-ERROR for an invalid schema", \deserializeSchemaErrors());
+        addTestCase("int columns with number values", \intNumbers());
+        addTestCase("schema nesting depth", \schemaDepth());
+        addTestCase("fixed_size columns", \fixedSize());
+        set_return_value(main());
+    }
+
+    private issueCase() {
+        assertThrows("COLUMNAR-SCHEMA-ERROR", sub () {
+            ColumnarResult::fromColumnHash({"c": (1.5n, 2n)}, {"c": {"schema": {"kind": "binary"}}});
+        });
+        # the values of a list column are converted to the buffer type of its kind
+        assertThrows("BUFFER-TYPE-ERROR", sub () {
+            ColumnarResult::fromColumnHash({"c": (2026-01-01, 2026-01-02)},
+                {"c": {"schema": {"kind": "float", "buffer_type": "float32"}}});
+        });
+        assertThrows("COLUMNAR-SCHEMA-ERROR", sub () {
+            ColumnarResult::fromColumnHash({"c": new buffer<int64>((1, 2))}, {"c": {"schema": {"kind": "struct"}}});
+        });
+        # a buffer that is not of the declared buffer type
+        assertThrows("COLUMNAR-SCHEMA-ERROR", sub () {
+            ColumnarResult::fromColumnHash({"c": new buffer<bool>((True,))},
+                {"c": {"schema": {"kind": "bool", "buffer_type": "int64"}}});
+        });
+    }
+
+    #! the columnar schema descriptors given for each kind in the matrix
+    private hash<auto> matrixSchema(string kind, *string buffer_type) {
+        hash<auto> schema = {
+            "kind": kind,
+            "nullable": True,
+            "fixed_size": 2,
+            "children": kind == "map"
+                ? ({"name": "key", "kind": "string"}, {"name": "value", "kind": "int"})
+                : ({"name": "item", "kind": "int"},),
+        };
+        if (buffer_type) {
+            schema.buffer_type = buffer_type;
+        }
+        return schema;
+    }
+
+    #! returns True if a kind (with the matrix children) can be stored in a buffer of the given type
+    private bool kindAcceptsBuffer(string kind, string buffer_type) {
+        switch (kind) {
+            case "auto": return True;
+            case "bool": return buffer_type == "bool";
+            case "int": return inlist(buffer_type, IntBufferTypes);
+            case "float": return inlist(buffer_type, FloatBufferTypes);
+            case "string": return buffer_type == "string";
+            case "decimal128": return buffer_type == "decimal128";
+            case "date":
+            case "timestamp":
+            case "duration": return buffer_type == "int64";
+            # the value kind of the matrix dictionary is int
+            case "dictionary": return inlist(buffer_type, IntBufferTypes);
+        }
+        return False;
+    }
+
+    #! returns the kind that a schema with the given kind and buffer type has, or NOTHING if they conflict
+    private *string effectiveKind(string kind, *string buffer_type, bool children = True) {
+        if (!buffer_type) {
+            return kind;
+        }
+        if (kind == "dictionary" && !children) {
+            return kind;
+        }
+        if (kind == "auto") {
+            return BufferTypeKind{buffer_type};
+        }
+        if (kind == "number" && buffer_type == "decimal128") {
+            return "decimal128";
+        }
+        return kindAcceptsBuffer(kind, buffer_type) ? kind : NOTHING;
+    }
+
+    #! returns True if a non-null value matches a kind (the type and the child schemas of the matrix)
+    private bool valueMatches(auto value, string kind) {
+        if (!exists value) {
+            return True;
+        }
+        if (kind == "auto") {
+            return True;
+        }
+        if (kind == "dictionary") {
+            return valueMatches(value, "int");
+        }
+        if (!inlist(valueType(value), KindValueTypes{kind})) {
+            return False;
+        }
+        if (kind == "int" && value.typeCode() == NT_NUMBER && value != value.toInt()) {
+            return False;
+        }
+        switch (kind) {
+            # the matrix schemas have fixed_size 2
+            case "binary":
+                return value.size() == 2;
+            case "list":
+            case "large_list":
+                return (foldl $1 && $2, (map valueMatches($1, "int"), value)) ?? True;
+            case "fixed_size_list":
+                return value.size() == 2 && ((foldl $1 && $2, (map valueMatches($1, "int"), value)) ?? True);
+            case "struct":
+                return valueMatches(value.item, "int");
+            case "map":
+                return (foldl $1 && $2, (map valueMatches($1, "int"), value.iterator())) ?? True;
+        }
+        return True;
+    }
+
+    #! returns True if all values of a list match a kind
+    private bool listMatches(list<auto> values, string kind) {
+        foreach auto value in (values) {
+            if (!valueMatches(value, kind)) {
+                return False;
+            }
+        }
+        return True;
+    }
+
+    #! returns True if a list can be assigned to a buffer of the given type
+    private bool listFitsBuffer(list<auto> values, string buffer_type) {
+        foreach auto value in (values) {
+            if (!exists value) {
+                continue;
+            }
+            switch (buffer_type) {
+                case "bool": if (value.typeCode() != NT_BOOLEAN) return False; break;
+                case "string": if (value.typeCode() != NT_STRING) return False; break;
+                case "float32":
+                case "float64": if (value.typeCode() != NT_FLOAT && value.typeCode() != NT_INT) return False; break;
+                case "decimal128":
+                    if (value.typeCode() != NT_NUMBER && value.typeCode() != NT_INT) return False;
+                    # the buffer has scale 0
+                    if (value.typeCode() == NT_NUMBER && value != value.toInt()) return False;
+                    break;
+                default: if (value.typeCode() != NT_INT) return False; break;
+            }
+        }
+        return True;
+    }
+
+    #! returns True if fromColumnHash() accepts the column (see the class documentation)
+    private bool fromColumnHashAccepts(auto value, string kind, *string buffer_type) {
+        *string k = effectiveKind(kind, buffer_type);
+        if (!k) {
+            return False;
+        }
+        if (value.typeCode() == NT_BUFFER) {
+            string e = bufferElementType(value);
+            if (buffer_type && buffer_type != e) {
+                return False;
+            }
+            if (e == "decimal128" && (k == "auto" || k == "number")) {
+                return True;
+            }
+            return kindAcceptsBuffer(k, e);
+        }
+        # the storage of a list column is given by its kind
+        switch (k) {
+            case "auto":
+                return True;
+            case "bool":
+            case "int":
+            case "float":
+            case "string":
+                return listFitsBuffer(value, buffer_type ?? KindBufferType{k});
+            case "dictionary":
+                return listFitsBuffer(value, buffer_type ?? "int64");
+            case "decimal128":
+                return listFitsBuffer(value, "decimal128");
+        }
+        return listMatches(value, k);
+    }
+
+    private fromColumnHashMatrix() {
+        int accepted = 0;
+        int rejected = 0;
+        foreach string dn in (keys data) {
+            foreach string kind in (Kinds) {
+                foreach *string buffer_type in ((NOTHING,) + BufferTypes) {
+                    string label = sprintf("fromColumnHash data=%s kind=%s buffer_type=%y", dn, kind, buffer_type);
+                    bool expected = fromColumnHashAccepts(data{dn}, kind, buffer_type);
+                    *ColumnarResult r;
+                    *hash<ExceptionInfo> err;
+                    try {
+                        r = ColumnarResult::fromColumnHash({"c": data{dn}}, {"c": {"schema": matrixSchema(kind,
+                            buffer_type)}});
+                    } catch (hash<ExceptionInfo> ex) {
+                        err = ex;
+                    }
+                    if (expected) {
+                        ++accepted;
+                        if (err) {
+                            assertTrue(False, sprintf("%s: unexpected %s: %s", label, err.err, err.desc));
+                            continue;
+                        }
+                        checkConsistent(label, r);
+                        checkRoundTrip(label, r);
+                    } else {
+                        ++rejected;
+                        if (!err) {
+                            assertTrue(False, sprintf("%s: accepted with schema %y", label, r.schemaV2()[0]));
+                        } else {
+                            assertTrue(inlist(err.err, ("COLUMNAR-SCHEMA-ERROR", "BUFFER-TYPE-ERROR",
+                                "BUFFER-RANGE-ERROR", "COLUMNAR-RESULT-ERROR")), label + ": " + err.err);
+                        }
+                    }
+                }
+            }
+        }
+        assertTrue(accepted > 100, sprintf("accepted: %d", accepted));
+        assertTrue(rejected > 1000, sprintf("rejected: %d", rejected));
+    }
+
+    #! returns the serialized data of a one-column result with the schema of the column replaced
+    private hash<SerializationInfo> tamper(hash<SerializationInfo> sd, hash<auto> schema) {
+        foreach hash<auto> i in (sd._index.pairIterator()) {
+            if (i.value.hasKey("_members") && exists i.value._members.kind && i.value._members.name == "c") {
+                sd._index{i.key}._members = schema;
+                return sd;
+            }
+        }
+        throw "TEST-ERROR", "no schema in the serialized data";
+    }
+
+    #! returns True if deserialize() accepts a column with the given storage and schema (see the class documentation)
+    private bool deserializeAccepts(ColumnarResult src, string kind, *string buffer_type) {
+        *string k = effectiveKind(kind, buffer_type, False);
+        if (!k) {
+            return False;
+        }
+        auto value = src.getColumn("c");
+        if (inlist(k, ("date", "timestamp", "duration"))) {
+            if (!buffer_type) {
+                buffer_type = "int64";
+            }
+        } else if (k == "decimal128") {
+            buffer_type = "decimal128";
+        }
+        if (value.typeCode() == NT_BUFFER) {
+            string e = bufferElementType(value);
+            if (buffer_type && buffer_type != e) {
+                return False;
+            }
+            if (k == "auto") {
+                return True;
+            }
+            # the matrix dictionary schema in a serialized payload has no children
+            if (k == "dictionary") {
+                return True;
+            }
+            return kindAcceptsBuffer(k, e);
+        }
+        if (buffer_type) {
+            return False;
+        }
+        if (inlist(k, ("date", "timestamp", "duration", "decimal128"))) {
+            return False;
+        }
+        if (k == "dictionary" || k == "auto") {
+            return True;
+        }
+        # the tampered schema has no children: only the type (and the fixed size) of each value is checked
+        foreach auto v in (value) {
+            if (!exists v) {
+                continue;
+            }
+            if (!inlist(valueType(v), KindValueTypes{k})) {
+                return False;
+            }
+            # a number in an int column has no fractional part
+            if (k == "int" && v.typeCode() == NT_NUMBER && v != v.toInt()) {
+                return False;
+            }
+            if ((k == "fixed_size_list" || k == "binary") && v.size() != 2) {
+                return False;
+            }
+        }
+        return True;
+    }
+
+    private deserializeMatrix() {
+        int accepted = 0;
+        int rejected = 0;
+        foreach string dn in (keys data) {
+            ColumnarResult src = ColumnarResult::fromColumnHash({"c": data{dn}});
+            hash<auto> src_schema = src.schemaV2()[0];
+            hash<SerializationInfo> sd = Serializable::serializeToData(src);
+            foreach string kind in (Kinds) {
+                foreach *string buffer_type in ((NOTHING,) + BufferTypes) {
+                    string label = sprintf("deserialize data=%s kind=%s buffer_type=%y", dn, kind, buffer_type);
+                    hash<auto> schema = {"name": "c", "kind": kind, "nullable": True, "fixed_size": 2};
+                    if (buffer_type) {
+                        schema.buffer_type = buffer_type;
+                    }
+                    if (src_schema.kind == "decimal128") {
+                        schema += src_schema{"precision", "scale"};
+                    }
+                    bool expected = deserializeAccepts(src, kind, buffer_type);
+                    *ColumnarResult r;
+                    *hash<ExceptionInfo> err;
+                    try {
+                        r = Serializable::deserialize(tamper(sd, schema));
+                    } catch (hash<ExceptionInfo> ex) {
+                        err = ex;
+                    }
+                    if (expected) {
+                        ++accepted;
+                        if (err) {
+                            assertTrue(False, sprintf("%s: unexpected %s: %s", label, err.err, err.desc));
+                            continue;
+                        }
+                        checkConsistent(label, r);
+                        checkRoundTrip(label, r);
+                    } else {
+                        ++rejected;
+                        if (!err) {
+                            assertTrue(False, sprintf("%s: accepted with schema %y", label, r.schemaV2()[0]));
+                        } else {
+                            assertEq("DESERIALIZATION-ERROR", err.err, label);
+                        }
+                    }
+                }
+            }
+        }
+        assertTrue(accepted > 50, sprintf("accepted: %d", accepted));
+        assertTrue(rejected > 1000, sprintf("rejected: %d", rejected));
+    }
+
+    private deserializeDecimal() {
+        ColumnarResult src = ColumnarResult::fromColumnHash({"n": (1.25n, NOTHING)},
+            {"n": {"native_type": "numeric(10,2)", "nullable": True}});
+        hash<SerializationInfo> sd = Serializable::serializeToData(src);
+        string key;
+        foreach hash<auto> i in (sd._index.pairIterator()) {
+            if (i.value.hasKey("_members") && exists i.value._members.kind && i.value._members.name == "n") {
+                key = i.key;
+                break;
+            }
+        }
+        foreach hash<auto> c in (({"precision": 10, "scale": 3}, {"precision": 12, "scale": 2},
+                {"precision": 38, "scale": 0})) {
+            hash<SerializationInfo> d = sd;
+            d._index{key}._members += c;
+            assertThrows("DESERIALIZATION-ERROR", \Serializable::deserialize(), (d,), sprintf("%y", c));
+        }
+        ColumnarResult copy = Serializable::deserialize(sd);
+        assertEq(src.schemaV2(), copy.schemaV2());
+    }
+
+    #! the value of each type in the nested matrix
+    const NestedValues = {
+        "bool": True,
+        "int": 1,
+        "float": 1.5,
+        "number": 1.5n,
+        "string": "x",
+        "date": 2026-01-01T00:00:00Z,
+        "binary": <01>,
+        "list": (1, 2),
+        "hash": {"item": 1, "key": "k"},
+    };
+
+    #! the child kinds of the nested matrix: decimal128 is included, as a nested value is not stored in a buffer
+    const NestedKinds = ("auto", "bool", "int", "float", "number", "decimal128", "string", "date", "timestamp",
+        "duration", "binary", "list", "large_list", "struct", "map");
+
+    #! returns True if a nested value matches a child kind whose own children are of kind int
+    private bool nestedMatches(auto value, string kind) {
+        if (kind == "auto") {
+            return True;
+        }
+        if (!inlist(valueType(value), KindValueTypes{kind})) {
+            return False;
+        }
+        if (kind == "int" && value.typeCode() == NT_NUMBER && value != value.toInt()) {
+            return False;
+        }
+        switch (kind) {
+            case "list":
+            case "large_list":
+                return listMatches(value, "int");
+            case "struct":
+                return valueMatches(value.item, "int");
+            case "map":
+                return listMatches(value.values(), "int");
+        }
+        return True;
+    }
+
+    #! returns the schema of a child of the given kind, whose own children are of kind int
+    private hash<auto> nestedChild(string name, string kind) {
+        hash<auto> child = {};
+        child.name = name;
+        child.kind = kind;
+        if (kind == "map") {
+            child.children = ({"name": "key", "kind": "string"}, {"name": "value", "kind": "int"});
+        } else if (inlist(kind, ("list", "large_list", "struct"))) {
+            child.children = ({"name": "item", "kind": "int"},);
+        }
+        return child;
+    }
+
+    #! the columns of each container kind holding a value of each type, each with a child of each kind
+    private list<hash<auto>> nestedCases() {
+        list<hash<auto>> rv = ();
+        foreach string vt in (keys NestedValues) {
+            auto value = NestedValues{vt};
+            foreach string kind in (NestedKinds) {
+                hash<auto> child = nestedChild("item", kind);
+                bool ok = nestedMatches(value, kind);
+                rv += {
+                    "label": sprintf("list<%s> value %s", kind, vt),
+                    "data": ((value, NOTHING),),
+                    "schema": {"kind": "list", "nullable": True, "children": (child,)},
+                    "ok": ok,
+                };
+                rv += {
+                    "label": sprintf("fixed_size_list<%s> value %s", kind, vt),
+                    "data": ((value, value),),
+                    "schema": {"kind": "fixed_size_list", "fixed_size": 2, "nullable": True,
+                        "children": (child,)},
+                    "ok": ok,
+                };
+                rv += {
+                    "label": sprintf("struct field %s value %s", kind, vt),
+                    "data": ({"f": value, "g": 1},),
+                    "schema": {"kind": "struct", "nullable": True, "children": (nestedChild("f", kind),
+                        {"name": "g", "kind": "int"})},
+                    "ok": ok,
+                };
+                rv += {
+                    "label": sprintf("map item %s value %s", kind, vt),
+                    "data": ({"a": value, "b": NOTHING},),
+                    "schema": {"kind": "map", "nullable": True, "children": ({"name": "key", "kind": "string"},
+                        nestedChild("value", kind))},
+                    "ok": ok,
+                };
+                rv += {
+                    "label": sprintf("list<list<%s>> value %s", kind, vt),
+                    "data": (((value,),),),
+                    "schema": {"kind": "list", "nullable": True, "children": ({"name": "item", "kind": "list",
+                        "children": (child,)},)},
+                    "ok": ok,
+                };
+            }
+        }
+        # a fixed size list with another number of elements
+        rv += {
+            "label": "fixed_size_list size",
+            "data": ((1, 2, 3),),
+            "schema": {"kind": "fixed_size_list", "fixed_size": 2, "children": ({"name": "item", "kind": "int"},)},
+            "ok": False,
+        };
+        rv += {
+            "label": "fixed_size_list without a size",
+            "data": ((1, 2),),
+            "schema": {"kind": "fixed_size_list", "children": ({"name": "item", "kind": "int"},)},
+            "ok": False,
+        };
+        rv += {
+            "label": "fixed-size binary",
+            "data": (<0102>, <01>),
+            "schema": {"kind": "binary", "fixed_size": 2},
+            "ok": False,
+        };
+        rv += {
+            "label": "time unit",
+            "data": (2026-01-01T00:00:00Z,),
+            "schema": {"kind": "timestamp", "time_unit": "fortnight"},
+            "ok": False,
+        };
+        rv += {
+            "label": "nested time unit",
+            "data": ((2026-01-01T00:00:00Z,),),
+            "schema": {"kind": "list", "children": ({"name": "item", "kind": "timestamp", "time_unit": "x"},)},
+            "ok": False,
+        };
+        return rv;
+    }
+
+    private nestedMatrix() {
+        int n = 0;
+        foreach hash<auto> c in (nestedCases()) {
+            *ColumnarResult r;
+            *hash<ExceptionInfo> err;
+            try {
+                r = ColumnarResult::fromColumnHash({"c": c.data}, {"c": {"schema": c.schema}});
+            } catch (hash<ExceptionInfo> ex) {
+                err = ex;
+            }
+            if (c.ok) {
+                if (err) {
+                    assertTrue(False, sprintf("%s: unexpected %s: %s", c.label, err.err, err.desc));
+                    continue;
+                }
+                checkConsistent(c.label, r);
+                checkRoundTrip(c.label, r);
+            } else {
+                if (!err) {
+                    assertTrue(False, sprintf("%s: accepted with schema %y", c.label, r.schemaV2()[0]));
+                } else {
+                    assertEq("COLUMNAR-SCHEMA-ERROR", err.err, c.label);
+                }
+            }
+            ++n;
+        }
+        assertTrue(n > 500, sprintf("cases: %d", n));
+    }
+
+    #! nested values with a tampered child schema in serialized data
+    private deserializeNested() {
+        foreach hash<auto> c in (nestedCases()) {
+            if (c.ok || c.label =~ /fixed_size_list without|time unit/) {
+                continue;
+            }
+            # the data is made with child schemas of kind auto, which accept any value
+            hash<auto> loose = c.schema;
+            loose.children = map $1 + {"kind": "auto", "children": NOTHING}, loose.children;
+            if (loose.kind == "fixed_size_list" && !loose.fixed_size) {
+                continue;
+            }
+            *ColumnarResult src;
+            try {
+                src = ColumnarResult::fromColumnHash({"c": c.data}, {"c": {"schema": loose}});
+            } catch (hash<ExceptionInfo> ex) {
+                # the data does not fit the container kind itself
+                continue;
+            }
+            hash<SerializationInfo> sd = Serializable::serializeToData(src);
+            hash<auto> schema = c.schema + {"name": "c", "nullable": True};
+            assertThrows("DESERIALIZATION-ERROR", \Serializable::deserialize(), (tamper(sd, schema),), c.label);
+        }
+    }
+
+    private fromRowsCase() {
+        assertThrows("COLUMNAR-SCHEMA-ERROR", sub () {
+            ColumnarResult::fromRows(({"c": 1.5n}, {"c": 2n}), {"c": {"schema": {"kind": "binary"}}});
+        });
+        assertThrows("COLUMNAR-SCHEMA-ERROR", sub () {
+            ColumnarResult::fromRows(({"c": (1,)}, {"c": "x"}), {"c": {"schema": {"kind": "list"}}});
+        });
+        ColumnarResult r = ColumnarResult::fromRows(({"c": (1,)}, {"c": NOTHING}), {"c": {"schema": {"kind": "list",
+            "children": ({"name": "item", "kind": "int"},)}}});
+        assertEq(("list", True), r.schemaV2()[0]{"kind", "nullable"}.values());
+    }
+
+    private nullability() {
+        # NOTHING values make a column and a child nullable
+        ColumnarResult r = ColumnarResult::fromColumnHash({
+            "l": ((1, NOTHING), NOTHING),
+            "s": ({"a": NOTHING}, {"a": "x"}),
+            "b": new buffer<*int64>((1, NOTHING)),
+        }, {
+            "l": {"schema": {"kind": "list", "nullable": False, "children": ({"name": "item", "kind": "int"},)}},
+            "s": {"schema": {"kind": "struct", "children": ({"name": "a", "kind": "string"},)}},
+            "b": {"schema": {"kind": "int", "nullable": False}},
+        });
+        hash<string, hash<auto>> schema = map {$1.name: $1}, r.schemaV2();
+        assertTrue(schema.l.nullable);
+        assertTrue(schema.l.children[0].nullable);
+        assertTrue(schema.s.children[0].nullable);
+        assertTrue(schema.b.nullable);
+        checkRoundTrip("nullability", r);
+    }
+
+    #! columns as the library produces them: all are accepted and round trip
+    private validRoundTrip() {
+        ColumnarResult r = ColumnarResult::fromColumnHash({
+            "i8": new buffer<*int8>((1, NOTHING)),
+            "i32": new buffer<int32>((1, 2)),
+            "f32": new buffer<*float32>((1.5, NOTHING)),
+            "f": (1.5, 2),
+            "b": (True, NOTHING),
+            "s": ("a", NOTHING),
+            "n": (1.5n, NOTHING),
+            "dec": (1.25n, NOTHING),
+            "dec0": (12n, 13n),
+            "ts": (2026-01-01T00:00:00Z, NOTHING),
+            "tsz": (2026-01-01T00:00:00Z, NOTHING),
+            "d": (2026-01-01, NOTHING),
+            "u": (1s, NOTHING),
+            "bin": (<01>, NOTHING),
+            "json": ({"a": 1}, (1, 2)),
+            "l": ((1, 2), NOTHING),
+            "fsl": ((1, 2), (3, 4)),
+            "st": ({"a": 1, "b": "x"}, NOTHING),
+            "m": ({"x": 1.5}, {}),
+            "dict": ("a", NOTHING),
+            "lts": ((2026-01-01T00:00:00Z,), NOTHING),
+            "ldec": ((1.5n,), NOTHING),
+            "numstr": ("1.5", 2),
+        }, {
+            "dec": {"native_type": "numeric(10,2)"},
+            "dec0": {"native_type": "numeric(15,0)"},
+            "ts": {"native_type": "timestamp"},
+            "tsz": {"schema": {"kind": "timestamp", "time_unit": "ms", "timezone": "UTC"}},
+            "d": {"native_type": "date"},
+            "u": {"native_type": "interval"},
+            "bin": {"native_type": "bytea"},
+            "json": {"native_type": "jsonb"},
+            "l": {"schema": {"kind": "list", "children": ({"name": "item", "kind": "int"},)}},
+            "fsl": {"schema": {"kind": "fixed_size_list", "fixed_size": 2,
+                "children": ({"name": "item", "kind": "int"},)}},
+            "st": {"schema": {"kind": "struct", "children": ({"name": "a", "kind": "int"},
+                {"name": "b", "kind": "string"})}},
+            "m": {"schema": {"kind": "map", "children": ({"name": "key", "kind": "string"},
+                {"name": "value", "kind": "float"})}},
+            "dict": {"schema": {"kind": "dictionary", "dictionary_index_type": "int32",
+                "children": ({"name": "value", "kind": "string"},)}},
+            "lts": {"schema": {"kind": "list", "children": ({"name": "item", "kind": "timestamp",
+                "time_unit": "us"},)}},
+            "ldec": {"schema": {"kind": "list", "children": ({"name": "item", "kind": "decimal128",
+                "precision": 10, "scale": 2},)}},
+        });
+        checkConsistent("library columns", r);
+        checkRoundTrip("library columns", r);
+        # take(), filter() and slice() keep the schema
+        foreach ColumnarResult x in ((r.take((1, 0)), r.filter((True, False)), r.slice(0, 1))) {
+            checkConsistent("derived", x);
+            checkRoundTrip("derived", x);
+        }
+        # a list column whose values are not of its kind is refused
+        assertThrows("BUFFER-TYPE-ERROR", sub () {
+            ColumnarResult::fromColumnHash({"c": (1, "x")}, {"c": {"schema": {"kind": "int"}}});
+        });
+        assertThrows("COLUMNAR-SCHEMA-ERROR", sub () {
+            ColumnarResult::fromColumnHash({"c": (1, <01>)}, {"c": {"schema": {"kind": "number"}}});
+        });
+    }
+
+    #! returns serialized ColumnarResult data for a payload with one column \c c
+    private static hash<SerializationInfo> payload(hash<auto> schema, list<auto> values) {
+        hash<auto> p = {"version": 1, "row_count": values.size(), "columns": ({"name": "c",
+            "schema": schema + {"name": "c"}, "data": {"storage": "value", "value": values}},)};
+        hash<SerializationInfo> sd = Serializable::serializeToData(p);
+        string pidx = sd._data._index;
+        string cidx = string(max(map $1.toInt(), keys sd._index) + 1);
+        sd._index{cidx} = <ObjectSerializationInfo>{"_class": "Qore::SQL::ColumnarResult",
+            "_class_data": {"Qore::SQL::ColumnarResult": {"payload": {"_index": pidx}}}};
+        sd._data = {"_index": cidx};
+        return sd;
+    }
+
+    #! an invalid schema in serialized data raises DESERIALIZATION-ERROR
+    private deserializeSchemaErrors() {
+        # a valid payload is accepted
+        ColumnarResult r = Serializable::deserialize(payload({"kind": "list", "nullable": True,
+            "children": ({"name": "item", "kind": "int"},)}, ((1, 2), NOTHING)));
+        assertEq(2, r.numRows());
+        list<hash<auto>> cases = (
+            {"label": "child kind and buffer type", "schema": {"kind": "list", "children": ({"name": "item",
+                "kind": "int", "buffer_type": "float32"},)}, "values": ((1,),)},
+            {"label": "kind and buffer type", "schema": {"kind": "binary", "buffer_type": "int64"},
+                "values": (<01>,)},
+            {"label": "child decimal precision", "schema": {"kind": "list", "children": ({"name": "item",
+                "kind": "decimal128", "precision": 50},)}, "values": ((1n,),)},
+            {"label": "child decimal scale", "schema": {"kind": "list", "children": ({"name": "item",
+                "kind": "decimal128", "precision": 10, "scale": 11},)}, "values": ((1n,),)},
+            {"label": "child time unit", "schema": {"kind": "list", "children": ({"name": "item",
+                "kind": "timestamp", "time_unit": "x"},)}, "values": ((2026-01-01T00:00:00Z,),)},
+            {"label": "child value", "schema": {"kind": "list", "children": ({"name": "item", "kind": "string"},)},
+                "values": ((1,),)},
+            {"label": "native type with a NUL character", "schema": {"kind": "string", "native_type": "a\x00b"},
+                "values": ("x",)},
+        );
+        foreach hash<auto> c in (cases) {
+            assertThrows("DESERIALIZATION-ERROR", \Serializable::deserialize(), (payload(c.schema, c.values),),
+                c.label);
+        }
+    }
+
+    #! an int column holds ints, or numbers with no fractional part (as an Arrow import of unsigned 64-bit integers
+    #! does); fromColumnHash() and deserialize() accept the same columns
+    private intNumbers() {
+        list<auto> big = (1, 18446744073709551615n, NOTHING);
+        ColumnarResult r = ColumnarResult::fromColumnHash({"c": big}, {"c": {"schema": {"kind": "int"}}});
+        hash<auto> schema = r.schemaV2()[0];
+        assertEq(("int", NOTHING), (schema.kind, schema.buffer_type));
+        assertEq(big, r.getColumn("c"));
+        checkRoundTrip("int numbers", r);
+        ColumnarResult d = Serializable::deserialize(payload({"kind": "int", "nullable": True}, big));
+        assertEq(r.schemaV2(), d.schemaV2());
+        # ints alone are stored in a buffer
+        r = ColumnarResult::fromColumnHash({"c": (1, 2)}, {"c": {"schema": {"kind": "int"}}});
+        assertEq("int64", r.schemaV2()[0].buffer_type);
+        # a number with a fractional part is refused by both
+        assertThrows("COLUMNAR-SCHEMA-ERROR", sub () {
+            ColumnarResult::fromColumnHash({"c": (1.5n, 2n)}, {"c": {"schema": {"kind": "int"}}});
+        });
+        assertThrows("DESERIALIZATION-ERROR", \Serializable::deserialize(), (payload({"kind": "int"}, (1.5n, 2n)),));
+        # with an int buffer type, a number cannot be stored
+        assertThrows("BUFFER-TYPE-ERROR", sub () {
+            ColumnarResult::fromColumnHash({"c": (1, 2n)}, {"c": {"schema": {"kind": "int", "buffer_type": "int64"}}});
+        });
+    }
+
+    #! returns a list schema with \a depth levels of list children
+    private static hash<auto> nestedSchema(int depth) {
+        hash<auto> schema = {"name": "item", "kind": "int"};
+        for (int i = 0; i < depth; ++i) {
+            schema = {"name": "item", "kind": "list", "children": (schema,)};
+        }
+        return schema;
+    }
+
+    #! returns serialized ColumnarResult data with a list column whose schema has \a depth levels of list children;
+    #! the schema entries are made directly in the serialization index
+    private static hash<SerializationInfo> deepPayload(int depth) {
+        ColumnarResult src = ColumnarResult::fromColumnHash({"c": (NOTHING,)}, {"c": {"schema": {"kind": "list",
+            "children": ({"name": "item", "kind": "int"},)}}});
+        hash<SerializationInfo> sd = Serializable::serializeToData(src);
+        string top;
+        foreach hash<auto> i in (sd._index.pairIterator()) {
+            if (i.value.hasKey("_members") && i.value._members.name === "c" && exists i.value._members.kind) {
+                top = i.key;
+            }
+        }
+        int next = max(map $1.toInt(), keys sd._index) + 1;
+        string cur = top;
+        for (int d = 0; d < depth; ++d) {
+            string lidx = string(next++);
+            string cidx = string(next++);
+            hash<auto> m = sd._index{cur}._members;
+            m.children = {"_index": lidx};
+            sd._index{cur}._members = m;
+            sd._index{lidx} = <ListSerializationInfo>{"_list": "auto", "_elements": ({"_index": cidx},)};
+            sd._index{cidx} = <HashSerializationInfo>{"_hash": "^auto", "_members": {"name": "item", "kind": "list",
+                "type": "auto", "nullable": True}};
+            cur = cidx;
+        }
+        return sd;
+    }
+
+    #! a column schema can be nested at most 64 levels deep
+    private schemaDepth() {
+        ColumnarResult r = ColumnarResult::fromColumnHash({"c": (NOTHING,)}, {"c": {"schema": nestedSchema(63)}});
+        checkRoundTrip("depth 63", r);
+        r = ColumnarResult::fromColumnHash({"c": (NOTHING,)}, {"c": {"schema": nestedSchema(64)}});
+        checkRoundTrip("depth 64", r);
+        foreach int depth in ((65, 1000)) {
+            assertThrows("COLUMNAR-SCHEMA-ERROR", sub () {
+                ColumnarResult::fromColumnHash({"c": (NOTHING,)}, {"c": {"schema": nestedSchema(depth)}});
+            }, NOTHING, sprintf("fromColumnHash() depth %d", depth));
+        }
+        Serializable::deserialize(deepPayload(60));
+        foreach int depth in ((70, 20000)) {
+            assertThrows("DESERIALIZATION-ERROR", \Serializable::deserialize(), (deepPayload(depth),),
+                sprintf("deserialize() depth %d", depth));
+        }
+    }
+
+    #! the values of a fixed_size column have its size, and its null values cannot need more padding than its other
+    #! values or 2^24 elements
+    private fixedSize() {
+        hash<auto> fsl = {"kind": "fixed_size_list", "fixed_size": 2147483647,
+            "children": ({"name": "item", "kind": "int"},)};
+        hash<auto> fsb = {"kind": "binary", "fixed_size": 2147483647};
+        foreach hash<auto> schema in ((fsl, fsb)) {
+            assertThrows("COLUMNAR-SCHEMA-ERROR", sub () {
+                ColumnarResult::fromColumnHash({"c": (NOTHING,)}, {"c": {"schema": schema}});
+            }, NOTHING, schema.kind);
+            assertThrows("DESERIALIZATION-ERROR", \Serializable::deserialize(),
+                (payload(schema + {"nullable": True}, (NOTHING,)),), schema.kind);
+            # nested in a list
+            assertThrows("COLUMNAR-SCHEMA-ERROR", sub () {
+                ColumnarResult::fromColumnHash({"c": ((NOTHING, NOTHING),)}, {"c": {"schema": {"kind": "list",
+                    "children": (schema + {"name": "item"},)}}});
+            }, NOTHING, "nested " + schema.kind);
+        }
+        # null values whose padding is bounded are accepted
+        ColumnarResult r = ColumnarResult::fromColumnHash({"c": (NOTHING, NOTHING, (1, 2))},
+            {"c": {"schema": {"kind": "fixed_size_list", "fixed_size": 2,
+            "children": ({"name": "item", "kind": "int"},)}}});
+        checkRoundTrip("fixed_size_list", r);
+        r = ColumnarResult::fromColumnHash({"c": (NOTHING, NOTHING)}, {"c": {"schema": {"kind": "binary",
+            "fixed_size": 16}}});
+        checkRoundTrip("all-null fixed-size binary", r);
+        # as many null values as other values, whatever the size
+        r = ColumnarResult::fromColumnHash({"c": (NOTHING, <0102030405060708>)}, {"c": {"schema": {"kind": "binary",
+            "fixed_size": 8}}});
+        checkRoundTrip("fixed-size binary", r);
+    }
+
+    #! returns the name of the type of a value as used in KindValueTypes
+    private static string valueType(auto value) {
+        switch (value.typeCode()) {
+            case NT_BOOLEAN: return "bool";
+            case NT_INT: return "int";
+            case NT_FLOAT: return "float";
+            case NT_NUMBER: return "number";
+            case NT_STRING: return "string";
+            case NT_DATE: return "date";
+            case NT_BINARY: return "binary";
+            case NT_LIST: return "list";
+            case NT_HASH: return "hash";
+        }
+        return value.type();
+    }
+
+    #! returns the element type of a buffer
+    private static string bufferElementType(auto value) {
+        return (value.fullType() =~ x/^buffer<\*?([a-z0-9]+)>$/)[0];
+    }
+
+    #! checks that the schema of each column is consistent with its data
+    private checkConsistent(string label, ColumnarResult r) {
+        foreach hash<auto> schema in (r.schemaV2()) {
+            auto value = r.getColumn(schema.name);
+            if (value.typeCode() == NT_BUFFER) {
+                string e = bufferElementType(value);
+                assertEq(e, schema.buffer_type, label + ": buffer type");
+                if (schema.kind != "dictionary") {
+                    assertTrue(kindAcceptsBuffer(schema.kind, e) || schema.kind == "dictionary",
+                        sprintf("%s: kind %s in buffer<%s>", label, schema.kind, e));
+                }
+                if (e == "decimal128") {
+                    # fromColumnHash() takes the precision and scale of a buffer column from the buffer
+                    hash<auto> buffer_schema = ColumnarResult::fromColumnHash({"x": value}).schemaV2()[0];
+                    assertEq((buffer_schema.precision ?? 0, buffer_schema.scale ?? 0),
+                        (schema.precision ?? 0, schema.scale ?? 0), label + ": precision and scale");
+                }
+            } else {
+                assertEq(NOTHING, schema.buffer_type, label + ": list buffer type");
+                if (exists KindValueTypes{schema.kind}) {
+                    foreach auto v in (value) {
+                        if (exists v) {
+                            assertTrue(inlist(valueType(v), KindValueTypes{schema.kind}),
+                                sprintf("%s: %s value in a %s column", label, v.type(), schema.kind));
+                        }
+                    }
+                }
+            }
+            if (!schema.nullable) {
+                foreach auto v in (value) {
+                    assertTrue(exists v, label + ": NOTHING in a column that is not nullable");
+                }
+            }
+        }
+    }
+
+    #! checks that a serialization round trip keeps the schema and values
+    private checkRoundTrip(string label, ColumnarResult r) {
+        ColumnarResult copy = Serializable::deserialize(Serializable::serialize(r));
+        assertEq(r.schemaV2(), copy.schemaV2(), label + ": round trip schema");
+        assertEq(r.toRows(), copy.toRows(), label + ": round trip rows");
+        hash<auto> h = r.toColumnHash();
+        assertEq(keys h, r.columnNames(), label + ": column hash");
+    }
+}

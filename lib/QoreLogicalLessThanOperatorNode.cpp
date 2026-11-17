@@ -64,6 +64,43 @@ static int try_plugin_binary_parse_lt(QoreParseContext& parse_context, const Qor
     return 0;
 }
 
+//! compares the values of the operands as the operator does when it has no specialization for their types: a buffer
+//! elementwise, then with a plugin operation, then as scalars
+static QORE_INTERN_ALWAYS_INLINE QoreValue lt_eval_values(const QoreValue& lh, const QoreValue& rh,
+        ExceptionSink* xsink) {
+    if (qore_buffer_binary_op_applies(lh, rh)) {
+        return qore_buffer_binary_op(lh, rh, QoreBufferBinaryOperation::LessThan, xsink);
+    }
+
+    if (qore_plugin_value_may_have_operation(lh) || qore_plugin_value_may_have_operation(rh)) {
+        bool plugin_matched = false;
+        QoreValue plugin_result = qore_plugin_try_dispatch_binary(getProgram(), "lt",
+            QorePluginHelperAbi::BinaryValue, lh, rh, plugin_matched, xsink);
+        if (*xsink || plugin_matched) {
+            return plugin_result;
+        }
+    }
+
+    return QoreLogicalLessThanOperatorNode::doLessThan(lh, rh, xsink);
+}
+
+QoreValue QoreLogicalLessThanOperatorNode::evalValues(const QoreValue& lh, const QoreValue& rh,
+        ExceptionSink* xsink) const {
+    // the specializations of parse initialization for the types of the operands (evalImpl())
+    if (pfunc == &QoreLogicalLessThanOperatorNode::floatLessThan) {
+        return lh.getAsFloat() < rh.getAsFloat();
+    }
+    if (pfunc == &QoreLogicalLessThanOperatorNode::bigIntLessThan) {
+        return lh.getAsBigInt() < rh.getAsBigInt();
+    }
+    assert(!pfunc);
+    // a buffer and a plugin value are nodes: two inline values are compared as scalars
+    if (!lh.isPointer() && !rh.isPointer()) {
+        return doLessThan(lh, rh, xsink);
+    }
+    return lt_eval_values(lh, rh, xsink);
+}
+
 QoreValue QoreLogicalLessThanOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
     if (pfunc) {
         return (this->*pfunc)(xsink);
@@ -75,21 +112,7 @@ QoreValue QoreLogicalLessThanOperatorNode::evalImpl(bool& needs_deref, Exception
     QoreOperandEvalHolder rh(right, xsink);
     if (*xsink)
         return QoreValue();
-
-    if (qore_buffer_binary_op_applies(*lh, *rh)) {
-        return qore_buffer_binary_op(*lh, *rh, QoreBufferBinaryOperation::LessThan, xsink);
-    }
-
-    if (qore_plugin_value_may_have_operation(*lh) || qore_plugin_value_may_have_operation(*rh)) {
-        bool plugin_matched = false;
-        QoreValue plugin_result = qore_plugin_try_dispatch_binary(getProgram(), "lt",
-            QorePluginHelperAbi::BinaryValue, *lh, *rh, plugin_matched, xsink);
-        if (*xsink || plugin_matched) {
-            return plugin_result;
-        }
-    }
-
-    return doLessThan(*lh, *rh, xsink);
+    return lt_eval_values(*lh, *rh, xsink);
 }
 
 int QoreLogicalLessThanOperatorNode::parseInitIntern(const char* name, QoreValue& val, QoreParseContext& parse_context) {
