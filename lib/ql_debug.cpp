@@ -352,6 +352,19 @@ static QoreValue f_dbg_retired_type_declarations(const QoreListNode* params, Run
     return static_cast<int64>(qore_retired_type_owner_count());
 }
 
+//! Returns the declarations and derived types kept until library cleanup, by kind, and the sizes of the derived type
+//! caches (issue #6419)
+static QoreValue f_dbg_type_retention_breakdown(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    std::map<std::string, int64_t> counts;
+    qore_type_retention_breakdown(counts);
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(bigIntTypeInfo), xsink);
+    for (const auto& i : counts) {
+        rv->setKeyValue(i.first.c_str(), i.second, xsink);
+    }
+    return rv.release();
+}
+
 //! Returns the number of groups of declarations that survived their Program and are not collected yet (issue #5790)
 static QoreValue f_dbg_type_declaration_groups(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     return static_cast<int64>(qore_type_owner_group_count());
@@ -26034,6 +26047,8 @@ void init_debug_functions(QoreNamespace& qns) {
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_type_declaration_groups", f_dbg_type_declaration_groups, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_type_retention_breakdown", f_dbg_type_retention_breakdown, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, hashTypeInfo);
     qns.addBuiltinVariant("dbg_cyclic_type_declarations", f_dbg_cyclic_type_declarations, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_get_ns_info", f_dbg_get_ns_info, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, hashTypeInfo);
