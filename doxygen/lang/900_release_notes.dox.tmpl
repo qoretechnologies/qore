@@ -2082,6 +2082,9 @@
       @ref member_initialization; issue #6411)
     - argument and parameter values are released in the same order in every execution mode; compiled code released
       some of them only at the end of the statement (issue #6262)
+    - in the functional operators (@ref map "map", @ref select "select", @ref foldl "foldl", @ref foldr "foldr" and
+      the others), the temporary values created for an element are released at the end of that element in every
+      execution mode, so their destructors run once per element instead of after the whole operation (issue #6288)
     - a module blacklisted with @ref Qore::qore_add_module_to_blacklist() "qore_add_module_to_blacklist()" is also
       refused when it is a @ref separated_modules "separated module", however it is loaded (issue #6450)
     - a line that starts with an unknown parse directive, such as <tt>%%require mymod</tt>, gives an error that names it
