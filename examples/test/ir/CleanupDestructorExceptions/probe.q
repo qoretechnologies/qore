@@ -65,6 +65,17 @@ sub for_outer_break() { try { while (True) { for (D d = new D("for-ob"); True; )
 # an exception raised in the body releases the initializer's locals before the catch block runs
 sub for_body_throw() { try { for (T t("ft"); True; ) { throw "BODY"; } } catch (hash<ExceptionInfo> ex) { log += "catch:" + ex.err; } }
 
+# the assignment of the next element to a foreach variable releases the previous one: the variable, the iterator and
+# the element are released before the catch block, whose exception chains the next element's
+class GI inherits AbstractIterator {
+    private { int i = 0; string p; }
+    constructor(string p) { self.p = p; }
+    bool next() { return ++i < 4; }
+    auto getValue() { return new D(p + i); }
+    bool valid() { return i > 0 && i < 4; }
+}
+sub foreach_store() { try { foreach auto d in (new GI("fs")) { } } catch (hash<ExceptionInfo> ex) { printf("foreach_store caught %s next %y\n", ex.desc, ex.next.desc); } }
+
 # qore#6244: the temporaries of other lowering paths
 int y = 5;
 auto x;
@@ -109,7 +120,7 @@ for (int i = 0; i < 2; ++i) {
 log = ();
 for_body_throw();
 printf("for_body_throw: %y\n", log);
-foreach string t in ("for_end", "for_break", "for_return", "for_outer_break", "s_end", "s_break", "s_continue", "s_foreach_break", "s_for_break", "s_switch_break", "s_return",
+foreach string t in ("foreach_store", "for_end", "for_break", "for_return", "for_outer_break", "s_end", "s_break", "s_continue", "s_foreach_break", "s_for_break", "s_switch_break", "s_return",
         "s_return_nested", "s_break_inner_try", "t7", "t7a", "t10", "t10b", "t10d", "t5b", "t5c", "t11", "t12", "t14",
         "t15", "t16", "t20", "t24", "push_value") {
     try {

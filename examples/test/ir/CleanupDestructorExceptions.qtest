@@ -50,6 +50,7 @@ class CleanupDestructorExceptionsTest inherits QUnit::Test {
             assertRegex("\n" + t + " caught ", out, t);
         }
         assertRegex("\nfor_return -> \"after\"\n", out);
+        assertRegex("\nforeach_store caught fs1 next \"fs2\"\n", out);
         assertRegex("\nfor_body_throw: \\[\"~ft\", \"catch:BODY\"\\]\n", out);
         assertRegex("\ns_return -> \"after\"\n", out);
         # the catch block in the loop body ends the try statement that the break left: the loop goes on

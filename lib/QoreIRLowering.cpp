@@ -3292,6 +3292,12 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         QoreIRValue old_element = builder.createPushImplicitElement(index_val, stmt->loc)->result;
 
         // Assign the value to the loop variable
+        // the instructions of the assignment, in the block where it starts: an exception that it raises (a
+        // destructor of the variable's previous element) goes to the statement's exception cleanup block, which
+        // releases the element, the iterator, the list and the loop variables first, as for an exception of the
+        // body (qore#6244; see below)
+        QoreIRBasicBlock* element_store_block = builder.getBlock();
+        size_t element_store_start = element_store_block->instructions.size();
         if (var_expr && !var_expr.isNothing()) {
             // The AST interpreter assigns the variable each element as it is, so that an element that is a weak
             // reference makes the variable a weak reference, which does not keep the target alive while the body
@@ -3386,6 +3392,16 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             // iterator, the list and the loop variables first too, as the AST's foreach statement does (qore#5655)
             if (foreach_next_inst) {
                 foreach_next_inst->exception_target = foreach_exception_cleanup_block;
+            }
+            // and one that the assignment of the element to the variable raises (qore#6244); an assignment that
+            // created blocks of its own keeps its targets
+            if (builder.getBlock() == element_store_block) {
+                auto& insts = element_store_block->instructions;
+                for (size_t i = element_store_start; i < insts.size(); ++i) {
+                    if (insts[i]->exception_target == foreach_saved_exception_target) {
+                        insts[i]->exception_target = foreach_exception_cleanup_block;
+                    }
+                }
             }
         }
 
