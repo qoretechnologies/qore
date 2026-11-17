@@ -2821,12 +2821,19 @@ void UserSignature::setupFromAOTMetadata(
         // and LLVM lowering rely on it for the static borrowed-reference semantics
         // of constructor/method self.
         if (classTypeInfo) {
-            LocalVar*& cached = local_pp->shared_aot_self[classTypeInfo];
-            if (!cached) {
+            auto ci = local_pp->shared_aot_self.find(classTypeInfo);
+            LocalVar* cached;
+            if (ci == local_pp->shared_aot_self.end()) {
                 cached = local_pp->createLocalVar("self", classTypeInfo->getTypeInfo());
                 cached->setSelf();
-            } else if (!cached->isSelf()) {
-                cached->setSelf();
+                // fork() waits for the change (see qore_program_private_base::recordLock())
+                std::lock_guard<std::mutex> rl(local_pp->threadContainerLock());
+                local_pp->shared_aot_self.insert(std::make_pair(classTypeInfo, cached));
+            } else {
+                cached = ci->second;
+                if (!cached->isSelf()) {
+                    cached->setSelf();
+                }
             }
             selfid = cached;
         }
@@ -7374,6 +7381,9 @@ void UserVariantBase::setProgram(QoreProgram* p) {
 
 void qore_program_private::registerUserVariant(const UserVariantBase* v) {
     std::lock_guard<std::mutex> lock(user_variant_lock);
+    // the list is changed at run time as well (AOT closures deserialized lazily): fork() waits for the change (see
+    // recordLock())
+    std::lock_guard<std::mutex> rl(threadContainerLock());
     assert(!v->uv_prev && !v->uv_next && user_variants != v);
     v->uv_next = user_variants;
     if (user_variants) {
@@ -7387,6 +7397,7 @@ void qore_program_private::registerUserVariant(const UserVariantBase* v) {
 
 void qore_program_private::unregisterUserVariant(const UserVariantBase* v) {
     std::lock_guard<std::mutex> lock(user_variant_lock);
+    std::lock_guard<std::mutex> rl(threadContainerLock());
     // a variant that is not in the list leaves it unchanged
     if (!v->uv_prev && user_variants != v) {
         assert(false);

@@ -1,0 +1,280 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - fork() and the fork handlers of the records of debug programs and breakpoints
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+%allow-debugger
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class DebugRecordsForkTest
+
+#! a debug program that parks a given thread in its attach event until it is released
+class ParkingDebugProgram inherits DebugProgram {
+    public {
+        #! the thread to park, or -1 for none
+        int park_tid = -1;
+        #! reached when the thread is parked
+        Counter parked(1);
+        #! the parked thread continues when it reaches zero
+        Counter release(1);
+        #! code that the parked thread runs while it is parked, or NOTHING
+        *code in_callback;
+        #! the value that \a in_callback returned
+        auto in_callback_result;
+    }
+
+    onAttach(ProgramControl pgm, reference rs, reference rts) {
+        rs = DebugRun;
+        if (gettid() == park_tid) {
+            if (in_callback) {
+                in_callback_result = in_callback();
+            }
+            parked.dec();
+            release.waitForZero();
+        }
+    }
+    onDetach(ProgramControl pgm, reference rs, reference rts) {
+        rs = DebugDetach;
+    }
+    onStep(ProgramControl pgm, int blk, *int sid, *int bid, reference flow, reference rs, reference rts) {
+    }
+    onFunctionEnter(ProgramControl pgm, int sid, reference rs, reference rts) {
+    }
+    onFunctionExit(ProgramControl pgm, int sid, reference rv, reference rs, reference rts) {
+    }
+    onException(ProgramControl pgm, int sid, hash<auto> ex, reference dismiss, reference rs, reference rts) {
+    }
+    onExit(ProgramControl pgm, int sid, reference rv, reference rs, reference rts) {
+    }
+}
+
+#! fork() while another thread changes a record of a debug program can leave the child blocked or inconsistent
+/** A debug program records the Programs that it debugs and counts the calls in progress into it, a Program counts the
+    calls in progress into its debug program and records its breakpoints; a debugger changes these records at run
+    time.  fork() waits for a change in progress of the records, the child never waits for a lock held by a thread
+    that does not exist in it, and it keeps only the calls in progress of the thread that called fork().
+
+    A child that finds the records locked exits at once (98), and one that waits forever is ended, so the test cannot
+    hang.
+*/
+class DebugRecordsForkTest inherits QUnit::Test {
+    public {
+        #! the change of the Programs of a debug program (QPRS_DEBUG_PROGRAMS)
+        const SiteDebugPrograms = 4;
+        #! the change of the breakpoints of a Program (QPRS_BREAKPOINTS)
+        const SiteBreakpoints = 5;
+
+        #! the code of the Programs that the test debugs
+        const ProgramCode = "
+int sub add(int a, int b) {
+    return a + b;
+}
+";
+    }
+
+    constructor() : Test("DebugRecordsForkTest", "1.0") {
+        addTestCase("the child does not wait for the debugger calls of the parent's other threads",
+            \otherThreadCallbackTest());
+        addTestCase("the child keeps the debugger calls of the thread that called fork()", \ownCallbackTest());
+        addTestCase("fork() waits for a change of the Programs of a debug program", \debugProgramsTest());
+        addTestCase("fork() waits for a change of the breakpoints of a Program", \breakpointsTest());
+        set_return_value(main());
+    }
+
+    #! another thread is in a call into the debug program; the child deletes the Program and the debug program
+    /** The deletion of each waits for the calls in progress into the debug program, which in the child are the calls
+        of the forking thread only
+    */
+    otherThreadCallbackTest() {
+        checkAvailable();
+        Program p(PO_NEW_STYLE);
+        p.parse(ProgramCode, "debug-callback");
+        ParkingDebugProgram dp();
+        dp.addProgram(control(p));
+
+        Counter tid_set(1);
+        Counter done(1);
+        int result;
+        background sub () {
+            on_exit done.dec();
+            dp.park_tid = gettid();
+            tid_set.dec();
+            result = p.callFunction("add", 20, 22);
+        }();
+        tid_set.waitForZero();
+        dp.parked.waitForZero();
+        # the parked thread continues in any case
+        on_exit if (dp.release.getCount()) {
+            dp.release.dec();
+        }
+
+        int status = call_function("dbg_fork_child_bounded", int sub () {
+            if (dp.getInterruptedCount()) {
+                return 1;
+            }
+            dp.removeProgram(control(p));
+            if (p.callFunction("add", 2, 3) != 5) {
+                return 2;
+            }
+            # waits for the calls in progress into the debug program
+            delete p;
+            delete dp;
+            return 0;
+        });
+        dp.release.dec();
+        done.waitForZero();
+
+        assertEq(0, status, "the child deleted the Program and the debug program");
+        assertEq(42, result, "the parked thread ran the code of the Program");
+        assertEq(0, dp.getInterruptedCount());
+        dp.removeProgram(control(p));
+    }
+
+    #! a thread calls fork() in a call into the debug program; the child keeps that call
+    ownCallbackTest() {
+        checkAvailable();
+        Program p(PO_NEW_STYLE);
+        p.parse(ProgramCode, "debug-own-callback");
+        ParkingDebugProgram dp();
+        dp.addProgram(control(p));
+        dp.in_callback = int sub () {
+            return call_function("dbg_fork_child_bounded", int sub () {
+                # this thread's call into the debug program is in progress in the child as well
+                return dp.getInterruptedCount() == 1 ? 0 : 1;
+            });
+        };
+
+        Counter tid_set(1);
+        Counter done(1);
+        background sub () {
+            on_exit done.dec();
+            dp.park_tid = gettid();
+            tid_set.dec();
+            p.callFunction("add", 1, 2);
+        }();
+        tid_set.waitForZero();
+        dp.parked.waitForZero();
+        dp.release.dec();
+        done.waitForZero();
+
+        assertEq(0, dp.in_callback_result, "the child kept the call of the thread that called fork()");
+        assertEq(0, dp.getInterruptedCount());
+        dp.removeProgram(control(p));
+    }
+
+    #! fork() waits while a thread adds a Program to a debug program; the child adds and removes Programs
+    debugProgramsTest() {
+        checkAvailable();
+        Program p(PO_NEW_STYLE);
+        p.parse(ProgramCode, "debug-programs");
+        Program p2(PO_NEW_STYLE);
+        p2.parse(ProgramCode, "debug-programs-2");
+        ParkingDebugProgram dp();
+
+        call_function("dbg_hold_program_record_change", SiteDebugPrograms, p);
+        on_exit call_function("dbg_hold_program_record_change_clear");
+
+        Counter done(1);
+        background sub () {
+            on_exit done.dec();
+            dp.addProgram(control(p));
+        }();
+
+        hash<auto> r = call_function("dbg_fork_while_program_record_held", "program_thread_containers", int sub () {
+            # the Program was added before the process was copied
+            if (dp.getAllPrograms().size() != 1) {
+                return 1;
+            }
+            dp.addProgram(control(p2));
+            if (dp.getAllPrograms().size() != 2) {
+                return 2;
+            }
+            dp.removeProgram(control(p));
+            dp.removeProgram(control(p2));
+            if (dp.getAllPrograms()) {
+                return 3;
+            }
+            if (p.callFunction("add", 2, 3) != 5) {
+                return 4;
+            }
+            delete p;
+            delete dp;
+            return 0;
+        });
+        done.waitForZero();
+
+        assertTrue(r.waited, "the fork handlers were reached while the thread was inside the change");
+        assertTrue(r.changed, "fork() waited until the thread had finished the change");
+        assertEq(0, r.status, "the child added and removed Programs");
+        assertEq(1, dp.getAllPrograms().size());
+        dp.removeProgram(control(p));
+    }
+
+    #! fork() waits while a thread assigns a breakpoint to a Program; the child assigns and unassigns breakpoints
+    breakpointsTest() {
+        checkAvailable();
+        Program p(PO_NEW_STYLE);
+        p.parse(ProgramCode, "breakpoints");
+        Breakpoint b();
+
+        call_function("dbg_hold_program_record_change", SiteBreakpoints, p);
+        on_exit call_function("dbg_hold_program_record_change_clear");
+
+        Counter done(1);
+        background sub () {
+            on_exit done.dec();
+            b.assignProgram(control(p));
+        }();
+
+        hash<auto> r = call_function("dbg_fork_while_program_record_held", "program_thread_containers", int sub () {
+            Breakpoint b2();
+            b2.assignProgram(control(p));
+            b2.setThreadIds((1, 2, 3));
+            if (b2.getThreadIds() != (1, 2, 3)) {
+                return 1;
+            }
+            # the breakpoint was assigned before the process was copied
+            if (b.getProgram().getProgramId() != p.getProgramId()) {
+                return 2;
+            }
+            b2.unassignProgram();
+            b.unassignProgram();
+            try {
+                b.getProgram();
+                return 3;
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err != "BREAKPOINT-ERROR") {
+                    return 4;
+                }
+            }
+            delete p;
+            return 0;
+        });
+        done.waitForZero();
+
+        assertTrue(r.waited, "the fork handlers were reached while the thread was inside the change");
+        assertTrue(r.changed, "fork() waited until the thread had finished the change");
+        assertEq(0, r.status, "the child assigned and unassigned breakpoints");
+        assertEq(p.getProgramId(), b.getProgram().getProgramId());
+        b.unassignProgram();
+    }
+
+    #! returns the debugger's handle of the given Program
+    private static ProgramControl control(Program p) {
+        return ProgramControl::resolveProgramId(p.getProgramId());
+    }
+
+    private checkAvailable() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the test needs a debug build of the library");
+        }
+        if (!Option::HAVE_FORK) {
+            testSkip("fork() is not available");
+        }
+    }
+}

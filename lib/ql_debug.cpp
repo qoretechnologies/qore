@@ -18448,6 +18448,244 @@ static QoreValue f_dbg_fork_while_thread_container_held(const QoreListNode* para
     return rv.release();
 }
 
+
+namespace {
+//! parks the first thread that reaches a given change of a record of a given Program, with the lock of the change held;
+//! see dbg_hold_program_record_change()
+struct ProgramRecordHold {
+    std::mutex m;
+    std::condition_variable cv;
+    //! the change held (see QoreProgramRecordSite)
+    int site = -1;
+    //! the Program whose change is held, or null if no hold is armed; only compared, never dereferenced
+    const qore_program_private_base* pgm = nullptr;
+    //! the name of the fork handler whose prepare handler releases the parked thread, or empty for none
+    std::string handler;
+    //! a thread was parked in the change (stays set when it continues)
+    bool held = false;
+    //! the parked thread may continue
+    bool release = false;
+    //! the parked thread has continued with the change
+    bool continued = false;
+    //! the fork prepare handler given was reached while the thread was parked
+    bool hook_saw_held = false;
+};
+
+ProgramRecordHold& program_record_hold() {
+    // not destroyed: a parked thread can use it while static objects are destroyed
+    static ProgramRecordHold* h = new ProgramRecordHold;
+    return *h;
+}
+
+//! called inside a change of a record of a Program, with the lock of the change held
+void program_record_hold_hook(int site, const qore_program_private_base* pp) {
+    ProgramRecordHold& h = program_record_hold();
+    std::unique_lock<std::mutex> l(h.m);
+    if (!h.pgm || h.pgm != pp || h.site != site || h.held) {
+        return;
+    }
+    h.held = true;
+    h.cv.notify_all();
+    h.cv.wait(l, [&h]() { return h.release; });
+    h.continued = true;
+    h.cv.notify_all();
+}
+
+//! the fork prepare hook: releases the parked thread when the prepare handler given is reached
+void program_record_fork_hook(const char* name) {
+    ProgramRecordHold& h = program_record_hold();
+    std::lock_guard<std::mutex> lg(h.m);
+    if (h.handler != name) {
+        return;
+    }
+    h.hook_saw_held = h.held && !h.release;
+    h.release = true;
+    h.cv.notify_all();
+}
+
+//! releases a parked thread and disarms the hold; the hold's mutex must be held
+void program_record_hold_disarm(ProgramRecordHold& h) {
+    h.release = true;
+    h.pgm = nullptr;
+    h.cv.notify_all();
+}
+
+//! runs the code given in a child created with fork() and exits with the value it returns
+/** Exits with 99 if the code raised an exception, and with 98 at once if \a check_stripes is true and one of the
+    stripe locks of the records of Programs is not free; a child that does not exit within 120 seconds is ended by
+    SIGALRM
+*/
+[[noreturn]] void program_record_fork_child(const ResolvedCallReferenceNode* child_code, bool check_stripes) {
+    if (check_stripes) {
+        // only this thread exists: the stripe locks must be free
+        for (auto& shard : qore_program_private_base::thread_container_shards) {
+            if (!shard.lock.try_lock()) {
+                _exit(98);
+            }
+            shard.lock.unlock();
+        }
+    }
+    // a child that waits forever is ended instead
+    sigset_t set;
+    sigemptyset(&set);
+    sigaddset(&set, SIGALRM);
+    pthread_sigmask(SIG_UNBLOCK, &set, nullptr);
+    signal(SIGALRM, SIG_DFL);
+    alarm(120);
+    int status = 0;
+    if (child_code) {
+        ExceptionSink child_xsink;
+        ValueHolder rv(child_code->invoke(nullptr, &child_xsink), &child_xsink);
+        status = child_xsink ? 99 : static_cast<int>(rv->getAsBigInt());
+        child_xsink.clear();
+    }
+    _exit(status);
+}
+}
+
+//! Debug-only: arms a hold of the next thread that reaches the given change of a record of the given Program
+/** The thread is parked inside the change (see QoreProgramRecordSite), with the lock that the change is made under
+    held, until dbg_fork_while_program_record_held() calls fork() or dbg_hold_program_record_change_clear() is called.
+    DEBUG builds only.
+
+    @param site the change: 0: a thread's first entry into the Program, 1: a thread's first thread-local data in the
+    Program's family, 2: a lock of the Program's parse options, 3: a feature added to the Program, 4: the Program
+    added to a debug program, 5: a breakpoint assigned to the Program
+    @param pgm the Program
+
+    @throw DBG-ARGUMENT-ERROR a hold is already armed, or a thread of a previous hold has not continued yet
+*/
+static QoreValue f_dbg_hold_program_record_change(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    int site = static_cast<int>(get_param_value(params, 0).getAsBigInt());
+    const QoreObject* obj = get_param_value(params, 1).get<const QoreObject>();
+    ReferenceHolder<QoreProgram> pgm(static_cast<QoreProgram*>(obj->getReferencedPrivateData(CID_PROGRAM,
+        xsink)), xsink);
+    if (!pgm) {
+        return QoreValue();
+    }
+    if (site < QPRS_THREAD_PROGRAMS || site > QPRS_BREAKPOINTS) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "invalid record change %d", site);
+        return QoreValue();
+    }
+    ProgramRecordHold& h = program_record_hold();
+    std::lock_guard<std::mutex> lg(h.m);
+    if (h.pgm || (h.held && !h.continued)) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "a program record hold is already armed or still held");
+        return QoreValue();
+    }
+    h.site = site;
+    qore_program_private* pp = qore_program_private::get(**pgm);
+    // the thread-local data of a Program is recorded with the root of its family
+    h.pgm = site == QPRS_THREAD_DATA
+        ? static_cast<const qore_program_private_base*>(pp->tld_root.load(std::memory_order_acquire))
+        : static_cast<const qore_program_private_base*>(pp);
+    h.handler.clear();
+    h.held = false;
+    h.release = false;
+    h.continued = false;
+    h.hook_saw_held = false;
+    qore_program_private_base::dbg_record_hook.store(program_record_hold_hook);
+    return QoreValue();
+}
+
+//! Debug-only: releases a thread parked by dbg_hold_program_record_change() and disarms the hold
+static QoreValue f_dbg_hold_program_record_change_clear(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    ProgramRecordHold& h = program_record_hold();
+    std::lock_guard<std::mutex> lg(h.m);
+    program_record_hold_disarm(h);
+    qore_program_private_base::dbg_record_hook.store(nullptr);
+    return QoreValue();
+}
+
+//! Debug-only: creates a child process with fork() while a thread is parked in a change of a record of a Program
+/** Waits until the thread armed with dbg_hold_program_record_change() is parked, then calls fork().  With a handler
+    name, the parked thread is released when the prepare handler of that name is reached, so fork() waits until it
+    has finished the change if the handler waits for the lock of the change, and the child exits with 98 at once if
+    one of the stripe locks of the records of Programs is not free; without one, the parked thread is released when
+    fork() has returned in the parent.  The child runs the code given and exits with the value it returns (99 if it
+    raised an exception; it is ended by SIGALRM if it does not exit within 120 seconds).  The hold is disarmed in any
+    case.  DEBUG builds only.
+
+    @return a hash: \c status: the exit status of the child (-1 if it did not exit normally), \c waited: True if the
+    prepare handler was reached while the thread was parked, \c changed: True if the parked thread had finished the
+    change when fork() returned in the parent
+
+    @throw DBG-FORK-ERROR no hold is armed, no thread was parked within 120 seconds, or fork() failed
+*/
+static QoreValue f_dbg_fork_while_program_record_held(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    const QoreStringNode* handler = get_param_value(params, 0).get<const QoreStringNode>();
+    const ResolvedCallReferenceNode* child_code = get_param_value(params, 1).get<const ResolvedCallReferenceNode>();
+    ProgramRecordHold& h = program_record_hold();
+    {
+        std::unique_lock<std::mutex> l(h.m);
+        if (!h.pgm) {
+            xsink->raiseException("DBG-FORK-ERROR", "no program record hold is armed");
+            return QoreValue();
+        }
+        // a bound for a broken test only: the thread is parked when it reaches the change
+        if (!h.cv.wait_for(l, std::chrono::seconds(120), [&h]() { return h.held; })) {
+            program_record_hold_disarm(h);
+            qore_program_private_base::dbg_record_hook.store(nullptr);
+            xsink->raiseException("DBG-FORK-ERROR", "no thread was parked in the change of the record");
+            return QoreValue();
+        }
+        h.handler = handler ? handler->c_str() : "";
+    }
+    if (handler) {
+        qore_fork_prepare_hook = program_record_fork_hook;
+    }
+    pid_t pid = fork();
+    if (!pid) {
+        program_record_fork_child(child_code, handler != nullptr);
+    }
+    int fork_errno = errno;
+    qore_fork_prepare_hook = nullptr;
+    bool waited, changed;
+    {
+        std::lock_guard<std::mutex> lg(h.m);
+        waited = h.hook_saw_held;
+        changed = h.continued;
+        // releases the parked thread if the prepare handler did not
+        program_record_hold_disarm(h);
+    }
+    qore_program_private_base::dbg_record_hook.store(nullptr);
+    if (pid < 0) {
+        xsink->raiseErrnoException("DBG-FORK-ERROR", fork_errno, "fork() failed");
+        return QoreValue();
+    }
+    int status = ut_wait_child(pid);
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+    rv->setKeyValue("status", status, xsink);
+    rv->setKeyValue("waited", waited, xsink);
+    rv->setKeyValue("changed", changed, xsink);
+    return rv.release();
+}
+
+//! Debug-only: creates a child process with fork() that runs the code given and exits with the value it returns
+/** As dbg_fork_child(), but the child exits with 98 at once if one of the stripe locks of the records of Programs is
+    not free, and it is ended by SIGALRM if it does not exit within 120 seconds, so that a child that would wait
+    forever cannot hang a test.  DEBUG builds only.
+
+    @return the exit status of the child (-1 if it did not exit normally)
+
+    @throw DBG-FORK-ERROR fork() failed
+*/
+static QoreValue f_dbg_fork_child_bounded(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    const ResolvedCallReferenceNode* child_code = get_param_value(params, 0).get<const ResolvedCallReferenceNode>();
+    pid_t pid = fork();
+    if (!pid) {
+        program_record_fork_child(child_code, true);
+    }
+    if (pid < 0) {
+        xsink->raiseErrnoException("DBG-FORK-ERROR", errno, "fork() failed");
+        return QoreValue();
+    }
+    return ut_wait_child(pid);
+}
+
 namespace {
 //! the gate of dbg_arm_parse_commit_gate() (issue #6243)
 struct QoreDbgParseCommitGate {
@@ -25534,6 +25772,16 @@ void init_debug_functions(QoreNamespace& qns) {
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo);
     qns.addBuiltinVariant("dbg_fork_while_thread_container_held", f_dbg_fork_while_thread_container_held,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, hashTypeInfo, 1, codeOrNothingTypeInfo, QORE_PARAM_NO_ARG, "child");
+    qns.addBuiltinVariant("dbg_hold_program_record_change", f_dbg_hold_program_record_change, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, nothingTypeInfo, 2, bigIntTypeInfo, QORE_PARAM_NO_ARG, "site", QC_PROGRAM->getTypeInfo(),
+        QORE_PARAM_NO_ARG, "pgm");
+    qns.addBuiltinVariant("dbg_hold_program_record_change_clear", f_dbg_hold_program_record_change_clear,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo);
+    qns.addBuiltinVariant("dbg_fork_while_program_record_held", f_dbg_fork_while_program_record_held,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, hashTypeInfo, 2, stringOrNothingTypeInfo, QORE_PARAM_NO_ARG, "handler",
+        codeOrNothingTypeInfo, QORE_PARAM_NO_ARG, "child");
+    qns.addBuiltinVariant("dbg_fork_child_bounded", f_dbg_fork_child_bounded, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        bigIntTypeInfo, 1, codeTypeInfo, QORE_PARAM_NO_ARG, "child");
     qns.addBuiltinVariant("dbg_ref_set_unique_remove_key", f_dbg_ref_set_unique_remove_key, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, autoTypeInfo, 4, referenceTypeInfo, QORE_PARAM_NO_ARG, "ref", stringTypeInfo,
         QORE_PARAM_NO_ARG, "set_key", autoTypeInfo, QORE_PARAM_NO_ARG, "val", stringTypeInfo, QORE_PARAM_NO_ARG,

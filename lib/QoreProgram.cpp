@@ -653,14 +653,31 @@ void qore_program_private::fixupAfterFork(int tid, ThreadProgramData* tpd) {
     if (tclear && tclear != tid) {
         tclear = 0;
     }
+    // the Program data of the parent's other threads remains recorded in the Program, and the Program's teardown in
+    // the child uses it; its lock can be held by its thread or by a thread that tore down another Program, and the
+    // records that it protects are consistent, as they are changed under the stripe lock (see recordLock())
+    for (auto& i : pgm_data_map) {
+        if (i.first != tpd) {
+            i.first->reinitLockAfterFork();
+        }
+    }
     tld_lock.reinitAfterFork();
     sm_lock.reinitAfterFork();
     featureLock.reinitAfterFork();
     new (&runtime_metadata_lock) std::recursive_mutex();
     pwo.parse_options.reinitAfterFork();
+    // a leaf lock held only while the lock state of the parse options is checked and changed, never by the forking
+    // thread: the state that it protects is consistent in the child, as its changes are ordered (the restrictions
+    // kept are set before the options are marked locked, and they are only used once the options are locked)
+    new (&po_mutex) std::mutex();
+    // the copies of the external data in progress in the parent's other threads do not go on in the child
+    ext_copy_count = QoreForkCountedHold::countOwn(&ext_copy_count);
+    ext_copy_waiting = 0;
+    ext_copy_cond.reinitAfterFork();
     ir_fallback_lock.reinitAfterFork();
     plugin_fallback_lock.reinitAfterFork();
-    debug_program_counter.reinitAfterFork();
+    // the calls into the debug program in progress in the parent's other threads do not go on in the child
+    debug_program_counter.reinitAfterFork(static_cast<int>(QoreForkCountedHold::countOwn(&debug_program_counter)));
     lck_breakpoint.reinitAfterFork();
     // the thread data of the parent's other threads remains registered; its lock can be held by its thread
     for (ThreadProgramData* i : tld_registry) {
@@ -670,10 +687,39 @@ void qore_program_private::fixupAfterFork(int tid, ThreadProgramData* tpd) {
     }
 }
 
+namespace {
+//! the debug programs, for qore_program_private::fixupAllAfterFork(); protected by the Program registry lock
+std::set<qore_debug_program_private*>* qore_debug_program_set = nullptr;
+}
+
+void qore_program_private::registerDebugProgram(qore_debug_program_private* dp) {
+    QoreAutoRWWriteLocker al(&lck_programMap);
+    if (!qore_debug_program_set) {
+        qore_debug_program_set = new std::set<qore_debug_program_private*>;
+    }
+    qore_debug_program_set->insert(dp);
+}
+
+void qore_program_private::unregisterDebugProgram(qore_debug_program_private* dp) {
+    QoreAutoRWWriteLocker al(&lck_programMap);
+    assert(qore_debug_program_set);
+    qore_debug_program_set->erase(dp);
+}
+
 void qore_program_private::fixupAllAfterFork(int tid, ThreadProgramData* tpd) {
+    // the forking thread's own Program data can be locked by another thread that tore down a Program of the thread;
+    // the forking thread itself never holds the lock across fork()
+    if (tpd) {
+        tpd->reinitLockAfterFork();
+    }
     // all instances, also those whose last reference has been released and that are being destroyed
     for (QoreProgram* p : qore_program_set) {
         qore_program_private::get(*p)->fixupAfterFork(tid, tpd);
+    }
+    if (qore_debug_program_set) {
+        for (qore_debug_program_private* dp : *qore_debug_program_set) {
+            dp->fixupAfterFork();
+        }
     }
 }
 
@@ -804,7 +850,10 @@ void qore_program_private::markSandboxedParse() {
 std::atomic<qore_program_private_base::dbg_teardown_hook_t> qore_program_private_base::dbg_teardown_hook{nullptr};
 std::atomic<qore_program_private_base::dbg_thread_container_hook_t>
     qore_program_private_base::dbg_thread_container_hook{nullptr};
+std::atomic<qore_program_private_base::dbg_record_hook_t> qore_program_private_base::dbg_record_hook{nullptr};
 #endif
+
+thread_local QoreForkCountedHold* QoreForkCountedHold::top = nullptr;
 
 namespace {
 class QoreProgramTeardownScope;
@@ -1366,6 +1415,8 @@ const QoreProgramLocation* qore_program_private_base::getLocation(int sline, int
     loc_set_t::iterator i = loc_set.find(&loc);
     if (i == loc_set.end()) {
         QoreProgramLocation* lp = new QoreProgramLocation(loc);
+        // fork() waits for the change (see recordLock())
+        std::lock_guard<std::mutex> rl(threadContainerLock());
         pgmloc.push_back(lp);
         loc_set.insert(lp);
         return lp;
@@ -1392,6 +1443,8 @@ const QoreProgramLocation* qore_program_private_base::getLocation(int sline, int
     loc_set_t::iterator i = loc_set.find(&loc);
     if (i == loc_set.end()) {
         QoreProgramLocation* lp = new QoreProgramLocation(loc);
+        // fork() waits for the change (see recordLock())
+        std::lock_guard<std::mutex> rl(threadContainerLock());
         pgmloc.push_back(lp);
         loc_set.insert(lp);
         return lp;
@@ -1409,6 +1462,8 @@ const QoreProgramLocation* qore_program_private_base::getLocation(const QoreProg
     loc_set_t::iterator i = loc_set.find(&loc1);
     if (i == loc_set.end()) {
         QoreProgramLocation* lp = new QoreProgramLocation(loc1);
+        // fork() waits for the change (see recordLock())
+        std::lock_guard<std::mutex> rl(threadContainerLock());
         pgmloc.push_back(lp);
         loc_set.insert(lp);
         return lp;
@@ -1438,6 +1493,8 @@ const QoreProgramLocation* qore_program_private_base::getLocation(const QoreProg
     loc_set_t::iterator i = loc_set.find(&loc1);
     if (i == loc_set.end()) {
         QoreProgramLocation* lp = new QoreProgramLocation(loc1);
+        // fork() waits for the change (see recordLock())
+        std::lock_guard<std::mutex> rl(threadContainerLock());
         pgmloc.push_back(lp);
         loc_set.insert(lp);
         return lp;
@@ -2056,8 +2113,12 @@ void qore_program_private_base::copyExternalData() {
         parent_data.assign(parent->extmap.begin(), parent->extmap.end());
         ++parent->ext_copy_count;
     }
-    ON_BLOCK_EXIT([parent] () {
+    // a child created with fork() during the copy keeps only the copies of the forking thread (see fixupAfterFork())
+    QoreForkCountedHold copy_hold;
+    copy_hold.hold(&parent->ext_copy_count);
+    ON_BLOCK_EXIT([parent, &copy_hold] () {
         AutoLocker al(parent->plock);
+        copy_hold.release();
         assert(parent->ext_copy_count);
         if (!--parent->ext_copy_count && parent->ext_copy_waiting) {
             parent->ext_copy_cond.broadcast();
@@ -2080,6 +2141,7 @@ void qore_program_private_base::copyExternalData() {
         if (copy) {
             // the Program is registered already, so other threads can look up its external data
             AutoLocker al(plock);
+            std::lock_guard<std::mutex> rl(threadContainerLock());
             extmap.insert(extmap_t::value_type(i.first, copy));
         }
     }
@@ -2127,27 +2189,30 @@ void qore_program_private::internParseRollback(ExceptionSink* xsink) {
     sb.parseRollback();
     native_parse_info = committed_native_parse_info;
 
-    // free temporary data structures
-    str_set.clear();
-    loc_set.clear();
+    // free temporary data structures; their structure is changed under the stripe lock (see recordLock())
+    {
+        std::lock_guard<std::mutex> rl(threadContainerLock());
+        str_set.clear();
+        loc_set.clear();
 
-    // With PO_ALLOW_REPARSE, we do atomic rollback: only delete pending items added since last commit,
-    // preserving committed state for continued use. Without PO_ALLOW_REPARSE, the program is considered
-    // unusable after rollback anyway, so we just clear the vectors without freeing (the memory will be
-    // cleaned up when the Program is destroyed). This preserves backward compatibility where error messages
-    // could still reference parse locations from failed parses.
-    if (pwo.parse_options & PO_ALLOW_REPARSE) {
-        // delete pending strings (those added after str_vec_hwm)
-        for (size_t i = str_vec_hwm; i < str_vec.size(); ++i) {
-            free(str_vec[i]);
-        }
-        str_vec.resize(str_vec_hwm);
+        // With PO_ALLOW_REPARSE, we do atomic rollback: only delete pending items added since last commit,
+        // preserving committed state for continued use. Without PO_ALLOW_REPARSE, the program is considered
+        // unusable after rollback anyway, so we just clear the vectors without freeing (the memory will be
+        // cleaned up when the Program is destroyed). This preserves backward compatibility where error messages
+        // could still reference parse locations from failed parses.
+        if (pwo.parse_options & PO_ALLOW_REPARSE) {
+            // delete pending strings (those added after str_vec_hwm)
+            for (size_t i = str_vec_hwm; i < str_vec.size(); ++i) {
+                free(str_vec[i]);
+            }
+            str_vec.resize(str_vec_hwm);
 
-        // delete pending locations (those added after pgmloc_hwm)
-        for (size_t i = pgmloc_hwm; i < pgmloc.size(); ++i) {
-            delete pgmloc[i];
+            // delete pending locations (those added after pgmloc_hwm)
+            for (size_t i = pgmloc_hwm; i < pgmloc.size(); ++i) {
+                delete pgmloc[i];
+            }
+            pgmloc.resize(pgmloc_hwm);
         }
-        pgmloc.resize(pgmloc_hwm);
     }
     // Note: without PO_ALLOW_REPARSE, we don't clear str_vec/pgmloc - the memory will be freed
     // when the Program object is destroyed. This is intentional to avoid use-after-free when
@@ -2408,20 +2473,24 @@ void qore_program_private::waitForTerminationAndClear(ExceptionSink* xsink) {
 
         del(xsink);
 
-        // release parse caches now that the program is cleared
-        str_set.clear();
-        loc_set.clear();
-        str_vec.clear();
-        str_vec.shrink_to_fit();
-        pgmloc.clear();
-        pgmloc.shrink_to_fit();
-        statementIds.clear();
-        statementIds.shrink_to_fit();
-        reverseStatementIds.clear();
+        // release parse caches now that the program is cleared; their structure is changed under the stripe lock
+        // (see recordLock())
+        {
+            std::lock_guard<std::mutex> rl(threadContainerLock());
+            str_set.clear();
+            loc_set.clear();
+            str_vec.clear();
+            str_vec.shrink_to_fit();
+            pgmloc.clear();
+            pgmloc.shrink_to_fit();
+            statementIds.clear();
+            statementIds.shrink_to_fit();
+            reverseStatementIds.clear();
 
-        // deque-backed arena: clearing destroys LocalVars in-place;
-        // no manual delete loop needed.
-        local_var_list.clear();
+            // deque-backed arena: clearing destroys LocalVars in-place;
+            // no manual delete loop needed.
+            local_var_list.clear();
+        }
 
         // Deferred AOT module initialization is scoped to this Program. Release
         // the per-Program markers together with the parse data so repeated
@@ -2630,6 +2699,7 @@ int qore_program_private::internParseCommit(bool standard_parse) {
             {
                 // Runtime initialization can admit threads that materialize AOT metadata.
                 std::lock_guard<std::recursive_mutex> lock(runtime_metadata_lock);
+                std::lock_guard<std::mutex> rl(threadContainerLock());
                 str_set.clear();
                 loc_set.clear();
 
@@ -2675,6 +2745,7 @@ int qore_program_private::internParseCommit(bool standard_parse) {
         // free temporary data structures
         {
             std::lock_guard<std::recursive_mutex> lock(runtime_metadata_lock);
+            std::lock_guard<std::mutex> rl(threadContainerLock());
             str_set.clear();
             loc_set.clear();
         }
@@ -3422,7 +3493,10 @@ void qore_program_private::del(ExceptionSink* xsink) {
             e.convert(xsink);
         }
     }
-    extmap.clear();
+    {
+        std::lock_guard<std::mutex> rl(threadContainerLock());
+        extmap.clear();
+    }
 
     // the Program object released the Program after it had stopped reporting its code (clearScanHolder()), unless the
     // data of the Program is deleted while the object still holds it (a Program cleared at the end of the process by
@@ -3631,7 +3705,12 @@ LocalVar* qore_program_private::createLocalVar(const char* name, const QoreTypeI
     // that stays valid for the Program's lifetime.  Avoids the per-
     // LocalVar `new`+list-node allocation of the prior safe_dslist
     // implementation — hot path in AOT deserialization.
-    LocalVar* lv = local_var_list.emplace(name, typeInfo);
+    LocalVar* lv;
+    {
+        // fork() waits for the change (see recordLock())
+        std::lock_guard<std::mutex> rl(threadContainerLock());
+        lv = local_var_list.emplace(name, typeInfo);
+    }
     lv->setOwner(this);
     return lv;
 }
@@ -3705,12 +3784,19 @@ StatementBlock* qore_program_private::getAOTClosureDebugBlock(const QoreProgramL
     if (!loc) {
         loc = getLocation(0, 0);
     }
-    StatementBlock*& b = aot_closure_debug_blocks[loc];
-    if (!b) {
-        b = new StatementBlock(this, loc);
-        registerStatement(pgm, b, false);
+    aot_closure_debug_block_map_t::iterator i = aot_closure_debug_blocks.find(loc);
+    if (i != aot_closure_debug_blocks.end()) {
+        return i->second;
     }
-    return b;
+    std::unique_ptr<StatementBlock> b(new StatementBlock(this, loc));
+    {
+        // fork() waits for the change (see recordLock())
+        std::lock_guard<std::mutex> rl(threadContainerLock());
+        i = aot_closure_debug_blocks.insert(aot_closure_debug_block_map_t::value_type(loc, b.get())).first;
+    }
+    StatementBlock* rv = b.release();
+    registerStatement(pgm, rv, false);
+    return rv;
 }
 
 void qore_program_private::registerStatement(QoreProgram *pgm, AbstractStatement *statement, bool addToIndex) {
@@ -3718,6 +3804,9 @@ void qore_program_private::registerStatement(QoreProgram *pgm, AbstractStatement
         // plock must already be held
         ReverseStatementIdMap_t::iterator i = pgm->priv->reverseStatementIds.find(statement);
         if (i == pgm->priv->reverseStatementIds.end()) {
+            // statements are registered at run time as well (getAOTClosureDebugBlock()): fork() waits for the change
+            // (see recordLock())
+            std::lock_guard<std::mutex> rl(pgm->priv->threadContainerLock());
             // a new block can start at a line of the cache of blocks
             pgm->priv->blockIndexCache.clear();
             pgm->priv->statementIds.push_back(statement);
@@ -4243,6 +4332,7 @@ void QoreProgram::lockOptions() {
     // qore_program_private_base::po_mutex); the restrictions that it has now are kept
     std::lock_guard<std::recursive_mutex> lg(priv->pwo.parse_options.writeLock());
     std::lock_guard<std::mutex> po_guard(priv->po_mutex);
+    QORE_DBG_RECORD_CHANGE(QPRS_PARSE_OPTION_LOCK, priv);
     priv->locked_restrictions |= priv->pwo.parse_options & ~QoreParseOptions::POSITIVE_OPTIONS;
     priv->po_locked = true;
 }
@@ -5752,7 +5842,11 @@ const StatementBlock* qore_program_private::getBlockFromIndex(const char* file, 
             rv_lines = lines;
         }
     }
-    blockIndexCache[key] = rv;
+    {
+        // fork() waits for the change (see recordLock())
+        std::lock_guard<std::mutex> rl(threadContainerLock());
+        blockIndexCache[key] = rv;
+    }
     return rv;
 }
 
@@ -6109,6 +6203,8 @@ QoreBreakpoint::~QoreBreakpoint() {
     // the breakpoint left the list of all breakpoints with its last reference (see deref())
     if (qore_program_private* p = getPgm()) {
         QoreAutoRWWriteLocker al(&p->lck_breakpoint);
+        // fork() waits for the change (see qore_program_private_base::recordLock())
+        std::lock_guard<std::mutex> rl(p->threadContainerLock());
         p->breakpointList.remove(this);
         unassignAllStatements();
     } else {
@@ -6153,8 +6249,13 @@ void QoreBreakpoint::assignProgram(QoreProgram *new_pgm, ExceptionSink* xsink) {
     } else {
         if (qore_program_private* p = getPgm()) {
             QoreAutoRWWriteLocker al(&p->lck_breakpoint);
-            p->breakpointList.remove(this);
-            unassignAllStatements();
+            {
+                // fork() waits for the change (see qore_program_private_base::recordLock()); not held while the
+                // breakpoint is released, which takes the lock of all breakpoints
+                std::lock_guard<std::mutex> rl(p->threadContainerLock());
+                p->breakpointList.remove(this);
+                unassignAllStatements();
+            }
             pgm = nullptr;
             deref();
         }
@@ -6185,6 +6286,8 @@ void QoreBreakpoint::assignStatement(AbstractStatement* statement, ExceptionSink
         QoreAutoRWWriteLocker al(&getPgm()->lck_breakpoint);
         if (getPgm()->isBreakpointRegistered(this)) {
             if (statement && !isStatementAssigned(statement)) {
+                // fork() waits for the change (see qore_program_private_base::recordLock())
+                std::lock_guard<std::mutex> rl(getPgm()->threadContainerLock());
                 statementList.push_back(statement);
                 statement->assignBreakpoint(this);
             }
@@ -6197,6 +6300,7 @@ void QoreBreakpoint::unassignStatement(AbstractStatement* statement, ExceptionSi
         QoreAutoRWWriteLocker al(&getPgm()->lck_breakpoint);
         if (getPgm()->isBreakpointRegistered(this)) {
             if (statement && isStatementAssigned(statement)) {
+                std::lock_guard<std::mutex> rl(getPgm()->threadContainerLock());
                 statementList.remove(statement);
                 statement->unassignBreakpoint(this);
             }
@@ -6246,8 +6350,11 @@ void QoreBreakpoint::getThreadIds(TidList_t &tidList, ExceptionSink* xsink) {
 
 void QoreBreakpoint::setThreadIds(TidList_t tidList, ExceptionSink* xsink) {
     QoreAutoRWWriteLocker al(getPgm() ? &getPgm()->lck_breakpoint : nullptr);
-    tidMap.clear();
     tidList.sort();  // or create copy not to sort argument list ?
+    // the thread IDs of a breakpoint are changed under the stripe lock of the breakpoint (see
+    // qore_program_private_base::recordLock())
+    std::lock_guard<std::mutex> rl(qore_program_private_base::recordLock(this));
+    tidMap.clear();
     TidList_t::iterator it = tidList.begin();
     while (it != tidList.end()) {
         int tid = *it;
@@ -6265,6 +6372,8 @@ void QoreBreakpoint::setThreadIds(TidList_t tidList, ExceptionSink* xsink) {
 
 void QoreBreakpoint::addThreadId(int tid, ExceptionSink* xsink) {
     QoreAutoRWWriteLocker al(getPgm() ? &getPgm()->lck_breakpoint : nullptr);
+    // see setThreadIds()
+    std::lock_guard<std::mutex> rl(qore_program_private_base::recordLock(this));
     if (!tidMap.empty()) {
         TidMap_t::iterator it2 = tidMap.upper_bound(tid);
         if (it2 != tidMap.begin()) {
@@ -6297,6 +6406,8 @@ void QoreBreakpoint::addThreadId(int tid, ExceptionSink* xsink) {
 
 void QoreBreakpoint::removeThreadId(int tid, ExceptionSink* xsink) {
     QoreAutoRWWriteLocker al(getPgm() ? &getPgm()->lck_breakpoint : nullptr);
+    // see setThreadIds()
+    std::lock_guard<std::mutex> rl(qore_program_private_base::recordLock(this));
     if (!tidMap.empty()) {
         TidMap_t::iterator it = tidMap.upper_bound(tid);
         if (it != tidMap.begin()) {
@@ -6333,6 +6444,8 @@ bool QoreBreakpoint::isThreadId(int tid, ExceptionSink* xsink) {
 
 void QoreBreakpoint::clearThreadIds(ExceptionSink* xsink) {
     QoreAutoRWWriteLocker al(getPgm() ? &getPgm()->lck_breakpoint : nullptr);
+    // see setThreadIds()
+    std::lock_guard<std::mutex> rl(qore_program_private_base::recordLock(this));
     tidMap.clear();
 }
 
