@@ -50,7 +50,7 @@
 // Compile-time guard: forces review of LLVM lowering when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 438,
+static_assert(QORE_IR_MAX_OPCODE == 439,
     "New IR opcode added — review QoreIRToLLVM.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRInterpreter.cpp.");
 
@@ -37460,6 +37460,21 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             if (inst->exception_target) {
                 emitExceptionCheck(module, llvm_func, inst);
             }
+            return true;
+        }
+        case QoreIROpcode::SetCodeParseOptions: {
+            // the top-level code runs its statements with their own options, as the AST interpreter does (qore#6293)
+            llvm::Value* words[4];
+            for (unsigned i = 0; i < 4; ++i) {
+                llvm::Value* val = getVal(inst->operands[i].id, error);
+                if (!val) {
+                    return false;
+                }
+                words[i] = ensureIntTypeInline(val, inst->operands[i].id);
+            }
+            auto helper = module.getOrInsertFunction("qore_rt_set_code_parse_options",
+                llvm::FunctionType::get(void_type, {i64_type, i64_type, i64_type, i64_type}, false));
+            builder->CreateCall(helper, {words[0], words[1], words[2], words[3]});
             return true;
         }
         case QoreIROpcode::HandlerReturn: {
