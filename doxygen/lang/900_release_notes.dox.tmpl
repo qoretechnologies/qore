@@ -823,6 +823,12 @@
     \c date lvalue, is a \c PARSE-TYPE-ERROR in every mode, as an assignment of the result is, where it raised an
     exception when it ran (see @ref compound_assignment_parse_checks "parse-time checks"; issue #6103).
 
+    @par A Variable Used in Its Own Initializer Is a Parse Error
+    A use of a local variable, member or static class variable in its own initialization expression, where it has no
+    value yet (ex: <tt>int a = a + 1;</tt>, <tt>list&lt;auto&gt; l = (l,);</tt>), is a parse error in every mode; a use
+    in a closure created there and a global, which keeps its value, are not affected (see
+    @ref variable_initializer_scope; issue #526).
+
     @par Calls Through Method References on Deleted Objects Name the Method
     The \c OBJECT-ALREADY-DELETED exception of a call through a method call reference on a deleted object names the
     method (<tt>cannot call U::m() ...</tt>) instead of <tt>cannot call a method ...</tt>, in every execution mode
