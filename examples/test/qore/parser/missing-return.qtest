@@ -1,0 +1,288 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class MissingReturnTest
+
+#! The MISSING-RETURN parse error (issue #5940)
+/** The error is raised when the end of a function, method or closure with a declared return type that does not accept
+    NOTHING is certainly reachable without a return statement; conditions can be true and false, and a call completes
+    if its target is known to be able to return.  No error is raised when the end cannot be reached or when it is not
+    known whether it can be (a call of a target that is not known when the code is parsed).
+*/
+class MissingReturnTest inherits QUnit::Test {
+    public {
+        #! code whose end is certainly reachable: name -> code
+        const Missing = {
+            "empty function": "int sub f() {}",
+            "empty function with a string return type": "string sub f() {}",
+            "if without else": "int sub f(int i) { if (i) { return 1; } }",
+            "if with an else that completes": "int sub f(int i) { if (i) { return 1; } else { i = 2; } }",
+            "constant false condition": "int sub f() { if (False) { return 1; } }",
+            "expression statement last": "int sub f(int i) { i += 2; }",
+            "call of a user function that returns last": "sub g() {} int sub f() { g(); }",
+            "call of a function that returns, declared later": "int sub f() { later(); } sub later() {}",
+            "call of a function that can return": "sub h(bool b) { if (b) { throw \"X\"; } } int sub f() { h(True); }",
+            "call of a function whose call can return": "sub h2() { h1(); } sub h1() {} int sub f() { h2(); }",
+            "call of a function that returns with return": "int sub g() { return 1; } int sub f() { g(); }",
+            "call of a builtin function last": "int sub f() { printf(\"\"); }",
+            "call in an argument": "sub g(int i) {} int sub f() { g(strlen(\"a\")); }",
+            "while loop that can end": "int sub f(int i) { while (i) { return 1; } }",
+            "while loop left with break": "int sub f() { while (True) { break; } }",
+            "do while loop": "int sub f(int i) { do { ++i; } while (i < 10); }",
+            "for loop": "int sub f() { for (int i = 0; i < 10; ++i) { if (i == 5) { return i; } } }",
+            "foreach loop": "int sub f(list<int> l) { foreach int i in (l) { if (i) { return i; } } }",
+            "foreach loop over a hash": "int sub f(hash<auto> h) { foreach string k in (keys h) { return 1; } }",
+            "switch without default": "int sub f(int i) { switch (i) { case 1: return 1; case 2: return 2; } }",
+            "switch case that completes": "int sub f(int i) { switch (i) { case 1: return 1; default: i = 2; } }",
+            "switch case left with break": "int sub f(int i) { switch (i) { case 1: break; default: return 2; } }",
+            "catch block that completes":
+                "int sub f() { try { printf(\"\"); return 1; } catch (hash<ExceptionInfo> ex) {} }",
+            "try block that completes":
+                "int sub f() { try { printf(\"\"); } catch (hash<ExceptionInfo> ex) { rethrow; } }",
+            "on_exit handler": "int sub f() { on_exit { printf(\"\"); } }",
+            "closure": "sub f() { code c = int sub () {}; }",
+            "closure in a closure":
+                "sub f() { code c = sub () { code d = int sub (int i) { if (i) { return i; } }; }; }",
+            "method": "class C { int m() {} }",
+            "method that calls a static method that returns": "class C { static g() {} int m() { C::g(); } }",
+            "static method": "class C { static int m() {} }",
+            "static method that calls a static method that returns":
+                "class C { static g() {} static int m() { C::g(); } }",
+            "method that calls a method of its final class": "final class C { g() {} int m() { g(); } }",
+            "method that calls a base class method that returns":
+                "class B { g() {} } class C inherits B { int m() { B::g(); } }",
+            "method that calls a method of a final class": "final class F { g() {} } class C { int m(F f) { f.g(); } }",
+            "builtin constructor": "int sub f() { Mutex m(); }",
+            "builtin constructor with new": "int sub f() { object o = new Mutex(); }",
+            "pseudo-method": "int sub f(string s) { s.size(); }",
+            "builtin given a list": "int sub f(list<int> l) { sort(l); }",
+            "member of a hash": "int sub f(hash<auto> h) { auto v = h.a; }",
+            "on_error handler that completes":
+                "int sub f() { try { on_error printf(\"\"); printf(\"\"); return 1; } "
+                "catch (hash<ExceptionInfo> ex) {} }",
+            "continue in a switch in a loop":
+                "int sub f(int x) { do { switch (x) { default: continue; } return 1; } while (False); }",
+            "call of exit() that is not reached": "int sub f(bool b) { if (b) { exit(1); } }",
+            "list and hash literals":
+                "int sub f(int i) { list<int> l = (i, strlen(\"a\")); hash<auto> h = {\"a\": strlen(\"b\")}; }",
+        };
+
+        #! code whose end cannot be reached or is not known to be reachable: name -> code
+        const NotMissing = {
+            "return": "int sub f() { return 1; }",
+            "optional return type": "*int sub f() {}",
+            "no return type": "sub f() {}",
+            "throw": "int sub f() { throw \"X\"; }",
+            "thread_exit": "int sub f() { thread_exit; }",
+            "if and else that return": "int sub f(int i) { if (i) { return 1; } else { return 2; } }",
+            "constant true condition": "int sub f() { if (True) { return 1; } }",
+            "else if chain":
+                "int sub f(int i) { if (i == 1) { return 1; } else if (i == 2) { return 2; } else { throw \"X\"; } }",
+            "call of a function that throws": "sub thrower() { throw \"X\"; } int sub f() { thrower(); }",
+            "call of a function that throws, declared later":
+                "int sub f() { later_thrower(); } sub later_thrower() { throw \"X\"; }",
+            "call of a function that throws after work":
+                "sub t(string s) { s += \"a\"; throw s; } int sub f() { t(\"x\"); }",
+            "call of a function that calls a function that throws":
+                "sub t1() { t2(); } sub t2() { throw \"X\"; } int sub f() { t1(); }",
+            "call of a function that throws in each branch":
+                "sub t(int i) { if (i) { throw \"A\"; } else { throw \"B\"; } } int sub f() { t(1); }",
+            "call of exit()": "int sub f() { exit(1); }",
+            "catch block after a call of exit()": "int sub f() { try { exit(1); } catch (hash<ExceptionInfo> ex) {} }",
+            "catch block after a call that does not return":
+                "sub t() { throw \"X\"; } int sub f() { try { t(); } catch (hash<ExceptionInfo> ex) {} }",
+            "call of abort()": "int sub f(bool b) { if (b) { return 1; } abort(); }",
+            "call of a static method that throws":
+                "class C { static throwIt() { throw \"X\"; } } int sub f() { C::throwIt(); }",
+            "method that calls a static method that throws":
+                "class C { static throwIt() { throw \"X\"; } int m() { C::throwIt(); } }",
+            "method that calls a method of its final class that throws":
+                "final class C { throwIt() { throw \"X\"; } int m() { throwIt(); } }",
+            "method that calls a base class method that throws":
+                "class B { throwIt() { throw \"X\"; } } class C inherits B { int m() { B::throwIt(); } }",
+            "method that calls a method of a final class that throws":
+                "final class F { throwIt() { throw \"X\"; } } class C { int m(F f) { f.throwIt(); } }",
+            "overridable method": "class C { g() {} int m() { g(); } }",
+            "overridable method of an object": "class D { g() {} } class C { int m(D d) { d.g(); } }",
+            "method of an object of a builtin class": "int sub f(Mutex m) { m.lock(); }",
+            "call reference": "int sub f(code c) { c(); }",
+            "call of a closure": "sub g() {} int sub f() { code c = \\g(); c(); }",
+            "user constructor": "class C {} int sub f() { C c(); }",
+            "user constructor with new": "class C {} int sub f() { object o = new C(); }",
+            "recursive call": "int sub f(int i) { if (i) { return i; } f(i - 1); }",
+            "rethrow": "int sub f() { try { printf(\"\"); return 1; } catch (hash<ExceptionInfo> ex) { rethrow; } }",
+            "catch block that throws":
+                "int sub f() { try { return strlen(\"a\"); } catch (hash<ExceptionInfo> ex) { throw ex.err; } }",
+            "try block that cannot raise an exception":
+                "int sub f() { try { return 1; } catch (hash<ExceptionInfo> ex) { printf(\"\"); } }",
+            "constant infinite while loop": "int sub f() { while (True) { printf(\"\"); } }",
+            "constant infinite for loop": "int sub f() { for (;;) { printf(\"\"); } }",
+            "constant infinite do while loop": "int sub f(int i) { do { ++i; } while (True); }",
+            "loop left with break by an inner loop only": "int sub f() { while (True) { while (True) { break; } } }",
+            "switch with a default case": "int sub f(int i) { switch (i) { case 1: return 1; default: return 2; } }",
+            "switch whose cases fall through to a return":
+                "int sub f(int i) { switch (i) { case 1: i = 2; default: return i; } }",
+            "switch over an enum":
+                "enum E { A = 1, B = 2 } int sub f(E e) { switch (e) { case E::A: return 1; case E::B: return 2; } }",
+            "switch over a boolean": "int sub f(bool b) { switch (b) { case True: return 1; case False: return 2; } }",
+            "switch with relational cases":
+                "int sub f(int i) { switch (i) { case < 0: return -1; case >= 0: return 1; } }",
+            "switch over an untyped value": "int sub f(auto a) { switch (a) { case 1: return 1; } }",
+            "on_exit handler that throws": "int sub f() { on_exit { throw \"X\"; } }",
+            "foreach over an iterator object": "int sub f(AbstractIterator i) { foreach auto v in (i) { return 1; } }",
+            "map over an iterator object": "int sub f(AbstractIterator i) { list<auto> l = map $1, i; }",
+            "delete": "int sub f(object o) { delete o; }",
+            "new hashdecl value": "hashdecl H { int a = 1; } int sub f() { hash<H> h = new hash<H>(); }",
+            "new complex list": "int sub f() { list<int> l = new list<int>(); }",
+            "closure that returns": "sub f() { code c = int sub () { return 1; }; }",
+            "closure that throws": "sub f() { code c = int sub () { throw \"X\"; }; }",
+            "closure with no return type": "int sub f() { code c = sub () { printf(\"\"); }; return 1; }",
+            "background call": "sub t() { throw \"X\"; } int sub f() { background t(); return 1; }",
+            "method that returns": "class C { int m() { return 1; } }",
+            "abstract method": "class C { abstract int m(); }",
+            "call of exec()": "int sub f(string c) { exec(c); }",
+            "call of call_function()": "int sub f() { call_function(\"g\"); } sub g() {}",
+            "builtin given a call reference": "int sub f(list<int> l, code c) { sort(l, c); }",
+            "callref exec pseudo-method": "int sub f(code c) { c.exec(); }",
+            "member of an object": "class C { public { int a; } } int sub f(C c) { int i = c.a; }",
+            "on_exit handler that exits in a try block":
+                "int sub f() { try { on_exit exit(1); printf(\"\"); return 1; } catch (hash<ExceptionInfo> ex) {} }",
+            "on_error handler that exits in a try block":
+                "int sub f() { try { on_error exit(1); printf(\"\"); return 1; } catch (hash<ExceptionInfo> ex) {} }",
+            "constant string condition": "int sub f() { if (\"yes\") { return 1; } }",
+            "constant string loop condition": "int sub f() { while (\"yes\") { printf(\"\"); } }",
+        };
+    }
+
+    constructor() : QUnit::Test("MissingReturnTest", "1.0") {
+        addTestCase("missing return", \missingReturnTest());
+        addTestCase("no missing return", \noMissingReturnTest());
+        addTestCase("error", \errorTest());
+        addTestCase("runtime parse", \runtimeParseTest());
+        addTestCase("code that runs", \runTest());
+        set_return_value(main());
+    }
+
+    missingReturnTest() {
+        foreach hash<auto> i in (Missing.pairIterator()) {
+            assertEq(1, parseErrors(i.value).size(), i.key);
+        }
+    }
+
+    noMissingReturnTest() {
+        foreach hash<auto> i in (NotMissing.pairIterator()) {
+            assertEq((), parseErrors(i.value), i.key);
+        }
+    }
+
+    errorTest() {
+        Program p(PO_MODERN);
+        try {
+            p.parse("sub g() {}\nint sub f() {\n    g();\n}\n", "missing-return-error");
+            fail("no exception raised");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("MISSING-RETURN", ex.err);
+            assertEq("this code block has declared return type 'int' but the end of the block can be reached "
+                "without a return statement", ex.desc);
+            assertEq("missing-return-error", ex.file);
+            # the location of the body, from its first statement to its end
+            assertEq(3, ex.line);
+            assertEq(4, ex.endline);
+        }
+        # the name of a complex type
+        list<hash<ExceptionInfo>> errs = parseErrors("hash<string, int> sub f() {}");
+        assertEq(1, errs.size());
+        assertEq("this code block has declared return type 'hash<string, int>' but the end of the block can be "
+            "reached without a return statement", errs[0].desc);
+        # every missing return is reported
+        errs = parseErrors("int sub f() {} string sub g() {} class C { int m() {} }");
+        assertEq(3, errs.size());
+        # with %broken-loop-statement, continue in a switch statement leaves the switch statement
+        errs = parseErrors("%old-style\n%broken-loop-statement\n%allow-bare-refs\n"
+            "int sub f(int x) { do { switch (x) { default: continue; } return 1; } while (False); }");
+        assertEq(0, errs.size());
+        # a closure in a constant, which is initialized after the parse has initialized the other code
+        errs = parseErrors("const C = string sub () { printf(\"\"); };");
+        assertEq(1, errs.size());
+        errs = parseErrors("sub thrower() { throw \"X\"; } const C = string sub () { thrower(); };");
+        assertEq(0, errs.size());
+        # a closure in the initializer of a member
+        errs = parseErrors("class X { public { code c = int sub () { printf(\"\"); }; } }");
+        assertEq(1, errs.size());
+    }
+
+    #! code parsed at run time is checked with the return type of the code parsed, not that of the running code
+    runtimeParseTest() {
+        Program p(PO_MODERN);
+        p.parse("sub g() {} int sub ret() { return 1; }", "runtime-parse");
+        # the code is parsed while Program::getExpression(), which returns an Expression, runs
+        Expression e = p.getExpression("sub () { printf(\"\"); }", "closure");
+        assertEq(NOTHING, e.eval()());
+        e = p.getExpression("sub () { g(); }", "closure-call");
+        assertEq(NOTHING, e.eval()());
+        # a closure with a declared return type is checked; it calls the code that has been parsed
+        assertThrows("MISSING-RETURN", \p.getExpression(), ("int sub () {}", "missing"));
+        assertThrows("MISSING-RETURN", \p.getExpression(), ("int sub () { g(); }", "missing"));
+        e = p.getExpression("int sub () { ret(); return 2; }", "returns");
+        assertEq(2, e.eval()());
+        # code parsed while a function with a return type runs is checked with its own return type
+        assertEq(1, runtimeParseInt());
+    }
+
+    #! a function with a return type that parses code that has none
+    int runtimeParseInt() {
+        Program p(PO_MODERN);
+        p.parse("sub g() { printf(\"\"); }", "runtime-parse-int");
+        return 1;
+    }
+
+    #! code whose end cannot be reached runs as expected
+    runTest() {
+        Program p(PO_MODERN);
+        p.parse("sub thrower(string err) { throw err; }
+int sub f(int i) { if (i) { return i; } thrower(\"X\"); }
+int sub w(int i) { while (True) { if (++i > 3) { return i; } } }
+int sub s(int i) { switch (i) { case 1: return 10; default: thrower(\"Y\"); } }
+final class C { throwIt() { throw \"Z\"; } int m(int i) { if (i) { return i; } throwIt(); } }
+int sub m(int i) { return (new C()).m(i); }
+", "run");
+        assertEq(2, p.callFunction("f", 2));
+        assertThrows("X", \p.callFunction(), ("f", 0));
+        assertEq(4, p.callFunction("w", 0));
+        assertEq(10, p.callFunction("s", 1));
+        assertThrows("Y", \p.callFunction(), ("s", 2));
+        assertEq(3, p.callFunction("m", 3));
+        assertThrows("Z", \p.callFunction(), ("m", 0));
+    }
+
+    #! returns the MISSING-RETURN errors of parsing the code
+    static list<hash<ExceptionInfo>> parseErrors(string code) {
+        Program p(PO_MODERN);
+        list<hash<ExceptionInfo>> rv = ();
+        hash<ExceptionInfo> ex;
+        try {
+            p.parse(code, "missing-return");
+            return rv;
+        } catch (hash<ExceptionInfo> ex0) {
+            ex = ex0;
+        }
+        # one exception per error, chained in ex.next
+        *hash<ExceptionInfo> e = ex;
+        while (e) {
+            if (e.err == "MISSING-RETURN") {
+                rv += e;
+            } else {
+                throw e.err, sprintf("%s: %s (%s:%d)", e.err, e.desc, e.file, e.line);
+            }
+            e = e.next;
+        }
+        return rv;
+    }
+}

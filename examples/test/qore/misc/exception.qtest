@@ -219,6 +219,10 @@ class ExceptionTest inherits QUnit::Test {
         if (False) {
             return True;
         }
+        # the end is reached at run time without a return statement: the call of a closure keeps the parse from
+        # knowing that it is, which would be a MISSING-RETURN parse error (issue #5940)
+        code c = sub () {};
+        c();
     }
 
     testSimpleTryCatch() {

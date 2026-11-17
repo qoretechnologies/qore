@@ -59,6 +59,7 @@
 #include <cstring>
 #include <iostream>
 #include "qore/intern/QoreDeferredRelease.h"
+#include "qore/intern/QoreCompletionAnalysis.h"
 
 // Defined in Function.cpp - collects all local variables from a StatementBlock and nested blocks
 extern void collectAllStatementLocals(const StatementBlock* block, std::vector<LocalVar*>& locals);
@@ -639,6 +640,8 @@ int StatementBlock::parseInitImpl(QoreParseContext& parse_context) {
     // function has the local variables that its condition and log message are checked with
     setParseScope();
 
+    parse_initialized = true;
+
     //printd(5, "StatementBlock::parseInitImpl(this=%p): done (lvars=%p, %d vars, vstack = %p)\n", this, lvars, lvids,
     //    getVStack());
     return err;
@@ -654,25 +657,27 @@ int StatementBlock::parseInit(UserVariantBase* uvb, const QoreClass* class_ctx) 
     // initialize code block
     QoreParseContext parse_context(class_ctx);
     int err = parseInitImpl(parse_context);
-    if (parseCheckReturn() && !err) {
+    if (parseCheckReturn(uvb) && !err) {
         err = -1;
     }
     return err;
 }
 
-int StatementBlock::parseCheckReturn() {
-    const QoreTypeInfo* returnTypeInfo = getReturnTypeInfo();
-    if (QoreTypeInfo::hasType(returnTypeInfo) && !QoreTypeInfo::parseAccepts(returnTypeInfo, nothingTypeInfo)) {
-        // make sure the last statement is a return statement if the block has a return type
-        if (statement_list.empty() || !(*statement_list.last())->hasFinalReturn()) {
-            QoreStringNode* desc = new QoreStringNode("this code block has declared return type ");
-            QoreTypeInfo::getThisType(returnTypeInfo, *desc);
-            desc->concat(" but does not have a return statement as the last statement in the block");
-            qore_program_private::makeParseException(getProgram(), *loc, "MISSING-RETURN", desc);
-            return -1;
-        }
+int StatementBlock::parseCheckReturn(const UserVariantBase* uvb) {
+    assert(uvb->getStatementBlock() == this);
+    // the declared return type of the code parsed (and not that of the code running in the thread, which can be
+    // parsing it at run time; issue #5940)
+    const QoreTypeInfo* returnTypeInfo = uvb->getUserSignature()->getReturnTypeInfo();
+    if (!QoreTypeInfo::hasType(returnTypeInfo) || QoreTypeInfo::parseAccepts(returnTypeInfo, nothingTypeInfo)) {
+        return 0;
     }
-    return 0;
+    QoreProgram* pgm = getProgram();
+    // the check of code initialized by a parse waits until the parse has initialized all of its code, as it
+    // analyzes the code of the functions and methods called
+    if (qore_program_private::get(*pgm)->deferMissingReturnCheck(uvb)) {
+        return 0;
+    }
+    return qore_parse_check_missing_return(pgm, uvb);
 }
 
 int StatementBlock::parseInitMethod(const QoreTypeInfo* typeInfo, UserVariantBase* uvb) {
@@ -689,7 +694,7 @@ int StatementBlock::parseInitMethod(const QoreTypeInfo* typeInfo, UserVariantBas
         parse_context.setFlags(PF_CONST_METHOD);
     }
     int err = parseInitImpl(parse_context);
-    if (parseCheckReturn() && !err) {
+    if (parseCheckReturn(uvb) && !err) {
         err = -1;
     }
     return err;
@@ -741,7 +746,7 @@ int StatementBlock::parseInitClosure(UserVariantBase* uvb, UserClosureFunction* 
         parse_context.setFlags(PF_CONST_METHOD);
     }
     int err = parseInitImpl(parse_context);
-    if (parseCheckReturn() && !err) {
+    if (parseCheckReturn(uvb) && !err) {
         err = -1;
     }
     return err;

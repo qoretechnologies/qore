@@ -44,10 +44,6 @@ public:
     DLLLOCAL WhileStatement(int start_line, int end_line, QoreValue c, StatementBlock* cd);
     DLLLOCAL virtual ~WhileStatement();
 
-    // faked here; checked at runtime
-    DLLLOCAL virtual bool hasFinalReturn() const {
-        return true;
-    }
     DLLLOCAL virtual void parseCommit(QoreProgram* pgm);
 
     DLLLOCAL QoreValue getCond() const {

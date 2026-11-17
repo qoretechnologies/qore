@@ -141,7 +141,11 @@ public class DataProviderBulkRecordIterator inherits AbstractDataProviderRecordI
     }
 
     #! This method is never called by this implementation
+    /** @throw UNSUPPORTED-OPERATION always: next() does not call it
+    */
     private bool nextImpl() {
+        throw "UNSUPPORTED-OPERATION", sprintf("%s::nextImpl() is not used; call %s::next() instead",
+            self.className(), self.className());
     }
 }
 }

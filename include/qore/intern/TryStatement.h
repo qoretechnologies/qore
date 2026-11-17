@@ -44,8 +44,6 @@ public:
 
     DLLLOCAL virtual ~TryStatement();
 
-    DLLLOCAL virtual bool hasFinalReturn() const;
-
     DLLLOCAL virtual void parseCommit(QoreProgram* pgm);
 
     DLLLOCAL class StatementBlock* getTryBlock() const {

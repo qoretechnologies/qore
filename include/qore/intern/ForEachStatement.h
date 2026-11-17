@@ -48,10 +48,6 @@ public:
         QoreValue var, QoreValue list, StatementBlock* code);
     DLLLOCAL ForEachStatement(int start_line, int end_line, QoreValue v, QoreValue l, StatementBlock* cd);
     DLLLOCAL virtual ~ForEachStatement();
-    // faked here, checked at runtime
-    DLLLOCAL virtual bool hasFinalReturn() const {
-        return true;
-    }
     DLLLOCAL virtual void parseCommit(QoreProgram* pgm);
 
     // Accessors for IR lowering

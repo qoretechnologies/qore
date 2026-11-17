@@ -82,11 +82,6 @@ public:
             StatementBlock* cd);
     DLLLOCAL virtual ~ContextStatement();
 
-    // faked here; checked at runtime
-    DLLLOCAL virtual bool hasFinalReturn() const {
-        return false;
-    }
-
     DLLLOCAL virtual void parseCommit(QoreProgram* pgm);
 
 protected:

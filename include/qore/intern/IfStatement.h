@@ -44,9 +44,6 @@ public:
     DLLLOCAL IfStatement(int start_line, int end_line, QoreValue c, StatementBlock* i, StatementBlock* e = nullptr);
     DLLLOCAL virtual ~IfStatement();
 
-    DLLLOCAL virtual bool hasFinalReturn() const {
-        return if_code && if_code->hasFinalReturn() && else_code && else_code->hasFinalReturn();
-    }
     DLLLOCAL virtual void parseCommit(QoreProgram* pgm);
 
     DLLLOCAL QoreValue getCond() const {

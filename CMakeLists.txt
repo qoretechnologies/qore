@@ -1742,6 +1742,7 @@ set(LIBQORE_CPP_SRC
     lib/ForStatement.cpp
     lib/ForEachStatement.cpp
     lib/TryStatement.cpp
+    lib/QoreCompletionAnalysis.cpp
     lib/RethrowStatement.cpp
     lib/ThrowStatement.cpp
     lib/AssertStatement.cpp
@@ -2106,6 +2107,7 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_SOURCE_DIR}/lib/ForStatement.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/ForEachStatement.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/TryStatement.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreCompletionAnalysis.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/ThrowStatement.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/AssertStatement.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/DebugStatement.cpp\"

@@ -880,6 +880,11 @@
     @ref Qore::get_http_accept_charset() "get_http_accept_charset()"); 2.2.1 took the first charset unless the value
     or an element directly after a comma began with UTF-8 or \c "*", whatever the weights (issue #6343).
 
+    @par Code with a Return Type Whose End Can Be Reached Is a Parse Error
+    A function, method or closure whose declared return type does not accept @ref nothing "NOTHING" and whose end can
+    certainly be reached without a \c return statement now raises a \c MISSING-RETURN parse error (see
+    @ref missing_return); 2.2.1 did not check it, or checked it with the return type of the running code (issue #5940).
+
     @subsection qore_3_0_0_new_features New Features in Qore
     @par Strict Number Parsing
     @ref parse_int(string, string, bool) "parse_int()", @ref parse_float(string, string, bool) "parse_float()" and

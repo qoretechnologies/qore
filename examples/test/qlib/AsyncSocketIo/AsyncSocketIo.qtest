@@ -1883,6 +1883,7 @@ class SimpleStringHandler inherits AbstractHttpRequestHandler {
         } else if (hdr.method == "POST") {
             return makeResponse(200, m_data ?? binary(body), {"Content-Type": m_mime});
         }
+        return makeResponse(405, "method not allowed");
     }
 
     static interruptibleSleep(*Counter entered = NOTHING) {
