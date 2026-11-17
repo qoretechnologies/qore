@@ -492,10 +492,17 @@ QORE_INTERN_ALWAYS_INLINE QoreValue AbstractMethodCallNode::execImpl(LexicalSema
             return qore_method_private::evalNormalVariantWithPolicy<Lexical>(policy, *method, xsink, rc, o,
                 reinterpret_cast<const QoreExternalMethodVariant*>(variant), args, explicit_inst);
         }
-        return runtime_arg_names
-            ? execNamed(policy, o, method, c_str, ctx, rc, xsink)
-            : qore_method_private::evalWithPolicy<Lexical>(policy, *method, xsink, rc, o, args, ctx, nullptr, nullptr,
-                explicit_inst);
+        if (runtime_arg_names) {
+            return execNamed(policy, o, method, c_str, ctx, rc, xsink);
+        }
+        // a static method called through an object (not through self in a method: s()) checks the object after the
+        // arguments, as the call of a variant resolved at parse time does above (issue #6056)
+        if (qore_method_private::get(*method)->static_flag && getType() != NT_SELF_CALL) {
+            return qore_method_private::evalStaticOnObject<Lexical>(policy, *method, xsink, rc, o, args, ctx,
+                nullptr, explicit_inst);
+        }
+        return qore_method_private::evalWithPolicy<Lexical>(policy, *method, xsink, rc, o, args, ctx, nullptr,
+            nullptr, explicit_inst);
     }
     return execByNameImpl<Lexical>(policy, o, c_str, ctx, rc, xsink);
 }

@@ -756,6 +756,18 @@ lock();
     @endcode\n
     Calls to object methods can be made outside the class by using the above syntax as well. If the object's class is not known at parse time, then the call is resolved at run-time, and if a call is attempted to a private function outside the defining class, then a run-time \c METHOD-IS-PRIVATE (if the method is private) or \c BASE-CLASS-IS-PRIVATE (if the method resolves to a privately-inherited base class) exception is raised.
 
+    @anchor method_call_deleted_object
+    @par Method Calls on a Deleted Object
+    A method call on an object chooses what it calls before its arguments are evaluated: a method of the object's
+    class, a static method of the class, a member holding a call reference, a pseudo-method of objects or the
+    @ref methodGate_methods "methodGate()" method of the class.  A call on an object that has been deleted raises
+    \c OBJECT-ALREADY-DELETED; when the arguments of the call delete the object, the call raises it after them and
+    nothing is called: <tt>cannot call C::m() on an object that has already been deleted</tt>, naming the class of the
+    method that the call would run (\c C::methodGate() for a call that \c methodGate() would receive), or, for a member
+    holding a call reference or a pseudo-method, the class of the object and the name of the call.  A static method
+    called in a method of its class without an object (<tt>s()</tt>) is called whatever its arguments did to the
+    object.  The behavior is the same in every @ref exec_mode_overview "execution mode".
+
     @anchor methodGate_methods
     @par methodGate() methods
     If the class implements a \c methodGate() method, then whenever a non-existent method of the class is called, the methodGate() method will be called with the name of the member as the first argument (prepended to the other arguments to the non-existant method), so that the class simulate or redirect the method call.  This method is also called when methods of the same class try to call non-existent methods, but is not called from within the \c methodGate() method itself.

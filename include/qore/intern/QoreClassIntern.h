@@ -6021,6 +6021,18 @@ public:
         }
     }
 
+    //! calls the static method @a m through the object @a self (o.s()), as eval() does, checking the object after the
+    //! arguments: arguments that deleted it raise the error of a method call on a deleted object (issue #6056)
+    /** Not for a call through self without an object (s() in a method), which calls the static method whatever the
+        arguments did to the object; the variant is resolved with the arguments first, as for a method call
+        (qore_object_private::startCall())
+    */
+    template <bool Lexical>
+    DLLLOCAL static QoreValue evalStaticOnObject(LexicalSemanticPolicy policy, const QoreMethod& m,
+            ExceptionSink* xsink, RuntimeConfig& rc, QoreObject* self, const QoreListNode* args,
+            const qore_class_private* cctx, QoreProgram* pgm_ctx,
+            const QoreTypeParamInstantiation* explicit_type_param_instantiation);
+
     template <bool Lexical, typename... Args>
     DLLLOCAL static QoreValue evalTmpArgsWithPolicy(LexicalSemanticPolicy policy, Args&&... args) {
         if constexpr (Lexical) {

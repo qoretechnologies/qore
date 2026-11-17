@@ -1,0 +1,31 @@
+member closure, untyped, deleted by an argument: OBJECT-ALREADY-DELETED: cannot call MemberClosure::f() on an object that has already been deleted
+member closure, typed, deleted by an argument: OBJECT-ALREADY-DELETED: cannot call MemberClosure::f() on an object that has already been deleted
+member closure, deleted by a closure argument: OBJECT-ALREADY-DELETED: cannot call MemberClosure::f() on an object that has already been deleted
+member closure, deleted before: OBJECT-ALREADY-DELETED: cannot call MemberClosure::f() on an object that has already been deleted
+member closure, not deleted: "closure 2"
+member closure, reference argument: 2
+methodGate, untyped, deleted by an argument: OBJECT-ALREADY-DELETED: cannot call GateClass::methodGate() on an object that has already been deleted
+methodGate, typed, deleted by an argument: OBJECT-ALREADY-DELETED: cannot call GateClass::methodGate() on an object that has already been deleted
+methodGate, subclass, deleted by an argument: METHOD-DOES-NOT-EXIST: no method GateChild::anything() has been defined and no pseudo-method <object>::anything() is available (class lang: Qore)
+methodGate, deleted by a closure argument: OBJECT-ALREADY-DELETED: cannot call GateClass::methodGate() on an object that has already been deleted
+methodGate, arguments that it does not accept, deleted by an argument: OBJECT-ALREADY-DELETED: cannot call StrictGate::methodGate() on an object that has already been deleted
+methodGate, member that is not code, deleted by an argument: OBJECT-ALREADY-DELETED: cannot call GateMember::methodGate() on an object that has already been deleted
+methodGate, deleted before: OBJECT-ALREADY-DELETED: cannot call GateClass::anything() on an object that has already been deleted
+methodGate, not deleted: "gate anything(2)"
+pseudo-method, untyped, deleted by an argument: OBJECT-ALREADY-DELETED: cannot call Priv::hasCallableMethod() on an object that has already been deleted
+pseudo-method, typed, deleted by an argument: OBJECT-ALREADY-DELETED: cannot call Priv::hasCallableMethod() on an object that has already been deleted
+pseudo-method, deleted by a closure argument: OBJECT-ALREADY-DELETED: cannot call Priv::hasCallableMethod() on an object that has already been deleted
+pseudo-method, deleted before: OBJECT-ALREADY-DELETED: cannot call Priv::hasCallableMethod() on an object that has already been deleted
+pseudo-method, not deleted: True
+static method, untyped, deleted by an argument: OBJECT-ALREADY-DELETED: cannot call St::s() on an object that has already been deleted
+static method, typed, deleted by an argument: OBJECT-ALREADY-DELETED: cannot call St::s() on an object that has already been deleted
+static method, subclass, deleted by an argument: OBJECT-ALREADY-DELETED: cannot call St::s() on an object that has already been deleted
+static method, deleted by a closure argument: OBJECT-ALREADY-DELETED: cannot call St::s() on an object that has already been deleted
+static method, overloaded, deleted by an argument: OBJECT-ALREADY-DELETED: cannot call St::s2() on an object that has already been deleted
+static method, no variant for the arguments, deleted by an argument: RUNTIME-OVERLOAD-ERROR: no variant matching '::St::s2(integer, integer)' can be found; the following variants were tested:
+   ::St::s2(int a)
+   ::St::s2(string a)
+static method, through self, deleted by an argument: OBJECT-ALREADY-DELETED: cannot call St::s() on an object that has already been deleted
+static method, call through self without an object, deleted by an argument: "static 1"
+static method, deleted before: OBJECT-ALREADY-DELETED: cannot call St::s() on an object that has already been deleted
+static method, not deleted: "static 2"

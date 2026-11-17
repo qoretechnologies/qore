@@ -1,0 +1,74 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes and in programs compiled with qcc
+# test-platform: macos - JIT and AOT code generation of the check of a method call's target after its arguments
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../../TestInterpreter.qm
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class DeletedByArgsCallTargetsTest
+
+#! Regression test for issue #6056: arguments that delete the object of a call raise OBJECT-ALREADY-DELETED for every
+#! target of the call
+/** A call on an object whose arguments delete it raises OBJECT-ALREADY-DELETED in every execution mode when it is made
+    to a member holding a closure, to methodGate(), to a pseudo-method of \<object\> or to a static method called
+    through the object, as for a method (issue #5824); the AST interpreter made the call, except to methodGate(), and
+    the compiled modes named the method called instead of methodGate().
+
+    DeletedByArgsCallTargets.q makes these calls with objects deleted by an argument, deleted before the call and not
+    deleted; its output must be the one in DeletedByArgsCallTargets.expected in every execution mode, on the IR tier
+    and in programs compiled with qcc -O0 and -O3.
+*/
+class DeletedByArgsCallTargetsTest inherits QUnit::Test {
+    private {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string fixture = get_script_dir() + "/DeletedByArgsCallTargets.q";
+        string expected = ReadOnlyFile::readTextFile(get_script_dir() + "/DeletedByArgsCallTargets.expected");
+    }
+
+    constructor() : QUnit::Test("deleted by arguments call targets", "1.0", \ARGV) {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            string execution_mode = mode;
+            addTestCase("execution mode " + mode, sub () {
+                assertEq(expected, ExecModeHarness::run(command(execution_mode)));
+            });
+        }
+        addTestCase("IR tier", sub () {
+            assertEq(expected, ExecModeHarness::run_ir_tier(command("tiered")));
+        });
+        addTestCase("qcc -O0", sub () { checkQcc(0); });
+        addTestCase("qcc -O3", sub () { checkQcc(3); });
+
+        set_return_value(main());
+    }
+
+    private string command(string mode) {
+        return sprintf("%s --enable-debug --exec-mode=%s %s", shellQuote(qore_bin), mode, shellQuote(fixture));
+    }
+
+    #! compiles the fixture with qcc and compares the output of the program
+    private checkQcc(int opt) {
+        string qcc_bin = ENV.QCC_BIN ?? dirname(qore_bin) + "/qcc";
+        if (!is_file(qcc_bin)) {
+            qcc_bin = "qcc";
+        }
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        string program = dir + "/deleted-by-args-call-targets";
+        string output = backquote(sprintf("%s -O%d -o %s %s 2>&1", shellQuote(qcc_bin), opt, shellQuote(program),
+            shellQuote(fixture)));
+        assertTrue(is_file(program), "the fixture compiled: " + output);
+        assertEq(expected, backquote(shellQuote(program) + " 2>&1"));
+    }
+
+    private static string shellQuote(string value) {
+        return "'" + replace(value, "'", "'\\''") + "'";
+    }
+}

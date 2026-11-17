@@ -675,12 +675,28 @@ DLLLOCAL void qore_raise_deleted_method_call(ExceptionSink* xsink, const QoreObj
     over, as the call's would) as the call resolves it (NormalMethodFunction::evalMethodTmpArgs()), unless @a variant
     is given; the error of the resolution is raised if it fails, otherwise the error of the method's code, which names
     the class of the variant.  The compiled modes evaluate a call's arguments before the call: their check of the
-    call's target after the arguments raises it instead of the call.
+    call's target after the arguments raises it instead of the call.  A static method called through the object
+    (o.s()) is resolved as StaticMethodFunction::evalMethodTmpArgs() resolves it, with the object as the receiver of
+    the call, and raises the error of qore_method_private::evalStaticOnObject() (issue #6056).
 */
 DLLLOCAL void qore_raise_deleted_method_call_after_args(QoreObject* self, const QoreMethod& m,
         const AbstractQoreFunctionVariant* variant, QoreListNode* args, const qore_class_private* cctx,
         const QoreTypeParamInstantiation* explicit_type_param_instantiation, const name_vec_t* arg_names,
         ExceptionSink* xsink);
+
+//! Raises the exception of a call by the name @a name on the object @a self that the call's arguments deleted, when
+//! the class of the object has no method of that name (issue #6056)
+/** The call is made to a member holding a call reference, to a pseudo-method of \<object\> or to methodGate(), as
+    qore_eval_missing_method() chooses it; the AST interpreter chooses it before the arguments are evaluated, and raises
+    the error after them: "cannot call <class>::<name>()", naming the class of the object, for a member or a
+    pseudo-method, or "cannot call <class>::methodGate()", naming the class of methodGate(), which the call of
+    methodGate() raises when it starts, before its variant is resolved.
+
+    The members of a deleted object are gone: a member that the call would have called is recognized by its
+    declaration, as a member whose type accepts a call reference.
+*/
+DLLLOCAL void qore_raise_deleted_missing_method_call_after_args(QoreObject* self, const char* name,
+        const qore_class_private* class_ctx, ExceptionSink* xsink);
 
 //! Returns the node as a FunctionCallNode if it is one, otherwise nullptr
 /** The same result as dynamic_cast<const FunctionCallNode*>(), from the node type: a FunctionCallNode has

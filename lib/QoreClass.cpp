@@ -45,6 +45,8 @@
 #include "qore/intern/RuntimeConfig.h"
 #include "qore/intern/QoreLibIntern.h"
 #include "qore/intern/QoreForkHandlers.h"
+#include "qore/intern/CallReferenceNode.h"
+#include "qore/intern/QoreClosureNode.h"
 
 #include <algorithm>
 #include <atomic>
@@ -5569,6 +5571,54 @@ QoreValue qore_class_private::getMemberCode(QoreObject* self, const char* nme, c
     return QoreValue();
 }
 
+//! evaluates the arguments of a call to a member holding a call reference or to a pseudo-method of an object, whose
+//! target was chosen before them, then checks the object again (issue #6056)
+/** Arguments that deleted the object raise the error of a call on a deleted object, which names the class of the
+    object, as the compiled modes raise it: they evaluate the arguments of a call before it, and their dispatch by name
+    rejects the deleted object (qore_class_private::evalMethod(), qore_raise_deleted_missing_method_call_after_args()).
+    Arguments that need no evaluation have no effect on the object, which the call checked before them.
+
+    @return -1 if an exception was raised, 0 if not
+*/
+static QORE_INTERN_NOINLINE int qore_eval_missing_method_args(QoreObject* self, const char* nme,
+        const QoreListNode* args, QoreListNodeEvalOptionalRefHolder& call_args, ExceptionSink* xsink) {
+    call_args.assignEval(args);
+    if (*xsink) {
+        return -1;
+    }
+    if (!self->isValid()) {
+        qore_raise_deleted_object(xsink, "cannot call %s::%s() on an object that has already been deleted",
+            self->getClassName(), nme);
+        return -1;
+    }
+    return 0;
+}
+
+//! calls the call reference @a ref of a member with the arguments that qore_eval_missing_method_args() evaluated
+/** The parameters of a closure or of a reference to user code take the values of a list that the call evaluated over,
+    as when the call reference evaluates its arguments itself (see qore_class_eval_member_code_given_args()), so that a
+    write to a parameter releases its argument (issue #5882)
+*/
+template <bool Lexical>
+static QORE_INTERN_NOINLINE QoreValue qore_invoke_member_code(LexicalSemanticPolicy policy,
+        const ResolvedCallReferenceNode* ref, QoreListNodeEvalOptionalRefHolder& call_args, ExceptionSink* xsink) {
+    if (call_args.needsDeref()) {
+        // the list is the call's own: its values can be taken over; a closure runs Qore code, which takes no policy
+        if (ref->getType() == NT_RUNTIME_CLOSURE) {
+            return static_cast<const QoreClosureBase*>(ref)->execValueTmpArgs(*call_args, xsink);
+        }
+        if constexpr (!Lexical) {
+            if (auto* rcr = dynamic_cast<const ResolvedCallReferenceNodeIntern*>(ref)) {
+                // execValueTmpArgs() does not apply the sandbox provenance of the reference, which invoke() does
+                QoreSandboxProvenanceHelper provenance(ref);
+                return rcr->execValueTmpArgs(*call_args, xsink);
+            }
+        }
+    }
+    if constexpr (Lexical) return ref->invokeLexical(*call_args, xsink, policy);
+    else return ref->invoke(*call_args, xsink);
+}
+
 // Member-call references, pseudo-methods and methodGate are only considered after method lookup fails.
 // Their ownership/locking locals must not reserve stack space on the ordinary method-call path.
 template <bool Lexical>
@@ -5602,8 +5652,12 @@ static QORE_INTERN_NOINLINE QoreValue qore_eval_missing_method(const qore_class_
                 const ResolvedCallReferenceNode* ref =
                     dynamic_cast<const ResolvedCallReferenceNode*>(mv.getInternalNode());
                 if (ref) {
-                    if constexpr (Lexical) return ref->invokeLexical(args, xsink, policy);
-                    else return ref->invoke(args, xsink);
+                    // the member's value, chosen before the arguments, is called after them (issue #6056)
+                    QoreListNodeEvalOptionalRefHolder call_args(xsink);
+                    if (qore_eval_missing_method_args(self, nme, args, call_args, xsink)) {
+                        return QoreValue();
+                    }
+                    return qore_invoke_member_code<Lexical>(policy, ref, call_args, xsink);
                 }
             }
         }
@@ -5613,7 +5667,13 @@ static QORE_INTERN_NOINLINE QoreValue qore_eval_missing_method(const qore_class_
     QoreClass* qc = nullptr;
     const QoreMethod* w = pseudo_classes_find_method(NT_OBJECT, nme, qc);
     if (w) {
-        return qore_method_private::evalPseudoMethodWithPolicy<Lexical>(policy, *w, xsink, rc, nullptr, self, args);
+        // the object is checked again after the arguments (issue #6056)
+        QoreListNodeEvalOptionalRefHolder call_args(xsink);
+        if (qore_eval_missing_method_args(self, nme, args, call_args, xsink)) {
+            return QoreValue();
+        }
+        return qore_method_private::evalPseudoMethodWithPolicy<Lexical>(policy, *w, xsink, rc, nullptr, self,
+            *call_args);
     } else if (qcp.methodGate && !qcp.methodGate->inMethod(self)) { // call methodGate with unknown method name and arguments
         return qcp.evalMethodGateImpl<Lexical>(policy, self, nme, args, xsink);
     }
@@ -5655,6 +5715,11 @@ QORE_INTERN_ALWAYS_INLINE QoreValue qore_class_private::evalMethodImpl(LexicalSe
     }
 
     if (w) {
+        // a static method called through the object checks it after the arguments (issue #6056)
+        if (qore_method_private::get(*w)->static_flag) {
+            return qore_method_private::evalStaticOnObject<Lexical>(policy, *w, xsink, rc, self, args, class_ctx,
+                pgm_ctx, explicit_type_param_instantiation);
+        }
         return qore_method_private::evalWithPolicy<Lexical>(policy, *w, xsink, rc, self, args, class_ctx, pgm_ctx, nullptr,
             explicit_type_param_instantiation);
     }
@@ -8908,11 +8973,40 @@ static QORE_INTERN_NOINLINE void raise_abstract_variant_call(ExceptionSink* xsin
         f->getClassName(), f->getName(), mv->getSignature()->getSignatureText());
 }
 
+// raises the error of a static method called through an object that its arguments deleted, as
+// qore_method_private::evalStaticOnObject() raises it (issue #6056)
+static QORE_INTERN_NOINLINE void qore_raise_deleted_static_call_after_args(QoreObject* self, const QoreMethod& m,
+        const AbstractQoreFunctionVariant* variant, QoreListNode* args, const qore_class_private* cctx,
+        const QoreTypeParamInstantiation* explicit_type_param_instantiation, ExceptionSink* xsink) {
+    const StaticMethodFunction* f = SMETHF(qore_method_private::get(m)->getFunction());
+    const QoreClass* qc = f->getClass();
+    RuntimeConfig& rc = rc_get_current_ref();
+    QoreSourceProgramHolder spgm_holder(xsink);
+    {
+        // as StaticMethodFunction::evalMethodTmpArgs(), which the call runs: the variant is resolved with the
+        // arguments, raising the error of the resolution, with the object as the receiver of the call
+        CodeEvaluationHelper ceh(xsink, rc, f, variant, f->getName(), args, nullptr, qore_class_private::get(*qc),
+            CT_UNUSED, false, cctx, qore_get_method_pgm_context(*qc, spgm_holder),
+            qore_get_object_receiver_type_info(self), explicit_type_param_instantiation);
+        if (*xsink) {
+            return;
+        }
+    }
+    qore_object_private::get(*self)->raiseDeletedCall(qore_class_private::get(*METHV_const(variant)->getClass()),
+        f->getName(), xsink);
+}
+
 void qore_raise_deleted_method_call_after_args(QoreObject* self, const QoreMethod& m,
         const AbstractQoreFunctionVariant* variant, QoreListNode* args, const qore_class_private* cctx,
         const QoreTypeParamInstantiation* explicit_type_param_instantiation, const name_vec_t* arg_names,
         ExceptionSink* xsink) {
-    assert(!m.isStatic());
+    if (qore_method_private::get(m)->static_flag) {
+        // a named call of a static method is not checked (see qore_check_method_call_after_args())
+        assert(!arg_names);
+        qore_raise_deleted_static_call_after_args(self, m, variant, args, cctx, explicit_type_param_instantiation,
+            xsink);
+        return;
+    }
     const NormalMethodFunction* f = NMETHF(qore_method_private::get(m)->getFunction());
     RuntimeConfig& rc = rc_get_current_ref();
     QoreSourceProgramHolder spgm_holder(xsink);
@@ -8936,6 +9030,78 @@ void qore_raise_deleted_method_call_after_args(QoreObject* self, const QoreMetho
     // the error of the method's code, which names the class of the variant (CodeContextHelper)
     qore_object_private::get(*self)->raiseDeletedCall(qore_class_private::get(*mv->getClass()), f->getName(), xsink);
 }
+
+void qore_raise_deleted_missing_method_call_after_args(QoreObject* self, const char* name,
+        const qore_class_private* class_ctx, ExceptionSink* xsink) {
+    assert(!self->isValid());
+    // the target that qore_eval_missing_method() chooses: a member holding a call reference, then a pseudo-method,
+    // then methodGate()
+    const qore_class_private* qcp = qore_class_private::get(*self->getClass());
+    bool gate = qcp->methodGate && !qcp->methodGate->inMethod(self);
+    if (gate) {
+        QoreClass* pseudo_qc = nullptr;
+        if (pseudo_classes_find_method(NT_OBJECT, name, pseudo_qc)) {
+            gate = false;
+        } else if (const QoreMemberInfo* mi = qcp->runtimeGetMemberInfo(name, class_ctx)) {
+            // the value of the member is gone with the object: a member that can hold a call reference is taken to
+            // be the target
+            const QoreTypeInfo* mti = mi->getTypeInfo();
+            if (!QoreTypeInfo::hasType(mti) || QoreTypeInfo::parseAcceptsReturns(mti, NT_RUNTIME_CLOSURE)
+                    || QoreTypeInfo::parseAcceptsReturns(mti, NT_FUNCREF)) {
+                gate = false;
+            }
+        }
+    }
+    if (gate) {
+        // the error of the call of methodGate(), which its arguments, evaluated before it, deleted: raised when the
+        // call starts, before its variant is resolved (CodeEvaluationHelper), naming the class of methodGate()
+        qore_raise_deleted_object(xsink, "cannot call %s::%s() on an object that has already been deleted",
+            qcp->methodGate->getClass()->getName(), qcp->methodGate->getName());
+        return;
+    }
+    qore_raise_deleted_object(xsink, "cannot call %s::%s() on an object that has already been deleted",
+        self->getClassName(), name);
+}
+
+// documented in QoreClassIntern.h
+template <bool Lexical>
+QORE_INTERN_NOINLINE QoreValue qore_method_private::evalStaticOnObject(LexicalSemanticPolicy policy,
+        const QoreMethod& m, ExceptionSink* xsink, RuntimeConfig& rc, QoreObject* self, const QoreListNode* args,
+        const qore_class_private* cctx, QoreProgram* pgm_ctx,
+        const QoreTypeParamInstantiation* explicit_type_param_instantiation) {
+    // as StaticMethodFunction::evalMethod(), which eval() calls for a static method
+    const StaticMethodFunction* f = SMETHF(m.priv->func);
+    const QoreClass* qc = f->getClass();
+    const char* mname = f->getName();
+    const AbstractQoreFunctionVariant* variant = nullptr;
+    QoreSourceProgramHolder spgm_holder(xsink);
+    CodeEvaluationHelper ceh(std::bool_constant<Lexical>{}, policy, xsink, rc, f, variant, mname, args, nullptr,
+        qore_class_private::get(*qc), CT_UNUSED, false, cctx, qore_get_method_pgm_context(*qc, spgm_holder, pgm_ctx),
+        qore_get_object_receiver_type_info(self), explicit_type_param_instantiation);
+    if (*xsink) {
+        return QoreValue();
+    }
+    // the arguments can have deleted the object: the error of a method call, which names the class of the variant
+    // (qore_object_private::startCall())
+    if (!self->isValid()) {
+        qore_object_private::get(*self)->raiseDeletedCall(
+            qore_class_private::get(*METHV_const(variant)->getClass()), mname, xsink);
+        return QoreValue();
+    }
+    // issue #4964: set class ctx
+    ObjectSubstitutionHelper osh(nullptr, cctx);
+    if constexpr (Lexical) return METHV_const(variant)->evalLexicalMethod(nullptr, ceh, xsink);
+    else return METHV_const(variant)->evalMethod(nullptr, ceh, xsink);
+}
+
+template QoreValue qore_method_private::evalStaticOnObject<false>(LexicalSemanticPolicy policy, const QoreMethod& m,
+    ExceptionSink* xsink, RuntimeConfig& rc, QoreObject* self, const QoreListNode* args,
+    const qore_class_private* cctx, QoreProgram* pgm_ctx,
+    const QoreTypeParamInstantiation* explicit_type_param_instantiation);
+template QoreValue qore_method_private::evalStaticOnObject<true>(LexicalSemanticPolicy policy, const QoreMethod& m,
+    ExceptionSink* xsink, RuntimeConfig& rc, QoreObject* self, const QoreListNode* args,
+    const qore_class_private* cctx, QoreProgram* pgm_ctx,
+    const QoreTypeParamInstantiation* explicit_type_param_instantiation);
 
 QoreValue NormalMethodFunction::evalMethod(
         ExceptionSink* xsink, RuntimeConfig& rc,
