@@ -721,6 +721,15 @@ D::p = new Program(PO_NEW_STYLE);
     closure, so naming one is a parse error.  A static class variable's initializer is evaluated when the class is
     initialized, which can be before the top-level code has assigned the variable.
 
+    An untyped member that more than one class of the hierarchy declares (possible only without
+    @ref require-types "%require-types": a class that declares a member of a base class again, or two base classes
+    that declare the same member; a typed declaration of such a member is a parse error) is one member of the object.
+    Its initialization expressions run in the order of initialization, base classes first and in the order of the
+    inheritance list, each once: the last one gives the value, it can read the value that the one before it gave (ex:
+    <tt>class B inherits A { public { $.a = $.a + 1; } }</tt>), and the value that it replaces is released (an object
+    that nothing else references is destroyed).  A declaration without an initialization expression leaves the value
+    as it is.
+
     @note The automatic <tt>argv</tt> local variable is instantiated as usual in all class methods where there are more arguments than variables declared in the method declaration.\n\n
 
     @section object_method_calls Object Method Calls

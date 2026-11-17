@@ -16,7 +16,7 @@
 
 %exec-class CompoundAssignmentAstParityPart1
 
-#! runs part 1 of 28 of the cases of CompoundAssignmentAstParityBase: +=: the ir mode and the qcc-compiled executable
+#! runs part 1 of 70 of CompoundAssignmentAstParityBase: +=: the AST output, the ir mode and the executable
 class CompoundAssignmentAstParityPart1 inherits CompoundAssignmentAstParityBase {
     constructor() : CompoundAssignmentAstParityBase("CompoundAssignmentAstParityPart1", 1) {
     }

@@ -27,7 +27,7 @@ enum St : string {
     A = "a",
 }
 
-#! members initialized with enum values, which keep the enum type
+#! members initialized with enum values, which hold the enums' base values (qore#6274)
 class EnumMembers {
     public {
         int m = Pr::High;
@@ -126,7 +126,7 @@ sub containers() {
     showArgs("list<*int> + int (literal)", \litOrNothingIntListInt(), ((1,), 2));
     showArgs("int + list<int> (literal)", \litIntIntList(), (2, (1,)));
     showArgs("list + int (literal)", \litPlainListInt(), ((1,), 2));
-    # an int or string member initialized with an enum value keeps the enum type, which the runtime takes
+    # an int or string member initialized with an enum value holds the enum's base value (qore#6274)
     EnumMembers em();
     list<Pr> lpr = (Pr::Low,);
     list<St> lst = (St::A,);

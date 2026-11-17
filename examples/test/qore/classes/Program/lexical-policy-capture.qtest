@@ -323,12 +323,13 @@ class LexicalPolicyCaptureTest inherits QUnit::Test {
             auto expected = strict ? (NOTHING, False, False, 0, (), (1,2,3), 0, 1)
                 : (1, True, True, 3, (1,2,3), (), 3, NOTHING);
             foreach int mutation in (0, 1) {
-                assertEq(expected, p.callFunction("sample", "text"), "string predicate");
-                assertEq(expected, p.callFunction("sample", (1,2)), "list predicate");
+                assertEq(expected, p.callFunction("sample", "text"),
+                    sprintf("string predicate (mutation %d)", mutation));
+                assertEq(expected, p.callFunction("sample", (1,2)), sprintf("list predicate (mutation %d)", mutation));
                 assertEq((1, True, True, 3, (1,2,3), (), 3, NOTHING),
-                    p.callFunction("sample", True), "true scalar predicate");
+                    p.callFunction("sample", True), sprintf("true scalar predicate (mutation %d)", mutation));
                 assertEq((NOTHING, False, False, 0, (), (1,2,3), 0, 1),
-                    p.callFunction("sample", False), "false scalar predicate");
+                    p.callFunction("sample", False), sprintf("false scalar predicate (mutation %d)", mutation));
                 if (strict) p.disableParseOptions(PO_STRICT_BOOLEAN_EVAL);
                 else p.setParseOptions(PO_STRICT_BOOLEAN_EVAL);
             }

@@ -136,6 +136,8 @@ int StaticClassVarRefNode::parseInitImpl(QoreValue& val, QoreParseContext& parse
     printd(5, "StaticClassVarRefNode::parseInit() '%s::%s'\n", qc.getName(), str.c_str());
     ClassOnlySubstitutionHelper cosh(qore_class_private::get(qc));
     vi.parseInit(str.c_str());
+    // a static variable used in its own initialization expression has no value yet (qore#526)
+    QoreParseInitializerTarget::parseUse(&vi, nullptr, loc);
     parse_context.typeInfo = vi.getTypeInfo();
     return 0;
 }
