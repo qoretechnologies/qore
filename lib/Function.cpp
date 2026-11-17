@@ -2191,6 +2191,11 @@ __attribute__((noinline, cold)) int CodeEvaluationHelper::findVariantNamed(const
         return -1;
     }
     assert(bound_args);
+    // the temporary argument list of the call, whose values compiled code evaluated, gives its references to the
+    // list of the bound arguments, whose values the parameters then take over, as they take over the arguments of a
+    // call with positional arguments: a temporary argument is released when the callee writes its parameter
+    // (issues #5958, #6486)
+    tmp.releaseTmpSourceValues(bound_args);
     tmp.assign(true, bound_args);
     return 0;
 }

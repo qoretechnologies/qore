@@ -19,6 +19,8 @@
     a temporary argument is released by the callee, after its local variables and on_exit handlers and while its frame
     is still on the call stack; the IR interpreter, JIT, tiered and AOT code released it in the caller once the callee's
     frame had been popped, so a destructor that raised an exception or read the call stack saw another call stack.
+    Issue #6486: a callee that writes the parameter that takes a temporary argument over releases it at the write, as
+    the AST interpreter does, also with named arguments (#5958).
 
     The script next to the test runs in every execution mode (its functions compiled before they run, with
     QORE_JIT_SYNC_COMPILE), on the IR tier and as AOT executables, and its output, which shows the call stack of each
@@ -53,7 +55,7 @@ class TempArgReleaseFrameTest inherits QUnit::Test {
     #! checks the output of the AST interpreter
     private astTest() {
         string out = astOutput();
-        assertEq(38, (select out.split("\n"), $1 =~ /^[a-z ]+: /).size(), "cases");
+        assertEq(44, (select out.split("\n"), $1 =~ /^[a-z ]+: /).size(), "cases");
         hash<string, string> exp = {
             "function": "rel a [\"Rec::destructor\", \"nocall\", \"case_function\"]",
             "function two": "rel b [\"Rec::destructor\", \"two\", \"case_function_two\"]; "
@@ -87,6 +89,17 @@ class TempArgReleaseFrameTest inherits QUnit::Test {
             "try function": "catch DTOR [\"Dtor::destructor\", \"nocall\", \"case_try_function\"]",
             "throw method": "catch DTOR [\"Dtor::destructor\", \"C::m\", \"case_throw_method\"]",
             "throw closure": "catch DTOR [\"Dtor::destructor\", \"<anonymous closure>\", \"case_throw_closure\"]",
+            # qore#6486: released at the write of the parameter, before the callee goes on
+            "method write": "rel a [\"Rec::destructor\", \"W::mw\", \"case_method_write\"]; after write",
+            "named method write": "rel a [\"Rec::destructor\", \"W::mw\", \"case_named_method_write\"]; "
+                "after write",
+            "static method write": "rel a [\"Rec::destructor\", \"W::smw\", \"case_static_method_write\"]; "
+                "after write",
+            "named static method write": "rel a [\"Rec::destructor\", \"W::smw\", "
+                "\"case_named_static_method_write\"]; after write",
+            "function write": "rel a [\"Rec::destructor\", \"fw\", \"case_function_write\"]; after write",
+            "named function write": "rel a [\"Rec::destructor\", \"fw\", \"case_named_function_write\"]; "
+                "after write",
         };
         hash<string, string> lines = map {$1.substr(0, $1.find(": ")): $1.substr($1.find(": ") + 2)},
             out.split("\n"), $1 =~ /: /;

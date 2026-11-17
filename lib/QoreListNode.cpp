@@ -70,6 +70,16 @@ QoreValue& QoreListNodeEvalOptionalRefHolder::getEntryReference(size_t index) {
 }
 
 // with this variant, we can edit and reuse references from "exp"
+void QoreListNodeEvalOptionalRefHolder::releaseTmpSourceValues(const QoreListNode* keep) {
+    if (!tmp_source || !val || val == keep) {
+        return;
+    }
+    qore_list_private* l = qore_list_private::get(*val);
+    for (size_t i = 0, e = l->length; i < e; ++i) {
+        ValueHolder v(l->takeExists(i), xsink);
+    }
+}
+
 void QoreListNodeEvalOptionalRefHolder::evalIntern(QoreListNode* exp) {
     assert(!exp || exp->reference_count() == 1);
     tmp_source = false;
