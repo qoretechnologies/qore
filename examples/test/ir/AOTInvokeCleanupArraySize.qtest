@@ -6,21 +6,27 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
+%requires ../TestInterpreter.qm
 %requires FsUtil
 
 %exec-class AOTInvokeCleanupArraySizeTest
 
 #! Regression test for the oversized AOT/JIT invoke cleanup pointer array
-/** Background: large compiled functions record the addresses of their
+/** Background: large compiled functions recorded the addresses of their
     invoke-result cleanup slots in an entry-block pointer array
-    (`%cleanup_slots`) so every exit can release them with one
-    qore_rt_cleanup_run_allocas() call.  The array was allocated with a
+    (`%cleanup_slots`) so every exit could release them with one runtime
+    call.  The array was allocated with a
     capacity estimate 8-11 times larger than the slots actually registered;
     because its address escapes into the runtime helper LLVM could not shrink
     it, so it dominated the native frame size and exhausted the thread stack
     in deep recursion (module-xml WSDL serialization of a 128-level structure
     failed with STACK-LIMIT-EXCEEDED at level ~84).  Functions whose exits all
     used the inline cleanup kept the unused array in optnone frames.
+
+    The slots are those of one frame array now (`%cleanup_frame`), which a
+    constant table of their indexes (`@cleanup_slots`) gives to
+    qore_rt_cleanup_run_frame() (qore#6299): the frame has exactly the slots
+    of the tables, and nothing is written to describe them at the entry.
 
     This test checks the lowered LLVM IR (dumped before optimization, so the
     result does not depend on LLVM removing anything) and the runtime behavior
@@ -43,10 +49,9 @@ class AOTInvokeCleanupArraySizeTest inherits QUnit::Test {
     }
 
     constructor() : QUnit::Test("AOTInvokeCleanupArraySizeTest", "1.0", \ARGV) {
-        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string qore_bin = TestInterpreter::qore_interpreter();
         libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
-        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
-            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        qcc_bin = TestInterpreter::qcc_compiler() ?? "qcc";
         env = sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir);
 
         addTestCase("helper-path cleanup array is sized to its registered slots",
@@ -143,6 +148,16 @@ class AOTInvokeCleanupArraySizeTest inherits QUnit::Test {
         return map $1.value, fns.pairIterator(), $1.key.substr(0, prefix.size()) == prefix;
     }
 
+    #! returns the entries of the constant table @p name (a global of an i64 array) in @p ir
+    private static list<int> getTable(string ir, string name) {
+        *string data = (regex_extract(ir, "\\n@\\Q" + name + "\\E = private [^\\n]*constant \\[[0-9]+ x i64\\] "
+            + "\\[([^\\]]*)\\]") ?? ())[0];
+        if (!data) {
+            return ();
+        }
+        return map ($1 =~ x/i64 ([0-9]+)/)[0].toInt(), data.split(", ");
+    }
+
     testHelperPathArraySize() {
         TmpDir tmp("qore-aot-cleanup-array-");
         string ir = compile(tmp.path + "/probe", "printf(\"%d\\n\", big_cleanup_probe(\"x\", 1, -1));\n");
@@ -150,25 +165,41 @@ class AOTInvokeCleanupArraySizeTest inherits QUnit::Test {
         assertGt(0, bodies.size(), "big_cleanup_probe was lowered");
 
         foreach string body in (bodies) {
-            *list<*string> alloc = body =~ x/%cleanup_slots = alloca ptr, i32 ([0-9]+)/;
-            assertTrue(exists alloc, "helper-path function allocates a cleanup array");
+            *list<*string> alloc = body =~ x/%cleanup_frame = alloca i64, i64 ([0-9]+)/;
+            assertTrue(exists alloc, "helper-path function allocates a cleanup frame");
             int size = alloc[0].toInt();
-            assertGe(BigTemps, size, "cleanup array holds at least one slot per temporary");
+            assertGe(BigTemps, size, "the cleanup frame holds at least one slot per temporary");
 
-            # every registration writes a distinct index below the array size (the calls that release the slots
-            # of an exit that holds the value of a return take the address of a run of them with a pointer of
-            # their own, %cleanup_run_from)
-            list<string> idx = body =~ x/%cleanup_slot_ptr[0-9]* = getelementptr ptr, ptr %cleanup_slots, i32 ([0-9]+)/g;
-            assertEq(size, idx.size(), "one registration per array element");
-            assertEq(size, (map {$1: True}, idx).size(), "registration indexes are distinct");
-            assertEq(size - 1, max(map $1.toInt(), idx), "highest registration index is the last element");
+            # each slot of the frame replaces an alloca: a distinct index below the frame size
+            list<string> idx = body =~ x/= getelementptr inbounds i64, ptr %cleanup_frame, i64 ([0-9]+)/g;
+            assertEq(size, idx.size(), "one address per frame slot");
+            assertEq(size, (map {$1: True}, idx).size(), "the slot indexes are distinct");
+            assertEq(size - 1, max(map $1.toInt(), idx), "the highest slot index is the last slot");
+
+            # no slot address is written in the entry block to describe the slots
+            string entry;
+            foreach string line in (body.split("\n")) {
+                if ($# && line =~ /^[^ ;].*:/) {
+                    break;
+                }
+                entry += line + "\n";
+            }
+            assertEq(0, (entry =~ x/(store ptr %[A-Za-z_]*cleanup[0-9]*, )/g ?? ()).size(),
+                "no cleanup slot address is stored in the entry block");
 
             # an exit lowered mid-body releases the slots registered before it, so every runtime cleanup
-            # call stays within the array, and the final exits cover all of it
-            list<int> counts = map $1.toInt(),
-                (body =~ x/qore_rt_cleanup_run_allocas\(ptr %cleanup_slots, i32 ([0-9]+)/g);
-            assertGt(0, counts.size(), "exits release the array through the runtime helper");
-            assertEq(size, max(counts), "the final exits release the whole array");
+            # call stays within the table, and the final exits cover all of it; every entry is a slot of the frame
+            list<string> names = (body
+                =~ x/qore_rt_cleanup_run_frame\(ptr %cleanup_frame, ptr @(cleanup_slots[.0-9]*), i32 [0-9]+/g);
+            list<int> counts = map $1.toInt(), (body
+                =~ x/qore_rt_cleanup_run_frame\(ptr %cleanup_frame, ptr @cleanup_slots[.0-9]*, i32 ([0-9]+)/g);
+            assertGt(0, counts.size(), "exits release the table through the runtime helper");
+            assertEq(1, (map {$1: True}, names).size(), "the exits share one table");
+            list<int> table = getTable(ir, names[0]);
+            assertEq(table.size(), max(counts), "the final exits release the whole table");
+            assertGe(BigTemps, table.size(), "the table has an entry per temporary");
+            assertEq(table.size(), (map {$1: True}, table).size(), "the table has distinct slots");
+            assertEq(0, (select table, ($1 >> 3) >= size).size(), "the entries are slots of the frame");
         }
     }
 
@@ -180,14 +211,14 @@ class AOTInvokeCleanupArraySizeTest inherits QUnit::Test {
         assertGt(0, bodies.size(), "small_cleanup_probe was lowered");
 
         foreach string body in (bodies) {
-            assertEq(-1, body.find("cleanup_slots = alloca"), "inline-path function has no cleanup array");
-            assertEq(-1, body.find("%cleanup_slots"), "no cleanup array registration remains");
-            assertEq(-1, body.find("qore_rt_cleanup_run_allocas(ptr %cleanup_slots"),
+            assertEq(-1, body.find("%cleanup_frame"), "inline-path function has no cleanup frame");
+            assertEq(-1, body.find("@cleanup_slots"), "no cleanup table remains");
+            assertEq(-1, body.find("qore_rt_cleanup_run_frame("),
                 "inline-path function does not call the runtime helper for invoke cleanup");
         }
-        # the large function in the same module still uses the array
-        assertGt(0, (select getBodies(fns, "big_cleanup_probe"), $1.find("%cleanup_slots = alloca") != -1).size(),
-            "the large function in the same module keeps its cleanup array");
+        # the large function in the same module still uses the frame
+        assertGt(0, (select getBodies(fns, "big_cleanup_probe"), $1.find("%cleanup_frame = alloca") != -1).size(),
+            "the large function in the same module keeps its cleanup frame");
     }
 
     testDeepRecursion() {

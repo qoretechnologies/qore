@@ -112,8 +112,8 @@ int QoreFoldlOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse
 
         // $2 is the next element (see evalImpl())
         ParseImplicitArgTypeHelper pia(implicitArgType, implicitArgType);
-        // a fold does not set $#, which is unset in its expression, also in the per-element code of an enclosing
-        // operator or foreach statement (qore#5690)
+        // a fold does not set $#, so a $# in its expression is a parse error, also in the per-element code of an
+        // enclosing operator or foreach statement (qore#5690, qore#803)
         QoreParseContextFlagHelper element_flag(parse_context);
         element_flag.unsetFlags(PF_IMPLICIT_ELEMENT);
 

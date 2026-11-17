@@ -61,8 +61,8 @@ DLLLOCAL int qore_check_object_method_call(QoreObject* obj, const char* name, co
 
 //! Raises the exception that a method call raises for its receiver @a base before it evaluates its arguments, if any
 /** As QoreDotEvalOperatorNode::evalWithBase() dispatches the call: an object that has been deleted (also through a
-    weak reference), or a value whose pseudo-class has no method @a name; nothing for a hash whose member @a name is a
-    call reference.  The call is given by its method name and by what parse initialization resolved (@a qc,
+    weak reference), or a value whose pseudo-class has no method @a name; for a hash whose member @a name is a method
+    call reference, the error of the reference (an object that has been deleted, issue #6225).  The call is given by its method name and by what parse initialization resolved (@a qc,
     @a method, @a variant, @a pseudo), so that the AOT runtime can make the check from the call's target as well
     (issue #5784).
 

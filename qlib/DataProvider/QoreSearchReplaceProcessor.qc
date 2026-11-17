@@ -261,7 +261,15 @@ public class QoreSearchReplaceProcessor inherits AbstractDataProvider {
                 return replaceColumnBlock(records);
             case DataProviderShape::BufferColumns:
                 if (AbstractDataProcessor::isColumnarResult(records)) {
-                    return ColumnarResult::fromColumnHash(replaceColumnBlock(records.toColumnHash()));
+                    # the other columns keep their schema, and the replaced column too if it is a string column,
+                    # whose values stay strings (qore#6219)
+                    hash<auto> columns = replaceColumnBlock(records.toColumnHash());
+                    hash<auto> sources = (map {$1: $1}, keys columns, $1 != field) ?? {};
+                    *hash<auto> field_schema = (map $1, records.schemaV2(), $1.name == field)[0];
+                    if (field_schema.kind == "string") {
+                        sources{field} = field;
+                    }
+                    return AbstractDataProcessor::columnarResultWithSchemas(records, columns, sources);
                 }
                 return replaceColumnBlock(records);
             case DataProviderShape::DataFrameBlock:

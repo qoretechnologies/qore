@@ -2177,6 +2177,13 @@ public:
 
     mutable QoreThreadLock h2_session_lock;
 
+    //! The records of the close frames of the WebSocket streams of the HTTP/2 session that the socket released when
+    //! it closed (Http2Session::takeWebSocketCloseRecords(), #6077); a stream context created after the session
+    //! ended gets its record from here.  Replaced at the next close, so bounded by the streams of one connection.
+    std::unordered_map<int32_t, WebSocketCloseRecordRef> h2_ws_close_records;
+    //! protects h2_ws_close_records
+    mutable std::mutex h2_ws_close_records_lock;
+
     //! Maximum size for chunked HTTP body reads (0 = unlimited)
     /** When set, chunked body readers raise an HTTP-BODY-TOO-LARGE exception
         if the total size of the chunk data received exceeds this limit, also
@@ -2867,6 +2874,15 @@ public:
             }
         }
 
+        if (old_h2_session) {
+            // the records of the session's WebSocket streams outlive it (#6077); no socket lock is held here
+            std::unordered_map<int32_t, WebSocketCloseRecordRef> recs = old_h2_session->takeWebSocketCloseRecords();
+            if (!recs.empty()) {
+                std::lock_guard<std::mutex> lg(h2_ws_close_records_lock);
+                h2_ws_close_records.swap(recs);
+            }
+            // the records replaced are released here, outside the lock
+        }
         old_h2_session.reset();
         old_h2_stream_complete_callback = nullptr;
         if (old_remote_cert) {
@@ -4390,65 +4406,13 @@ public:
     }
 
     DLLLOCAL bool do_accept_charset(char* t, QoreHashNode& info) {
-        bool acceptcharset = false;
-
-        // see if we have "*" or utf8 or utf-8, in which case set it
-        // otherwise set the first charset in the list
-        char* a = t;
-        char* div = 0;
-        bool utf8 = false;
-        bool ok = true;
-        while (*a) {
-            if (ok) {
-                if (*a == '*') {
-                    utf8 = true;
-                    break;
-                }
-                ok = false;
-                if (*a == 'u' || *a == 'U') {
-                    ++a;
-                    if (*a == 't' || *a == 'T') {
-                        ++a;
-                        if (*a == 'f' || *a == 'F') {
-                            ++a;
-                            if (*a == '-')
-                                ++a;
-                            if (*a == '8') {
-                                utf8 = true;
-                                break;
-                            }
-                        }
-                    }
-                    continue;
-                }
-            } else if (*a == ',') {
-                if (!div)
-                    div = a;
-                ok = true;
-            } else if (*a == ';') {
-                if (!div)
-                    div = a;
-            }
-
-            ++a;
+        // the rule that the HTTP/2 and HTTP/3 servers apply too (qore_get_http_accept_charset(), qore#6333)
+        std::string ac = qore_get_http_accept_charset(t);
+        if (ac.empty()) {
+            return false;
         }
-        if (utf8) {
-            info.setKeyValue("accept-charset", new QoreStringNode("utf8"), 0);
-            acceptcharset = true;
-        } else {
-            SimpleRefHolder<QoreStringNode> ac(new QoreStringNode);
-            if (div)
-                ac->concat(t, div - t);
-            else
-                ac->concat(t);
-            ac->trim();
-            if (!ac->empty()) {
-                info.setKeyValue("accept-charset", ac.release(), 0);
-                acceptcharset = true;
-            }
-        }
-
-        return acceptcharset;
+        info.setKeyValue("accept-charset", new QoreStringNode(ac.c_str(), ac.size(), QCS_DEFAULT), 0);
+        return true;
     }
 
     // returns true if the connection should be closed, false if not
@@ -4507,36 +4471,18 @@ public:
                             close = false;
                     }
                 } else if (!strcmp(buf, "content-type")) {
-                    // the encoding of the body follows the rules shared by all HTTP clients and servers, as far as
-                    // they can be applied before the body is read; see qore_get_http_header_charset()
-                    const QoreEncoding* assumed = QEM.findCreate(assume_http_encoding.c_str());
-                    const QoreEncoding* hdr_enc = qore_get_http_header_charset(t, assumed);
-                    qore_http_media_type_param charset;
-                    if (qore_find_http_media_type_param(t, "charset", charset) && !charset.value.empty()) {
-                        enc = hdr_enc ? hdr_enc : QEM.findCreate(charset.value.c_str());
-                        senc = enc.load()->getCode();
-                        //printd(5, "got encoding '%s' from request\n", senc);
-
-                        if (info) {
-                            info->setKeyValue("charset", new QoreStringNode(charset.value.c_str(),
-                                charset.value.size(), QCS_DEFAULT), nullptr);
-
-                            // the content type without the charset parameter
-                            SimpleRefHolder<QoreStringNode> ct(new QoreStringNode(t, charset.begin, QCS_DEFAULT));
-                            ct->trim_trailing();
-                            ct->concat(t + charset.end);
-                            ct->trim();
-                            if (!ct->empty()) {
-                                info->setKeyValue("body-content-type", ct.release(), nullptr);
-                            }
-                        }
-                    } else {
-                        // a type that is not text is read in the assumed encoding, as before
-                        enc = hdr_enc ? hdr_enc : assumed;
-                        senc = enc.load()->getCode();
-                        if (info) {
-                            info->setKeyValue("charset", new QoreStringNode(senc), nullptr);
-                            info->setKeyValue("body-content-type", val->refSelf(), nullptr);
+                    // the character set and the media type, which the HTTP/2 and HTTP/3 servers report in the same
+                    // way (qore_get_http_content_type_info(), qore#6318)
+                    QoreHttpContentTypeInfo cti = qore_get_http_content_type_info(t,
+                        QEM.findCreate(assume_http_encoding.c_str()));
+                    enc = cti.enc;
+                    senc = enc.load()->getCode();
+                    if (info) {
+                        info->setKeyValue("charset", new QoreStringNode(cti.charset.c_str(), cti.charset.size(),
+                            QCS_DEFAULT), nullptr);
+                        if (cti.has_body_content_type) {
+                            info->setKeyValue("body-content-type", new QoreStringNode(cti.body_content_type.c_str(),
+                                cti.body_content_type.size(), QCS_DEFAULT), nullptr);
                         }
                     }
                 } else if (chunked && !strcmp(buf, "transfer-encoding") && !strcasecmp(t, "chunked")) {

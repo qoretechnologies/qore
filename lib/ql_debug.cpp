@@ -44,6 +44,7 @@
 #include "qore/intern/QoreIRInterpreter.h"
 #include "qore/intern/QoreIR.h"
 #include "qore/intern/QoreIRAnalysis.h"
+#include "qore/intern/BreakStatement.h"
 #include "qore/intern/typed_hash_decl_private.h"
 #include "qore/intern/ql_type.h"
 #include "qore/intern/qore_string_private.h"
@@ -75,6 +76,7 @@
 #include "qore/intern/Http2Session.h"
 #include "qore/intern/qore_socket_private.h"
 #include "qore/intern/qore_program_private.h"
+#include "qore/intern/QC_Expression.h"
 #include "qore/intern/QC_QoreParseOptions.h"
 #include "qore/intern/QoreHttp3ClientConnection.h"
 #include "qore/intern/QC_Http3ClientPollOperationBase.h"
@@ -95,6 +97,7 @@
 #include "qore/intern/QoreForkHandlers.h"
 #include "qore/intern/QoreSignal.h"
 #include "qore/intern/QoreJIT.h"
+#include "qore/intern/QoreIRToLLVM.h"
 #include "qore/intern/QoreAOT.h"
 #include "qore/intern/QoreAOTBatchMemory.h"
 #include "qore/intern/FileStreamIo.h"
@@ -117,6 +120,8 @@
 #include <fcntl.h>
 #include <netinet/in.h>
 #include <poll.h>
+#include <sched.h>
+#include <sys/ioctl.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -1875,6 +1880,216 @@ static void ut_cond_wait_cancel_in_window(UnitTestCounters& c) {
         }
     }
     UT_ASSERT_EQ(c, QORE_COND_RESULT_INTERRUPTED, t.result, "the wait reports the cancellation");
+}
+#endif
+
+#ifdef DEBUG
+namespace {
+//! State for ut_parse_lock_sinkless_cycle_window(); see there; protected by lck
+struct ParseLockWindowTest {
+    QoreThreadLock lck;
+    QoreCondition cond;
+    QoreProgram* p = nullptr;
+    QoreProgram* q = nullptr;
+    //! true to hold A before its wait is registered for a wakeup, false to hold it after its last check
+    bool before_registration;
+    //! the TID of the thread that waits with an exception sink (A), and of the one that waits without one (B)
+    int a_tid = 0;
+    int b_tid = 0;
+    //! set by A just before it waits for Q's parse lock, so that the hook holds only that wait
+    bool armed = false;
+    bool b_holds_q = false;
+    bool in_window = false;
+    bool go_b = false;
+    bool release_a = false;
+    bool a_done = false;
+    bool b_done = false;
+    int a_rc = 0;
+    std::string a_err;
+    int b_rc = -1;
+
+    ParseLockWindowTest(bool before_registration) : before_registration(before_registration) {
+    }
+
+    //! waits up to 10 seconds for a predicate; lck is held
+    template <typename P>
+    bool waitFor(P pred) {
+        int64 deadline_us = q_get_monotonic_us() + 10000000;
+        while (!pred()) {
+            int64 remaining_us = deadline_us - q_get_monotonic_us();
+            if (remaining_us <= 0) {
+                return false;
+            }
+            cond.wait2(&lck, (remaining_us + 999) / 1000);
+        }
+        return true;
+    }
+};
+
+std::atomic<ParseLockWindowTest*> parse_lock_window_test{nullptr};
+
+//! Holds A in the phase of its wait that the test chose, until released
+void parse_lock_window_hold(bool before_registration) {
+    ParseLockWindowTest* t = parse_lock_window_test.load();
+    if (!t) {
+        return;
+    }
+    AutoLocker al(t->lck);
+    if (q_gettid() != t->a_tid || !t->armed || t->before_registration != before_registration) {
+        return;
+    }
+    t->armed = false;
+    t->in_window = true;
+    t->cond.broadcast();
+    // bounded, so that a failure cannot hold the thread for ever
+    t->waitFor([t] () { return t->release_a; });
+}
+
+//! Called before A's wait is registered for a wakeup, after A has checked for a cycle when it entered the graph
+void parse_lock_register_hook() {
+    parse_lock_window_hold(true);
+}
+
+//! Called after A's wait is registered and its last check for a cycle, before A blocks
+void parse_lock_window_hook() {
+    parse_lock_window_hold(false);
+}
+
+//! A: holds P's parse lock, and then waits, with an exception sink, for Q's, which B holds
+void parse_lock_window_a(ExceptionSink* xsink, void* arg) {
+    ParseLockWindowTest* t = static_cast<ParseLockWindowTest*>(arg);
+    qore_program_private::lockParsing(*t->p, xsink);
+    {
+        AutoLocker al(t->lck);
+        t->a_tid = q_gettid();
+        t->cond.broadcast();
+        t->waitFor([t] () { return t->b_holds_q; });
+        t->armed = true;
+    }
+    ExceptionSink wait_xsink;
+    int rc = qore_program_private::lockParsing(*t->q, &wait_xsink);
+    std::string err;
+    if (wait_xsink) {
+        QoreValue e = wait_xsink.getExceptionErr();
+        if (e.getType() == NT_STRING) {
+            err = e.get<const QoreStringNode>()->c_str();
+        }
+        wait_xsink.clear();
+    }
+    if (!rc) {
+        qore_program_private::unlockParsing(*t->q, xsink);
+    }
+    qore_program_private::unlockParsing(*t->p, xsink);
+    AutoLocker al(t->lck);
+    t->a_rc = rc;
+    t->a_err = err;
+    t->a_done = true;
+    t->cond.broadcast();
+}
+
+//! B: holds Q's parse lock, and then waits, without an exception sink, for P's, which closes the cycle
+void parse_lock_window_b(ExceptionSink* xsink, void* arg) {
+    ParseLockWindowTest* t = static_cast<ParseLockWindowTest*>(arg);
+    qore_program_private::lockParsing(*t->q, xsink);
+    {
+        AutoLocker al(t->lck);
+        t->b_tid = q_gettid();
+        t->b_holds_q = true;
+        t->cond.broadcast();
+        t->waitFor([t] () { return t->go_b; });
+    }
+    int rc = qore_program_private::lockParsing(*t->p, nullptr);
+    if (!rc) {
+        qore_program_private::unlockParsing(*t->p, xsink);
+    }
+    qore_program_private::unlockParsing(*t->q, xsink);
+    AutoLocker al(t->lck);
+    t->b_rc = rc;
+    t->b_done = true;
+    t->cond.broadcast();
+}
+
+//! runs one case of ut_parse_lock_sinkless_cycle_window(); see there
+void ut_parse_lock_sinkless_cycle_case(UnitTestCounters& c, bool before_registration) {
+    const char* phase = before_registration ? "before registration" : "after the last check";
+    // on the heap: if a thread does not end, the state and the Programs are leaked, as the thread still uses them
+    ParseLockWindowTest* t = new ParseLockWindowTest(before_registration);
+    t->p = new QoreProgram(QoreParseOptions(PO_DEFAULT));
+    t->q = new QoreProgram(QoreParseOptions(PO_DEFAULT));
+    parse_lock_window_test = t;
+    qore_cond_wait_register_hook = parse_lock_register_hook;
+    qore_cond_wait_window_hook = parse_lock_window_hook;
+    ExceptionSink xsink;
+    int a_tid = q_start_thread(&xsink, parse_lock_window_a, t);
+    int b_tid = a_tid < 0 ? -1 : q_start_thread(&xsink, parse_lock_window_b, t);
+    UT_ASSERT(c, a_tid >= 0 && b_tid >= 0, "the threads start");
+    bool ended = true;
+    if (a_tid >= 0 && b_tid < 0) {
+        // A gets Q's lock, as B does not hold it, without the hook: it is held only in a wait
+        AutoLocker al(t->lck);
+        ended = t->waitFor([t] () { return t->a_done; });
+    } else if (a_tid >= 0) {
+        SafeLocker sl(t->lck);
+        bool in_window = t->waitFor([t] () { return t->in_window; });
+        UT_ASSERT(c, in_window, phase);
+        t->go_b = true;
+        t->cond.broadcast();
+        sl.unlock();
+        // B closes the cycle and wakes A in the same critical section in which it is registered
+        int64 deadline_us = q_get_monotonic_us() + 10000000;
+        bool registered;
+        while (!(registered = qore_program_private::dbgParseWaitRegistered(b_tid))
+                && q_get_monotonic_us() < deadline_us) {
+            qore_usleep(1000);
+        }
+        UT_ASSERT(c, registered, "B waits for P's lock");
+        sl.lock();
+        t->release_a = true;
+        t->cond.broadcast();
+        bool a_done = t->waitFor([t] () { return t->a_done; });
+        if (!a_done) {
+            printf("  parse lock cycle closed %s: A's wait did not end\n", phase);
+            // ends A's wait, which is cancellable, so that the test can end
+            sl.unlock();
+            qore_cancel_thread(a_tid, "parse lock window test");
+            sl.lock();
+            ended = t->waitFor([t] () { return t->a_done; });
+        }
+        UT_ASSERT(c, a_done, "A's wait ends: the wakeup by B is not lost");
+        bool b_done = t->waitFor([t] () { return t->b_done; });
+        UT_ASSERT(c, b_done, "B gets P's lock once A has released it");
+        ended = ended && b_done;
+        UT_ASSERT_EQ(c, -1, t->a_rc, "A's wait is refused");
+        UT_ASSERT(c, t->a_err == "PROGRAM-ERROR", "A's wait is refused with PROGRAM-ERROR");
+        UT_ASSERT_EQ(c, 0, t->b_rc, "B's wait gets the lock");
+    }
+    qore_cond_wait_window_hook = nullptr;
+    qore_cond_wait_register_hook = nullptr;
+    parse_lock_window_test = nullptr;
+    xsink.clear();
+    if (!ended) {
+        printf("  parse lock cycle closed %s: a thread did not end; its state is leaked\n", phase);
+        return;
+    }
+    t->p->waitForTerminationAndDeref(&xsink);
+    t->q->waitForTerminationAndDeref(&xsink);
+    UT_ASSERT(c, !xsink, "the Programs are deleted without an exception");
+    xsink.clear();
+    delete t;
+}
+}
+
+//! A wait without an exception sink that closes a cycle of parse lock waits makes a wait of the cycle refused
+/** Thread A holds P's parse lock and waits for Q's with an exception sink; thread B holds Q's lock and then waits for
+    P's without one, which cannot be refused (issue #5693).  B closes the cycle while a hook holds A, in each phase of
+    its wait: before the wait is registered for a wakeup (B's wakeup finds nothing to wake, so A's check before it
+    blocks must see the cycle), and after its last check, before it blocks (B's wakeup is handed to the condition
+    waker thread, which wakes A once it blocks).  A must be refused with \c PROGRAM-ERROR either way, and B then gets
+    P's lock.
+*/
+static void ut_parse_lock_sinkless_cycle_window(UnitTestCounters& c) {
+    ut_parse_lock_sinkless_cycle_case(c, true);
+    ut_parse_lock_sinkless_cycle_case(c, false);
 }
 #endif
 
@@ -10782,6 +10997,470 @@ static void ut_debug_step_every_statement(UnitTestCounters& c, QoreProgram* pare
     UT_ASSERT(c, !xsink, "debug step target program cleanup succeeds");
 }
 
+//! Records the step events of the statements of a range of lines, from any thread, and raises an exception at the
+//! first step event of a line
+/** At the step event where it raises the exception, it records the location of the statement, the runtime location
+    of the thread and the location of the exception that it raised
+*/
+class FoldedStepDebugProgram : public QoreDebugProgram {
+public:
+    //! a source line and the column where it starts (0-based); -1 if unknown, -2 if not recorded
+    struct LineColumn {
+        int line = -2;
+        int column = -2;
+
+        DLLLOCAL bool operator==(const LineColumn& other) const {
+            return line == other.line && column == other.column;
+        }
+    };
+
+    int first_line = 0;
+    int last_line = 0;
+    int raise_line = -1;
+
+    DLLLOCAL void onAttach(QoreProgram* pgm, DebugRunStateEnum& rs, const AbstractStatement*& rts,
+            ExceptionSink* xsink) override {
+        rs = DBG_RS_STEP;
+    }
+
+    DLLLOCAL void onStep(QoreProgram* pgm, const StatementBlock* blockStatement, const AbstractStatement* statement,
+            unsigned bkptId, int& flow, DebugRunStateEnum& rs, const AbstractStatement*& rts,
+            ExceptionSink* xsink) override {
+        rs = DBG_RS_STEP;
+        if (!statement || !statement->loc) {
+            return;
+        }
+        int line = statement->loc->start_line;
+        if (line < first_line || line > last_line) {
+            return;
+        }
+        bool raise = false;
+        {
+            std::lock_guard<std::mutex> lg(m);
+            step_lines.push_back(line);
+            if (line == raise_line && !raised) {
+                raised = true;
+                raise = true;
+            }
+        }
+        if (raise) {
+            LineColumn runtime;
+            if (const QoreProgramLocation* loc = get_runtime_location()) {
+                runtime = {loc->start_line, loc->start_column};
+            }
+            xsink->raiseException("DEBUGGER-ERROR", "raised by the debugger at line %d", line);
+            LineColumn ex;
+            if (const QoreException* e = xsink->getException()) {
+                ex = {e->start_line, e->start_column};
+            }
+            std::lock_guard<std::mutex> lg(m);
+            raise_statement = {statement->loc->start_line, statement->loc->start_column};
+            raise_runtime = runtime;
+            raise_exception = ex;
+        }
+    }
+
+    //! returns the location of the statement, the runtime location and the location of the exception at the step
+    //! event where the debugger raised its exception
+    DLLLOCAL void getRaiseLocations(LineColumn& statement, LineColumn& runtime, LineColumn& ex) {
+        std::lock_guard<std::mutex> lg(m);
+        statement = raise_statement;
+        runtime = raise_runtime;
+        ex = raise_exception;
+    }
+
+    DLLLOCAL std::vector<int> getStepLines() {
+        std::lock_guard<std::mutex> lg(m);
+        return step_lines;
+    }
+
+    DLLLOCAL bool getRaised() {
+        std::lock_guard<std::mutex> lg(m);
+        return raised;
+    }
+
+private:
+    std::mutex m;
+    std::vector<int> step_lines;
+    bool raised = false;
+    LineColumn raise_statement;
+    LineColumn raise_runtime;
+    LineColumn raise_exception;
+};
+
+//! Returns the number of step events that the operations of the IR of function \a name of \a pgm keep
+//! (qore_ir_folded_debug_step()) for the statements that start on lines \a first_line to \a last_line, or -1 if the
+//! function has no IR
+static int ut_folded_debug_steps(QoreProgram* pgm, const char* name, int first_line, int last_line) {
+    const QoreFunction* qf = reinterpret_cast<const QoreFunction*>(pgm->findFunction(name));
+    const AbstractQoreFunctionVariant* variant = qf && qf->numVariants() == 1 ? qf->first() : nullptr;
+    const UserVariantBase* uvb = variant ? variant->getUserVariantBase() : nullptr;
+    const QoreIRFunction* ir = uvb ? uvb->getCachedIR() : nullptr;
+    if (!ir) {
+        return -1;
+    }
+    int count = 0;
+    for (const auto& block : ir->blocks) {
+        for (const auto& inst : block->instructions) {
+            const QoreIRDebugStatementInstruction* step = qore_ir_folded_debug_step(inst.get());
+            const QoreProgramLocation* loc = step && step->statement ? step->statement->loc : nullptr;
+            if (loc && loc->start_line >= first_line && loc->start_line <= last_line) {
+                ++count;
+            }
+        }
+    }
+    return count;
+}
+
+//! The IncrementLocalInt instruction of a statement of the IR of a function, as ut_inc_local_int_at() finds it
+struct UtIncLocalIntInfo {
+    //! true if the IR of the function has an IncrementLocalInt instruction on the line
+    bool found = false;
+    //! true if the instruction has an exception target (when it keeps a step event, that of the event)
+    bool exception_target = false;
+    //! true if the instruction keeps the step event of its statement (qore_ir_folded_debug_step())
+    bool folded = false;
+};
+
+//! Returns the IncrementLocalInt instruction on line \a line of the IR of function \a name of \a pgm
+static UtIncLocalIntInfo ut_inc_local_int_at(QoreProgram* pgm, const char* name, int line) {
+    UtIncLocalIntInfo info;
+    const QoreFunction* qf = reinterpret_cast<const QoreFunction*>(pgm->findFunction(name));
+    const AbstractQoreFunctionVariant* variant = qf && qf->numVariants() == 1 ? qf->first() : nullptr;
+    const UserVariantBase* uvb = variant ? variant->getUserVariantBase() : nullptr;
+    const QoreIRFunction* ir = uvb ? uvb->getCachedIR() : nullptr;
+    if (!ir) {
+        return info;
+    }
+    for (const auto& block : ir->blocks) {
+        for (const auto& inst : block->instructions) {
+            if (inst->opcode == QoreIROpcode::IncrementLocalInt && inst->loc && inst->loc->start_line == line) {
+                info.found = true;
+                info.exception_target = inst->exception_target != nullptr;
+                info.folded = qore_ir_folded_debug_step(inst.get()) != nullptr;
+                return info;
+            }
+        }
+    }
+    return info;
+}
+
+//! the step event of a statement whose first instruction is a fused local int operation, which the operation makes
+//! (qore_ir_fold_debug_statements()), is made before the operation, and an exception raised by the debugger at it
+//! leaves the statement before the operation runs, to the statement's exception path
+/** The event of a folded statement is made in the location of the statement: the statement where the debugger raises
+    its exception, `b = ++a;`, is folded, and its operation, `++a`, starts on the statement's line at another column,
+    so that the runtime location of the event and the location of the exception that the debugger raises there are
+    the statement's only if the event sets them (QORE_IR_DISPATCH_FOLDED_DEBUG_STEP() in the IR interpreter,
+    QoreIRToLLVM::emitDebugStepHook() in native code): the location is otherwise set only when the line changes, and
+    the instructions before the operation on the statement's line leave a location of lines 13-15 without columns.
+*/
+/** The debugger is attached while the function runs in a thread of its own, so that it runs in the tier of the
+    execution mode (with a debugger attached at its call, a function runs with the AST interpreter); the thread waits
+    for the attach on a queue, in a closure, after it signals that it waits there, so that the function was called
+    before the attach: a method call in the function itself would keep its locals on the stack
+    of local variables, which the IR does not fold the statements of.
+
+    The statements are folded only in a Program without PO_ALLOW_DEBUGGER, whose IR keeps the locals that only the IR
+    uses (a Program that allows a debugger keeps every local on the stack of local variables, where the debugger's
+    locals are); a debugger can still be attached to it, as it does not have PO_NO_DEBUGGING.  \a allow_debugger
+    gives the same function in a Program with PO_ALLOW_DEBUGGER, whose statements are not folded, as the reference:
+    the step events and results must be the same.
+
+    The statement where the debugger raises its exception, `b = ++a;`, is in a try block: it is folded only if the
+    lowering gives its operation no exception target of its own (qore#6197 gives it the try block's handler).  The
+    reference, which runs first, records in \a ref_inc_target whether its IncrementLocalInt of line 13 has an exception
+    target (1) or not (0), as lowered, since no fold changes it there; the Program without PO_ALLOW_DEBUGGER must then
+    fold the statement exactly when it has none.
+*/
+static void ut_debug_step_folded_statements_mode(UnitTestCounters& c, qore_exec_mode_t mode, bool allow_debugger,
+        int& ref_inc_target) {
+    ExceptionSink xsink;
+    // a Program of its own, whose parse options are not restricted or extended by those of a parent Program; with the
+    // options of %modern from the start, which the execution modes other than AST need
+    // (qore_parse_options_support_ir())
+    QoreProgram* pgm = new QoreProgram(PO_MODERN | PO_NO_CHILD_PO_RESTRICTIONS
+        | (allow_debugger ? PO_ALLOW_DEBUGGER : 0));
+    UT_ASSERT_EQ(c, allow_debugger, static_cast<bool>(pgm->getParseOptions64() & PO_ALLOW_DEBUGGER),
+        "the folded debug step target program allows a debugger as requested");
+    pgm->setExecMode(mode, true);
+    // the code is parsed as at the top level, with no return type of running code (see ut_self_call_without_method())
+    const QoreTypeInfo* old_return_type = saveReturnTypeInfo(nullptr);
+    pgm->parse("%modern\n"
+        "class Q {\n"                                       // 2
+        "    public { static Queue qin(); static Queue qout(); static Queue qready(); }\n" // 3
+        "}\n"
+        "string sub work(code wait) {\n"                     // 5
+        "    int a = 1;\n"                                   // 6
+        "    int b = 3;\n"                                   // 7
+        "    wait();\n"                                      // 8
+        "    a += 2;\n"                                      // 9
+        "    ++a;\n"                                         // 10
+        "    a += b;\n"                                      // 11
+        "    try {\n"                                        // 12
+        "        b = ++a;\n"                                 // 13
+        "        return \"not raised\";\n"                   // 14
+        "    } catch (hash<ExceptionInfo> ex) {\n"
+        "        return sprintf(\"%s:%d\", ex.err, a);\n"    // 16
+        "    }\n"
+        "}\n"
+        "sub start() {\n"
+        "    background Q::qout.push(work(sub () { Q::qready.push(1); Q::qin.get(); }));\n"
+        "}\n"
+        "sub ready() {\n"
+        "    Q::qready.get();\n"
+        "}\n"
+        "sub release() {\n"
+        "    Q::qin.push(1);\n"
+        "}\n"
+        "string sub result() {\n"
+        "    return Q::qout.get();\n"
+        "}\n",
+        "debug-step-folded-test", &xsink, nullptr, 0);
+    saveReturnTypeInfo(old_return_type);
+    UT_ASSERT(c, !xsink, "folded debug step target program parses");
+    if (xsink) {
+        xsink.handleExceptions();
+        xsink.clear();
+        pgm->waitForTerminationAndDeref(&xsink);
+        return;
+    }
+
+    // work() is called once first, with thresholds of 1, so that it runs on the tier of the execution mode when the
+    // debugger attaches: with the IR interpreter with IR execution, and as native code with JIT and tiered execution,
+    // whose compile after the call is waited for
+    if (mode != QEM_AST) {
+        {
+            uint64_t ir_threshold = QoreJIT::getIRThreshold();
+            uint64_t jit_threshold = QoreJIT::getJITThreshold();
+            QoreJIT::setIRThreshold(1);
+            QoreJIT::setJITThreshold(1);
+            ON_BLOCK_EXIT([ir_threshold, jit_threshold] () {
+                QoreJIT::setIRThreshold(ir_threshold);
+                QoreJIT::setJITThreshold(jit_threshold);
+            });
+            pgm->callFunction("start", nullptr, &xsink).discard(&xsink);
+            if (!xsink) {
+                pgm->callFunction("ready", nullptr, &xsink).discard(&xsink);
+                pgm->callFunction("release", nullptr, &xsink).discard(&xsink);
+                pgm->callFunction("result", nullptr, &xsink).discard(&xsink);
+            }
+            QoreJIT::instance().waitForBgCompileQueue();
+        }
+        UT_ASSERT(c, !xsink, "the folded statements run before the debugger attaches");
+        const QoreFunction* qf = reinterpret_cast<const QoreFunction*>(pgm->findFunction("work"));
+        const UserVariantBase* uvb = qf && qf->numVariants() == 1 ? qf->first()->getUserVariantBase() : nullptr;
+        if (mode != QEM_IR) {
+            UT_ASSERT(c, uvb && uvb->hasCachedFunction(), "the function of the folded statements is native code");
+        }
+        if (xsink) {
+            xsink.handleExceptions();
+            xsink.clear();
+            pgm->waitForTerminationAndDeref(&xsink);
+            return;
+        }
+    }
+
+    // the thread waits for the attach in work()
+    pgm->callFunction("start", nullptr, &xsink).discard(&xsink);
+    UT_ASSERT(c, !xsink, "the thread of the folded statements starts");
+    if (xsink) {
+        // no thread pushes a result to wait for
+        xsink.handleExceptions();
+        xsink.clear();
+        pgm->waitForTerminationAndDeref(&xsink);
+        return;
+    }
+
+    // the thread is in work(), waiting in the closure, when the debugger attaches: a function that is called with a
+    // debugger attached runs with the AST interpreter
+    pgm->callFunction("ready", nullptr, &xsink).discard(&xsink);
+    UT_ASSERT(c, !xsink, "the thread of the folded statements waits for the attach");
+
+    FoldedStepDebugProgram dbg;
+    dbg.first_line = 9;
+    dbg.last_line = 16;
+    dbg.raise_line = 13;
+    dbg.addProgram(pgm, &xsink);
+    UT_ASSERT(c, !xsink, "debugger attaches to folded debug step target program");
+
+    pgm->callFunction("release", nullptr, &xsink).discard(&xsink);
+    QoreValue rv = pgm->callFunction("result", nullptr, &xsink);
+    UT_ASSERT(c, !xsink, "an exception raised by the debugger at a folded statement is caught by the program");
+    UT_ASSERT(c, dbg.getRaised(), "the debugger raised its exception at the folded statement");
+    // 1 + 2 + 1 + 3; the operation of the statement where the debugger raised the exception did not run (++a)
+    UT_ASSERT(c, rv.getType() == NT_STRING && !strcmp(rv.get<const QoreStringNode>()->c_str(), "DEBUGGER-ERROR:7"),
+        "the folded statements ran after their step events, and the one where the debugger raised the exception "
+        "did not");
+    rv.discard(&xsink);
+    std::vector<int> expected = {9, 10, 11, 12, 13, 16};
+    UT_ASSERT(c, dbg.getStepLines() == expected, "every folded statement has a step event, in the order they run");
+    // the step event where the debugger raised its exception, at `b = ++a;`, is made in the location of the
+    // statement of a folded statement, with its column (8); the AST interpreter does not set the runtime location of
+    // a statement before its event.  With PO_ALLOW_DEBUGGER, the event keeps the location that an instruction before
+    // the statement's DebugStatement instruction on the same line set (lines 13-15, without columns), as the runtime
+    // location is set only when the line changes: only its line is checked.  The same holds for the statement in the
+    // Program without PO_ALLOW_DEBUGGER when it is not folded, as when its operation has an exception target of its
+    // own in the try block (qore#6197; see qore_ir_fold_debug_statements())
+    {
+        // whether `b = ++a;` must be folded, from the lowering of its operation (see above), not from the fold
+        bool raise_folded = false;
+        if (mode != QEM_AST) {
+            UtIncLocalIntInfo inc = ut_inc_local_int_at(pgm, "work", 13);
+            UT_ASSERT(c, inc.found, "the IR has the IncrementLocalInt instruction of line 13");
+            if (allow_debugger) {
+                UT_ASSERT(c, !inc.folded, "the IncrementLocalInt instruction of line 13 of the reference is not "
+                    "folded");
+                ref_inc_target = inc.exception_target ? 1 : 0;
+            } else {
+                UT_ASSERT(c, ref_inc_target >= 0, "the reference recorded the exception target of the "
+                    "IncrementLocalInt instruction of line 13");
+                raise_folded = ref_inc_target == 0;
+                UT_ASSERT_EQ(c, raise_folded ? 1 : 0, ut_folded_debug_steps(pgm, "work", 13, 13),
+                    raise_folded ? "`b = ++a;` is folded: its operation has no exception target of its own"
+                        : "`b = ++a;` is not folded: its operation has an exception target of its own");
+                UT_ASSERT_EQ(c, raise_folded, inc.folded, "the IncrementLocalInt instruction of line 13 keeps the step "
+                    "event exactly when it has no exception target of its own");
+                if (!inc.folded) {
+                    UT_ASSERT(c, inc.exception_target, "the IncrementLocalInt instruction of line 13 that is not folded "
+                        "has an exception target of its own");
+                }
+            }
+        }
+        FoldedStepDebugProgram::LineColumn statement, runtime, ex;
+        dbg.getRaiseLocations(statement, runtime, ex);
+        FoldedStepDebugProgram::LineColumn expected_loc = {13, 8};
+        UT_ASSERT(c, statement == expected_loc, "the debugger raised its exception at the step event of the "
+            "statement of line 13, which starts at column 8");
+        if (mode != QEM_AST) {
+            // the execution mode and the Program of a failure
+            std::string what = std::string(mode == QEM_IR ? "ir" : (mode == QEM_JIT ? "jit" : "tiered"))
+                + (allow_debugger ? " (reference)" : " (folded)") + ": ";
+            UT_ASSERT_EQ(c, 13, runtime.line, (what + "the runtime location of the step event is on the "
+                "statement's line").c_str());
+            UT_ASSERT_EQ(c, 13, ex.line, (what + "the exception raised by the debugger at the step event is on the "
+                "statement's line").c_str());
+            UT_ASSERT(c, ex == runtime, (what + "the exception raised by the debugger at the step event is in the "
+                "runtime location of the event").c_str());
+            if (raise_folded) {
+                UT_ASSERT_EQ(c, 8, runtime.column, (what + "the runtime location of the step event of the folded "
+                    "statement is at the statement's column").c_str());
+                UT_ASSERT_EQ(c, 8, ex.column, (what + "the exception raised by the debugger at the step event of "
+                    "the folded statement is at the statement's column").c_str());
+            }
+        }
+    }
+    if (xsink) {
+        xsink.handleExceptions();
+        xsink.clear();
+    }
+    // the three statements of fused local int operations before the try block (a += 2, ++a, a += b) keep their step
+    // events in the IR of the IR and JIT tiers of the Program without PO_ALLOW_DEBUGGER, and none in the other one.
+    // The statement in the try block, b = ++a, is folded only if its operation has no exception target of its own
+    // (qore_ir_fold_debug_statements()): the checks of its events and of the debugger's exception above hold either
+    // way (ut_ir_fold_debug_statements_exception_target() checks that an operation with an exception target is not
+    // folded)
+    if (mode != QEM_AST) {
+        UT_ASSERT_EQ(c, allow_debugger ? 0 : 3, ut_folded_debug_steps(pgm, "work", 9, 11),
+            "the statements of the target function are folded only without PO_ALLOW_DEBUGGER");
+        UT_ASSERT_EQ(c, 0, allow_debugger ? ut_folded_debug_steps(pgm, "work", 1, 30) : 0,
+            "no statement of the reference function is folded");
+    }
+
+    dbg.removeProgram(pgm);
+    dbg.waitForTerminationAndClear(&xsink);
+    UT_ASSERT(c, !xsink, "debugger cleanup succeeds");
+    pgm->waitForTerminationAndDeref(&xsink);
+    UT_ASSERT(c, !xsink, "folded debug step target program cleanup succeeds");
+}
+
+//! qore_ir_fold_debug_statements() moves the step event of a statement into a fused local int operation that follows
+//! it only if the operation has no exception target of its own
+/** An operation in a try block can have the handler of the try block as its exception target, for the exceptions
+    that it raises itself (qore#6197).  The operation cannot take the exception path of the step event as its own
+    then: it is not folded, and the step event stays an instruction of its own, with its own exception path.  An
+    operation without an exception target takes the event, and the event's exception path becomes the operation's, so
+    that the edges of the block are unchanged.
+*/
+static void ut_ir_fold_debug_statements_exception_target(UnitTestCounters& c) {
+    // the statement of the step events; its location is one of the Program of the running code
+    BreakStatement statement(1, 1);
+    LocalVar target("a", bigIntTypeInfo);
+    LocalVar source("b", bigIntTypeInfo);
+    int dpgm = 0;
+    for (QoreIROpcode op : {QoreIROpcode::IncrementLocalInt, QoreIROpcode::AddAssignLocalInt}) {
+        for (bool op_target : {false, true}) {
+            std::string what = std::string(op == QoreIROpcode::IncrementLocalInt ? "IncrementLocalInt" :
+                "AddAssignLocalInt") + (op_target ? " with an exception target: " : " without an exception target: ");
+            QoreIRFunction func("fold_debug_statements_exception_target");
+            // a function lowered for a debugger's step events (the IR interpreter and the JIT)
+            func.source_dpgm_addr = &dpgm;
+            func.blocks.push_back(std::make_unique<QoreIRBasicBlock>("entry"));
+            func.blocks.push_back(std::make_unique<QoreIRBasicBlock>("handler"));
+            QoreIRBasicBlock* entry = func.blocks[0].get();
+            QoreIRBasicBlock* handler = func.blocks[1].get();
+            // the step event, whose exception path (an exception that the debugger raises) is the try block's handler
+            auto step = std::make_unique<QoreIRDebugStatementInstruction>(&statement);
+            step->exception_target = handler;
+            QoreIRDebugStatementInstruction* step_ptr = step.get();
+            std::unique_ptr<QoreIRInstruction> host;
+            if (op == QoreIROpcode::IncrementLocalInt) {
+                auto inc = std::make_unique<QoreIRIncrementLocalIntInstruction>(&target, 1);
+                inc->ir_only = true;
+                host = std::move(inc);
+            } else {
+                auto add = std::make_unique<QoreIRAddAssignLocalIntInstruction>(&target, &source);
+                add->target_ir_only = true;
+                host = std::move(add);
+            }
+            // the operation's own exception path: the handler of the try block that contains it
+            host->exception_target = op_target ? handler : nullptr;
+            QoreIRInstruction* host_ptr = host.get();
+            entry->instructions.push_back(std::move(step));
+            entry->instructions.push_back(std::move(host));
+            entry->instructions.push_back(std::make_unique<QoreIRInstruction>(QoreIROpcode::Return));
+
+            size_t folded = qore_ir_fold_debug_statements(func);
+            if (op_target) {
+                UT_ASSERT_EQ(c, (size_t)0, folded, (what + "no step event is moved").c_str());
+                UT_ASSERT_EQ(c, (size_t)3, entry->instructions.size(), (what + "the block keeps the step event's "
+                    "instruction").c_str());
+                UT_ASSERT(c, entry->instructions.size() == 3 && entry->instructions[0].get() == step_ptr
+                    && entry->instructions[1].get() == host_ptr, (what + "the step event stays before the "
+                    "operation").c_str());
+                UT_ASSERT(c, !qore_ir_folded_debug_step(host_ptr), (what + "the operation keeps no step "
+                    "event").c_str());
+                UT_ASSERT(c, !step_ptr->folded_host, (what + "the step event is an instruction of its own").c_str());
+            } else {
+                UT_ASSERT_EQ(c, (size_t)1, folded, (what + "the step event is moved").c_str());
+                UT_ASSERT(c, entry->instructions.size() == 2 && entry->instructions[0].get() == host_ptr,
+                    (what + "the operation is the first instruction of the block").c_str());
+                UT_ASSERT(c, qore_ir_folded_debug_step(host_ptr) == step_ptr, (what + "the operation keeps the step "
+                    "event").c_str());
+                UT_ASSERT(c, step_ptr->folded_host == host_ptr, (what + "the step event runs before the "
+                    "operation").c_str());
+            }
+            // the exception path of the block is the same either way
+            UT_ASSERT(c, host_ptr->exception_target == handler, (what + "the operation has the exception path of the "
+                "step event").c_str());
+            UT_ASSERT(c, step_ptr->exception_target == handler, (what + "the step event keeps its exception "
+                "path").c_str());
+        }
+    }
+}
+
+static void ut_debug_step_folded_statements(UnitTestCounters& c, QoreProgram* /* parent */) {
+    // the statements are folded in the IR of the IR and JIT tiers; the AST interpreter, and the same function in a
+    // Program that allows a debugger, whose statements are not folded, give the same events and results
+    for (qore_exec_mode_t mode : {QEM_AST, QEM_IR, QEM_JIT, QEM_TIERED}) {
+        // the reference first: it records whether the operation of `b = ++a;` has an exception target as lowered
+        int ref_inc_target = -1;
+        for (bool allow_debugger : {true, false}) {
+            ut_debug_step_folded_statements_mode(c, mode, allow_debugger, ref_inc_target);
+        }
+    }
+}
+
 static void ut_asyncio_autostop(UnitTestCounters& c) {
     ExceptionSink xsink;
     AsyncIoControllerPriv* ctrl = new AsyncIoControllerPriv(true, &xsink);
@@ -11826,6 +12505,14 @@ static void ut_http1_connection_timeout(UnitTestCounters& c) {
 // dispatch path: a registered manager receives onConnectionClosed exactly
 // once; after setManager(nullptr) it receives nothing.
 
+//! gives back the stream slot and the reference of a connection returned by an acquire method of the manager
+static void ut_release_acquired(HttpClientConnectionManagerBase* mgr, HttpClientConnectionBase* conn) {
+    mgr->releaseConnection(conn);
+    ExceptionSink rel_xsink;
+    conn->deref(&rel_xsink);
+    rel_xsink.clear();
+}
+
 class UtCountingManager : public HttpClientConnectionManagerBase {
 public:
     DLLLOCAL UtCountingManager(const HttpClientConnectionManagerBase::Options& opts,
@@ -11976,7 +12663,7 @@ public:
 
     //! Pools a connection under the key a real checkout for this origin uses.
     /** addPooled() above uses a fixed key, which is enough for tests that reach
-        into the pool directly; a test that goes through acquireConnection()
+        into the pool directly; a test that goes through acquireConnectionRef()
         needs the key that poolKey() derives from the origin.
     */
     DLLLOCAL void addPooledForOrigin(HttpClientConnectionBase* conn, const char* host,
@@ -12258,7 +12945,7 @@ static void ut_manager_new_connection_notified_after_reservation(UnitTestCounter
         xsink.clear();
         return;
     }
-    HttpClientConnectionBase* conn = mgr->acquireConnectionAsync("http", "unit-test.invalid", 80, &xsink);
+    HttpClientConnectionBase* conn = mgr->acquireConnectionAsyncRef("http", "unit-test.invalid", 80, &xsink);
     UT_ASSERT_EQ(c, 1, mgr->created.load(), "one connection was created");
     UT_ASSERT(c, !conn, "no connection is returned for a connection whose close notification has run");
     UT_ASSERT(c, xsink.isException(), "the creator gets an error");
@@ -13200,7 +13887,7 @@ static void ut_wait_for_connect_failure(HttpClientConnectionBase* conn) {
 }
 
 // A non-blocking connect can fail before the manager adds the new connection to its pool and reserves its first stream:
-// the reservation is refused on the closed connection.  acquireConnectionAsync() reported that as
+// the reservation is refused on the closed connection.  acquireConnectionAsyncRef() reported that as
 // "HTTPCLIENT-CAPACITY-ERROR: freshly-created connection unexpectedly at capacity", which hid the error of the connect,
 // and left the closed connection in the pool.  The caller gets the error of the connection, and the pool does not
 // keep it.
@@ -13223,7 +13910,7 @@ static void ut_manager_new_connection_closed_before_reservation(UnitTestCounters
     }
     ut_new_connection_hook_calls = 0;
     qore_http_manager_new_connection_hook = ut_wait_for_connect_failure;
-    HttpClientConnectionBase* conn = mgr->acquireConnectionAsync("http", "127.0.0.1", port, &xsink);
+    HttpClientConnectionBase* conn = mgr->acquireConnectionAsyncRef("http", "127.0.0.1", port, &xsink);
     qore_http_manager_new_connection_hook = nullptr;
     UT_ASSERT_EQ(c, 1, ut_new_connection_hook_calls.load(), "the connect failed before the reservation");
     UT_ASSERT(c, !conn, "no connection is returned for a connection whose connect failed");
@@ -13437,7 +14124,7 @@ static void ut_manager_closed_new_connection_detached(UnitTestCounters& c) {
         HttpClientConnectionBase* conn;
         {
             UtNewConnectionHookHolder new_hook(ut_wait_for_connect_failure);
-            conn = mgr->acquireConnectionAsync("http", "127.0.0.1", port, &xsink);
+            conn = mgr->acquireConnectionAsyncRef("http", "127.0.0.1", port, &xsink);
         }
         UT_ASSERT(c, !conn, "no connection is returned for a connection whose connect failed");
         UT_ASSERT(c, xsink.isException(), "the failed connect raises an error");
@@ -13487,7 +14174,7 @@ static void ut_manager_evicted_closed_connection_detached(UnitTestCounters& c) {
         if (reached) {
             // the checkout evicts the closed connection; the new connection it makes is refused
             UtNewConnectionHookHolder new_hook(ut_wait_for_connect_failure);
-            HttpClientConnectionBase* acquired = mgr->acquireConnectionAsync("http", "127.0.0.1", port, &xsink);
+            HttpClientConnectionBase* acquired = mgr->acquireConnectionAsyncRef("http", "127.0.0.1", port, &xsink);
             UT_ASSERT(c, !acquired, "the checkout gets no connection");
             xsink.clear();
             UT_ASSERT_EQ(c, 0, mgr->getPoolSize(), "the closed connection is evicted");
@@ -13529,7 +14216,7 @@ static void ut_manager_notified_closed_connection_detached(UnitTestCounters& c) 
     UT_ASSERT_EQ(c, 1, mgr->getNotifications(), "the closed connection notifies its manager");
     {
         UtNewConnectionHookHolder new_hook(ut_wait_for_connect_failure);
-        HttpClientConnectionBase* acquired = mgr->acquireConnectionAsync("http", "127.0.0.1", port, &xsink);
+        HttpClientConnectionBase* acquired = mgr->acquireConnectionAsyncRef("http", "127.0.0.1", port, &xsink);
         UT_ASSERT(c, !acquired, "the checkout gets no connection");
         xsink.clear();
     }
@@ -13579,7 +14266,7 @@ static void ut_manager_shutdown_new_connection_detached(UnitTestCounters& c) {
     HttpClientConnectionBase* acquired;
     {
         UtNewConnectionHookHolder new_hook(ut_shut_down_manager_on_new_connection);
-        acquired = mgr->acquireConnectionAsync("http", "127.0.0.1", port, &xsink);
+        acquired = mgr->acquireConnectionAsyncRef("http", "127.0.0.1", port, &xsink);
     }
     ut_shutdown_manager = nullptr;
     ReferenceHolder<HttpClientConnectionBase> kept(ut_shutdown_new_connection, &xsink);
@@ -13993,17 +14680,17 @@ static void ut_manager_pool_sandbox(UnitTestCounters& c) {
         UT_ASSERT(c, !xsink.isException(), (label + "manager construction succeeds").c_str());
 
         // code without a sandbox opens the connection
-        HttpClientConnectionBase* conn = mgr->acquireConnection("http", "127.0.0.1", port, &xsink);
+        HttpClientConnectionBase* conn = mgr->acquireConnectionRef("http", "127.0.0.1", port, &xsink);
         UT_ASSERT(c, conn && !xsink.isException(), (label + "the connection is opened").c_str());
         if (!conn) {
             xsink.clear();
             return;
         }
-        mgr->releaseConnection(conn);
+        ut_release_acquired(*mgr, conn);
 
         // a sandbox that denies the destination does not get the connection, and cannot open another one
         ut_with_sandbox(*deny, [&]() {
-            HttpClientConnectionBase* r = mgr->acquireConnection("http", "127.0.0.1", port, &xsink);
+            HttpClientConnectionBase* r = mgr->acquireConnectionRef("http", "127.0.0.1", port, &xsink);
             UT_ASSERT(c, !r, (label + "a sandbox that denies the destination gets no connection").c_str());
             if (xsink.isException()) {
                 QoreStringValueHelper desc(xsink.getExceptionDesc());
@@ -14013,18 +14700,18 @@ static void ut_manager_pool_sandbox(UnitTestCounters& c) {
             UT_ASSERT(c, ut_take_exception(xsink, "NETWORK-ACCESS-DENIED"),
                 (label + "the sandbox's denial is raised").c_str());
             if (r) {
-                mgr->releaseConnection(r);
+                ut_release_acquired(*mgr, r);
             }
         });
         UT_ASSERT_EQ(c, 1, mgr->getConnectionCount("127.0.0.1", port), (label + "no other connection was opened").c_str());
 
         // a sandbox that allows it gets the pooled connection
         ut_with_sandbox(*allow, [&]() {
-            HttpClientConnectionBase* r = mgr->acquireConnection("http", "127.0.0.1", port, &xsink);
+            HttpClientConnectionBase* r = mgr->acquireConnectionRef("http", "127.0.0.1", port, &xsink);
             UT_ASSERT(c, r == conn && !xsink.isException(), (label + "a sandbox that allows it reuses the connection").c_str());
             xsink.clear();
             if (r) {
-                mgr->releaseConnection(r);
+                ut_release_acquired(*mgr, r);
             }
         });
         UT_ASSERT_EQ(c, 1, mgr->getConnectionCount("127.0.0.1", port), (label + "the connection was reused").c_str());
@@ -14620,11 +15307,11 @@ static void ut_manager_close_all(UnitTestCounters& c) {
     UT_ASSERT(c, !xsink, "closeAll succeeds");
     UT_ASSERT_EQ(c, 0, mgr->getPoolSize(), "pool empty after closeAll");
 
-    // Subsequent acquireConnection raises HTTPCLIENT-SHUTDOWN
-    HttpClientConnectionBase* dead_conn = mgr->acquireConnection(
+    // Subsequent acquireConnectionRef raises HTTPCLIENT-SHUTDOWN
+    HttpClientConnectionBase* dead_conn = mgr->acquireConnectionRef(
         "http", "127.0.0.1", server_port, &xsink);
-    UT_ASSERT(c, !dead_conn, "acquireConnection returns nullptr after closeAll");
-    UT_ASSERT(c, xsink.isException(), "acquireConnection raises after closeAll");
+    UT_ASSERT(c, !dead_conn, "acquireConnectionRef returns nullptr after closeAll");
+    UT_ASSERT(c, xsink.isException(), "acquireConnectionRef raises after closeAll");
     QoreStringValueHelper err(xsink.getExceptionErr());
     UT_ASSERT(c, err && !strcmp(err->c_str(), "HTTPCLIENT-SHUTDOWN"),
         "exception code is HTTPCLIENT-SHUTDOWN");
@@ -15167,7 +15854,7 @@ static void ut_manager_negotiate_plaintext_uses_h1(UnitTestCounters& c) {
     // only failure here is the connection itself -- port 1 is refused.  Rejecting the target up
     // front with HTTPCLIENT-NEGOTIATE-SSL-REQUIRED would mean the transport was decided by the
     // client's protocol instead of by the request target.
-    HttpClientConnectionBase* conn = mgr->acquireConnection(
+    HttpClientConnectionBase* conn = mgr->acquireConnectionRef(
         "http", "127.0.0.1", 1, &xsink);
     UT_ASSERT(c, !conn, "NEGOTIATE + plain HTTP to a refused port returns nullptr");
     UT_ASSERT(c, xsink.isException(),
@@ -15199,7 +15886,7 @@ static void ut_manager_negotiate_refused_port(UnitTestCounters& c) {
 
     // https scheme triggers the NEGOTIATE path.  Connect fails at TCP
     // (refused); the error propagates out of the negotiation helper.
-    HttpClientConnectionBase* conn = mgr->acquireConnection(
+    HttpClientConnectionBase* conn = mgr->acquireConnectionRef(
         "https", "127.0.0.1", dead_port, &xsink);
     UT_ASSERT(c, !conn, "NEGOTIATE + refused port returns nullptr");
     UT_ASSERT(c, xsink.isException(),
@@ -15332,7 +16019,7 @@ static void ut_manager_h2_dispatch(UnitTestCounters& c) {
         return;
     }
 
-    HttpClientConnectionBase* conn = mgr->acquireConnection(
+    HttpClientConnectionBase* conn = mgr->acquireConnectionRef(
         "http", "127.0.0.1", dead_port, &xsink);
     UT_ASSERT(c, !conn, "acquireConnection on refused port returns nullptr");
     UT_ASSERT(c, xsink.isException(),
@@ -15392,7 +16079,7 @@ static void ut_manager_h3_dispatch(UnitTestCounters& c) {
 
     // H3 requires HTTPS scheme — but we're just testing the manager
     // dispatch path (no PROTOCOL-NOT-IMPLEMENTED anymore)
-    HttpClientConnectionBase* conn = mgr->acquireConnection(
+    HttpClientConnectionBase* conn = mgr->acquireConnectionRef(
         "https", "127.0.0.1", dead_port, &xsink);
     UT_ASSERT(c, !conn, "acquireConnection fails on refused port");
     UT_ASSERT(c, xsink.isException(),
@@ -15485,7 +16172,7 @@ static void ut_manager_proxy_h1_connect(UnitTestCounters& c) {
 
     // HTTPS through proxy: should attempt the connect (not raise
     // HTTPCLIENT-PROXY-ERROR anymore)
-    HttpClientConnectionBase* conn = mgr->acquireConnection(
+    HttpClientConnectionBase* conn = mgr->acquireConnectionRef(
         "https", "target.example.com", 443, &xsink);
     UT_ASSERT(c, !conn, "acquireConnection(https via proxy) returns nullptr (connect refused)");
     UT_ASSERT(c, xsink.isException(),
@@ -15496,7 +16183,7 @@ static void ut_manager_proxy_h1_connect(UnitTestCounters& c) {
     xsink.clear();
 
     // Plain HTTP through proxy: also should attempt connect
-    conn = mgr->acquireConnection("http", "target.example.com", 80, &xsink);
+    conn = mgr->acquireConnectionRef("http", "target.example.com", 80, &xsink);
     UT_ASSERT(c, !conn, "acquireConnection(http via proxy) returns nullptr");
     UT_ASSERT(c, xsink.isException(),
         "acquireConnection(http via proxy) raises exception");
@@ -15519,7 +16206,7 @@ static void ut_manager_proxy_h3_rejected(UnitTestCounters& c) {
     UT_ASSERT(c, !xsink, "manager(H3+proxy) construction succeeds");
     if (xsink) { xsink.clear(); return; }
 
-    HttpClientConnectionBase* conn = mgr->acquireConnection(
+    HttpClientConnectionBase* conn = mgr->acquireConnectionRef(
         "https", "target.example.com", 443, &xsink);
     UT_ASSERT(c, !conn, "H3+proxy acquireConnection returns nullptr");
     UT_ASSERT(c, xsink.isException(), "H3+proxy raises exception");
@@ -16320,10 +17007,72 @@ static QoreValue f_dbg_close_socket_at_next_ssl_io(const QoreListNode* params, R
     return QoreValue();
 }
 
-//! Debug-only: closes a socket so that its connection is reset at once
+//! returns the number of bytes in the send buffer of \a fd that the peer has not acknowledged, or 0 if unknown
+static int64 dbg_unacknowledged_bytes(int fd) {
+#ifdef DARWIN
+    int n = 0;
+    socklen_t len = sizeof n;
+    return getsockopt(fd, SOL_SOCKET, SO_NWRITE, &n, &len) || n < 0 ? 0 : n;
+#elif defined(TIOCOUTQ)
+    int n = 0;
+    return ::ioctl(fd, TIOCOUTQ, &n) || n < 0 ? 0 : n;
+#else
+    return 0;
+#endif
+}
+
+//! blocks until the peer has acknowledged everything written on \a fd, or the connection has ended; no timer is
+//! involved
+/** A reset (\c SO_LINGER 0) discards the data in the send buffer that has not been sent; on macOS a small write made
+    while an earlier one is unacknowledged is held back (Nagle), and loopback delivery is not synchronous with send(),
+    so a reset made at once discards the end of what was written (as for issue #6320).  The peer acknowledges data
+    when it arrives, whether its program reads it or not, so this only waits if more was written than the peer's
+    receive buffer takes.
+*/
+static void dbg_wait_send_buffer_empty(int fd) {
+#ifdef DARWIN
+    // the write filter fires for each change of the send buffer's space, as the peer acknowledges data
+    int kq = kqueue();
+    if (kq < 0) {
+        return;
+    }
+    ON_BLOCK_EXIT([kq] () { ::close(kq); });
+    struct kevent kev;
+    EV_SET(&kev, fd, EVFILT_WRITE, EV_ADD | EV_CLEAR, 0, 0, nullptr);
+    if (kevent(kq, &kev, 1, nullptr, 0, nullptr) < 0) {
+        return;
+    }
+    while (dbg_unacknowledged_bytes(fd) > 0) {
+        struct kevent out;
+        int rc = kevent(kq, nullptr, 0, &out, 1, nullptr);
+        if (rc < 0 && errno == EINTR) {
+            continue;
+        }
+        if (rc <= 0 || (out.flags & (EV_EOF | EV_ERROR))) {
+            return;
+        }
+    }
+#else
+    // loopback acknowledges data as it is delivered, before send() returns, so this normally does not wait
+    while (dbg_unacknowledged_bytes(fd) > 0) {
+        pollfd pfd = {fd, POLLOUT, 0};
+        if (::poll(&pfd, 1, -1) < 0 && errno != EINTR) {
+            return;
+        }
+        if (pfd.revents & (POLLHUP | POLLERR | POLLNVAL)) {
+            return;
+        }
+        sched_yield();
+    }
+#endif
+}
+
+//! Debug-only: closes a socket so that its connection is reset at once, once what was written on it has arrived
 /** The close sets \c SO_LINGER with a zero timeout and skips the TLS close_notify alert and the shutdown that a close
     makes first, which on macOS discards unread data and ends the connection with a FIN.  Tests use it to have a peer
-    reset a connection deterministically.  DEBUG builds only.
+    reset a connection deterministically.  The close is made once the peer has acknowledged all the data written on
+    the socket (see dbg_wait_send_buffer_empty()), so that the reset does not discard the end of an answer still in
+    the send buffer.  DEBUG builds only.
 */
 static QoreValue f_dbg_reset_socket(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     const QoreObject* obj = get_param_value(params, 0).get<const QoreObject>();
@@ -16337,6 +17086,10 @@ static QoreValue f_dbg_reset_socket(const QoreListNode* params, RuntimeConfig& r
         xsink);
     if (*xsink || !sock) {
         return QoreValue();
+    }
+    int fd = sock->getPollableDescriptor();
+    if (fd >= 0) {
+        dbg_wait_send_buffer_empty(fd);
     }
     sock->dbgResetOnClose();
     sock->close();
@@ -17516,6 +18269,150 @@ static QoreValue f_dbg_signal_reassign_release(const QoreListNode* params, Runti
     return rv.release();
 }
 
+namespace {
+//! the gate of dbg_arm_parse_start_gate() (issue #6206)
+struct QoreDbgParseStartGate {
+    std::mutex m;
+    std::condition_variable cv;
+    //! the Program whose next parse stops; cleared when a parse reaches the gate
+    const QoreProgram* pgm = nullptr;
+    //! true if the parse fails at the gate
+    bool fail = false;
+    bool reached = false;
+    bool release = false;
+    //! set by dbg_abort_parse_start_gate() when the parse ends without reaching the gate
+    bool aborted = false;
+};
+
+QoreDbgParseStartGate parse_start_gate;
+}
+
+int qore_dbg_parse_start_gate(const QoreProgram* pgm, ExceptionSink* xsink) {
+    std::unique_lock<std::mutex> ul(parse_start_gate.m);
+    if (!parse_start_gate.pgm || parse_start_gate.pgm != pgm) {
+        return 0;
+    }
+    parse_start_gate.pgm = nullptr;
+    parse_start_gate.reached = true;
+    parse_start_gate.cv.notify_all();
+    parse_start_gate.cv.wait(ul, [] { return parse_start_gate.release; });
+    if (parse_start_gate.fail) {
+        xsink->raiseException("DBG-PARSE-START-GATE", "the parse failed at the gate armed by "
+            "dbg_arm_parse_start_gate()");
+        return -1;
+    }
+    return 0;
+}
+
+namespace {
+//! the Program whose next parse throws a C++ exception (see dbg_parse_with_cxx_exception())
+std::atomic<const QoreProgram*> parse_throw_pgm{nullptr};
+}
+
+void qore_dbg_parse_throw_point(const QoreProgram* pgm) {
+    const QoreProgram* armed = pgm;
+    if (parse_throw_pgm.compare_exchange_strong(armed, nullptr)) {
+        throw QoreStandardException("DBG-PARSE-CXX-EXCEPTION", "a C++ exception thrown by "
+            "dbg_parse_with_cxx_exception() after the parse has started");
+    }
+}
+
+//! Debug-only: parses the code in the Program, which leaves the parse with a C++ exception once it has started
+/** The exception is thrown where the parse of the code begins, after the Program has been marked as being parsed,
+    and is raised as a Qore exception (\c DBG-PARSE-CXX-EXCEPTION) when it reaches this function (issue #6206).  If
+    \a expression is True, the code is parsed as the expression of an Expression object.  DEBUG builds only.
+*/
+static QoreValue f_dbg_parse_with_cxx_exception(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    const QoreObject* obj = get_param_value(params, 0).get<const QoreObject>();
+    ReferenceHolder<QoreProgram> pgm(static_cast<QoreProgram*>(obj->getReferencedPrivateData(CID_PROGRAM,
+        xsink)), xsink);
+    if (!pgm) {
+        return QoreValue();
+    }
+    QoreStringNodeValueHelper code(get_param_value(params, 1));
+    parse_throw_pgm = *pgm;
+    // disarmed also if another exception leaves the parse
+    ON_BLOCK_EXIT([] { parse_throw_pgm = nullptr; });
+    try {
+        if (get_param_value(params, 2).getAsBool()) {
+            SimpleRefHolder<QoreStringNode> src(new QoreStringNode(*code));
+            SimpleRefHolder<QoreStringNode> label(new QoreStringNode("dbg-cxx-exception"));
+            ReferenceHolder<QoreExpression> exp(new QoreExpression(**pgm, **src, **label, xsink), xsink);
+        } else {
+            (*pgm)->parse(code->c_str(), "dbg-cxx-exception", xsink);
+        }
+    } catch (AbstractException& e) {
+        e.convert(xsink);
+    }
+    return QoreValue();
+}
+
+//! Debug-only: parses the file in the Program with QoreProgram::parseFile() (issue #6206); DEBUG builds only
+static QoreValue f_dbg_program_parse_file(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    const QoreObject* obj = get_param_value(params, 0).get<const QoreObject>();
+    ReferenceHolder<QoreProgram> pgm(static_cast<QoreProgram*>(obj->getReferencedPrivateData(CID_PROGRAM,
+        xsink)), xsink);
+    if (!pgm) {
+        return QoreValue();
+    }
+    QoreStringNodeValueHelper path(get_param_value(params, 1));
+    (*pgm)->parseFile(path->c_str(), xsink);
+    return QoreValue();
+}
+
+//! Debug-only: stops the next parse of the Program once it has started (issue #6206)
+/** The parse (Program::parse(), Program::parsePending() or Program::parseCommit()) stops after it has been marked
+    as in progress, until dbg_release_parse_start_gate() is called; dbg_wait_parse_start_gate() waits until it has
+    stopped.  If \a fail is True, the parse then fails with \c DBG-PARSE-START-GATE.  DEBUG builds only.
+*/
+static QoreValue f_dbg_arm_parse_start_gate(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    const QoreObject* obj = get_param_value(params, 0).get<const QoreObject>();
+    ReferenceHolder<QoreProgram> pgm(static_cast<QoreProgram*>(obj->getReferencedPrivateData(CID_PROGRAM,
+        xsink)), xsink);
+    if (!pgm) {
+        return QoreValue();
+    }
+    std::lock_guard<std::mutex> lg(parse_start_gate.m);
+    parse_start_gate.pgm = *pgm;
+    parse_start_gate.fail = get_param_value(params, 1).getAsBool();
+    parse_start_gate.reached = false;
+    parse_start_gate.release = false;
+    parse_start_gate.aborted = false;
+    return QoreValue();
+}
+
+//! Debug-only: waits until a parse has stopped at the gate armed with dbg_arm_parse_start_gate(); DEBUG builds only
+/** @return True if a parse stopped at the gate, False if dbg_abort_parse_start_gate() was called first (the parse
+    ended without reaching it)
+*/
+static QoreValue f_dbg_wait_parse_start_gate(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    std::unique_lock<std::mutex> ul(parse_start_gate.m);
+    parse_start_gate.cv.wait(ul, [] { return parse_start_gate.reached || parse_start_gate.aborted; });
+    return parse_start_gate.reached;
+}
+
+//! Debug-only: wakes dbg_wait_parse_start_gate() if no parse has stopped at the gate, and disarms it; DEBUG only
+/** Called by a test when the thread that parses ends, so that a parse that ends without reaching the gate does not
+    leave the test waiting.
+*/
+static QoreValue f_dbg_abort_parse_start_gate(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    std::lock_guard<std::mutex> lg(parse_start_gate.m);
+    parse_start_gate.pgm = nullptr;
+    parse_start_gate.aborted = true;
+    parse_start_gate.cv.notify_all();
+    return QoreValue();
+}
+
+//! Debug-only: lets the parse stopped at the gate armed with dbg_arm_parse_start_gate() go on; DEBUG builds only
+static QoreValue f_dbg_release_parse_start_gate(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    std::lock_guard<std::mutex> lg(parse_start_gate.m);
+    parse_start_gate.release = true;
+    parse_start_gate.cv.notify_all();
+    return QoreValue();
+}
+
 //! Debug-only: creates a child process with fork() while another thread holds the lock of a registered fork handler
 /** The other thread takes the lock as the handler's prepare handler does, and releases it when the prepare handlers
     reach the handler, so fork() waits for it.  The child takes and releases the lock in the same way, runs the code
@@ -17648,6 +18545,172 @@ static QoreValue f_dbg_fork_while_parse_options_locked(const QoreListNode* param
         return QoreValue();
     }
     return ut_wait_child(pid);
+}
+
+//! Debug-only: creates a child process with fork() while another thread holds the lock of the thread list's records
+//! of cancellable waits
+/** The other thread holds the lock that every cancellable wait takes in debug builds (QoreThreadList::dbgNoteWait())
+    until fork() has returned in the parent, as a thread that registers or ends a wait at the moment of fork() does.
+    The child first checks that it can take the lock and exits with 98 at once if it cannot, so that a child that
+    inherited the lock held fails without waiting for it; then it runs the code given, which can wait (ex: a file
+    read), and exits with the value it returns (99 if it raised an exception).  DEBUG builds only.
+
+    @return the exit status of the child (-1 if it did not exit normally)
+
+    @throw DBG-FORK-ERROR fork() failed
+*/
+static QoreValue f_dbg_fork_while_thread_wait_lock_held(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    const ResolvedCallReferenceNode* child_code = get_param_value(params, 0).get<const ResolvedCallReferenceNode>();
+    QoreThreadLock& wait_lck = thread_list.dbgGetWaitLock();
+    std::mutex m;
+    std::condition_variable cv;
+    bool held = false;
+    bool release = false;
+    std::thread holder([&]() {
+        AutoLocker al(wait_lck);
+        std::unique_lock<std::mutex> ul(m);
+        held = true;
+        cv.notify_all();
+        cv.wait(ul, [&release] { return release; });
+    });
+    {
+        std::unique_lock<std::mutex> ul(m);
+        cv.wait(ul, [&held] { return held; });
+    }
+    pid_t pid = fork();
+    if (!pid) {
+        // a lock inherited held would block the code below forever
+        if (wait_lck.trylock()) {
+            _exit(98);
+        }
+        wait_lck.unlock();
+        ExceptionSink child_xsink;
+        ValueHolder rv(child_code->invoke(nullptr, &child_xsink), &child_xsink);
+        int status = child_xsink ? 99 : static_cast<int>(rv->getAsBigInt());
+        child_xsink.clear();
+        _exit(status);
+    }
+    int fork_errno = errno;
+    {
+        std::lock_guard<std::mutex> lg(m);
+        release = true;
+        cv.notify_all();
+    }
+    holder.join();
+    if (pid < 0) {
+        xsink->raiseErrnoException("DBG-FORK-ERROR", fork_errno, "fork() failed");
+        return QoreValue();
+    }
+    return ut_wait_child(pid);
+}
+
+namespace {
+//! the gate of dbg_arm_parse_commit_gate() (issue #6243)
+struct QoreDbgParseCommitGate {
+    std::mutex m;
+    std::condition_variable cv;
+    //! the Program whose next commit stops; cleared when a commit reaches the gate
+    const QoreProgram* pgm = nullptr;
+    //! where the commit stops (see qore_dbg_parse_commit_gate())
+    int point = 0;
+    bool reached = false;
+    bool release = false;
+    //! set by dbg_abort_parse_commit_gate() when the parse ends without reaching the gate
+    bool aborted = false;
+};
+
+QoreDbgParseCommitGate parse_commit_gate;
+}
+
+void qore_dbg_parse_commit_gate(const QoreProgram* pgm, int point) {
+    std::unique_lock<std::mutex> ul(parse_commit_gate.m);
+    if (!parse_commit_gate.pgm || parse_commit_gate.pgm != pgm || parse_commit_gate.point != point) {
+        return;
+    }
+    parse_commit_gate.pgm = nullptr;
+    parse_commit_gate.reached = true;
+    parse_commit_gate.cv.notify_all();
+    parse_commit_gate.cv.wait(ul, [] { return parse_commit_gate.release; });
+}
+
+//! Debug-only: creates a child process with fork() from the current thread (issue #6243)
+/** The child runs the code given and exits with the value it returns (99 if it raised an exception); the other
+    threads of the process do not exist in the child.  As in the other fork seams, the signal manager and the sandbox
+    watchdog are not prepared for the fork, so the code must not use signal handling, start threads or rely on time
+    limits.  DEBUG builds only.
+
+    @return the exit status of the child (-1 if it did not exit normally)
+
+    @throw DBG-FORK-ERROR fork() failed
+*/
+static QoreValue f_dbg_fork_child(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    const ResolvedCallReferenceNode* child_code = get_param_value(params, 0).get<const ResolvedCallReferenceNode>();
+    pid_t pid = fork();
+    if (!pid) {
+        ExceptionSink child_xsink;
+        ValueHolder rv(child_code->invoke(nullptr, &child_xsink), &child_xsink);
+        int status = child_xsink ? 99 : static_cast<int>(rv->getAsBigInt());
+        child_xsink.clear();
+        _exit(status);
+    }
+    if (pid < 0) {
+        xsink->raiseErrnoException("DBG-FORK-ERROR", errno, "fork() failed");
+        return QoreValue();
+    }
+    return ut_wait_child(pid);
+}
+
+//! Debug-only: stops the next commit of a parse of the Program once it has started (issue #6243)
+/** The commit stops after the Program has been marked as committing (\a point 0), or after the new code has been
+    merged into the Program, before the deferred initialization of its closures (\a point 1), until
+    dbg_release_parse_commit_gate() is called; dbg_wait_parse_commit_gate() waits until it has stopped.  DEBUG builds
+    only.
+*/
+static QoreValue f_dbg_arm_parse_commit_gate(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    const QoreObject* obj = get_param_value(params, 0).get<const QoreObject>();
+    ReferenceHolder<QoreProgram> pgm(static_cast<QoreProgram*>(obj->getReferencedPrivateData(CID_PROGRAM,
+        xsink)), xsink);
+    if (!pgm) {
+        return QoreValue();
+    }
+    std::lock_guard<std::mutex> lg(parse_commit_gate.m);
+    parse_commit_gate.pgm = *pgm;
+    parse_commit_gate.point = static_cast<int>(get_param_value(params, 1).getAsBigInt());
+    parse_commit_gate.reached = false;
+    parse_commit_gate.release = false;
+    parse_commit_gate.aborted = false;
+    return QoreValue();
+}
+
+//! Debug-only: waits until a commit has stopped at the gate armed with dbg_arm_parse_commit_gate(); DEBUG builds only
+/** @return True if a commit stopped at the gate, False if dbg_abort_parse_commit_gate() was called first
+*/
+static QoreValue f_dbg_wait_parse_commit_gate(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    std::unique_lock<std::mutex> ul(parse_commit_gate.m);
+    parse_commit_gate.cv.wait(ul, [] { return parse_commit_gate.reached || parse_commit_gate.aborted; });
+    return parse_commit_gate.reached;
+}
+
+//! Debug-only: lets the commit stopped at the gate armed with dbg_arm_parse_commit_gate() go on; DEBUG builds only
+static QoreValue f_dbg_release_parse_commit_gate(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    std::lock_guard<std::mutex> lg(parse_commit_gate.m);
+    parse_commit_gate.release = true;
+    parse_commit_gate.cv.notify_all();
+    return QoreValue();
+}
+
+//! Debug-only: wakes dbg_wait_parse_commit_gate() if no commit has stopped at the gate, and disarms it; DEBUG only
+/** Called by a test when the thread that parses ends, so that a parse that ends without reaching the gate does not
+    leave the test waiting.
+*/
+static QoreValue f_dbg_abort_parse_commit_gate(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    std::lock_guard<std::mutex> lg(parse_commit_gate.m);
+    parse_commit_gate.pgm = nullptr;
+    parse_commit_gate.aborted = true;
+    parse_commit_gate.cv.notify_all();
+    return QoreValue();
 }
 
 //! Debug-only: release the socket private data detached by dbg_detach_async_io_socket(), closing its fd.
@@ -18028,6 +19091,45 @@ static QoreValue f_dbg_run_method_cache_lifetime_tests(const QoreListNode* param
 #endif
 
 #ifdef DEBUG
+//! The variant search without diagnostics returns the type arguments of a generic variant without parameters
+/** QoreFunction::parseFindVariantNoDiagnostics() returned an empty instantiation for a call without arguments: the
+    search keeps the instantiation of the variant found to return it at its end, and the variant found without
+    arguments was not kept there (the AOT fallback resolution of a call, QoreAOTBinary.cpp)
+*/
+static void ut_parse_find_variant_no_args_type_param_inst(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    QoreProgram* pgm = new QoreProgram(PO_NO_CHILD_PO_RESTRICTIONS);
+    pgm->parse("%modern\n"
+        "string sub ut_zero_arg_generic<T = int>() { return \"T\"; }\n",
+        "zero-arg-generic-test", &xsink, nullptr, 0);
+    UT_ASSERT(c, !xsink, "the program with a generic function without parameters parses");
+    const QoreExternalFunction* ext = xsink ? nullptr : pgm->findFunction("ut_zero_arg_generic");
+    UT_ASSERT(c, ext, "the generic function is found");
+    if (ext) {
+        const QoreFunction* func = reinterpret_cast<const QoreFunction*>(ext);
+        QoreProgramContextHelper pch(pgm);
+        QoreTypeParamInstantiation inst;
+        const AbstractQoreFunctionVariant* variant = func->parseFindVariantNoDiagnostics(type_vec_t(), nullptr,
+            nullptr, &inst);
+        UT_ASSERT(c, variant, "the variant without parameters is found for a call without arguments");
+        UT_ASSERT_EQ(c, static_cast<size_t>(1), inst.type_args.size(),
+            "the instantiation of the variant found is returned");
+        UT_ASSERT(c, inst.type_args.size() == 1 && inst.type_args[0] == bigIntTypeInfo,
+            "the type parameter is bound to its default type");
+    }
+    xsink.handleExceptions();
+    xsink.clear();
+    pgm->waitForTerminationAndDeref(&xsink);
+}
+
+//! Debug-only: runs the unit tests of the parse-time variant search
+static QoreValue f_dbg_run_variant_search_tests(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    UnitTestCounters c;
+    ut_parse_find_variant_no_args_type_param_inst(c);
+    return make_unit_test_result(c, xsink);
+}
+
 //! Debug-only: runs the unit tests of the once-only LLVM target initialization
 static QoreValue f_dbg_run_llvm_target_init_tests(const QoreListNode* params, RuntimeConfig& rc,
         ExceptionSink* xsink) {
@@ -19200,6 +20302,8 @@ static QoreValue f_run_debug_unit_tests(const QoreListNode* params, RuntimeConfi
     ut_dgc_scan_wait_cycle(c);
     ut_debug_skips_foreign_thread_callbacks(c, rc.getProgram());
     ut_debug_step_every_statement(c, rc.getProgram());
+    ut_debug_step_folded_statements(c, rc.getProgram());
+    ut_ir_fold_debug_statements_exception_target(c);
     ut_callback_caller_parse_options(c, rc.getProgram());
     ut_self_call_without_method(c, rc.getProgram());
     ut_old_background_self_call_helper(c);
@@ -19600,6 +20704,8 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_dgc_scan_wait_cycle(c);
     ut_debug_skips_foreign_thread_callbacks(c, rc.getProgram());
     ut_debug_step_every_statement(c, rc.getProgram());
+    ut_debug_step_folded_statements(c, rc.getProgram());
+    ut_ir_fold_debug_statements_exception_target(c);
     ut_callback_caller_parse_options(c, rc.getProgram());
 #ifdef DEBUG
     ut_sandbox_context_inner_program_id(c, rc.getProgram());
@@ -19667,6 +20773,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     AsyncIoStoppingThreadTest::run(c);
     AsyncIoFrameSendTest::run(c);
     ut_cond_wait_cancel_in_window(c);
+    ut_parse_lock_sinkless_cycle_window(c);
     ut_fork_waits_for_lock_holders(c);
     ut_fork_signal_block_waiter(c);
     ut_fork_jit_compile_in_progress(c);
@@ -20449,6 +21556,31 @@ static bool dbg_get_bg_compile_hold_point(const QoreStringNode* point, QoreJIT::
     return true;
 }
 
+//! makes the next check of a finalization loop of the native lowering report a cancellation at the given entry
+/** The lowering of the function then fails, and the function is not compiled.  The loops are \c "reload-chain-slots"
+    (the reload chain slots of QoreIRToLLVM::finalizeCleanupFrame()) and \c "handler-local-table"
+    (QoreIRToLLVM::finalizeObeEntries()); the hook is cleared when it fires, or with a negative index.  It is
+    process-wide: it fires in whichever lowering first reaches that loop at that index, on any thread, which can be
+    that of a callee of the batch of another function.
+
+    @throw DBG-ARGUMENT-ERROR the loop is unknown
+*/
+static QoreValue f_dbg_force_finalize_cancel(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    const QoreStringNode* loop = get_param_value(params, 0).get<const QoreStringNode>();
+    int64_t index = get_param_value(params, 1).getAsBigInt();
+    int which;
+    if (!strcmp(loop->c_str(), "reload-chain-slots")) {
+        which = QFL_RELOAD_CHAIN_SLOTS;
+    } else if (!strcmp(loop->c_str(), "handler-local-table")) {
+        which = QFL_HANDLER_LOCAL_TABLE;
+    } else {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "unknown finalization loop '%s'", loop->c_str());
+        return QoreValue();
+    }
+    qore_dbg_force_finalize_cancel(index < 0 ? 0 : which, index);
+    return QoreValue();
+}
+
 //! stops the next background JIT compile at the given point (\c "lowering", \c "llvm", \c "commit" or \c "install")
 /** The compile thread holds the compile lock while it is stopped, as a compile that takes a long time does.  If a
     function name is given, only the compile of that function (the root function of the batch) stops.
@@ -20464,30 +21596,6 @@ static QoreValue f_dbg_hold_bg_compile(const QoreListNode* params, RuntimeConfig
     if (!QoreJIT::instance().dbgHoldBgCompile(point, func ? func->c_str() : "")) {
         xsink->raiseException("DBG-ARGUMENT-ERROR", "a background compile hold is armed at this point already");
     }
-    return QoreValue();
-}
-
-//! lets a held background compile that the end of the process abandons end before the process does (qore#5842)
-/** Without this, a compile held at the end of the process stays held, and the process ends with \c _exit().  With
-    \c "shutdown", the compile is let go when it is abandoned, and QoreJIT::shutdown() waits for it, so that it
-    releases the JIT; with \c "exit", it is let go at the end of the process, which waits for it and releases the JIT
-    then (QoreJIT::exitQuickly()).
-
-    @throw DBG-ARGUMENT-ERROR the point is neither \c "shutdown" nor \c "exit"
-*/
-static QoreValue f_dbg_finish_abandoned_bg_compile(const QoreListNode* params, RuntimeConfig& rc,
-        ExceptionSink* xsink) {
-    const QoreStringNode* where = get_param_value(params, 0).get<const QoreStringNode>();
-    QoreJIT::DbgFinishAbandoned w;
-    if (where && *where == "shutdown") {
-        w = QoreJIT::DbgFinishAbandoned::Shutdown;
-    } else if (where && *where == "exit") {
-        w = QoreJIT::DbgFinishAbandoned::Exit;
-    } else {
-        xsink->raiseException("DBG-ARGUMENT-ERROR", "the point must be \"shutdown\" or \"exit\"");
-        return QoreValue();
-    }
-    QoreJIT::instance().dbgFinishAbandonedCompile(w);
     return QoreValue();
 }
 
@@ -20645,6 +21753,15 @@ static QoreValue f_dbg_get_lvalue_removal_allocation_count(const QoreListNode* p
     return q_get_lvalue_removal_allocation_count();
 }
 
+//! returns the number of old values of number lvalues copied by post-increments and post-decrements in this thread
+/** A post-increment or post-decrement whose value is unused copies no old value (qore#6197); tests use this to
+    verify it.
+*/
+static QoreValue f_dbg_get_number_old_value_copy_count(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return q_get_number_old_value_copy_count();
+}
+
 //! returns the number of objects that recursive-reference scans have entered in the current thread
 /** A scan takes the rsection of every object it enters and follows all of its references, so this reports the
     size of the graph the scans of the current thread have walked; tests use it to verify that a scan does not
@@ -20743,6 +21860,105 @@ static QoreValue f_dbg_get_module_mask_added(const QoreListNode* params, Runtime
 }
 
 //! returns the number of Program objects that exist (created and not yet destroyed; qore#5822)
+//! the references to objects that dbg_object_external_ref() holds, by ID; protected by its mutex
+static struct {
+    std::mutex m;
+    int64 next = 0;
+    std::map<int64, QoreObject*> refs;
+} dbg_external_refs;
+
+//! Debug-only: holds a reference to an object from C++, as the async I/O controller holds a poll operation (#6329)
+/** The reference is not reached by the scans of the recursive references: it is a reference from outside the
+    object graph, released with dbg_object_external_deref().
+
+    @param obj the object
+
+    @return the ID of the reference
+*/
+static QoreValue f_dbg_object_external_ref(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    QoreObject* obj = const_cast<QoreObject*>(get_param_value(params, 0).get<const QoreObject>());
+    obj->ref();
+    std::lock_guard<std::mutex> l(dbg_external_refs.m);
+    int64 id = ++dbg_external_refs.next;
+    dbg_external_refs.refs[id] = obj;
+    return id;
+}
+
+//! Debug-only: releases a reference that dbg_object_external_ref() holds, from C++ (#6329)
+static QoreValue f_dbg_object_external_deref(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    int64 id = get_param_value(params, 0).getAsBigInt();
+    QoreObject* obj;
+    {
+        std::lock_guard<std::mutex> l(dbg_external_refs.m);
+        auto i = dbg_external_refs.refs.find(id);
+        if (i == dbg_external_refs.refs.end()) {
+            xsink->raiseException("DBG-ARGUMENT-ERROR", "no external reference with ID %lld", (long long)id);
+            return QoreValue();
+        }
+        obj = i->second;
+        dbg_external_refs.refs.erase(i);
+    }
+    obj->deref(xsink);
+    return QoreValue();
+}
+
+//! Debug-only: returns the state of the member map of a class (#6272)
+/** @param path the path of the class, resolved in the current Program
+
+    @return a hash with \c frozen, \c indexed, \c members, \c has_internal_entries and \c error (an empty string if
+    the map's index and flags agree with its list; see QoreMemberMap::dbgCheckIndex())
+*/
+static QoreValue f_dbg_class_member_index_info(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    const QoreStringNode* path = get_param_value(params, 0).get<const QoreStringNode>();
+    const QoreClass* qc = getProgram()->findClass(path->c_str(), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    if (!qc) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "class '%s' not found", path->c_str());
+        return QoreValue();
+    }
+    const QoreMemberMap& members = qore_class_private::get(*qc)->members;
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+    rv->setKeyValue("frozen", members.isFrozen(), xsink);
+    rv->setKeyValue("indexed", members.isIndexed(), xsink);
+    rv->setKeyValue("members", (int64)members.size(), xsink);
+    rv->setKeyValue("has_internal_entries", members.hasInternalEntries(), xsink);
+    rv->setKeyValue("error", new QoreStringNode(members.dbgCheckIndex()), xsink);
+    return rv.release();
+}
+
+//! Debug-only: adds a public member to a class whose members are frozen, as a late change would (#6272)
+/** The member is added without the assertion that forbids it, so that the fallback that publishes a new index can be
+    tested; objects of the class made before hold no value for it.
+
+    @param path the path of the class, resolved in the current Program
+    @param name the name of the new member
+
+    @return the number of indexes that the class's member map has replaced so far
+*/
+static QoreValue f_dbg_class_member_late_add(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    const QoreStringNode* path = get_param_value(params, 0).get<const QoreStringNode>();
+    const QoreStringNode* name = get_param_value(params, 1).get<const QoreStringNode>();
+    const QoreClass* qc = getProgram()->findClass(path->c_str(), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    if (!qc) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "class '%s' not found", path->c_str());
+        return QoreValue();
+    }
+    qore_class_private* qcp = const_cast<qore_class_private*>(qore_class_private::get(*qc));
+    if (qcp->members.inList(name->c_str())) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "class '%s' already has a member '%s'", path->c_str(),
+            name->c_str());
+        return QoreValue();
+    }
+    QoreMemberInfo* mi = new QoreMemberInfo(&loc_builtin, autoTypeInfo, nullptr, QoreValue(), Public, qcp);
+    return (int64)qcp->members.dbgLateAdd(strdup(name->c_str()), mi);
+}
+
 static QoreValue f_dbg_get_live_program_count(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     return static_cast<int64>(qore_program_private::dbgGetLiveProgramCount());
 }
@@ -22187,6 +23403,7 @@ static QoreValue f_dbg_release_http1_connection_close(const QoreListNode* params
 
 std::atomic<qore_dbg_http1_send_hook_t> qore_dbg_http1_send_hook{nullptr};
 std::atomic<qore_dbg_socket_send_hook_t> qore_dbg_socket_send_hook{nullptr};
+std::atomic<qore_dbg_tls_read_want_hook_t> qore_dbg_tls_read_want_hook{nullptr};
 std::atomic<int64_t> qore_dbg_ssl_close_notify_count{0};
 std::atomic<int64_t> qore_dbg_sync_release_taken{0};
 std::atomic<int64_t> qore_dbg_sync_release_refused{0};
@@ -22287,12 +23504,64 @@ void dbg_http1_wait_hangup(int fd) {
 #endif
 }
 
+//! blocks until the receive buffer of \a fd holds at least \a size bytes, or the connection has ended; no timer is
+//! involved
+void dbg_http1_wait_received(int fd, size_t size) {
+    auto received = [fd] () -> size_t {
+        int n = 0;
+        return ::ioctl(fd, FIONREAD, &n) || n < 0 ? 0 : static_cast<size_t>(n);
+    };
+#ifdef DARWIN
+    // the read filter with a low-water mark fires once the receive buffer holds that many bytes, or at the end of the
+    // connection
+    int kq = kqueue();
+    if (kq < 0) {
+        return;
+    }
+    ON_BLOCK_EXIT([kq] () { ::close(kq); });
+    struct kevent kev;
+    EV_SET(&kev, fd, EVFILT_READ, EV_ADD | EV_CLEAR, NOTE_LOWAT, static_cast<intptr_t>(size), nullptr);
+    if (kevent(kq, &kev, 1, nullptr, 0, nullptr) < 0) {
+        return;
+    }
+    while (received() < size) {
+        struct kevent out;
+        int rc = kevent(kq, nullptr, 0, &out, 1, nullptr);
+        if (rc < 0 && errno == EINTR) {
+            continue;
+        }
+        if (rc <= 0 || (out.flags & (EV_EOF | EV_ERROR))) {
+            return;
+        }
+    }
+#else
+    // loopback delivers what send() wrote before it returns, so the data is normally there already
+    while (received() < size) {
+        pollfd pfd = {fd, POLLIN, 0};
+        int rc = ::poll(&pfd, 1, -1);
+        if (rc < 0 && errno == EINTR) {
+            continue;
+        }
+        if (rc < 0 || (pfd.revents & (POLLHUP | POLLERR | POLLNVAL))) {
+            return;
+        }
+        if (received() < size) {
+            sched_yield();
+        }
+    }
+#endif
+}
+
 //! writes \a response on the peer's descriptor \a pfd and resets the connection, with system calls only
 /** The connection is reset by closing its last descriptor with \c SO_LINGER and a zero timeout; the descriptor
     number is first taken over by a new, unconnected socket (dup2()), so the peer's Socket object keeps a valid
     descriptor, which it closes later without touching the connection or another socket.
+
+    A reset discards the data in the peer's send buffer that has not been sent, so the reset is made once the
+    response is in the receive buffer of the client's descriptor \a fd: loopback delivery is not synchronous with
+    send() on macOS, where a reset made at once could discard the response before it was sent (issue #6320).
 */
-void dbg_http1_answer_and_reset(int pfd, const std::string& response) {
+void dbg_http1_answer_and_reset(int pfd, const std::string& response, int fd) {
     size_t off = 0;
     while (off < response.size()) {
         ssize_t rc = ::send(pfd, response.data() + off, response.size() - off,
@@ -22316,6 +23585,9 @@ void dbg_http1_answer_and_reset(int pfd, const std::string& response) {
             continue;
         }
         break;
+    }
+    if (fd >= 0 && off == response.size()) {
+        dbg_http1_wait_received(fd, response.size());
     }
     struct linger l;
     l.l_onoff = 1;
@@ -22486,7 +23758,7 @@ void dbg_http1_send_hook(QoreDbgHttp1SendEvent event, int fd, const char* err) {
     }
     // the peer answers and resets the connection now, after the receive side found nothing, so the next write fails
     if (pfd >= 0) {
-        dbg_http1_answer_and_reset(pfd, response);
+        dbg_http1_answer_and_reset(pfd, response, fd);
     }
     dbg_http1_wait_hangup(fd);
     dbg_http1_send_failure_dec(c);
@@ -22514,7 +23786,7 @@ void dbg_http1_socket_send_hook(int fd) {
     }
     if (pfd >= 0) {
         // the peer answers and resets the connection before the write is made
-        dbg_http1_answer_and_reset(pfd, response);
+        dbg_http1_answer_and_reset(pfd, response, fd);
     }
     dbg_http1_send_failure_dec(c);
     // without a peer, the test cancels the request, which shuts the connection down
@@ -22728,7 +24000,7 @@ struct DbgHttpHold {
     Counter* release = nullptr;
 };
 std::mutex dbg_http_hold_m;
-DbgHttpHold dbg_http_holds[2];
+DbgHttpHold dbg_http_holds[static_cast<int>(QoreDbgHttpHoldPoint::Count)];
 }
 
 void qore_dbg_http_hold(QoreDbgHttpHoldPoint point) {
@@ -22752,10 +24024,97 @@ void qore_dbg_http_hold(QoreDbgHttpHoldPoint point) {
     xsink.clear();
 }
 
+bool qore_dbg_http_hold_armed(QoreDbgHttpHoldPoint point) {
+    std::lock_guard<std::mutex> l(dbg_http_hold_m);
+    return dbg_http_holds[static_cast<int>(point)].reached != nullptr;
+}
+
+namespace {
+//! the hold armed by dbg_hold_child_program_create(): the Counters are referenced
+std::mutex dbg_child_program_hold_m;
+Counter* dbg_child_program_reached = nullptr;
+Counter* dbg_child_program_release = nullptr;
+}
+
+void qore_dbg_child_program_create_hold() {
+    Counter* reached;
+    Counter* release;
+    {
+        std::lock_guard<std::mutex> l(dbg_child_program_hold_m);
+        if (!dbg_child_program_reached) {
+            return;
+        }
+        // one-shot: the hold is taken over by this thread
+        reached = dbg_child_program_reached;
+        release = dbg_child_program_release;
+        dbg_child_program_reached = dbg_child_program_release = nullptr;
+    }
+    ExceptionSink xsink;
+    reached->dec(&xsink);
+    // a hang guard only: the test releases the hold
+    release->waitForZero(&xsink, 60000);
+    reached->deref(&xsink);
+    release->deref(&xsink);
+    xsink.clear();
+}
+
+//! holds the next creation of a child Program after its options were checked and before it is created (one-shot)
+/** @param reached decremented when a thread reaches the hold
+    @param release the thread waits until it reaches zero
+
+    @throw DBG-ARGUMENT-ERROR the hold is already armed
+*/
+static QoreValue f_dbg_hold_child_program_create(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    ReferenceHolder<Counter> reached(get_counter_arg(params, 0, xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    ReferenceHolder<Counter> release(get_counter_arg(params, 1, xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    std::lock_guard<std::mutex> l(dbg_child_program_hold_m);
+    if (dbg_child_program_reached) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_hold_child_program_create() is already armed");
+        return QoreValue();
+    }
+    dbg_child_program_reached = reached.release();
+    dbg_child_program_release = release.release();
+    return QoreValue();
+}
+
+//! disarms dbg_hold_child_program_create() if no creation reached it
+static QoreValue f_dbg_hold_child_program_create_clear(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    Counter* reached;
+    Counter* release;
+    {
+        std::lock_guard<std::mutex> l(dbg_child_program_hold_m);
+        reached = dbg_child_program_reached;
+        release = dbg_child_program_release;
+        dbg_child_program_reached = dbg_child_program_release = nullptr;
+    }
+    if (reached) {
+        reached->deref(xsink);
+        release->deref(xsink);
+    }
+    return QoreValue();
+}
+
 //! holds the next HTTP client thread that reaches the given point until \a release reaches zero (one-shot)
 /** @param point \c "submit": HTTPClient::startPollSendRecv() has checked out its connection and is about to submit
     the request; \c "close": an HTTP/1 or HTTP/2 client connection that is being closed has been invalidated (new
-    calls on it are refused) and is not closed yet
+    calls on it are refused) and is not closed yet; \c "submit-failed": the submit of a request on a ready connection
+    raised an exception, which is about to be classified; \c "finalize": HTTPClient::startPollSendRecv() found an
+    ALPN-negotiating connection ready and is about to hand it over to a concrete connection (while it is armed, the
+    request waits for its connection to be ready first); \c "takeover": the hand-over of an ALPN-negotiating connection
+    checked the connection and holds its method guard; \c "drain-wait": the close of an HTTP client connection has to
+    wait for a call in flight (with a release Counter of 0, it only reports it); \c "swap": a negotiating connection was
+    handed over, and the connection manager is about to replace it in its pool with the connection that took it over;
+    \c "acquired": the connection manager found a connection in its pool for a request and released the pool lock;
+    \c "reserve-pending": a stream of a Qore-level HTTP client connection is to be reserved, before the reservation
+    lock is taken
     @param reached decremented when a thread reaches the point
     @param release the thread waits until it reaches zero
 
@@ -22768,6 +24127,20 @@ static QoreValue f_dbg_http_hold_at(const QoreListNode* params, RuntimeConfig& r
         point = static_cast<int>(QoreDbgHttpHoldPoint::Submit);
     } else if (!strcmp(name->c_str(), "close")) {
         point = static_cast<int>(QoreDbgHttpHoldPoint::CloseAfterInvalidate);
+    } else if (!strcmp(name->c_str(), "submit-failed")) {
+        point = static_cast<int>(QoreDbgHttpHoldPoint::SubmitFailed);
+    } else if (!strcmp(name->c_str(), "finalize")) {
+        point = static_cast<int>(QoreDbgHttpHoldPoint::Finalize);
+    } else if (!strcmp(name->c_str(), "takeover")) {
+        point = static_cast<int>(QoreDbgHttpHoldPoint::Takeover);
+    } else if (!strcmp(name->c_str(), "drain-wait")) {
+        point = static_cast<int>(QoreDbgHttpHoldPoint::DrainWait);
+    } else if (!strcmp(name->c_str(), "swap")) {
+        point = static_cast<int>(QoreDbgHttpHoldPoint::Swap);
+    } else if (!strcmp(name->c_str(), "acquired")) {
+        point = static_cast<int>(QoreDbgHttpHoldPoint::Acquired);
+    } else if (!strcmp(name->c_str(), "reserve-pending")) {
+        point = static_cast<int>(QoreDbgHttpHoldPoint::ReservePending);
     } else {
         xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_http_hold_at(): unknown point '%s'", name->c_str());
         return QoreValue();
@@ -22942,6 +24315,50 @@ static QoreValue f_dbg_http_submit_after_close_clear(const QoreListNode* params,
     return QoreValue();
 }
 
+//! set by dbg_http_new_connection_wait(): the next connection that a connection manager creates waits in
+//! qore_http_manager_new_connection_hook until it is ready or its connect failed
+static std::atomic<bool> dbg_new_connection_wait_armed{false};
+
+//! the hook of dbg_http_new_connection_wait(): one-shot; it removes itself once it has run
+static void dbg_new_connection_wait_hook(HttpClientConnectionBase* conn) {
+    if (!dbg_new_connection_wait_armed.exchange(false)) {
+        return;
+    }
+    void (*self)(HttpClientConnectionBase*) = dbg_new_connection_wait_hook;
+    qore_http_manager_new_connection_hook.compare_exchange_strong(self, nullptr);
+    ExceptionSink xs;
+    // a hang guard only: the connect of the test's connection ends at once
+    conn->waitForReadyOrError(60000, &xs);
+    xs.clear();
+}
+
+//! the next connection that an HTTP client connection manager creates waits until it is ready or its connect failed,
+//! before the manager reserves its first stream (one-shot)
+/** Orders a connect that fails before the reservation of the new connection deterministically: the manager then
+    raises the connection's error from the acquire.
+
+    @throw DBG-ARGUMENT-ERROR another hook for new connections is set
+*/
+static QoreValue f_dbg_http_new_connection_wait(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    void (*expected)(HttpClientConnectionBase*) = nullptr;
+    if (!qore_http_manager_new_connection_hook.compare_exchange_strong(expected, dbg_new_connection_wait_hook)
+            && expected != dbg_new_connection_wait_hook) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_http_new_connection_wait(): another hook is set");
+        return QoreValue();
+    }
+    dbg_new_connection_wait_armed = true;
+    return QoreValue();
+}
+
+//! disarms dbg_http_new_connection_wait() if no connection was created
+static QoreValue f_dbg_http_new_connection_wait_clear(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    dbg_new_connection_wait_armed = false;
+    void (*self)(HttpClientConnectionBase*) = dbg_new_connection_wait_hook;
+    qore_http_manager_new_connection_hook.compare_exchange_strong(self, nullptr);
+    return QoreValue();
+}
+
 //! has the peer of the next HTTP/1 client request answer and close its side (FIN) at a point of the request
 /** @param point \c "idle-check": before the check for data from the server that precedes the send of a request;
     \c "after-sent": after a request on a reused connection was sent, before the check for the server's close
@@ -23037,6 +24454,58 @@ static QoreValue f_dbg_hold_http1_socket_send(const QoreListNode* params, Runtim
     if (!*xsink) {
         qore_dbg_socket_send_hook.store(dbg_http1_socket_send_hook);
     }
+    return QoreValue();
+}
+
+//! the state of dbg_hold_tls_read_until_hangup(); protected by its mutex
+static struct {
+    std::mutex m;
+    int port = 0;
+    Counter* reached = nullptr;
+} dbg_tls_read_want;
+
+//! holds a TLS read of the socket connected to the armed port until its connection is reset or closed (#6315)
+static void dbg_tls_read_want_hook(int fd) {
+    Counter* c;
+    {
+        std::lock_guard<std::mutex> l(dbg_tls_read_want.m);
+        if (!dbg_tls_read_want.reached || fd < 0 || dbg_http1_peer_port(fd) != dbg_tls_read_want.port) {
+            return;
+        }
+        c = dbg_tls_read_want.reached;
+        dbg_tls_read_want.reached = nullptr;
+        qore_dbg_tls_read_want_hook.store(nullptr);
+    }
+    dbg_http1_send_failure_dec(c);
+    dbg_http1_wait_hangup(fd);
+}
+
+//! holds the next TLS read of a header (Socket::recvUntilBytes()) of a socket connected to the given port, once
+//! SSL_read() has found no record, until the connection is reset or closed
+/** The test's peer then sends its data and resets or closes the connection; the read continues once the end of the
+    connection has arrived, so the data and the end are both in the receive buffer when it polls (#6315).
+
+    @param port the port of the peer of the socket whose read is held
+    @param reached decremented when the read is held
+
+    @throw DBG-ARGUMENT-ERROR the hook is already armed
+*/
+static QoreValue f_dbg_hold_tls_read_until_hangup(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    int port = (int)get_param_value(params, 0).getAsBigInt();
+    Counter* c = get_counter_arg(params, 1, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    std::lock_guard<std::mutex> l(dbg_tls_read_want.m);
+    if (dbg_tls_read_want.reached) {
+        c->deref(xsink);
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_hold_tls_read_until_hangup() is already armed");
+        return QoreValue();
+    }
+    dbg_tls_read_want.port = port;
+    dbg_tls_read_want.reached = c;
+    qore_dbg_tls_read_want_hook.store(dbg_tls_read_want_hook);
     return QoreValue();
 }
 
@@ -23726,6 +25195,22 @@ static QoreValue f_dbg_fail_next_program_entry(const QoreListNode* params, Runti
     return QoreValue();
 }
 
+//! Returns the number of bytes that the character offset functions of UTF-8 strings have walked or scanned in the
+//! current thread
+/** Tests that a character offset in the ASCII text at the start of a UTF-8 string is O(1) (issue #6138)
+*/
+static QoreValue f_dbg_get_string_scan_bytes(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    return qore_dbg_string_scan_bytes;
+}
+
+//! Enables or disables the ASCII prefix cache of UTF-8 strings; returns the previous setting
+/** With the cache disabled, every character offset is walked from the start of the string, as before issue #6138
+*/
+static QoreValue f_dbg_set_ascii_prefix_cache(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    bool enable = get_param_value(params, 0).getAsBool();
+    return !qore_dbg_ascii_prefix_disabled.exchange(!enable, std::memory_order_relaxed);
+}
+
 //! Makes the next count sandbox call budget recordings fail as if no memory could be allocated
 /** Tests the fail-closed path of the sandbox limits (see design/sandbox-resource-limits.md)
 */
@@ -23767,7 +25252,78 @@ static QoreValue f_dbg_sandbox_cpu_used(const QoreListNode* params, RuntimeConfi
 */
 #define QDOM_DEBUG_HOOK (QDOM_PROCESS | QDOM_UNCONTROLLED_API)
 
+#ifdef HAVE_NANOSLEEP
+namespace {
+//! a nanosleep() that reports an interruption by a signal, without a signal, for dbg_nanosleep_eintr()
+struct DbgNanosleep {
+    //! the nanoseconds of each call
+    std::vector<int64> requests;
+    //! the nanoseconds left that each interrupted call reports; the call after the last one succeeds
+    std::vector<int64> remainders;
+    //! the errno of the call after the interrupted ones, or 0 for success
+    int fail_errno = 0;
+};
+
+thread_local DbgNanosleep* dbg_nanosleep = nullptr;
+
+int dbg_nanosleep_func(const struct timespec* req, struct timespec* rem) {
+    DbgNanosleep& d = *dbg_nanosleep;
+    size_t call = d.requests.size();
+    d.requests.push_back(static_cast<int64>(req->tv_sec) * 1000000000ll + req->tv_nsec);
+    if (call < d.remainders.size()) {
+        // nanosleep() reports the time left only if it is given where to put it
+        if (rem) {
+            rem->tv_sec = d.remainders[call] / 1000000000ll;
+            rem->tv_nsec = d.remainders[call] % 1000000000ll;
+        }
+        errno = EINTR;
+        return -1;
+    }
+    if (d.fail_errno) {
+        errno = d.fail_errno;
+        return -1;
+    }
+    return 0;
+}
+}
+
+//! sleeps with qore_nanosleep_with() and a nanosleep() that is interrupted as given, without sleeping (issue #6364)
+/** @param ns the nanoseconds to sleep
+    @param remainders the nanoseconds left that each interrupted call of nanosleep() reports
+    @param fail_errno the errno of the call after the interrupted ones, or 0 for success
+
+    @return a hash with \c rc, the return value, and \c requests, the nanoseconds that each call of nanosleep() was
+    given
+*/
+static QoreValue f_dbg_nanosleep_eintr(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    DbgNanosleep d;
+    const QoreListNode* l = HARD_QORE_VALUE_LIST(params, 1);
+    ConstListIterator li(l);
+    while (li.next()) {
+        d.remainders.push_back(li.getValue().getAsBigInt());
+    }
+    d.fail_errno = static_cast<int>(HARD_QORE_VALUE_INT(params, 2));
+    dbg_nanosleep = &d;
+    int rv = qore_nanosleep_with(HARD_QORE_VALUE_INT(params, 0), dbg_nanosleep_func);
+    dbg_nanosleep = nullptr;
+
+    ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), xsink);
+    h->setKeyValue("rc", rv, xsink);
+    ReferenceHolder<QoreListNode> requests(new QoreListNode(autoTypeInfo), xsink);
+    for (int64 r : d.requests) {
+        requests->push(r, xsink);
+    }
+    h->setKeyValue("requests", requests.release(), xsink);
+    return h.release();
+}
+#endif
+
 void init_debug_functions(QoreNamespace& qns) {
+#ifdef HAVE_NANOSLEEP
+    qns.addBuiltinVariant("dbg_nanosleep_eintr", f_dbg_nanosleep_eintr, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        hashTypeInfo, 3, bigIntTypeInfo, QORE_PARAM_NO_ARG, "ns", listTypeInfo, QORE_PARAM_NO_ARG, "remainders",
+        bigIntTypeInfo, QORE_PARAM_NO_ARG, "fail_errno");
+#endif
 
     qns.addBuiltinVariant("dbg_node_info", f_dbg_node_info, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, stringTypeInfo, 2,
         autoTypeInfo, QORE_PARAM_NO_ARG, "node", softBoolOrNothingTypeInfo, QORE_PARAM_NO_ARG, "shallow");
@@ -23806,6 +25362,8 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_run_connect_error_tests", f_dbg_run_connect_error_tests, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, hashTypeInfo);
 #endif
+    qns.addBuiltinVariant("dbg_run_variant_search_tests", f_dbg_run_variant_search_tests, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, hashTypeInfo);
     qns.addBuiltinVariant("dbg_run_http1_duplex_tests", f_dbg_run_http1_duplex_tests, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, hashTypeInfo);
     qns.addBuiltinVariant("dbg_poll_close_before_open_state", f_dbg_poll_close_before_open_state, QCF_NO_FLAGS,
@@ -23824,6 +25382,10 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_fail_next_program_entry", f_dbg_fail_next_program_entry,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "site");
+    qns.addBuiltinVariant("dbg_get_string_scan_bytes", f_dbg_get_string_scan_bytes, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_set_ascii_prefix_cache", f_dbg_set_ascii_prefix_cache, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        boolTypeInfo, 1, boolTypeInfo, QORE_PARAM_NO_ARG, "enable");
     qns.addBuiltinVariant("dbg_sandbox_fail_next_budgets", f_dbg_sandbox_fail_next_budgets,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "count");
@@ -23976,6 +25538,17 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_detach_async_io_socket", f_dbg_detach_async_io_socket,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
         QC_SOCKET->getTypeInfo(), QORE_PARAM_NO_ARG, "sock");
+    qns.addBuiltinVariant("dbg_fork_child", f_dbg_fork_child, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo, 1,
+        codeTypeInfo, QORE_PARAM_NO_ARG, "child");
+    qns.addBuiltinVariant("dbg_arm_parse_commit_gate", f_dbg_arm_parse_commit_gate, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        nothingTypeInfo, 2, QC_PROGRAM->getTypeInfo(), QORE_PARAM_NO_ARG, "pgm", bigIntTypeInfo, QORE_PARAM_NO_ARG,
+        "point");
+    qns.addBuiltinVariant("dbg_wait_parse_commit_gate", f_dbg_wait_parse_commit_gate, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        boolTypeInfo);
+    qns.addBuiltinVariant("dbg_release_parse_commit_gate", f_dbg_release_parse_commit_gate, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, nothingTypeInfo);
+    qns.addBuiltinVariant("dbg_abort_parse_commit_gate", f_dbg_abort_parse_commit_gate, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, nothingTypeInfo);
     qns.addBuiltinVariant("dbg_release_detached_async_io_sockets", f_dbg_release_detached_async_io_sockets,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo);
     qns.addBuiltinVariant("dbg_ds_arm_connection_abort", f_dbg_ds_arm_connection_abort,
@@ -24009,6 +25582,11 @@ void init_debug_functions(QoreNamespace& qns) {
         QDOM_DEBUG_HOOK, boolTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
     qns.addBuiltinVariant("dbg_run_in_foreign_thread", f_dbg_run_in_foreign_thread, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         stringOrNothingTypeInfo, 1, codeTypeInfo, QORE_PARAM_NO_ARG, "code");
+    qns.addBuiltinVariant("dbg_hold_child_program_create", f_dbg_hold_child_program_create, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, nothingTypeInfo, 2, QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "reached",
+        QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "release");
+    qns.addBuiltinVariant("dbg_hold_child_program_create_clear", f_dbg_hold_child_program_create_clear,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo);
     qns.addBuiltinVariant("dbg_hold_source_program_call", f_dbg_hold_source_program_call, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, nothingTypeInfo, 1, QC_PROGRAM->getTypeInfo(), QORE_PARAM_NO_ARG, "pgm");
     qns.addBuiltinVariant("dbg_wait_source_program_call_held", f_dbg_wait_source_program_call_held, QCF_NO_FLAGS,
@@ -24027,8 +25605,8 @@ void init_debug_functions(QoreNamespace& qns) {
         QDOM_DEBUG_HOOK, nothingTypeInfo, 1, QC_PROGRAM->getTypeInfo(), QORE_PARAM_NO_ARG, "pgm");
     qns.addBuiltinVariant("dbg_get_bg_compile_refused_count", f_dbg_get_bg_compile_refused_count, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
-    qns.addBuiltinVariant("dbg_finish_abandoned_bg_compile", f_dbg_finish_abandoned_bg_compile, QCF_NO_FLAGS,
-        QDOM_DEBUG_HOOK, nothingTypeInfo, 1, stringTypeInfo, QORE_PARAM_NO_ARG, "where");
+    qns.addBuiltinVariant("dbg_force_finalize_cancel", f_dbg_force_finalize_cancel, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        nothingTypeInfo, 2, stringTypeInfo, QORE_PARAM_NO_ARG, "loop", bigIntTypeInfo, QORE_PARAM_NO_ARG, "index");
     qns.addBuiltinVariant("dbg_hold_bg_compile", f_dbg_hold_bg_compile, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         nothingTypeInfo, 2, stringTypeInfo, QORE_PARAM_NO_ARG, "point", stringOrNothingTypeInfo, QORE_PARAM_NO_ARG,
         "func");
@@ -24074,6 +25652,8 @@ void init_debug_functions(QoreNamespace& qns) {
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_get_lvalue_removal_probe_count", f_dbg_get_lvalue_removal_probe_count, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_get_number_old_value_copy_count", f_dbg_get_number_old_value_copy_count,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_get_scan_object_count", f_dbg_get_scan_object_count, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_get_scan_edge_count", f_dbg_get_scan_edge_count, QCF_NO_FLAGS,
@@ -24088,6 +25668,15 @@ void init_debug_functions(QoreNamespace& qns) {
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_get_live_program_count", f_dbg_get_live_program_count, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_object_external_ref", f_dbg_object_external_ref, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        bigIntTypeInfo, 1, objectTypeInfo, QORE_PARAM_NO_ARG, "obj");
+    qns.addBuiltinVariant("dbg_object_external_deref", f_dbg_object_external_deref, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, nothingTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "id");
+    qns.addBuiltinVariant("dbg_class_member_index_info", f_dbg_class_member_index_info, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, hashTypeInfo, 1, stringTypeInfo, QORE_PARAM_NO_ARG, "path");
+    qns.addBuiltinVariant("dbg_class_member_late_add", f_dbg_class_member_late_add, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, bigIntTypeInfo, 2, stringTypeInfo, QORE_PARAM_NO_ARG, "path", stringTypeInfo,
+        QORE_PARAM_NO_ARG, "name");
     qns.addBuiltinVariant("dbg_get_module_mask_added", f_dbg_get_module_mask_added, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         listTypeInfo, 1, stringTypeInfo, QORE_PARAM_NO_ARG, "module");
     qns.addBuiltinVariant("dbg_hold_batch_collection", f_dbg_hold_batch_collection, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
@@ -24221,6 +25810,10 @@ void init_debug_functions(QoreNamespace& qns) {
         QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "closed");
     qns.addBuiltinVariant("dbg_http_submit_after_close_clear", f_dbg_http_submit_after_close_clear, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, nothingTypeInfo);
+    qns.addBuiltinVariant("dbg_http_new_connection_wait", f_dbg_http_new_connection_wait, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, nothingTypeInfo);
+    qns.addBuiltinVariant("dbg_http_new_connection_wait_clear", f_dbg_http_new_connection_wait_clear, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, nothingTypeInfo);
     qns.addBuiltinVariant("dbg_http2_default_connection_window", f_dbg_http2_default_connection_window, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, boolTypeInfo, 1, boolTypeInfo, QORE_PARAM_NO_ARG, "on");
     qns.addBuiltinVariant("dbg_http2_connection_window_updates", f_dbg_http2_connection_window_updates, QCF_NO_FLAGS,
@@ -24251,6 +25844,9 @@ void init_debug_functions(QoreNamespace& qns) {
         nothingTypeInfo, 4, bigIntTypeInfo, QORE_PARAM_NO_ARG, "port", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG,
         "reached", QC_SOCKET->getOrNothingTypeInfo(), QORE_PARAM_NO_ARG, "peer", dataOrNothingTypeInfo,
         QORE_PARAM_NO_ARG, "response");
+    qns.addBuiltinVariant("dbg_hold_tls_read_until_hangup", f_dbg_hold_tls_read_until_hangup, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, nothingTypeInfo, 2, bigIntTypeInfo, QORE_PARAM_NO_ARG, "port", QC_COUNTER->getTypeInfo(),
+        QORE_PARAM_NO_ARG, "reached");
     qns.addBuiltinVariant("dbg_http1_send_failure_result", f_dbg_http1_send_failure_result, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, hashTypeInfo, 0);
     qns.addBuiltinVariant("dbg_release_http1_connection_on_close", f_dbg_release_http1_connection_on_close,
@@ -24304,9 +25900,26 @@ void init_debug_functions(QoreNamespace& qns) {
         "name");
     qns.addBuiltinVariant("dbg_file_stream_io_flags", f_dbg_file_stream_io_flags, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         hashTypeInfo, 2, bigIntTypeInfo, QORE_PARAM_NO_ARG, "fd", codeTypeInfo, QORE_PARAM_NO_ARG, "call");
+    qns.addBuiltinVariant("dbg_parse_with_cxx_exception", f_dbg_parse_with_cxx_exception, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, nothingTypeInfo, 3, QC_PROGRAM->getTypeInfo(), QORE_PARAM_NO_ARG, "pgm", stringTypeInfo,
+        QORE_PARAM_NO_ARG, "code", boolTypeInfo, QORE_PARAM_NO_ARG, "expression");
+    qns.addBuiltinVariant("dbg_program_parse_file", f_dbg_program_parse_file, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        nothingTypeInfo, 2, QC_PROGRAM->getTypeInfo(), QORE_PARAM_NO_ARG, "pgm", stringTypeInfo, QORE_PARAM_NO_ARG,
+        "path");
+    qns.addBuiltinVariant("dbg_arm_parse_start_gate", f_dbg_arm_parse_start_gate, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        nothingTypeInfo, 2, QC_PROGRAM->getTypeInfo(), QORE_PARAM_NO_ARG, "pgm", boolTypeInfo, QORE_PARAM_NO_ARG,
+        "fail");
+    qns.addBuiltinVariant("dbg_wait_parse_start_gate", f_dbg_wait_parse_start_gate, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        boolTypeInfo);
+    qns.addBuiltinVariant("dbg_abort_parse_start_gate", f_dbg_abort_parse_start_gate, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        nothingTypeInfo);
+    qns.addBuiltinVariant("dbg_release_parse_start_gate", f_dbg_release_parse_start_gate, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, nothingTypeInfo);
     qns.addBuiltinVariant("dbg_fork_while_handler_held", f_dbg_fork_while_handler_held, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, hashTypeInfo, 2, stringTypeInfo, QORE_PARAM_NO_ARG, "name", codeOrNothingTypeInfo,
         QORE_PARAM_NO_ARG, "child");
+    qns.addBuiltinVariant("dbg_fork_while_thread_wait_lock_held", f_dbg_fork_while_thread_wait_lock_held,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo, 1, codeTypeInfo, QORE_PARAM_NO_ARG, "child");
     qns.addBuiltinVariant("dbg_fork_while_parse_options_locked", f_dbg_fork_while_parse_options_locked, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo, 2, QC_PROGRAM->getTypeInfo(), QORE_PARAM_NO_ARG, "pgm", codeTypeInfo,
         QORE_PARAM_NO_ARG, "child");

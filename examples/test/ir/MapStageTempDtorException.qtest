@@ -1,0 +1,161 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - JIT and AOT code generation of the exception edges of functional loops
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+%requires ../TestInterpreter.qm
+%exec-class MapStageTempDtorExceptionTest
+
+#! a destructor exception of a temporary of a map, select or fold expression is caught by try/catch (qore#6072)
+/** The list or hash of an element replaces the one of the previous element in its slot, which releases it: in native
+    code, the destructor's exception was checked with the list's own, which returned from the frame when the list has
+    no handler, past the try statement, with the exception chained to itself; the IR interpreter left it in the sink for
+    the next instruction that checks, which also returned from the frame when it had no handler.  The containers,
+    calls and Phis of the body of a functional loop whose values can hold an object now check the release with the
+    loop's handler (release checks, QoreIRReleaseCheck, QoreIRLowering::LoopBodyRegion), as does the loop's back-edge;
+    the loops of values that cannot hold an object get no check (qore_ir_prune_release_checks()).
+*/
+class MapStageTempDtorExceptionTest inherits QUnit::Test {
+    private {
+        string qore_bin = executablePath(TestInterpreter::qore_interpreter());
+        string lib_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        string qcc_bin = ENV.QCC ?? lib_dir + "/qcc";
+        string probe = get_script_dir() + "/MapStageTempDtorException/probe.q";
+        *string ast_out;
+    }
+
+    constructor() : Test("map stage temporary destructor exception", "1.0", \ARGV) {
+        addTestCase("AST catches the exceptions", \astReference());
+        addTestCase("compiled modes match AST", \sourceModes());
+        addTestCase("qcc executables match AST", \compiled());
+        addTestCase("release checks only for values that can hold an object", \releaseChecks());
+        set_return_value(main());
+    }
+
+    astReference() {
+        list<string> lines = getAst().split("\n");
+        foreach string line in ("top list: DTOR-l1,DTOR-l2", "top hash: DTOR-h1,DTOR-h2", "top foldl: DTOR-f2,DTOR-f3",
+                "top select: DTOR-s1,DTOR-s2", "top middle: DTOR-m", "top single: DTOR-o1",
+                "function list: \"DTOR-l1,DTOR-l2\"", "leaves list: DTOR-l1,DTOR-l2") {
+            assertTrue((select lines, $1 == line).size() > 0, line);
+        }
+        assertFalse(getAst() =~ /LOOP|none/, getAst());
+        # the temporaries of the elements are released before the catch blocks run
+        assertRegex("~p1\n~p2\norder map-select: caught ERR\n~q1\n~q2\norder map: caught ERR\n", getAst());
+        foreach string line in ("top adjacent-list: DTOR-al1,DTOR-al2", "top fold-adjacent: DTOR-fa2,DTOR-fa3",
+                "top map-over-select: DTOR-mo1,DTOR-mo2", "top hash-3-keys: DTOR-h31,DTOR-h32",
+                "top nested-size: DTOR-ns1,DTOR-ns2,DTOR-ns1,DTOR-ns2", "top complex-list: DTOR-cl1,DTOR-cl2",
+                "top fold-complex: DTOR-fc2,DTOR-fc3", "top fold-object: DTOR-ac2,DTOR-ac3",
+                "leaves nested-size: DTOR-ns1,DTOR-ns2,DTOR-ns1,DTOR-ns2", "leaves complex-list: DTOR-cl1,DTOR-cl2",
+                "leaves fold-complex: DTOR-fc2,DTOR-fc3", "leaves fold-object: DTOR-ac2,DTOR-ac3") {
+            assertTrue((select lines, $1 == line).size() > 0, line);
+        }
+    }
+
+    sourceModes() {
+        string expected = getAst();
+        foreach string mode in ("ir", "jit") {
+            assertEq(expected, run(("QORE_JIT_SYNC_COMPILE=1", qore_bin, "-b", "--enable-debug", "--exec-mode=" + mode,
+                probe)), mode);
+        }
+        assertEq(expected, run(("QORE_JIT_SYNC_COMPILE=1", "QORE_IR_THRESHOLD=1", "QORE_JIT_THRESHOLD=1", qore_bin,
+            "-b", "--enable-debug", "--exec-mode=tiered", probe)), "tiered");
+    }
+
+    compiled() {
+        string expected = getAst();
+        foreach string level in ("-O0", "-O3") {
+            TmpDir dir("qore-map-stage-temp-dtor-exception-");
+            string exe = dir.path + "/probe";
+            run((qcc_bin, level, "-o", exe, probe));
+            assertEq(expected, run((exe, "-b", "--enable-debug")), "qcc " + level);
+        }
+    }
+
+    #! the loops of values that cannot hold an object have no release check, so they run as before; the others have
+    releaseChecks() {
+        string dump = run((qore_bin, "-b", "--exec-mode=ir", "--ir-dump",
+            get_script_dir() + "/MapStageTempDtorException/release-checks.q"));
+        list<string> lines = dump.split("\n");
+        int int_end = -1;
+        int obj_end = -1;
+        for (int i = 0; i < lines.size(); ++i) {
+            if (lines[i] =~ /"int loops end/) {
+                int_end = i;
+            } else if (lines[i] =~ /"object loops end/) {
+                obj_end = i;
+            }
+        }
+        assertTrue(int_end > 0 && obj_end > int_end, dump);
+        list<string> int_part = lines[0..int_end];
+        list<string> obj_part = lines[int_end..obj_end];
+        # no check of either kind outside the exception paths (a check of a call's or a Phi's value becomes a
+        # CheckException), as before the release checks
+        list<string> checks = ();
+        string block = "";
+        foreach string line in (int_part) {
+            if (line =~ /^[A-Za-z_][A-Za-z0-9_.]*:$/) {
+                block = line;
+            } else if (line =~ /check\.(release\.)?exception/ && block !~ /cleanup|catch|propagate/) {
+                checks += block + " " + trim(line);
+            }
+        }
+        assertEq((), checks, int_part.join("\n"));
+        int obj_checks = 0;
+        block = "";
+        foreach string line in (obj_part) {
+            if (line =~ /^[A-Za-z_][A-Za-z0-9_.]*:$/) {
+                block = line;
+            } else if (line =~ /check\.exception/ && block !~ /cleanup|catch|propagate/) {
+                ++obj_checks;
+            }
+        }
+        assertGt(0, obj_checks, obj_part.join("\n"));
+        # the program's output follows the dump
+        assertRegex("int loops end\nobject loops end\n", dump);
+    }
+
+    private string getAst() {
+        if (!exists ast_out) {
+            ast_out = run((qore_bin, "-b", "--enable-debug", "--exec-mode=ast", probe));
+        }
+        return ast_out;
+    }
+
+    private static string quote(string value) {
+        return "'" + join("'\\''", split("'", value)) + "'";
+    }
+
+    private static string executablePath(string name) {
+        if (name.regex("/")) {
+            return realpath(name);
+        }
+        foreach string directory in (split(":", ENV.PATH ?? "")) {
+            string path = (directory ? directory : ".") + "/" + name;
+            if (is_executable(path)) {
+                return realpath(path);
+            }
+        }
+        throw "TEST-SETUP-ERROR", "cannot locate Qore executable " + name;
+    }
+
+    #! runs a command; one that runs qore with an execution mode runs through ExecModeHarness
+    private string run(list<string> args) {
+        string command = "env LD_LIBRARY_PATH=" + quote(lib_dir) + " QORE_LIBDIR=" + quote(lib_dir) + " "
+            + (map quote($1), args).join(" ");
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(command);
+        if (r.mode) {
+            ExecModeHarness::check_native(r);
+        }
+        assertEq(0, r.rc, r.out);
+        return r.out;
+    }
+}

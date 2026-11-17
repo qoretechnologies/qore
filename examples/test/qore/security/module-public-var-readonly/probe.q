@@ -230,32 +230,36 @@ sub check_message(string key, Program p, string func, string what) {
 }
 
 # a Program that restricted code creates is restricted as well: a child Program inherits the parent's parse options
-# (qore#5664); a child of a sandboxed Program is sandboxed (qore#5659)
+# (qore#5664); a child of a sandboxed Program is sandboxed (qore#5659); an independent Program, which has no parent,
+# keeps the restrictions of the code that creates it in the same way (qore#5669)
 foreach string ctx in (("sandbox", "no-pc")) {
-    OurVarMod::reset();
-    Program s(PO_NEW_STYLE | (ctx == "no-pc" ? PO_NO_PROCESS_CONTROL : 0));
-    if (ctx == "sandbox") {
-        s.setSandboxManager(new SandboxManager());
+    foreach bool independent in ((False, True)) {
+        string key = ctx + (independent ? "-independent-child" : "-child");
+        OurVarMod::reset();
+        Program s(PO_NEW_STYLE | (ctx == "no-pc" ? PO_NO_PROCESS_CONTROL : 0));
+        if (ctx == "sandbox") {
+            s.setSandboxManager(new SandboxManager());
+        }
+        s.parse("sub w(bool s) {\n"
+            "    Program c(PO_NEW_STYLE, " + (independent ? "True" : "False") + ");\n"
+            "    c.parse(\"%requires OurVarMod\\n\"\n"
+            "        \"sub w(bool s) { if (s) { OurVarMod::Obj::sx = 7; } else { OurVarMod::i = 7; } }\", \"child\");\n"
+            "    c.callFunction(\"w\", s);\n"
+            "}\n", "creator");
+        try {
+            s.callFunction("w", False);
+            result(key, "ok");
+        } catch (hash<ExceptionInfo> ex) {
+            result(key, ex.err);
+        }
+        try {
+            s.callFunction("w", True);
+            result(key + "-static", "ok");
+        } catch (hash<ExceptionInfo> ex) {
+            result(key + "-static", ex.err);
+        }
+        result(key + "-state", OurVarMod::state());
     }
-    s.parse("sub w(bool s) {\n"
-        "    Program c(PO_NEW_STYLE);\n"
-        "    c.parse(\"%requires OurVarMod\\n\"\n"
-        "        \"sub w(bool s) { if (s) { OurVarMod::Obj::sx = 7; } else { OurVarMod::i = 7; } }\", \"child\");\n"
-        "    c.callFunction(\"w\", s);\n"
-        "}\n", "creator");
-    try {
-        s.callFunction("w", False);
-        result(ctx + "-child", "ok");
-    } catch (hash<ExceptionInfo> ex) {
-        result(ctx + "-child", ex.err);
-    }
-    try {
-        s.callFunction("w", True);
-        result(ctx + "-child-static", "ok");
-    } catch (hash<ExceptionInfo> ex) {
-        result(ctx + "-child-static", ex.err);
-    }
-    result(ctx + "-child-state", OurVarMod::state());
 }
 
 # the host gives the module's variable that it imported to a child Program

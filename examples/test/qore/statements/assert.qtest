@@ -7,6 +7,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
+%requires ../../TestInterpreter.qm
 %requires Util
 
 %exec-class AssertDebugTest
@@ -288,9 +289,8 @@ class AssertDebugTest inherits QUnit::Test {
         }
         on_exit unlink(tmpfile);
 
-        # Find qore executable.  run_tests.sh exports QORE_BINARY; ENV._ is
-        # shell-dependent and may be missing under gosu/env in CI.
-        *string qore_bin_opt = ENV.QORE_BINARY ?? ENV._;
+        # the qore executable; a command line test needs a qore binary, not a wrapper (valgrind, etc.)
+        *string qore_bin_opt = TestInterpreter::qore_interpreter();
         if (!qore_bin_opt || qore_bin_opt !~ /\/qore$/) {
             testSkip("skipping command-line test: running under wrapper (valgrind, etc.)");
             return;
@@ -347,9 +347,8 @@ public namespace TestDebugModule {
 ");
         }
 
-        # Find qore executable.  run_tests.sh exports QORE_BINARY; ENV._ is
-        # shell-dependent and may be missing under gosu/env in CI.
-        *string qore_bin_opt = ENV.QORE_BINARY ?? ENV._;
+        # the qore executable; a command line test needs a qore binary, not a wrapper (valgrind, etc.)
+        *string qore_bin_opt = TestInterpreter::qore_interpreter();
         if (!qore_bin_opt || qore_bin_opt !~ /\/qore$/) {
             testSkip("skipping module debug test: running under wrapper (valgrind, etc.)");
             return;

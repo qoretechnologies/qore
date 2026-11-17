@@ -394,7 +394,7 @@ public class AnthropicDataProviderCommon inherits DataProvider::AbstractDataProv
     */
     private hash<auto> doMultipartSkillUpload(string method, string path, string skill_md,
             string display_title, string skill_name) {
-        string mpboundary = replace(make_base64_string(string(now_us())), "=", "");
+        string mpboundary = MultiPartMessage::getBoundary();
         # build multipart body with SKILL.md as files[]
         binary msg = binary();
         # display_title form field

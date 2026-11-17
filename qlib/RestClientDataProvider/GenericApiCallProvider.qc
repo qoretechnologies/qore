@@ -46,7 +46,8 @@ public namespace RestClientDataProvider {
       throwing.
     - <b>Multipart upload</b>: when <tt>body_type = multipart</tt>, the body is a
       @ref DataProvider::FileDataType "FileDataType" structure and the framework builds the
-      multipart envelope.
+      multipart envelope with a random boundary; a <tt>multipart/...</tt> <tt>Content-Type</tt> given in
+      <tt>hdr</tt> is sent with the boundary of the envelope (its own \c boundary parameter is replaced).
 
     @note The legacy @c RestClientCallDataProvider remains the canonical generic-call provider for
     the standalone @c "GenericRest" app; this class is specific to the framework-wide auto-injection
@@ -257,6 +258,14 @@ public class GenericApiCallProvider inherits DataProvider::AbstractDataProvider 
                 body = buildMultipartBody(req.body, boundary);
                 if (!ct_present) {
                     hdr."Content-Type" = "multipart/form-data; boundary=" + boundary;
+                } else {
+                    # a multipart Content-Type given by the caller must give the boundary of the body
+                    foreach string k in (keys hdr) {
+                        if (k.lwr() == "content-type") {
+                            hdr{k} = GenericApiCallProvider::setMultipartBoundary(string(hdr{k}), boundary);
+                            break;
+                        }
+                    }
                 }
                 break;
             case "auto":
@@ -478,23 +487,36 @@ string path = GenericApiCallProvider::appendQueryArgs("/contacts", {"email": "a+
         return pairs.join("&");
     }
 
+    #! Returns a multipart Content-Type value with the given boundary parameter
+    /** Any \c boundary parameter in the value is replaced, and the other parameters are kept; a value whose media
+        type is not \c multipart/... is returned unchanged
+
+        @param ct the Content-Type value given by the caller
+        @param boundary the boundary of the multipart body (a token: no quoting is needed)
+
+        @return the Content-Type value with the given boundary parameter
+    */
+    static string setMultipartBoundary(string ct, string boundary) {
+        if (ct !~ /^\s*multipart\//i) {
+            return ct;
+        }
+        # remove any boundary parameter, quoted or not
+        ct =~ s/\s*;\s*boundary\s*=\s*("([^"\\]|\\.)*"|[^;]*)//gi;
+        return trim(ct) + "; boundary=" + boundary;
+    }
+
     #! Generates a token-safe random boundary for multipart body construction
     /** Returns a boundary value composed only of characters that are safe to interpolate into an
         unquoted RFC 2046 <tt>boundary=</tt> parameter — base64url charset (A-Z a-z 0-9 - _) prefixed with
         a recognizable marker. Avoids <tt>/</tt> and <tt>+</tt> (which standard base64 produces and which are in
         RFC 2045 tspecials, requiring the parameter value to be quoted) and <tt>=</tt> (used for padding).
 
-        Includes 16 bytes of entropy from @c rand() so concurrent calls within the same microsecond
-        don't collide on the timestamp alone — a boundary collision between two interleaved
-        multipart uploads on the same connection would let one upload's body terminate the other's
-        envelope. The timestamp is folded in for human-readable debuggability.
+        The boundary is made of 16 random bytes from @ref Qore::get_random_bytes(), the generator of the crypto
+        library, so that it cannot be predicted or repeated: a boundary that occurs in a part would let the part
+        end the multipart body.
     */
     static string generateMultipartBoundary() {
-        binary entropy = binary();
-        for (int i = 0; i < 16; ++i) {
-            entropy += chr(rand() % 256);
-        }
-        string raw = make_base64_string(binary(string(now_us())) + entropy);
+        string raw = make_base64_string(get_random_bytes(16));
         # base64url-safe normalisation: strip padding, replace +/ with -_
         return "----QoreGenericApiCall" + replace(replace(replace(raw, "=", ""), "/", "_"), "+", "-");
     }

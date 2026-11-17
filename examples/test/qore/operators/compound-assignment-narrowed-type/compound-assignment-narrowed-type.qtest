@@ -8,6 +8,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
 %requires QUnit
+%requires ../../../TestInterpreter.qm
 %requires FsUtil
 %requires ../../../ExecModeHarness.qm
 
@@ -85,7 +86,7 @@ class CompoundAssignmentNarrowedTypeTest inherits QUnit::Test {
             "seeded type: ok \"hash<auto>\"",
             "seeded new = int: ok {a: \"b\", n: 1}",
             "kept: new /= 0: DIVISION-BY-ZERO {a: 2, n: null}",
-            "kept: new %= 0: ok {a: 2, n: null, m: 0}",
+            "kept: new %= 0: DIVISION-BY-ZERO {a: 2, n: null, m: null}",
             "kept: new elem /= 0: DIVISION-BY-ZERO [2, 3, null, null, null]",
             "kept: extract new key: EXTRACT-ERROR {a: 2, e: null}",
             "kept: extract new key value: EXTRACT-ERROR {a: 2, e: null, v: null}",
@@ -108,7 +109,7 @@ class CompoundAssignmentNarrowedTypeTest inherits QUnit::Test {
     }
 
     constructor() : QUnit::Test("CompoundAssignmentNarrowedType", "1.0", \ARGV) {
-        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        qore_bin = TestInterpreter::qore_interpreter();
         libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
         qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
         worker = get_script_dir() + DirSep + "compound-assignment-narrowed-type-worker.q";

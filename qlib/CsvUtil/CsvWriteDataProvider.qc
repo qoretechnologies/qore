@@ -128,7 +128,9 @@ public class CsvWriteDataProvider inherits DataProvider::AbstractDataProvider {
                         "index.html) for the masks\n"
                     "- `timezone`: for `date` types only, the time zone region whose wall-clock time the dates of "
                         "the field are written in; overrides the `timezone` option\n"
-                    "- `header`: the header text of the field, if not the field name"
+                    "- `header`: the header text of the field, if not the field name\n"
+                    "- `quote`: `true` to always quote the field, `false` to quote it only if it requires quoting; "
+                        "overrides `quote_types` for the field"
             },
             "headers": <DataProviderOptionInfo>{
                 "display_name": "Header Names",
@@ -170,6 +172,30 @@ public class CsvWriteDataProvider inherits DataProvider::AbstractDataProvider {
                 "type": AbstractDataProviderType::get(StringType),
                 "desc": "The quote character to quote fields (default: `\"`)",
                 "default_value": "\"",
+            },
+            "quote_null": <DataProviderOptionInfo>{
+                "display_name": "Quote Empty Values",
+                "short_desc": "Whether a field without a value is written with quotes",
+                "type": AbstractDataProviderType::get(SoftBoolType),
+                "desc": "Sets how a field without a value (no value or `NULL`) is written: `true` writes it as an "
+                    "empty quoted field (`\"\"`), and `false` as an empty field without quotes, so that it can be "
+                    "told apart from an empty string written with quotes (see `quote_types`).\n\n"
+                    "If not set, a field without a value is written without quotes, unless `optimal_quotes` is "
+                    "`false`.",
+            },
+            "quote_types": <DataProviderOptionInfo>{
+                "display_name": "Quoted Field Types",
+                "short_desc": "The types of the fields that are always quoted",
+                "type": AbstractDataProviderType::get(new Type("softlist<string>")),
+                "desc": "The types of the fields that are always quoted, for example `string` to quote strings but "
+                    "not numbers or dates: `string`, `int`, `float`, `number`, `date`, `bool`, `binary`, `hash` or "
+                    "`list`.\n\n"
+                    "The type of a field is the type in its field description, unless that is `string` or "
+                    "`*string`; then it is the type of the value.  Other fields are quoted only if they require "
+                    "quoting, and a field without a value is written as `quote_null` sets.  A field's `quote` "
+                    "attribute (`true` or `false`) overrides this option for the field.  Ignored if "
+                    "`optimal_quotes` is `false`.",
+                "example_value": ("string",),
             },
             "quote_escape": <DataProviderOptionInfo>{
                 "display_name": "Quote Escape Char(s)",

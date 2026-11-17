@@ -1,0 +1,24 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires ../TestInterpreter.qm
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+
+%include ModuleOwnProgramState.qc
+
+%exec-class ModuleOwnProgramStatePart1
+
+#! runs part 1 of 2 of the cases of ModuleOwnProgramStateBase: the source forms of the Mapper and DataProvider modules
+class ModuleOwnProgramStatePart1 inherits ModuleOwnProgramStateBase {
+    constructor() : ModuleOwnProgramStateBase("ModuleOwnProgramStatePart1", 1) {
+    }
+}

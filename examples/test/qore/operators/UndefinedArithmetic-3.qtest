@@ -1,0 +1,22 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - JIT native code and qcc AOT code generation of division, modulo and the libm math functions
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires FsUtil
+%requires QUnit
+%requires ../../TestInterpreter.qm
+
+%include UndefinedArithmetic.qc
+
+%exec-class UndefinedArithmeticPart3
+
+#! runs part 3 of 3 of the cases of UndefinedArithmeticBase: the qcc module and the constant expressions
+class UndefinedArithmeticPart3 inherits UndefinedArithmeticBase {
+    constructor() : UndefinedArithmeticBase("UndefinedArithmeticPart3", 3) {
+    }
+}

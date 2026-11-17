@@ -8,6 +8,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
 %requires QUnit
+%requires ../../../TestInterpreter.qm
 %requires FsUtil
 %requires ../../../ExecModeHarness.qm
 
@@ -20,7 +21,9 @@
     - an int result of \c >>=, \c <<=, \c %= or \c |= on a hash member holding a float is stored as a float
     - \c -= with a date operand on an lvalue of an int type gives the result of <tt>x = x - d</tt>, whether the
       int-specialized operator or the generic operator applies it (ex: a narrowed hash member): the binary operator
-      gives a date, which an \c int lvalue refuses and a \c softint lvalue converts
+      gives a date, which an \c int lvalue refuses and a \c softint lvalue converts; an operand of type \c date on
+      an \c int lvalue is a parse error (see compound-assignment-never-assignable.qtest), so the operands here
+      have a type that is known only at run time
 
     The worker runs in every execution mode, the default execution mode and as a qcc-compiled executable.
 */
@@ -47,7 +50,6 @@ class CompoundAssignmentDeclaredTypeTest inherits QUnit::Test {
             "int -= absolute date: RUNTIME-TYPE-ERROR",
             "int = int - absolute date: RUNTIME-TYPE-ERROR",
             "int -= relative date: RUNTIME-TYPE-ERROR",
-            "int -= literal date: RUNTIME-TYPE-ERROR",
             "*int -= relative date: RUNTIME-TYPE-ERROR",
             "global int -= relative date: RUNTIME-TYPE-ERROR",
             "int member -= relative date: RUNTIME-TYPE-ERROR",
@@ -75,7 +77,7 @@ class CompoundAssignmentDeclaredTypeTest inherits QUnit::Test {
     }
 
     constructor() : QUnit::Test("CompoundAssignmentDeclaredType", "1.0", \ARGV) {
-        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        qore_bin = TestInterpreter::qore_interpreter();
         libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
         qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
         worker = get_script_dir() + DirSep + "compound-assignment-declared-type-worker.q";

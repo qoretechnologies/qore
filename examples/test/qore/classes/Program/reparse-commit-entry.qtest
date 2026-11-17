@@ -1,0 +1,142 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - threads entering a Program while another thread commits a parse in it
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class ReparseCommitEntryTest
+
+#! Entering a Program while a parse of it is committed (issue #6243)
+/** Only the committing thread, which runs the code of the commit, and the threads that such code starts can enter
+    the Program until the commit has finished.  The commit is stopped where it has started with a gate of the debug
+    build (dbg_arm_parse_commit_gate()), so that another thread tries to enter the Program then.
+*/
+public class ReparseCommitEntryTest inherits QUnit::Test {
+    constructor() : QUnit::Test("ReparseCommitEntryTest", "1.0", \ARGV) {
+        addTestCase("reparse commit refuses entry", \reparseCommitRefusesEntry());
+        addTestCase("pending commit refuses entry", \pendingCommitRefusesEntry());
+        addTestCase("first commit refuses entry", \firstCommitRefusesEntry());
+        addTestCase("deferred closure initialization", \deferredClosureInit());
+        addTestCase("fork() during a commit", \forkDuringCommit());
+        set_return_value(main());
+    }
+
+    #! returns a Program that can be parsed again, with a function f() returning 1
+    private Program getProgram() {
+        Program p(PO_ALLOW_REPARSE | PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.parse("int sub f() { return 1; }", "f");
+        return p;
+    }
+
+    #! returns the error of a call of the function in the Program, or "OK" if it ran
+    private string tryCall(Program p, string func = "f") {
+        try {
+            p.callFunction(func);
+            return "OK";
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    private skipWithoutGate() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the test needs a debug build of the library");
+        }
+    }
+
+    #! runs \a parse in another thread with the commit gate armed for \a p, and calls \a check while it is stopped
+    private checkDuringCommit(Program p, code parse, code check, int point = 0) {
+        call_function("dbg_arm_parse_commit_gate", p, point);
+        Counter c(1);
+        *hash<ExceptionInfo> parse_ex;
+        background sub () {
+            on_exit {
+                # a parse that ends without reaching the gate does not leave the test waiting
+                call_function("dbg_abort_parse_commit_gate");
+                c.dec();
+            }
+            try {
+                parse();
+            } catch (hash<ExceptionInfo> ex) {
+                parse_ex = ex;
+            }
+        }();
+        {
+            # the gate is released also if an assertion fails, so that the commit ends
+            on_exit {
+                call_function("dbg_release_parse_commit_gate");
+                c.waitForZero();
+            }
+            assertTrue(call_function("dbg_wait_parse_commit_gate"));
+            check();
+        }
+        assertNothing(parse_ex);
+    }
+
+    reparseCommitRefusesEntry() {
+        skipWithoutGate();
+        Program p = getProgram();
+        checkDuringCommit(p, sub () { p.parse("int sub g() { return 2; }", "g"); }, sub () {
+            # the commit has started: no other thread can enter the Program
+            assertEq("PROGRAM-ERROR", tryCall(p));
+        });
+        assertEq(2, p.callFunction("g"));
+        assertEq("OK", tryCall(p));
+    }
+
+    pendingCommitRefusesEntry() {
+        skipWithoutGate();
+        Program p = getProgram();
+        p.parsePending("int sub g() { return 2; }", "g");
+        checkDuringCommit(p, sub () { p.parseCommit(); }, sub () {
+            assertEq("PROGRAM-ERROR", tryCall(p));
+        });
+        assertEq(2, p.callFunction("g"));
+        assertEq("OK", tryCall(p));
+    }
+
+    firstCommitRefusesEntry() {
+        skipWithoutGate();
+        Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.parsePending("int sub f() { return 1; }", "f");
+        checkDuringCommit(p, sub () { p.parseCommit(); }, sub () {
+            assertEq("PROGRAM-ERROR", tryCall(p));
+        });
+        assertEq("OK", tryCall(p));
+    }
+
+    #! a new function that runs a closure constant, whose initialization the commit has deferred
+    deferredClosureInit() {
+        skipWithoutGate();
+        Program p = getProgram();
+        # stopped after the merge: h() exists, and the closure of its constant is not initialized yet
+        checkDuringCommit(p, sub () {
+            p.parse("const C = int sub () { return 5; }; int sub h() { return C(); }", "h");
+        }, sub () {
+            assertEq("PROGRAM-ERROR", tryCall(p, "h"));
+        }, 1);
+        assertEq(5, p.callFunction("h"));
+    }
+
+    #! a child process created with fork() while another thread commits a parse can enter the Program
+    /** The committing thread does not exist in the child, where the commit does not go on
+    */
+    forkDuringCommit() {
+        skipWithoutGate();
+        if (!Option::HAVE_FORK) {
+            testSkip("fork() is not available");
+        }
+        Program p = getProgram();
+        checkDuringCommit(p, sub () { p.parse("int sub g() { return 2; }", "g"); }, sub () {
+            int status = call_function("dbg_fork_child", int sub () { return tryCall(p) == "OK" ? 0 : 1; });
+            assertEq(0, status);
+            # the parent still refuses the entry while the commit goes on
+            assertEq("PROGRAM-ERROR", tryCall(p));
+        });
+        assertEq(2, p.callFunction("g"));
+    }
+}

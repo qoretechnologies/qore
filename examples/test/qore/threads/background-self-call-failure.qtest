@@ -15,6 +15,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
+%requires ../../TestInterpreter.qm
 %requires Util
 %requires ../../ExecModeHarness.qm
 
@@ -129,7 +130,7 @@ done
     }
 
     constructor() : QUnit::Test("BackgroundSelfCallFailureTest", "1.0", \ARGV) {
-        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        qore_bin = TestInterpreter::qore_interpreter();
         # a qore run from the PATH has no directory in its name; its library and qcc are found next to it
         if (qore_bin !~ /\//) {
             foreach string dir in ((ENV.PATH ?? "").split(":")) {

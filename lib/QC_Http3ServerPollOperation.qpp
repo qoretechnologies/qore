@@ -1191,6 +1191,7 @@ bool Http3ServerPollOperation::hasError() [flags=RET_VALUE_ONLY] {
 */
 nothing Http3ServerPollOperation::startSendResponse(int status_code, *hash<auto> headers,
         *data body) [flags=NAMED_ARGS] {
+    (void)body;  // the body is read from the argument by materializeHttp3ServerDataBodyNode()
     ValueHolder materialized_body(xsink);
     const AbstractQoreNode* body_node = nullptr;
     if (materializeHttp3ServerDataBodyNode(get_param_value(args, 2), materialized_body,
@@ -1282,6 +1283,9 @@ nothing Http3ServerPollOperation::reloadCertificate(SSLCertificate[QoreSSLCertif
 */
 nothing Http3ServerPollOperation::setCompletionContext(object controller, object listener,
         object target, string owner) [flags=NAMED_ARGS] {
+    (void)controller;
+    (void)listener;
+    (void)target;  // they are read from the argument list (ctrl_arg, lsnr_arg, tgt_arg)
     // Store in internal members — accessed by onComplete()
     QoreValue ctrl_arg = args->retrieveEntry(0);
     QoreValue lsnr_arg = args->retrieveEntry(1);
@@ -1308,6 +1312,7 @@ nothing Http3ServerPollOperation::setCompletionContext(object controller, object
 */
 nothing Http3ServerPollOperation::setConnectionCompletionContext(object controller,
         string connection_unique_hash, string state) [flags=NAMED_ARGS] {
+    (void)controller;  // the controller is read from the argument list (ctrl_arg)
     QoreValue ctrl_arg = args->retrieveEntry(0);
     if (ctrl_arg.getType() == NT_OBJECT) {
         set_completion_controller(self, ctrl_arg, xsink);
@@ -1411,6 +1416,7 @@ nothing Http3ServerPollOperation::registerStreamQueue(int session_id, int stream
 */
 nothing Http3ServerPollOperation::registerStreamListener(int session_id, int stream_id,
         object listener) [flags=NAMED_ARGS] {
+    (void)listener;  // the listener is read from the argument list (listener_arg)
     std::string skey = std::to_string((int64_t)session_id) + ":" + std::to_string((int64_t)stream_id);
     QoreObject* listener_obj = nullptr;
 
@@ -1441,14 +1447,15 @@ nothing Http3ServerPollOperation::registerStreamListener(int session_id, int str
     // Mirror the registration in the priv so the I/O thread can queue a close
     // wakeup for this stream when its QUIC session dies (the QoreObject member
     // hash above is not reachable from closeSessionStreams()).
-    priv->registerStreamCloseNotify(skey);
+    priv->registerStreamCloseNotify(session_id, skey);
 
     // Replay a notification this listener was not yet registered to receive: either data
     // arrived / is queued (consumePendingOrQueueReady()), or the peer already reset the
-    // stream.  The reset case is not covered by the pending flag — a reset is a one-shot
-    // transport event with no further wakeups, so a listener registering afterwards would
-    // never hear about it; deliverSessionLifecycleEvents() records the reset for exactly
-    // this check.  Mirrors Http2PollOperation::registerStreamListener().
+    // stream, or its QUIC session closed.  The reset case is not covered by the pending flag — a
+    // reset is a one-shot transport event with no further wakeups, so a listener registering
+    // afterwards would never hear about it; deliverSessionLifecycleEvents() records the reset for
+    // exactly this check, and registerStreamCloseNotify() records a session that closed before the
+    // listener registered (qore#6202).  Mirrors Http2PollOperation::registerStreamListener().
     if (!*xsink && listener_obj
             && (priv->consumePendingOrQueueReady(skey) || priv->isStreamPeerClosed(skey))) {
         ASYNC_IO_TRACE("Http3ServerPollOperation::registerStreamListener REPLAY skey='%s' listener=%p\n",
@@ -1574,8 +1581,8 @@ bool Http3ServerPollOperation::isStreamPeerClosed(int session_id, int stream_id)
 */
 nothing Http3ServerPollOperation::onStreamData(string stream_key) [flags=NAMED_ARGS] {
     ValueHolder listener(xsink);
-    bool had_listeners = false;
-    size_t listener_count = 0;
+    [[maybe_unused]] bool had_listeners = false;
+    [[maybe_unused]] size_t listener_count = 0;
     bool listener_found = false;
     {
         AutoLocker ml(priv->stream_member_lock);

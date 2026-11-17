@@ -10,6 +10,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
+%requires ../TestInterpreter.qm
 %requires FsUtil
 
 %exec-class AOTModuleForeignThreadTest
@@ -32,7 +33,7 @@ class AOTModuleForeignThreadTest inherits QUnit::Test {
     }
 
     constructor() : QUnit::Test("AOTModuleForeignThreadTest", "1.0", \ARGV) {
-        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        qore_bin = TestInterpreter::qore_interpreter();
         libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
         qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
             ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
@@ -69,11 +70,22 @@ class AOTModuleForeignThreadTest inherits QUnit::Test {
         return sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir);
     }
 
-    private testForeignThread() {
-        string module_dir = ENV.QORE_MODULE_DIR ?? "";
-        if (module_dir !~ /staticpgmcode/) {
-            testSkip("the test module staticpgmcode is not in the module path");
+    #! fails the test case with the reason if the test module "staticpgmcode" cannot be loaded
+    /** A directory of the module in the module path does not mean that it can be loaded: run_tests.sh puts every
+        directory under <build>/modules in it, which CMake creates when it configures the build, also for a module
+        that it did not build (qore#6366); as in program-object-outlives-cleanup.qtest, the module is loaded
+    */
+    private requireModule() {
+        string out = run(sprintf("%s %s -l staticpgmcode -e 'exit(0);'", env(), qore_bin));
+        if (out !~ /status=0\n$/) {
+            fail(sprintf("the test module 'staticpgmcode' cannot be loaded: build it with: cmake --build "
+                "<build directory> --target staticpgmcode (run_tests.sh puts the modules of the build tree in the "
+                "module path): %s", out));
         }
+    }
+
+    private testForeignThread() {
+        requireModule();
         string src = get_script_dir() + "/../qore/misc/ForeignBlockModule.qm";
         foreach string opt in ("-O0", "-O3") {
             TmpDir tmp("qore-aot-foreign-");

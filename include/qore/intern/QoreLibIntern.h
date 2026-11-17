@@ -225,6 +225,12 @@ struct QoreParseContext {
     //! --stub external constant. Constants with such dependencies cannot be
     //! folded at compile time; AOT must preserve their initializer expression.
     bool external_stub_constant_ref = false;
+    //! The number of implicit index references (\c $#) that read the index of an enclosing operator or foreach
+    //! statement initialized so far (qore#6341)
+    /** A context statement and a find expression compare it before and after the initialization of their
+        expressions, which run as AST at run time, to know whether they read \c $#
+    */
+    unsigned implicit_element_reads = 0;
 
     DLLLOCAL QoreParseContext(QoreProgram* pgm = getProgram()) : pgm(pgm) {
     }
@@ -418,6 +424,20 @@ private:
 */
 DLLLOCAL void qore_set_result_parse_analysis(QoreParseContext& parse_context, const QoreTypeInfo* typeInfo);
 
+#ifdef HAVE_NANOSLEEP
+//! sleeps the given number of nanoseconds with the given nanosleep() function, as qore_usleep() does with nanosleep()
+/** A sleep that a signal interrupts (\c EINTR) is continued with the time that \a sleep_func reports as left in its
+    second argument, so that a signal does not lengthen the sleep (issue #6364).  The function is a parameter so that a
+    unit test can report interruptions without signals.
+
+    @param ns the number of nanoseconds to sleep
+    @param sleep_func the function that sleeps, with the signature of nanosleep()
+
+    @return 0 if the time was slept, -1 if \a sleep_func failed with an error other than \c EINTR (in \c errno)
+*/
+DLLLOCAL int qore_nanosleep_with(int64 ns, int (*sleep_func)(const struct timespec*, struct timespec*));
+#endif
+
 class QoreParseContextLvarHelper {
 public:
     DLLLOCAL QoreParseContextLvarHelper(QoreParseContext& parse_context, LVList*& lvars)
@@ -441,13 +461,45 @@ DLLLOCAL int parse_init_value(QoreValue& val, QoreParseContext& parse_context);
 */
 constexpr size_t QORE_PARSE_STACK_RESERVE = 64 * 1024;
 
+//! The error code of the parse error raised for code that cannot be parsed within the stack of the parsing thread
+/** Distinct from the other parse errors, as it depends on the thread that parses the code and not on the code: a
+    module that cannot be parsed for this reason is not a module that is unavailable, so the error of its load is
+    the error of the parse that loads it also with %%try-module (see QoreModuleManager::parseLoadModule())
+*/
+#define QORE_PARSE_STACK_ERR "PARSE-STACK-LIMIT-EXCEEDED"
+
+//! The description of the parse error QORE_PARSE_STACK_ERR
+#define QORE_PARSE_STACK_DESC "the code is nested too deeply to be parsed within the stack of this thread"
+
 //! Raises a parse error and returns -1 if the thread's stack has reached QORE_PARSE_STACK_RESERVE, otherwise 0
 /** Called before parse initialization recurses into a nested expression or statement: the parser accepts nesting
     that a thread with a small stack cannot initialize, which would otherwise overflow the stack
 
+    The error is QORE_PARSE_STACK_ERR.  Inline, so that the common case, with enough stack, is a comparison (see
+    q_thread_stack_reserve_exceeded()); defined after qore_thread_intern.h is included below.
+
     @param loc the location of the code being initialized, if known
 */
-DLLLOCAL int parse_check_stack(const QoreProgramLocation* loc);
+DLLLOCAL inline int parse_check_stack(const QoreProgramLocation* loc);
+
+//! Raises the parse error QORE_PARSE_STACK_ERR for parse_check_stack() and returns -1
+DLLLOCAL int parse_raise_stack_error(const QoreProgramLocation* loc);
+
+//! Returns true if the exception sink holds an error that depends on the stack of the thread, not on the code
+/** The parse error QORE_PARSE_STACK_ERR, raised where the parse of the code or of a module that it loads ran short of
+    the stack of the thread, always is.  \c STACK-LIMIT-EXCEEDED, raised where code that runs while a module is loaded
+    or initialized (the initialization of its constants, for example) ran short of it, is only in a thread whose stack
+    is smaller than the default thread stack size (q_thread_stack_smaller_than_default(), which compares the total
+    stack size, not the stack that remains): with at least that much stack, a module that exceeds it is assumed to
+    have a bug, such as a recursion without end, and is handled as a module that cannot be loaded.  A module whose
+    load fails with an error that depends on the thread is not a module that is not available (see
+    QoreModuleManager::parseLoadModule())
+*/
+DLLLOCAL bool qore_has_thread_stack_error(const ExceptionSink& xsink);
+
+//! Returns the first exception in the sink with an error that depends on the stack of the thread, or nullptr
+/** See qore_has_thread_stack_error() */
+DLLLOCAL const QoreException* qore_find_thread_stack_error(const ExceptionSink& xsink);
 
 //! Parse-initializes a node that is not a level of nesting of its own
 /** For a node that parse initialization replaces with another node in the same place, and for a node that the
@@ -565,6 +617,9 @@ static inline int64 qore_int_div(int64 l, int64 r) {
     assert(r);
     return r == -1 ? static_cast<int64>(0 - static_cast<uint64_t>(l)) : l / r;
 }
+
+//! Raises DIVISION-BY-ZERO for a modulo operator (\c %, \c %=) with a divisor of zero (qore#1034)
+DLLLOCAL void qore_raise_modulo_by_zero(ExceptionSink* xsink);
 
 //! Returns the remainder of an integer division by a divisor that is not zero
 /** The remainder of a division by -1 is 0, also for the smallest integer, where the CPU's division instruction
@@ -976,6 +1031,21 @@ void ensure_unique(AbstractQoreNode** v, ExceptionSink* xsink);
 */
 void ensure_unique(QoreValue& v, ExceptionSink* xsink);
 
+//! Checks the elements of a list or hash that trim or chomp modify in place, before any of them is modified
+/** trim and chomp replace a string element that holds an enum value with a plain string (see ensure_unique()), which
+    the element type of a typed container or the type of a hashdecl member refuses if it is an enum type: then
+    RUNTIME-TYPE-ERROR is raised with \a desc for the first such element, and the caller leaves the container
+    unchanged (qore#6195).  The elements are only read if the type of the container can refuse a plain string.
+
+    @param container a list or a hash
+    @param desc the description of the operation
+    @param xsink for the exception
+
+    @return -1 if an exception was raised, 0 if not
+*/
+DLLLOCAL int qore_check_in_place_container_strings(const QoreValue& container, const char* desc,
+        ExceptionSink* xsink);
+
 //! Returns an owned copy of the base value of the enum value \a v, which the caller can modify in place
 /** An enum value (QoreValue::isEnum()) holds a reference to its enum member, not to the member's base value, which is
     shared and constant: a node reached through it with QoreValue::get() or QoreValue::getInternalNode() has a
@@ -1157,6 +1227,19 @@ DLLLOCAL int check_lvalue_int(const QoreProgramLocation* loc, const QoreTypeInfo
 DLLLOCAL int check_lvalue_float(const QoreProgramLocation* loc, const QoreTypeInfo*& typeInfo, const char* name);
 DLLLOCAL int check_lvalue_int_float_number(const QoreProgramLocation* loc, const QoreTypeInfo*& typeInfo, const char* name);
 DLLLOCAL int check_lvalue_number(const QoreProgramLocation* loc, const QoreTypeInfo*& typeInfo, const char* name);
+//! makes sure an lvalue can be assigned the result of a compound assignment operator, else raises a parse exception
+//! and returns -1
+/** The result is one of the types given; the lvalue's type is checked as for an assignment of each of them, so the
+    error is raised only if the lvalue's type can accept none of them: the result can never be stored (qore#6103)
+
+    @param loc the location of the operator
+    @param typeInfo the declared type of the lvalue
+    @param name the operator (ex: \c "*=")
+    @param results the types that the result can have
+    @param value_desc the description of the result in the error (ex: \c "a date value")
+*/
+DLLLOCAL int check_lvalue_accepts_result(const QoreProgramLocation* loc, const QoreTypeInfo* typeInfo,
+        const char* name, std::initializer_list<const QoreTypeInfo*> results, const char* value_desc);
 // makes sure the lvalue can be assigned a string value, else raises a parse exception and returns -1
 DLLLOCAL int check_lvalue_string(const QoreProgramLocation* loc, const QoreTypeInfo*& typeInfo, const char* name);
 
@@ -1373,6 +1456,10 @@ public:
 #include "qore/intern/QoreThreadList.h"
 #include "qore/intern/lvalue_ref.h"
 #include "qore/intern/qore_thread_intern.h"
+
+DLLLOCAL inline int parse_check_stack(const QoreProgramLocation* loc) {
+    return q_thread_stack_reserve_exceeded(QORE_PARSE_STACK_RESERVE) ? parse_raise_stack_error(loc) : 0;
+}
 #include "qore/intern/Function.h"
 #include "qore/intern/CallReferenceCallNode.h"
 #include "qore/intern/CallReferenceNode.h"
@@ -2106,6 +2193,7 @@ public:
 };
 
 class ClosureParseEnvironment;
+class VNode;
 
 // pushes a marker on the local variable parse stack so that searches can skip to global thread-local variables when the search hits the marker
 /* the block is also a new capture root: a closure being parsed in the enclosing context (e.g. one whose body
@@ -2118,6 +2206,23 @@ public:
     DLLLOCAL ~VariableBlockHelper();
 
 private:
+    ClosureParseEnvironment* closure_parse_env;
+};
+
+//! Parses the initializer of a declaration (a class or hashdecl member, a class static variable) in its own scope
+/** A declaration's initializer is code of the declaration, not of the code whose parse makes it parse it: a class or
+    a hashdecl is parsed when it is first used, which can be in a function, a method or a closure.  The initializer
+    sees the program's top-level local variables, as the code of a function does, and none of the local variables of
+    the code being parsed, and it is in no closure, so that a top-level variable that it refers to is not captured by
+    the closure being parsed (qore#6268)
+*/
+class DeclarationParseScopeHelper {
+public:
+    DLLLOCAL DeclarationParseScopeHelper();
+    DLLLOCAL ~DeclarationParseScopeHelper();
+
+private:
+    VNode* vstack;
     ClosureParseEnvironment* closure_parse_env;
 };
 

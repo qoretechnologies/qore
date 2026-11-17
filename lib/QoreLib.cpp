@@ -579,12 +579,31 @@ bool qore_has_debug() {
 #endif
 }
 
-int parse_check_stack(const QoreProgramLocation* loc) {
-    if (!q_thread_stack_reserve_exceeded(QORE_PARSE_STACK_RESERVE)) {
-        return 0;
-    }
-    parse_error(loc ? *loc : loc_builtin, "the code is nested too deeply to be parsed within the stack of this thread");
+int parse_raise_stack_error(const QoreProgramLocation* loc) {
+    parseException(loc ? *loc : loc_builtin, QORE_PARSE_STACK_ERR, new QoreStringNode(QORE_PARSE_STACK_DESC));
     return -1;
+}
+
+const QoreException* qore_find_thread_stack_error(const ExceptionSink& xsink) {
+    // a run-time stack error depends on the thread only in a thread whose total stack size is smaller than the default
+    // thread stack size; with at least that much stack, the code that exceeded it is assumed to have a bug
+    bool small_stack = q_thread_stack_smaller_than_default();
+    for (const QoreException* e = qore_es_private::get(xsink)->head; e; e = e->next) {
+        // the error code can be an inline short string, which has no QoreStringNode
+        QoreStringDataHelper err(e->err);
+        if (!err) {
+            continue;
+        }
+        if (!strcmp(err.c_str(), QORE_PARSE_STACK_ERR)
+                || (small_stack && !strcmp(err.c_str(), "STACK-LIMIT-EXCEEDED"))) {
+            return e;
+        }
+    }
+    return nullptr;
+}
+
+bool qore_has_thread_stack_error(const ExceptionSink& xsink) {
+    return qore_find_thread_stack_error(xsink) != nullptr;
 }
 
 #ifndef NDEBUG
@@ -632,6 +651,29 @@ private:
 };
 }
 
+//! Raises the parse error for an expression that parse_init_value() cannot initialize in the thread's stack
+/** The node is not parse-initialized, so it must not stay where the code containing it continues its own parse
+    initialization: that code would use it as an initialized expression (the values of a hash that has no value types,
+    a variable reference that is not resolved; issue #6047).  The parse has failed, and the expression is replaced
+    with NOTHING of no known type.
+
+    Out of line, so that it does not add to the code of parse_init_value() on its path for every expression
+
+    @return -1
+*/
+static QORE_INTERN_NOINLINE int parse_init_value_stack_exceeded(AbstractQoreNode* n, QoreValue& val,
+        QoreParseContext& parse_context) {
+    const ParseNode* pn = dynamic_cast<const ParseNode*>(n);
+    int rc = parse_raise_stack_error(pn ? pn->loc : nullptr);
+    {
+        ParseExceptionSink xsink;
+        val.discard(*xsink);
+        val = QoreValue();
+    }
+    parse_context.typeInfo = nullptr;
+    return rc;
+}
+
 int parse_init_value(QoreValue& val, QoreParseContext& parse_context) {
     parse_context.analysis.clear();
     if (val.hasNode()) {
@@ -639,8 +681,7 @@ int parse_init_value(QoreValue& val, QoreParseContext& parse_context) {
         //printd(5, "parse_init_value() n: %p '%s'\n", n, get_type_name(n));
         // parse initialization recurses with the nesting of the code: it stops while enough stack remains
         if (q_thread_stack_reserve_exceeded(QORE_PARSE_STACK_RESERVE)) {
-            const ParseNode* pn = dynamic_cast<const ParseNode*>(n);
-            return parse_check_stack(pn ? pn->loc : nullptr);
+            return parse_init_value_stack_exceeded(n, val, parse_context);
         }
         // every nested expression is parse-initialized here, one level deeper than the expression containing it, so
         // flagging the nodes at every QORE_EVAL_STACK_CHECK_INTERVAL'th level makes the evaluation of any chain of
@@ -1602,7 +1643,8 @@ static QoreValue do_method_intern(QoreObject* self, const QoreMethod* meth, Clas
     }
     // a value created at run time: it records the permissions of the code creating it, which a call through it runs
     // with (see ResolvedCallReferenceNodeIntern::getCreatorParseOptions())
-    return QoreValue(new StaticMethodCallReferenceNode(&loc_builtin, meth, ::getProgram(), runtime_get_class()));
+    return QoreValue(new StaticMethodCallReferenceNode(&loc_builtin, meth, ::getProgram(), runtime_get_class(),
+        LocalStaticMethodCallReferenceNode::getRuntimeReceiverTypeInfo(*meth, pcls->cls, runtime_get_class())));
 }
 
 QoreValue get_call_reference_intern(QoreObject* self, const QoreStringNode* identifier, ExceptionSink* xsink) {
@@ -3157,19 +3199,25 @@ void qore_machine_backtrace() {
 #endif
 
 #ifdef HAVE_NANOSLEEP
-static int qore_nanosleep(int64 ns) {
+int qore_nanosleep_with(int64 ns, int (*sleep_func)(const struct timespec*, struct timespec*)) {
     struct timespec ts;
     ts.tv_sec = ns / 1000000000ll;
     ts.tv_nsec = (ns - ts.tv_sec * 1000000000);
-    int rc;
     while (true) {
-        rc = nanosleep(&ts, 0);
+        struct timespec rem;
+        int rc = sleep_func(&ts, &rem);
         if (rc && errno == EINTR) {
+            // a signal interrupted the sleep: the time that was left is slept, not the whole time again, which
+            // made each signal extend the sleep by up to its full length (issue #6364)
+            ts = rem;
             continue;
         }
-        break;
+        return rc;
     }
-    return rc;
+}
+
+static int qore_nanosleep(int64 ns) {
+    return qore_nanosleep_with(ns, ::nanosleep);
 }
 #endif
 
@@ -3933,6 +3981,60 @@ QoreValue qore_enum_value_copy_for_write(const QoreValue& v) {
     return base;
 }
 
+//! Returns true if \a ti is an enum type that cannot hold a plain string (ex: a string enum type)
+/** Only an enum type can be the type of a slot that holds an enum value and refuses a plain string
+*/
+static bool qore_type_refuses_plain_string(const QoreTypeInfo* ti) {
+    return ti && ti != autoTypeInfo && QoreTypeInfo::getReturnEnum(ti)
+        && !QoreTypeInfo::parseAccepts(ti, stringTypeInfo);
+}
+
+// documented in QoreLibIntern.h
+int qore_check_in_place_container_strings(const QoreValue& container, const char* desc, ExceptionSink* xsink) {
+    if (container.getType() == NT_LIST) {
+        const QoreListNode* l = container.get<const QoreListNode>();
+        const QoreTypeInfo* vti = qore_list_private::get(*l)->getValueTypeInfo();
+        if (!qore_type_refuses_plain_string(vti)) {
+            return 0;
+        }
+        ConstListIterator li(l);
+        while (li.next()) {
+            const QoreValue v = li.getValue();
+            if (v.isEnum() && v.getType() == NT_STRING) {
+                vti->doTypeException("lvalue", 0, desc, v.getEnumBaseValue(), xsink);
+                return -1;
+            }
+        }
+        return 0;
+    }
+    assert(container.getType() == NT_HASH);
+    const QoreHashNode* h = container.get<const QoreHashNode>();
+    const qore_hash_private* hp = qore_hash_private::get(*h);
+    // a hashdecl gives each member a type of its own
+    const TypedHashDecl* hd = hp->getHashDecl();
+    const QoreTypeInfo* vti = hd ? nullptr : hp->getValueTypeInfo();
+    if (!hd && !qore_type_refuses_plain_string(vti)) {
+        return 0;
+    }
+    ConstHashIterator hi(h);
+    while (hi.next()) {
+        const QoreValue v = hi.get();
+        if (!v.isEnum() || v.getType() != NT_STRING) {
+            continue;
+        }
+        const QoreTypeInfo* ti = vti;
+        if (hd) {
+            const HashDeclMemberInfo* mem = typed_hash_decl_private::get(*hd)->findMember(hi.getKey());
+            ti = mem ? mem->getTypeInfo() : nullptr;
+        }
+        if (qore_type_refuses_plain_string(ti)) {
+            ti->doTypeException("lvalue", 0, desc, v.getEnumBaseValue(), xsink);
+            return -1;
+        }
+    }
+    return 0;
+}
+
 //! Replaces the enum value \a v with an owned copy of its base value and returns the enum value replaced
 static QORE_INTERN_NOINLINE QoreValue replace_enum_value_for_write(QoreValue& v) {
     QoreValue copy = qore_enum_value_copy_for_write(v);
@@ -4013,6 +4115,16 @@ int check_self_assignment(const QoreProgramLocation* loc, QoreValue n, LocalVar*
         }
     }
     return 0;
+}
+
+//! returns true if an assignment of a value of the given type to an lvalue of the given type may succeed
+/** the value is assigned to the target of a reference lvalue (ex: a member declared \c reference<int>)
+*/
+static bool lvalue_parse_accepts(const QoreTypeInfo* typeInfo, const QoreTypeInfo* valueTypeInfo) {
+    if (QoreTypeInfo::isReference(typeInfo)) {
+        typeInfo = QoreTypeInfo::getReferenceTarget(typeInfo);
+    }
+    return QoreTypeInfo::parseAccepts(typeInfo, valueTypeInfo) != QTI_NOT_EQUAL;
 }
 
 int check_lvalue_int(const QoreProgramLocation* loc, const QoreTypeInfo*& typeInfo, const char* name) {
@@ -4168,6 +4280,24 @@ int check_lvalue_float(const QoreProgramLocation* loc, const QoreTypeInfo*& type
         return -1;
     }
     return 0;
+}
+
+int check_lvalue_accepts_result(const QoreProgramLocation* loc, const QoreTypeInfo* typeInfo, const char* name,
+        std::initializer_list<const QoreTypeInfo*> results, const char* value_desc) {
+    // the lvalue's type is checked as for an assignment of each result type: a soft type converts the value (ex: a
+    // softint lvalue accepts a date), and a type that may accept it (ex: auto, a union) is checked at runtime
+    for (const QoreTypeInfo* result : results) {
+        if (lvalue_parse_accepts(typeInfo, result)) {
+            return 0;
+        }
+    }
+    // raise a parse exception only if parse exceptions are not suppressed
+    if (getProgram()->getParseExceptionSink()) {
+        QoreStringNode* desc = new QoreStringNodeMaker("lvalue has type '%s', but the %s operator will assign it "
+            "%s", QoreTypeInfo::getName(typeInfo), name, value_desc);
+        qore_program_private::makeParseException(getProgram(), *loc, "PARSE-TYPE-ERROR", desc);
+    }
+    return -1;
 }
 
 int check_lvalue_int_float_number(const QoreProgramLocation* loc, const QoreTypeInfo*& typeInfo, const char* name) {

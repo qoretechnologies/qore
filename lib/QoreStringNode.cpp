@@ -233,6 +233,16 @@ QoreStringNode* QoreStringNode::makeView(QoreStringNode* parent, size_t byte_off
     qore_string_private* pp = qore_string_private::get(parent);
     assert(byte_offset <= pp->len);
     assert(byte_offset + byte_len <= pp->len);
+    // a view always reaches the end of its parent, whose terminator it shares: a part in the middle would need a
+    // terminator of its own, made by a copy on its first read, which a read of a string shared between threads cannot
+    // make safely (issue #6239); such a part is copied here, as almost every use of it would copy it anyway
+    if (byte_offset + byte_len != pp->len) {
+        QoreStringNode* part = new QoreStringNode(pp->getEncoding());
+        if (byte_len) {
+            part->concat(pp->effective_buf() + byte_offset, byte_len);
+        }
+        return part;
+    }
 
     // Collapse view-of-view: never chain. If parent is itself a view, hop once.
     QoreStringNode* actual_parent = parent;
@@ -250,6 +260,10 @@ QoreStringNode* QoreStringNode::makeView(QoreStringNode* parent, size_t byte_off
     vp->encoding = actual_parent->getEncoding();
     vp->view_parent = actual_parent;
     vp->view_offset = actual_offset;
+    // the view starts with the part of the known ASCII prefix of its parent that it contains (see
+    // qore_string_private::asciiPrefixStorage()); the parent does not change while the view exists
+    size_t parent_prefix = qore_string_private::get(actual_parent)->getAsciiPrefix();
+    vp->allocated = parent_prefix > actual_offset ? std::min(parent_prefix - actual_offset, byte_len) : 0;
 
     actual_parent->ref();
     return new QoreStringNode(vp);
@@ -315,6 +329,7 @@ QoreStringNode* QoreStringNode::substr(qore_offset_t offset, qore_offset_t lengt
     if (priv->compute_substr_range(offset, length, byte_offset, byte_len, xsink)) {
         return nullptr;
     }
+    // (makeView() copies a part that does not reach the end of the string, issue #6239)
     if (byte_len < QORE_VIEW_SUBSTR_THRESHOLD) {
         QoreStringNode* ns = new QoreStringNode(priv->getEncoding());
         ns->concat(priv->effective_buf() + byte_offset, byte_len);

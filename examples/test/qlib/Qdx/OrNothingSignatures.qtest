@@ -34,6 +34,7 @@
 %requires FsUtil
 %requires Util
 %requires QUnit
+%requires ../../TestInterpreter.qm
 
 public class OrNothingSignaturesTests inherits QUnit::Test {
     private {
@@ -126,7 +127,7 @@ public class OrNothingSignaturesTests inherits QUnit::Test {
         if (!is_file(qdx)) {
             testSkip("doxygen/qdx is not available");
         }
-        string qore_bin = ENV.QORE_EXECUTABLE ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string qore_bin = TestInterpreter::qore_interpreter();
         string module_dir = normalize_dir(get_script_dir() + "../../../../qlib")
             + (ENV.QORE_MODULE_DIR ? ":" + ENV.QORE_MODULE_DIR : "");
 
