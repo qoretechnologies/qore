@@ -411,10 +411,12 @@ pass imports only the indexes listed in `QORE_DOC_REFERENCE_MODULES_<module>` (s
 in `CMakeLists.txt`: the user modules that link to the module's pages and the
 modules its pages `@ref`), because Doxygen copies every symbol of every imported
 tag file into the importing module's search data (about 38 MB per module when all
-were imported, #6350). A missing entry is only a Doxygen warning in the final
-pass (nothing fails; the reference renders as plain text): add the module to the
-list when the final pass reports an unresolved reference; do not import every
-index. A name that is neither a bundled module nor a user module fails configure. The language final pass also
+were imported, #6350). A missing entry fails the module's final pass: the pass
+writes its Doxygen warnings to `modules/<module>/doc-final-warnings.log`, and
+`doxygen/check-module-doc-references.py` prints them and fails on an unresolved
+reference to a symbol or page that the tag file of a module outside the list
+defines, naming the module to add (#6367); an unresolved reference that no module
+defines stays a warning. Do not import every index. A name that is neither a bundled module nor a user module fails configure. The language final pass also
 keeps its initial tag file unchanged.
 
 #### Preferred: `qore_binary_module_two_phase_docs()` macro
