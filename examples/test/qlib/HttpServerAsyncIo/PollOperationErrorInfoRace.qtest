@@ -79,8 +79,7 @@ class PollOperationErrorInfoRaceTest inherits QUnit::Test {
         #! the size of a WebSocket frame whose send cannot complete at once: larger than the socket buffers
         const SendSize = 64 * 1024 * 1024;
 
-        #! the most poll cycles that the driving thread runs to process data that has arrived already
-        const MaxCycles = 50;
+
     }
 
     constructor() : Test("Poll operation error read race test", "1.0") {
@@ -183,23 +182,14 @@ class PollOperationErrorInfoRaceTest inherits QUnit::Test {
         pair.client.send(frame);
         # the driving thread stores the reason of the client's close frame as it processes the frame
         hash<auto> r = holdAndRead(op, "value", sub () {
-            for (int i = 0; i < MaxCycles && op.getState() == "connected"; ++i) {
-                op.continuePoll();
-            }
+            driveUntil(op, bool sub () { return op.getState() != "connected"; });
         }, auto sub () { return op.getCloseReason(); });
         assertEq(0, r.held, "the read waited for the thread that stores the close reason");
         assertEq(binary(reason), binary(r.value), "the close reason is read once it is stored");
         assertEq(1000, op.getCloseCode());
         # the server answers with its close frame, as a handler does, which ends the close handshake
         op.sendClose(1000);
-        bool ended;
-        for (int i = 0; i < MaxCycles; ++i) {
-            if (!op.continuePoll()) {
-                ended = True;
-                break;
-            }
-        }
-        assertTrue(ended, "the close handshake ended");
+        driveUntil(op, \op.isClosed());
         assertTrue(op.isClosed(), "the operation is closed");
         assertEq(binary(reason), binary(op.getCloseReason()), "the close reason is kept at the end of the handshake");
         assertEq(binary(reason), binary(op.getOutput().close_reason), "the output has the close reason");
@@ -213,9 +203,34 @@ class PollOperationErrorInfoRaceTest inherits QUnit::Test {
         *hash<SocketPollInfo> poll_info = op.continuePoll();
         assertTrue((poll_info.events & SOCK_POLLOUT) != 0, "the send is in progress");
         call_function("dbg_reset_socket", peer);
-        # the next poll cycle continues the send, which fails; continuePoll() raises the error that it records
-        *hash<auto> info = recordAndRead(op, sub () { op.continuePoll(); }, "SOCKET-SEND-ERROR");
+        # the send goes on when the socket is ready for it, and fails; continuePoll() raises the error that it records
+        *hash<auto> info = recordAndRead(op, sub () { driveUntil(op, \op.hasError()); }, "SOCKET-SEND-ERROR");
         assertEq("SOCKET-SEND-ERROR", info.err);
+    }
+
+    #! runs the operation's poll cycles until the condition is met, waiting for the I/O that each cycle waits for
+    /** @throw TEST-ERROR the operation ended, waits for nothing, or its I/O is not ready within the hang guard
+        before the condition is met
+    */
+    private driveUntil(object op, code<bool()> done) {
+        while (!done()) {
+            *hash<SocketPollInfo> info = op.continuePoll();
+            if (done()) {
+                break;
+            }
+            if (!info) {
+                throw "TEST-ERROR", sprintf("the operation ended in state %y before the condition was met",
+                    op.getState());
+            }
+            if (!info.events) {
+                throw "TEST-ERROR", sprintf("the operation waits for no I/O in state %y", op.getState());
+            }
+            # a hang guard only: the I/O that the operation waits for is ready long before
+            if (!Socket::poll((info,), HoldWait)) {
+                throw "TEST-ERROR", sprintf("the I/O of the operation in state %y was not ready within %y",
+                    op.getState(), HoldWait);
+            }
+        }
     }
 
     #! records an error in another thread, which is held while it records it, and reads the error
@@ -258,6 +273,8 @@ class PollOperationErrorInfoRaceTest inherits QUnit::Test {
         # armed for this operation only: other operations of the process can reach the point
         call_function("dbg_http_hold_at", kind + "-record", reached, release, op);
         *hash<ExceptionInfo> record_ex;
+        # set if the recording thread ended without reaching the hold point
+        bool skipped = False;
         background sub () {
             on_exit done.dec();
             try {
@@ -265,14 +282,21 @@ class PollOperationErrorInfoRaceTest inherits QUnit::Test {
             } catch (hash<ExceptionInfo> ex) {
                 record_ex = ex;
             }
-            # a thread that did not reach the hold point does not leave the test thread waiting for it
+            # a thread that did not reach the hold point (the count is 1 only then: a thread at the hold point is held
+            # there) reports it, and does not leave the test thread waiting for it
             if (reached.getCount()) {
+                skipped = True;
                 reached.dec();
             }
         }();
         started = True;
         if (reached.waitForZero(HoldWait)) {
             throw "TEST-ERROR", sprintf("no thread reached the %y hold point", kind + "-record");
+        }
+        if (skipped) {
+            done.waitForZero();
+            throw "TEST-ERROR", sprintf("the recording thread ended without reaching the %y hold point%s",
+                kind + "-record", record_ex ? sprintf(" (%s: %s)", record_ex.err, record_ex.desc) : "");
         }
         # a read that finds the lock taken releases the recording thread, as it then waits for it
         call_function("dbg_http_hold_at", kind + "-read", release, new Counter(0), op);
