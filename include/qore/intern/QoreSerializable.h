@@ -320,7 +320,7 @@ protected:
             qore_stream_type code, int64 flags);
 
     DLLLOCAL static QoreStringNode* deserializeStringFromStream(StreamReader& reader, qore_stream_type code,
-            ExceptionSink* xsink);
+            int64 flags, ExceptionSink* xsink);
 
     DLLLOCAL static int64 deserializeIntFromStream(StreamReader& reader, qore_stream_type code, ExceptionSink* xsink);
 
