@@ -107,6 +107,12 @@
     <tt>h.(keys h2)</tt>, is now read as the member name \c keys, usually a parse error; write <tt>h.(keys h2)</tt>
     (see @ref keywords; issue #525).
 
+    @par NOTHING Is Not the Base of an Lvalue
+    An element, member, slice or cast of the value \c NOTHING (also as a constant) used as an lvalue
+    (<tt>remove NOTHING.a</tt>, <tt>trim NOTHING[i]</tt>) is a parse error: such an operator removed nothing or raised
+    an exception at run time; \c NOTHING by itself is still an lvalue that the operators do not change, and a cast of
+    it that allows \c NOTHING (<tt>cast<*string>(NOTHING)</tt>) is \c NOTHING (issue #6480).
+
     @par Strong Encapsulation Refuses Out-of-Line Methods in Namespace Blocks
     @ref strong-encapsulation "%strong-encapsulation" (also set by @ref modern "%modern") refuses an out-of-line method
     definition in a namespace block, as it does at the top level (see
@@ -2120,6 +2126,8 @@
     - an @ref absolute_dates "absolute date" made from a number of seconds whose year does not fit a 32-bit integer
       (ex: <tt>softdate d = -1e300n;</tt>) is the earliest or the latest absolute date; it was formatted in an
       overflowed year with an overflowed UTC offset (see @ref date_time_arithmetic_range; issue #6431)
+    - a \c NOTHING element of a list assignment (<tt>(a, NOTHING, b) = l</tt>) is skipped and accepts a value of any
+      type: the elements after it were left unassigned, and the expression returned \c NOTHING (issue #6480)
     - when more than one class of a hierarchy declares a member with an initialization expression, the value that a
       later one replaces is released, so that an object that a base class stored there is destroyed (see
       @ref member_initialization; issue #6411)
