@@ -3205,6 +3205,9 @@
       between -1 and 1 (ex: <tt>pow(2n, 0.5n)</tt>) ended the process with an MPFR assertion (issue #1034)
     - a @ref number_type "number" division after a number operation that left an MPFR flag set (ex: <tt>nlog(0n)</tt>)
       raised \c DIVISION-BY-ZERO for a divisor that is not zero (issue #1034)
+    - @ref Qore::Serializable::deserialize() "binary deserialization" reads string and binary values in bounded chunks
+      and raises \c DESERIALIZATION-ERROR for a value, list or hash larger than the data that follows it, instead of
+      reserving the size given in the data first (issue #6502)
 
     @section qore_2_2_1 Qore 2.2.1
 
