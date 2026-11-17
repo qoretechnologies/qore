@@ -4170,6 +4170,10 @@ void QoreClass::addBuiltinVirtualBaseClass(QoreClass* qc) {
     priv->addBaseClass(qc, true);
 }
 
+#ifdef DEBUG
+std::atomic<int64> qore_param_class_check_steps{0};
+#endif
+
 namespace {
 //! A level of the walk of qore_class_private::findParameterizedBaseTypeInfo()
 struct ParameterizedBaseWalkFrame {
@@ -4211,8 +4215,13 @@ const QoreTypeInfo* qore_class_private::findParameterizedBaseTypeInfo(const Qore
     // and is inherited without type arguments is that instance on the path that inherits it so, as in a class loaded
     // from compiled code (see getParameterizedParentTypeInfo())
     HierarchyWalkStack<ParameterizedBaseWalkFrame> stack;
-    // a class without type arguments in the walk has the same answer on every path to it: one that a path through a
-    // class with more than one parent class (a diamond) reaches again is not walked again
+    // the classes whose walk ended without an answer: whether the walk of a class finds the target class depends
+    // only on the class, not on the type arguments of the path to it (a substitution in the specialization of a
+    // parent class gives a specialization of the same class), and the walk ends at the first answer, so a class that a
+    // path through a class with more than one parent class (a diamond, or a lattice of them, with as many paths as 2^n
+    // to a class n levels down) reaches again is not walked again, with type arguments or without: each class is
+    // walked once (qore#6449); a class popped before a class with more than one parent class is walked cannot be
+    // reached again
     std::set<const qore_class_private*> walked;
     bool multiple = false;
     stack.push({this, 0, source});
@@ -4220,12 +4229,16 @@ const QoreTypeInfo* qore_class_private::findParameterizedBaseTypeInfo(const Qore
         ParameterizedBaseWalkFrame& f = stack.back();
         // a class hierarchy with an error (such as a circular one) is not walked further
         if (!f.cls->scl || !f.cls->scl->valid || f.next == f.cls->scl->size()) {
+            if (multiple && f.cls != this) {
+                walked.insert(f.cls);
+            }
             stack.pop();
             continue;
         }
         if (!f.next && f.cls->scl->size() > 1) {
             multiple = true;
         }
+        QORE_PARAM_CLASS_CHECK_STEP();
         const BCNode& n = *(*f.cls->scl)[f.next++];
         // if there was a parse error finding the base class, then skip
         if (!n.sclass) {
@@ -4247,7 +4260,7 @@ const QoreTypeInfo* qore_class_private::findParameterizedBaseTypeInfo(const Qore
             continue;
         }
         const qore_class_private* parent = qore_class_private::get(*n.sclass);
-        if (!parent_pti && multiple && !walked.insert(parent).second) {
+        if (multiple && walked.count(parent)) {
             continue;
         }
         stack.push({parent, 0, parent_pti});

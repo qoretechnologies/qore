@@ -22485,6 +22485,14 @@ static QoreValue f_dbg_get_lvalue_removal_allocation_count(const QoreListNode* p
     return q_get_lvalue_removal_allocation_count();
 }
 
+//! returns the number of parent class edges that the lookups of parameterized base types have visited
+/** In all threads, since the library was loaded: a test takes the difference over its checks, so that it can require
+    a bound on the steps of the run-time checks of objects against parameterized class types (qore#6449)
+*/
+static QoreValue f_dbg_param_class_check_steps(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    return qore_param_class_check_steps.load(std::memory_order_relaxed);
+}
+
 //! returns the number of old values of number lvalues copied by post-increments and post-decrements in this thread
 /** A post-increment or post-decrement whose value is unused copies no old value (qore#6197); tests use this to
     verify it.
@@ -26701,6 +26709,8 @@ void init_debug_functions(QoreNamespace& qns) {
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_get_lvalue_removal_allocation_count", f_dbg_get_lvalue_removal_allocation_count,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_param_class_check_steps", f_dbg_param_class_check_steps, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_get_lvalue_removal_probe_count", f_dbg_get_lvalue_removal_probe_count, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_get_number_old_value_copy_count", f_dbg_get_number_old_value_copy_count,

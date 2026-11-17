@@ -89,6 +89,17 @@ class qore_class_private;
 // the source Program of a class taken for a frame; see CodeContextHelperBase
 struct QoreClassSourceProgramInfo;
 
+#ifdef DEBUG
+//! the parent class edges that the lookups of the parameterized base types of classes have visited (qore#6449)
+/** Read by the dbg_param_class_check_steps() debug hook, so that a test can require a bound on the steps of the
+    run-time checks of objects against parameterized class types independent of the timing
+*/
+DLLLOCAL extern std::atomic<int64> qore_param_class_check_steps;
+#define QORE_PARAM_CLASS_CHECK_STEP() qore_param_class_check_steps.fetch_add(1, std::memory_order_relaxed)
+#else
+#define QORE_PARAM_CLASS_CHECK_STEP()
+#endif
+
 //! Process-wide epoch incremented whenever a callable method table changes or a class or hashdecl is destroyed
 /** A dispatch cache keyed by class, hashdecl or type pointers matches only entries made in the current epoch: the
     increment at destruction makes every entry naming the destroyed metadata stale before its memory can be reused
