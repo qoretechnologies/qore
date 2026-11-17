@@ -284,7 +284,10 @@ public:
 
 private:
     //! Makes the charge of the budget of \a sm current again if it is below the innermost trusted build
-    DLLLOCAL void enterBelowBuild(int tid, QoreSandboxManager* sm, const void* owner);
+    /** @param entry_start the number of frames when the enter() call that calls it started: a charge that a frame
+        pushed since then made current is combined with the budget's charge
+    */
+    DLLLOCAL void enterBelowBuild(int tid, QoreSandboxManager* sm, const void* owner, size_t entry_start);
 
 public:
 

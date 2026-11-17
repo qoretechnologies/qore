@@ -594,6 +594,8 @@ void QoreSandboxBudgetStack::enter(int tid, QoreSandboxManager* sm, const void* 
     if (lost_owner) {
         return;
     }
+    // the frames pushed from here on are this entry's (see enterBelowBuild())
+    const size_t entry_start = frames.size();
     if (const std::vector<QoreSandboxManager*>* members = QoreSandboxComposition::members(sm)) {
         for (QoreSandboxManager* member : *members) {
             // the constituents are plain managers, so their getters report their own limits
@@ -607,7 +609,7 @@ void QoreSandboxBudgetStack::enter(int tid, QoreSandboxManager* sm, const void* 
                     return;
                 }
             } else if (memory > 0) {
-                enterBelowBuild(tid, member, owner);
+                enterBelowBuild(tid, member, owner, entry_start);
             }
         }
         return;
@@ -619,7 +621,7 @@ void QoreSandboxBudgetStack::enter(int tid, QoreSandboxManager* sm, const void* 
     if ((limit > 0 || cpu > 0 || stack > 0 || memory > 0) && !hasBudgetFor(sm)) {
         startBudget(tid, sm, limit, cpu, stack, memory, owner);
     } else if (memory > 0) {
-        enterBelowBuild(tid, sm, owner);
+        enterBelowBuild(tid, sm, owner, entry_start);
     }
 }
 
@@ -634,7 +636,8 @@ void QoreSandboxBudgetStack::resumeCharge(QoreSandboxCharge* saved) {
     qore_sb_set_charge(saved);
 }
 
-void QoreSandboxBudgetStack::enterBelowBuild(int tid, QoreSandboxManager* sm, const void* owner) {
+void QoreSandboxBudgetStack::enterBelowBuild(int tid, QoreSandboxManager* sm, const void* owner,
+        size_t entry_start) {
     // only inside a trusted build, for a sandbox whose budget is below it and that has no frame in the build yet
     if (charge_floors.empty()) {
         return;
@@ -652,9 +655,17 @@ void QoreSandboxBudgetStack::enterBelowBuild(int tid, QoreSandboxManager* sm, co
     if (!below || !below->charge) {
         return;
     }
-    // a charge made current in the build already (a budget started in the same entry, such as one of another
-    // constituent of a composite manager) is kept: the memory is charged to its accounts as well
-    QoreSandboxCharge* current = qore_sb_mem.charge;
+    // a charge that this entry made current already (a budget of another constituent of a composite manager) is
+    // kept: the memory is charged to its accounts as well; a charge made current before this entry (that of the
+    // Program that created the capability, entered by the build) is not: the caller's code is charged to the caller
+    // only, as when the caller calls it directly
+    QoreSandboxCharge* current = nullptr;
+    for (size_t i = entry_start; i < frames.size(); ++i) {
+        if (frames[i].charge_set) {
+            current = qore_sb_mem.charge;
+            break;
+        }
+    }
     QoreSandboxCharge* combined = nullptr;
     try {
         if (current && current != below->charge) {

@@ -97,7 +97,8 @@ entering it again enters nothing): storage keeps the charge it was
 created with, so a charged build would bill the first caller for as long as the state lives, and for its later growth
 by any caller. The caller's code that the build calls stays charged: entering its sandbox, whose budget is below the
 build, pushes a frame that makes that budget's charge current again (`enterBelowBuild()`), combined with a charge
-that the same entry made current already (another constituent of a composite manager). Work that the build hands to
+that the same entry made current already (another constituent of a composite manager), but not with a charge made
+current before the entry (the creator's, which the build entered): the caller's code is charged to the caller only. Work that the build hands to
 another thread captures only the budgets entered in the build (`capture()`), so it is not a part of the caller's call
 either.
 Creating the capability is refused to code that a sandbox governs or that is sandboxed, and for a callback that has

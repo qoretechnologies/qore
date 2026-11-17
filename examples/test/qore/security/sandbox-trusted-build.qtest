@@ -510,6 +510,12 @@ sub build(int n) {
 code sub mk() {
     return Qore::SandboxManager::createTrustedBuildCall(\\build());
 }
+auto sub run(code c) {
+    return c();
+}
+code sub mk_run() {
+    return Qore::SandboxManager::createTrustedBuildCall(\\run());
+}
 string sub call_own(code cap, int n) {
     try {
         cap(n);
@@ -523,6 +529,7 @@ sub clear() {
 }
 ", "memory-creator");
         code cap = creator.callFunction("mk");
+        code run_cap = creator.callFunction("mk_run");
         on_exit creator.callFunction("clear");
         SandboxManager cs();
         cs.setUncontrolledApiPolicy(True);
@@ -538,9 +545,29 @@ sub clear() {
         m.setMemoryLimit(64 * 1024 * 1024);
         Program p(PO_MODERN);
         p.setSandboxManager(m);
-        p.parse(SandboxedSource, "memory-creator-tenant");
+        p.parse(SandboxedSource + "our list<string> kept;
+code sub keeper() {
+    return int sub () {
+        list<string> l = ();
+        for (int i = 0; i < 30000; ++i) {
+            l += sprintf(\"tenant data entry %d with some padding to use memory\", i);
+        }
+        kept = l;
+        return kept.size();
+    };
+}
+sub release() {
+    remove kept;
+}
+", "memory-creator-tenant");
+        on_exit p.callFunction("release");
         assertThrows("SANDBOX-MEMORY-LIMIT", \p.callFunction(), ("call", cap, 200000));
         assertEq(0, m.getMemoryUsage());
+        # the tenant's own code that the build calls is charged to the tenant only, not to the creator: data that it
+        # keeps (about 3 MB) does not use the creator's limit, which would deny the creator's builds to other callers
+        assertEq(30000, p.callFunction("call", run_cap, p.callFunction("keeper")));
+        assertGt(1024 * 1024, m.getMemoryUsage());
+        assertEq(0, cs.getMemoryUsage());
         # within the creator's limit, the state is built
         cs.setMemoryLimit(0);
         assertEq("built", creator.callFunction("call_own", cap, 200000));
