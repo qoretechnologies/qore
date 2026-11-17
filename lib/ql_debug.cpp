@@ -11338,8 +11338,10 @@ static void ut_debug_step_folded_statements_mode(UnitTestCounters& c, qore_exec_
             } else {
                 UT_ASSERT_EQ(c, 0, ref_inc_target, "the reference's IncrementLocalInt instruction of line 13 of an "
                     "int local in a try block has no exception target of its own");
-                UT_ASSERT(c, !inc.exception_target, "the IncrementLocalInt instruction of line 13 has no exception "
-                    "target of its own");
+                // the fold gives the operation the exception path of its step event (the try block's handler),
+                // which the lowering did not give it (see the reference above)
+                UT_ASSERT(c, inc.exception_target, "the folded IncrementLocalInt instruction of line 13 takes the "
+                    "exception path of its step event");
                 raise_folded = true;
                 UT_ASSERT_EQ(c, 1, ut_folded_debug_steps(pgm, "work", 13, 13), "`b = ++a;` in the try block is "
                     "folded: its operation has no exception target of its own");
