@@ -1123,13 +1123,22 @@ static int clearConsumedArgCleanups(uint64_t** arg_cleanups, int nargs,
     if (!arg_cleanups) {
         return 0;
     }
+    // the last slot that holds a value: a call whose given slots hold nothing (the slot of a read through a reference
+    // when the local held no reference, issue #6262) releases nothing and constructs no exception sink
+    int last = nargs - 1;
+    while (last >= 0 && (!arg_cleanups[last] || !*arg_cleanups[last])) {
+        --last;
+    }
+    if (last < 0) {
+        return 0;
+    }
     // Argument cleanups must run even if the callee already raised an
     // exception.  Preserve the original exception and suppress any cleanup
     // exception in that case; otherwise report cleanup failures normally.
     bool had_exception = xsink && *xsink;
     ExceptionSink cleanup_sink;
     ExceptionSink* cleanup_xsink = had_exception ? &cleanup_sink : xsink;
-    for (int i = nargs - 1; i >= 0; --i) {
+    for (int i = last; i >= 0; --i) {
         uint64_t* slot = arg_cleanups[i];
         if (!slot) {
             continue;

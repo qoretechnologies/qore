@@ -1,0 +1,107 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+# the script of ParamWriteOperandRelease.qtest: a parameter's write releases the value of a functional operator or a
+# value read through a reference that the caller passed and no longer holds, as in the AST interpreter (issue #6262)
+%modern
+class T {
+    public { string n; }
+    constructor(string n) { self.n = n; }
+    destructor() { printf("dtor %s\n", n); }
+}
+class U inherits T {
+    constructor(string n) : T(n) {}
+}
+T sub mk(string n) { return new U(n); }
+
+our *T g_o;
+
+# parameters that are written before the function continues
+sub wa(auto a, string tag) { a = NOTHING; printf("after write %s\n", tag); }
+sub wl(list<auto> l, string tag) { l = (); printf("after write %s\n", tag); }
+sub wh(hash<auto> h, string tag) { h = {}; printf("after write %s\n", tag); }
+# the referenced variable and then the parameter are written
+sub ww(auto a, string tag) { g_o = NOTHING; a = NOTHING; printf("after write %s\n", tag); }
+class C {
+    m(auto a, string tag) { a = NOTHING; printf("after write %s\n", tag); }
+    mw(auto a, string tag) { g_o = NOTHING; a = NOTHING; printf("after write %s\n", tag); }
+    static s(auto a, string tag) { a = NOTHING; printf("after write %s\n", tag); }
+    static sw(auto a, string tag) { g_o = NOTHING; a = NOTHING; printf("after write %s\n", tag); }
+}
+
+# a value read through the reference that the caller gave, passed on to a callee that writes the referenced variable
+# and the parameter
+sub fwd(auto r, string tag) { ww(r, tag); printf("forwarded %s\n", tag); }
+sub fwd_method(auto r, string tag) { C c(); c.mw(r, tag); printf("forwarded %s\n", tag); }
+sub fwd_static(auto r, string tag) { C::sw(r, tag); printf("forwarded %s\n", tag); }
+sub fwd_closure(auto r, string tag) {
+    code c = sub (auto a, string t) { g_o = NOTHING; a = NOTHING; printf("after write %s\n", t); };
+    c(r, tag);
+    printf("forwarded %s\n", tag);
+}
+# a local that holds a reference to another local
+sub local_ref(string tag) {
+    *T o = new T(tag);
+    auto r = \o;
+    code c = sub (auto a, string t) { o = NOTHING; a = NOTHING; printf("after write %s\n", t); };
+    c(r, tag);
+    printf("forwarded %s\n", tag);
+}
+
+sub operands(string p) {
+    # the operand of a cast lives until the statement ends (issue #5712)
+    wa(cast<U>(mk(p + "cast")), p + "cast");
+    # map, map with select, hash map and hash map with select: the container holds the values alone
+    wl((map mk(p + "map" + $1), (1, 2)), p + "map");
+    wl((map mk(p + "msel" + $1), (1, 2), $1 > 0), p + "msel");
+    wh((map {"k" + $1: mk(p + "hmap" + $1)}, (1, 2)), p + "hmap");
+    wh((map {"k" + $1: mk(p + "hsel" + $1)}, (1, 2), $1 > 0), p + "hsel");
+    # over an iterator, a nested map, and over a single value given by a conditional expression
+    wl((map mk(p + "iter" + $1), new ListIterator((1, 2))), p + "iter");
+    wh((map {"k" + $1: mk(p + "hiter" + $1)}, new ListIterator((1,))), p + "hiter");
+    wl((map (map mk(p + "nest" + $1), (1,)), (1,)), p + "nest");
+    wa((map $1, mk(p + "mapn") ?? NOTHING), p + "mapn");
+    wa((select mk(p + "seln") ?? NOTHING, True), p + "seln");
+    # folds: the source is released when the fold has run, and the value is given to the parameter
+    wa((foldl $1 + $2, (1, 2) ? mk(p + "foldx") : NOTHING), p + "foldx");
+    wa((foldl $1, mk(p + "foldn") ?? NOTHING), p + "foldn");
+    wa((foldl $1, (mk(p + "fla"), mk(p + "flb"))), p + "fl");
+    wa((foldr $1, (mk(p + "fra"), mk(p + "frb"))), p + "fr");
+    wa((foldr $1 + $2, mk(p + "frx")), p + "frx");
+    wa((foldl $1, True ? (mk(p + "fta"), mk(p + "ftb")) : ()), p + "ft");
+    # a fold over the list that a select gives, and the value of a fold in a hash or list literal
+    wa((foldr $1, (select (mk(p + "fsa"), mk(p + "fsb")), True)), p + "fs");
+    wa({"x": (foldl $1, (mk(p + "hfold"),))}, p + "hfold");
+    wl(((foldl $1, (mk(p + "lfold"),)),), p + "lfold");
+    # methods, static methods and closures given the value of a functional operator
+    C c();
+    c.m((map mk(p + "mmap" + $1), (1,)), p + "mmap");
+    c.m((foldl $1, (mk(p + "mfold"),)), p + "mfold");
+    C::s((foldl $1, (mk(p + "sfold"),)), p + "sfold");
+    C::s((map mk(p + "smap" + $1), (1,)), p + "smap");
+    code cl = sub (auto a, string tag) { a = NOTHING; printf("after write %s\n", tag); };
+    cl((foldl $1, (mk(p + "cfold"),)), p + "cfold");
+    cl((map mk(p + "cmap" + $1), (1,)), p + "cmap");
+    # values read through references
+    g_o = new T(p + "ref");
+    fwd(\g_o, p + "ref");
+    g_o = new T(p + "mref");
+    fwd_method(\g_o, p + "mref");
+    g_o = new T(p + "sref");
+    fwd_static(\g_o, p + "sref");
+    g_o = new T(p + "cref");
+    fwd_closure(\g_o, p + "cref");
+    local_ref(p + "lref");
+}
+
+for (int round = 0; round < 3; ++round) {
+    printf("round %d\n", round);
+    operands("");
+    # from top-level code
+    wl((map mk("top-map" + $1), (1, 2)), "top-map");
+    wa((foldl $1, (mk("top-fla"), mk("top-flb"))), "top-fl");
+    wa((foldl $1 + $2, (1, 2) ? mk("top-foldx") : NOTHING), "top-foldx");
+    g_o = new T("top-ref");
+    fwd(\g_o, "top-ref");
+    printf("round end %d\n", round);
+}
