@@ -1,0 +1,52 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class NanosleepEintrTest
+
+#! Tests that a sleep that a signal interrupts sleeps the time that is left, not the whole time again (issue #6364)
+/** qore_usleep(), which usleep() and sleep() use for a remainder of less than a millisecond and while cancellation is
+    deferred, sleeps with nanosleep().  dbg_nanosleep_eintr() runs it with a nanosleep() that reports interruptions by
+    a signal (EINTR) with the time left, without a signal and without sleeping, and returns the time that each call
+    was asked to sleep; no time is measured.
+*/
+class NanosleepEintrTest inherits QUnit::Test {
+    constructor() : Test("NanosleepEintrTest", "1.0") {
+        addTestCase("an interrupted sleep sleeps the time that is left", \remainderTest());
+        addTestCase("an error other than EINTR ends the sleep", \errorTest());
+        set_return_value(main());
+    }
+
+    remainderTest() {
+        checkDebug();
+        # no interruption
+        assertEq({"rc": 0, "requests": (1500000000,)}, call_function("dbg_nanosleep_eintr", 1500000000, (), 0));
+        # two interruptions: each retry sleeps the time that the interrupted call reports as left
+        assertEq({"rc": 0, "requests": (1500000000, 900000000, 250000001)},
+            call_function("dbg_nanosleep_eintr", 1500000000, (900000000, 250000001), 0));
+        # interruptions that leave the same time each
+        assertEq({"rc": 0, "requests": (2000, 1500, 1500, 1500)},
+            call_function("dbg_nanosleep_eintr", 2000, (1500, 1500, 1500), 0));
+    }
+
+    errorTest() {
+        checkDebug();
+        # EINVAL after an interruption: the error is returned, and the sleep is not retried
+        assertEq({"rc": -1, "requests": (1000, 400)}, call_function("dbg_nanosleep_eintr", 1000, (400,), EINVAL));
+    }
+
+    #! skips the test case unless dbg_nanosleep_eintr() is there
+    /** It is registered only in a library built with DEBUG on a system with nanosleep(), and is called with
+        call_function(), so that a release build parses this test
+    */
+    private checkDebug() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING || !exists_function("dbg_nanosleep_eintr")) {
+            testSkip("dbg_nanosleep_eintr() is only in debug builds of the library on systems with nanosleep()");
+        }
+    }
+}

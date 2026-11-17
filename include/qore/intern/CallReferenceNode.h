@@ -70,6 +70,8 @@ public:
 DLLLOCAL QoreValue qore_call_ref_invoke_named(const ResolvedCallReferenceNode* r, const QoreListNode* args,
         const name_vec_t& arg_names, LexicalSemanticPolicy policy, ExceptionSink* xsink);
 
+class QoreListNodeEvalOptionalRefHolder;
+
 class ResolvedCallReferenceNodeIntern : public ResolvedCallReferenceNode, public CallReferenceNodeLocation {
 public:
     QoreValue dispatchValue(const QoreListNode* args, ExceptionSink* xsink) const override = 0;
@@ -161,11 +163,12 @@ public:
 //! a call reference to a static user method
 class LocalStaticMethodCallReferenceNode : public ResolvedCallReferenceNodeIntern {
 public:
-    DLLLOCAL LocalStaticMethodCallReferenceNode(const QoreProgramLocation* loc, const QoreMethod* n_method)
-            : ResolvedCallReferenceNodeIntern(loc, true), method(n_method) {
-        //printd(5, "LocalStaticMethodCallReferenceNode::LocalStaticMethodCallReferenceNode() this: %p %s::%s() "
-        //    "pgm: %p\n", this, method->getClass()->getName(), method->getName(), pgm);
-    }
+    /** @param n_scope_cls the class that the reference names (\\H::m()), if not the class of the method; a
+        reference to a static method of a generic class through a class that inherits a specialization of it calls
+        the method with the type arguments of the specialization (qore#6285)
+    */
+    DLLLOCAL LocalStaticMethodCallReferenceNode(const QoreProgramLocation* loc, const QoreMethod* n_method,
+            const QoreClass* n_scope_cls = nullptr);
 
     DLLLOCAL virtual ~LocalStaticMethodCallReferenceNode() {
     }
@@ -190,8 +193,42 @@ public:
         return method;
     }
 
+    //! Returns the class that the reference names, which a compiled reference records in place of the method's
+    DLLLOCAL const QoreClass* getScopeClass() const {
+        return scope_cls ? scope_cls : (method ? method->getClass() : nullptr);
+    }
+
+    //! Returns the receiver of the calls through a reference to the static method \a m created at run time
+    /** For a method of a generic class, it is the specialization that \a scope_cls (the class that the reference
+        names) inherits, if any, otherwise, in the code of a class that is or inherits the method's class
+        (\a code_class), the receiver of its running instantiation if it binds the type parameters of the method's
+        class (\\G::m() in G<T>); if there is none, a call through the reference binds them to the types of its
+        arguments, as a call G::m(...) does (see getCallReceiverTypeInfo(); qore#6285)
+    */
+    DLLLOCAL static const QoreTypeInfo* getRuntimeReceiverTypeInfo(const QoreMethod& m, const QoreClass* scope_cls,
+            const qore_class_private* code_class);
+
+    //! Returns the receiver of a call of the static method \a m with the arguments \a args
+    /** \a receiver_type_info, or else for a method of a generic class the receiver that binds the type parameters of
+        the class to the types of the arguments, if any (qore#6285)
+    */
+    DLLLOCAL static const QoreTypeInfo* getCallReceiverTypeInfo(const QoreMethod& m,
+            const QoreTypeInfo* receiver_type_info, const QoreListNode* args);
+
+    //! as getCallReceiverTypeInfo(), for arguments that can need evaluation
+    /** If the receiver is inferred from the arguments, unevaluated arguments are evaluated into \a eval_args first,
+        and \a args is set to the evaluated list, which the call takes then: the inference needs their values
+    */
+    DLLLOCAL static const QoreTypeInfo* getCallReceiverTypeInfo(const QoreMethod& m,
+            const QoreTypeInfo* receiver_type_info, const QoreListNode*& args,
+            QoreListNodeEvalOptionalRefHolder& eval_args, ExceptionSink* xsink);
+
 protected:
     const QoreMethod* method;
+    //! the class that the reference names, if not the class of the method
+    const QoreClass* scope_cls = nullptr;
+    //! the receiver of the calls of a static method of a generic class that the reference has from its class
+    const QoreTypeInfo* receiver_type_info = nullptr;
 
     // constructor for subclasses
     DLLLOCAL LocalStaticMethodCallReferenceNode(const QoreProgramLocation* loc, const QoreMethod* n_method,
@@ -210,8 +247,12 @@ protected:
     DLLLOCAL virtual bool derefImpl(ExceptionSink* xsink);
 
 public:
+    /** @param n_receiver_type_info the receiver of the calls of a static method of a generic class (see
+        LocalStaticMethodCallReferenceNode::getRuntimeReceiverTypeInfo())
+    */
     DLLLOCAL StaticMethodCallReferenceNode(const QoreProgramLocation* loc, const QoreMethod* n_method,
-            QoreProgram* n_pgm, const qore_class_private* n_class_ctx);
+            QoreProgram* n_pgm, const qore_class_private* n_class_ctx,
+            const QoreTypeInfo* n_receiver_type_info = nullptr);
 
     DLLLOCAL ~StaticMethodCallReferenceNode() {
         assert(!pgm);

@@ -25,7 +25,6 @@
 %modern
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%prepend-module-path "${SCRIPT_DIR}/../../../../build/modules/ml"
 %requires Util
 %requires QUnit
 %requires Mime
@@ -39,9 +38,7 @@
 %define NoPgsql
 %endtry
 
-%try-module SqlUtil
-%define NoSqlUtil
-%endtry
+%requires SqlUtil
 
 %requires Schema
 # a run on PostgreSQL has its own schema
@@ -1848,9 +1845,6 @@ class ModelRegistryTest inherits QUnit::Test {
     databaseBackendIntegrationTest() {
 %ifdef NoPgsql
         testSkip("pgsql module not available");
-%endif
-%ifdef NoSqlUtil
-        testSkip("SqlUtil module not available");
 %endif
         *string dsn = ENV.QORE_DB_CONNSTR_PGSQL;
         if (!dsn) {

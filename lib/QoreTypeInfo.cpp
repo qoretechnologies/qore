@@ -4396,6 +4396,11 @@ namespace {
 // Default internal entries have canonical semantics, including when entered from a legacy native callback.
 // Explicit lexical entries carry their value through recursive checks without changing a shared type.
 struct DefaultTypeMatchPolicy {
+    //! a deleted object does not match a class type (issue #3272: instanceof, cast<>)
+    static constexpr bool deleted_object_keeps_class = false;
+    //! true if SQL NULL can be accepted by a type that does not accept it (see QoreTypeInfo::acceptsBrokenSoftNull())
+    static constexpr bool may_accept_broken_soft_null = false;
+
     qore_type_result_e value(const QoreTypeInfo* ti, const QoreValue& n, bool fold) const {
         return fold ? QoreTypeInfo::runtimeAcceptsValueOrFold(ti, n) : QoreTypeInfo::runtimeAcceptsValue(ti, n);
     }
@@ -4406,6 +4411,9 @@ struct DefaultTypeMatchPolicy {
 };
 
 struct LexicalTypeMatchPolicy {
+    static constexpr bool deleted_object_keeps_class = false;
+    static constexpr bool may_accept_broken_soft_null = true;
+
     LexicalSemanticPolicy policy;
 
     qore_type_result_e value(const QoreTypeInfo* ti, const QoreValue& n, bool fold) const {
@@ -4414,6 +4422,37 @@ struct LexicalTypeMatchPolicy {
 
     qore_type_result_e spec(const QoreTypeSpec& spec, const QoreValue& n, bool exact, bool fold) const {
         return spec.runtimeAcceptsValue(n, exact, fold, policy);
+    }
+};
+
+//! the match of a call argument in the run-time selection of a variant: a deleted object keeps its class, as at parse
+//! time and for a variant selected at parse time (issue #6159); using it in the called code raises
+//! OBJECT-ALREADY-DELETED
+template <typename BasePolicy>
+struct CallArgTypeMatchPolicy : BasePolicy {
+    static constexpr bool deleted_object_keeps_class = true;
+
+    qore_type_result_e value(const QoreTypeInfo* ti, const QoreValue& n, bool fold) const {
+        if (!QoreTypeInfo::hasType(ti)) {
+            return QTI_WILDCARD;
+        }
+        for (auto& t : ti->getAcceptSpecs()) {
+            qore_type_result_e rv = t.spec.runtimeAcceptsValueImpl(n, t.exact, fold, *this);
+            if (rv != QTI_NOT_EQUAL) {
+                return rv;
+            }
+        }
+        // SQL NULL, which no class type accepts, is matched as by the base policy
+        if constexpr (BasePolicy::may_accept_broken_soft_null) {
+            if (n.getType() == NT_NULL) {
+                return BasePolicy::value(ti, n, fold);
+            }
+        }
+        return QTI_NOT_EQUAL;
+    }
+
+    qore_type_result_e spec(const QoreTypeSpec& spec, const QoreValue& n, bool exact, bool fold) const {
+        return spec.runtimeAcceptsValueImpl(n, exact, fold, *this);
     }
 };
 
@@ -4811,6 +4850,23 @@ std::shared_ptr<const QoreTypeInfo> qore_make_initializer_filter(const QoreTypeI
     return std::make_shared<QoreInitializerFilterTypeInfo>(type_info, policy, instance_member);
 }
 
+bool QoreTypeSpec::acceptsEnumDecl(const QoreEnumDecl* ed) const {
+    assert(typespec == QTS_ENUM);
+    return ed == u.ed || qore_enum_decl_private::get(*ed)->parseEqual(*qore_enum_decl_private::get(*u.ed));
+}
+
+//! returns true if the type has an enum type that accepts the enum value \a n (qore#6277)
+static bool qore_type_info_has_enum_spec_for(const QoreTypeInfo& typeInfo, const QoreValue& n) {
+    assert(n.isEnum());
+    const QoreEnumDecl* ed = n.getEnumMember()->getEnumDecl();
+    for (auto& t : typeInfo.getAcceptSpecs()) {
+        if (t.spec.getTypeSpec() == QTS_ENUM && t.spec.acceptsEnumDecl(ed)) {
+            return true;
+        }
+    }
+    return false;
+}
+
 template <typename FilterPolicy>
 bool QoreTypeSpec::acceptInputImpl(ExceptionSink* xsink, const QoreTypeInfo& typeInfo, const QoreAcceptSpec& accept,
         const char* arg_type, bool obj, int param_num, const char* param_name, QoreValue& n,
@@ -4962,6 +5018,12 @@ bool QoreTypeSpec::acceptInputImpl(ExceptionSink* xsink, const QoreTypeInfo& typ
                     return true;
                 }
             } else if (typespec == QTS_COMPLEXSOFTLIST) {
+                // an enum value is left to an enum type of the union, which keeps it as an enum value, and not
+                // wrapped in a list (qore#6277)
+                if (n.isEnum() && typeInfo.getAcceptSpecs().size() > 1
+                        && qore_type_info_has_enum_spec_for(typeInfo, n)) {
+                    break;
+                }
                 // see if value matches
                 if (policy.value(u.ti, n, true) > 0) {
                     ok = true;
@@ -5075,15 +5137,25 @@ bool QoreTypeSpec::acceptInputImpl(ExceptionSink* xsink, const QoreTypeInfo& typ
         }
         case QTS_TYPE: {
             qore_type_t t = n.getType();
-            // Unwrap TAG_ENUM to base type only for direct lvalue/parameter assignments
-            // (e.g. "string s = EnumVal"), NOT for hash key or member assignments where
-            // the TAG_ENUM must be preserved through containers for later typed retrieval
-            if (n.isEnum() && u.t != NT_ALL
-                && strcmp(arg_type, "key") && strcmp(arg_type, "member")) {
-                QoreValue base_val = n.getEnumMember()->getValue();
-                base_val.ref();
-                n.discard(xsink);
-                n = base_val;
+            if (n.isEnum()) {
+                // a union with an enum type of the value's enum keeps the value as an enum value: a base type, or a
+                // type that converts any value (softlist), does not accept it, and the enum type does (union<int, E>
+                // takes an E value as an E value, wherever E is in the union, also in an optional type, and for
+                // hash keys and members too; qore#6277); checked only for an enum value, so that the acceptance of
+                // other values does not change
+                if ((u.t != NT_ALL || accept.map) && typeInfo.getAcceptSpecs().size() > 1
+                        && qore_type_info_has_enum_spec_for(typeInfo, n)) {
+                    break;
+                }
+                // Unwrap TAG_ENUM to base type only for direct lvalue/parameter assignments
+                // (e.g. "string s = EnumVal"), NOT for hash key or member assignments where
+                // the TAG_ENUM must be preserved through containers for later typed retrieval
+                if (u.t != NT_ALL && strcmp(arg_type, "key") && strcmp(arg_type, "member")) {
+                    QoreValue base_val = n.getEnumMember()->getValue();
+                    base_val.ref();
+                    n.discard(xsink);
+                    n = base_val;
+                }
             }
             // special handling for objects; check for object validity; if it's already been deleted,
             // then we use NT_NOTHING
@@ -5105,13 +5177,8 @@ bool QoreTypeSpec::acceptInputImpl(ExceptionSink* xsink, const QoreTypeInfo& typ
 
         case QTS_ENUM: {
             // Accept TAG_ENUM values from same enum declaration
-            if (n.isEnum()) {
-                const QoreEnumMember* member = n.getEnumMember();
-                if (member->getEnumDecl() == u.ed
-                    || qore_enum_decl_private::get(*member->getEnumDecl())->parseEqual(
-                        *qore_enum_decl_private::get(*u.ed))) {
-                    ok = true;
-                }
+            if (n.isEnum() && acceptsEnumDecl(n.getEnumMember()->getEnumDecl())) {
+                ok = true;
             }
             break;
         }
@@ -5212,9 +5279,11 @@ qore_type_result_e QoreTypeSpec::runtimeAcceptsValueImpl(const QoreValue& n, boo
                 if (rv == QTI_NOT_EQUAL) {
                     return rv;
                 }
-                // issue #3272: do not return a match for deleted objects
-                if (!obj->isValid()) {
-                    return QTI_NOT_EQUAL;
+                // issue #3272: do not return a match for deleted objects, except to select a variant (issue #6159)
+                if constexpr (!MatchPolicy::deleted_object_keeps_class) {
+                    if (!obj->isValid()) {
+                        return QTI_NOT_EQUAL;
+                    }
                 }
                 return (rv == QTI_IDENT && exact) ? QTI_IDENT : QTI_AMBIGUOUS;
             }
@@ -5228,8 +5297,14 @@ qore_type_result_e QoreTypeSpec::runtimeAcceptsValueImpl(const QoreValue& n, boo
             } else if (ot == NT_WEAKREF) {
                 obj = n.get<const WeakReferenceNode>()->get();
             }
-            if (!obj || !obj->isValid()) {
+            if (!obj) {
                 return QTI_NOT_EQUAL;
+            }
+            // issue #3272: a deleted object does not match, except to select a variant (issue #6159)
+            if constexpr (!MatchPolicy::deleted_object_keeps_class) {
+                if (!obj->isValid()) {
+                    return QTI_NOT_EQUAL;
+                }
             }
             if (obj->getInstantiatedTypeInfo() == u.ti) {
                 return exact ? QTI_IDENT : QTI_AMBIGUOUS;
@@ -5596,12 +5671,14 @@ static int qore_typed_container_quality(const QoreTypeInfo* ti, const QoreListNo
 
 qore_type_result_e QoreTypeInfo::runtimeAcceptsCallArg(const QoreTypeInfo* ti, const QoreValue& n, int& quality,
         bool& content_dependent) {
-    return runtimeAcceptsCallArgImpl(ti, n, quality, content_dependent, DefaultTypeMatchPolicy{});
+    return runtimeAcceptsCallArgImpl(ti, n, quality, content_dependent,
+        CallArgTypeMatchPolicy<DefaultTypeMatchPolicy>{});
 }
 
 qore_type_result_e QoreTypeInfo::runtimeAcceptsCallArg(const QoreTypeInfo* ti, const QoreValue& n, int& quality,
         bool& content_dependent, LexicalSemanticPolicy policy) {
-    return runtimeAcceptsCallArgImpl(ti, n, quality, content_dependent, LexicalTypeMatchPolicy{policy});
+    return runtimeAcceptsCallArgImpl(ti, n, quality, content_dependent,
+        CallArgTypeMatchPolicy<LexicalTypeMatchPolicy>{{policy}});
 }
 
 template <typename MatchPolicy>
@@ -6068,6 +6145,11 @@ static const QoreTypeInfo* qore_resolve_parse_parameterized_class_type(const Qor
         args.push_back(arg);
     }
     for (size_t i = actual; i < expected; ++i) {
+        // the default resolved where the class is declared, once it is initialized (qore#6285)
+        if (const QoreTypeInfo* declared = qore_class_private::get(*qc)->getTypeParamDefaultTypeInfo(i)) {
+            args.push_back(declared);
+            continue;
+        }
         const char* default_type = qc->getTypeParameterDefaultType(i);
         assert(default_type);
         args.push_back(qore_resolve_parse_default_type_arg(default_type, loc, err));
@@ -6110,7 +6192,11 @@ static const QoreTypeInfo* qore_resolve_runtime_parameterized_class_type(const Q
         args.push_back(arg);
     }
     for (size_t i = actual; i < expected; ++i) {
-        const QoreTypeInfo* arg = qore_resolve_runtime_default_type_arg(qc->getTypeParameterDefaultType(i));
+        // the default resolved where the class is declared (qore#6285)
+        const QoreTypeInfo* arg = qore_class_private::get(*qc)->getTypeParamDefaultTypeInfo(i);
+        if (!arg) {
+            arg = qore_resolve_runtime_default_type_arg(qc->getTypeParameterDefaultType(i));
+        }
         if (!arg) {
             return nullptr;
         }

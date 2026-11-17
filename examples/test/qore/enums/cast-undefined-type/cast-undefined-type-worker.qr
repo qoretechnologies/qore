@@ -1,0 +1,88 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# the checks of cast-undefined-type.qtest: each line printed is "<check>=<result>", where the result is the parse
+# error raised by a Program that parses the code of the check, or the value that the code gives
+
+%modern
+
+#! the code of each check: the value of the "v" variable is printed if the code is parsed
+const Checks = {
+    # an undefined enum in the type of a cast, with an operand that is NOTHING (a literal or a constant) and with
+    # other operands
+    "enum-or-nothing-literal": "v = cast<*enum<NoSuchEnum>>(NOTHING);",
+    "enum-literal": "v = cast<enum<NoSuchEnum>>(NOTHING);",
+    "enum-or-nothing-int-literal": "v = cast<*enum<NoSuchEnum>>(1);",
+    "enum-int-literal": "v = cast<enum<NoSuchEnum>>(1);",
+    "enum-or-nothing-variable": "*int x; v = cast<*enum<NoSuchEnum>>(x);",
+    "enum-variable": "int x = 1; v = cast<enum<NoSuchEnum>>(x);",
+    "enum-or-nothing-constant": "const C = NOTHING; v = cast<*enum<NoSuchEnum>>(C);",
+    "enum-constant": "const C = NOTHING; v = cast<enum<NoSuchEnum>>(C);",
+    "enum-or-nothing-name-literal": "v = cast<*NoSuchEnum>(NOTHING);",
+    # the same for an undefined class, hashdecl and the element type of a list
+    "class-or-nothing-literal": "v = cast<*NoSuchClass>(NOTHING);",
+    "class-literal": "v = cast<NoSuchClass>(NOTHING);",
+    "class-or-nothing-constant": "const C = NOTHING; v = cast<*NoSuchClass>(C);",
+    "hashdecl-or-nothing-literal": "v = cast<*hash<NoSuchHashDecl>>(NOTHING);",
+    "hashdecl-literal": "v = cast<hash<NoSuchHashDecl>>(NOTHING);",
+    "list-or-nothing-literal": "v = cast<*list<NoSuchClass>>(NOTHING);",
+    "softlist-or-nothing-literal": "v = cast<*softlist<NoSuchClass>>(NOTHING);",
+    # an invalid target type: the wrong number of type arguments, a generic hashdecl without them, a key type that is
+    # not string, an invalid buffer element type
+    "generic-class-arguments-or-nothing-literal": "v = cast<*Gen<int, int>>(NOTHING);",
+    "generic-class-arguments-or-nothing-variable": "auto x; v = cast<*Gen<int, int>>(x);",
+    "generic-hashdecl-or-nothing-literal": "v = cast<*GH>(NOTHING);",
+    "generic-hashdecl-hash-or-nothing-literal": "v = cast<*hash<GH>>(NOTHING);",
+    "hash-key-type-or-nothing-literal": "v = cast<*hash<int, int>>(NOTHING);",
+    "buffer-element-type-or-nothing-literal": "v = cast<*buffer<int>>(NOTHING);",
+    "list-arguments-or-nothing-literal": "v = cast<*list<string, int>>(NOTHING);",
+    "enum-arguments-or-nothing-literal": "v = cast<*enum<Color, int>>(NOTHING);",
+    # a type that cannot be cast to
+    "code-or-nothing-literal": "v = cast<*code>(NOTHING);",
+    "code-or-nothing-variable": "auto x; v = cast<*code>(x);",
+    "reference-or-nothing-literal": "v = cast<*reference<int>>(NOTHING);",
+    "closure-or-nothing-literal": "v = cast<*closure>(NOTHING);",
+    # %broken-cast casts NOTHING to any type without a conversion
+    "broken-cast-class-literal": "%old-style\n%broken-cast\n$v = cast<NoSuchClass>(NOTHING);",
+    "broken-cast-enum-literal": "%old-style\n%broken-cast\n$v = cast<enum<NoSuchEnum>>(NOTHING);",
+    # defined types, also when declared after the cast: the cast of NOTHING gives NOTHING
+    "defined-enum-or-nothing-literal": "v = cast<*enum<Color>>(NOTHING);",
+    "defined-enum-or-nothing-constant": "const C = NOTHING; v = cast<*enum<Color>>(C);",
+    "defined-later-enum-or-nothing-literal": "v = cast<*enum<Later>>(NOTHING); enum Later : int { A = 1, }",
+    "defined-class-or-nothing-literal": "v = cast<*K>(NOTHING);",
+    "defined-later-class-or-nothing-literal": "v = cast<*LaterClass>(NOTHING); class LaterClass {}",
+    "defined-hashdecl-or-nothing-literal": "v = cast<*hash<H>>(NOTHING);",
+    "defined-broken-cast-class-literal": "%old-style\n%broken-cast\n$v = cast<K>(NOTHING);",
+    "defined-enum-or-nothing-member": "v = cast<*enum<Color>>(Color::Red);",
+    "defined-generic-class-or-nothing-literal": "v = cast<*Gen<int>>(NOTHING);",
+    "defined-generic-hashdecl-or-nothing-literal": "v = cast<*hash<GH<int>>>(NOTHING);",
+    "defined-typedef-or-nothing-literal": "v = cast<*TD>(NOTHING);",
+    "defined-object-or-nothing-literal": "v = cast<*object>(NOTHING);",
+    "defined-hash-or-nothing-literal": "v = cast<*hash>(NOTHING);",
+    "defined-list-or-nothing-literal": "v = cast<*list>(NOTHING);",
+    "defined-int-or-nothing-literal": "v = cast<*int>(NOTHING);",
+    "defined-softlist-or-nothing-literal": "v = cast<*softlist<int>>(NOTHING);",
+    "defined-complex-hash-or-nothing-literal": "v = cast<*hash<string, int>>(NOTHING);",
+};
+
+#! the declarations that every parsed Program has
+const Prefix = "%new-style\n%require-types\n%strict-args\nenum Color : int { Red = 1, Green = 2, }\nclass K {}\n"
+    "class Gen<T> {}\nhashdecl H { int a = 1; }\nhashdecl GH<T> { *T a; }\ntypedef TD = int;\nour auto v;\n";
+
+#! parses the code of each check and prints its result
+sub run_checks() {
+    foreach hash<auto> i in (Checks.pairIterator()) {
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        try {
+            p.parse(Prefix + i.value, i.key);
+            p.run();
+            auto v = p.getGlobalVariable("v");
+            printf("%s=%y %s\n", i.key, v, v.fullType());
+        } catch (hash<ExceptionInfo> ex) {
+            printf("%s=%s: %s\n", i.key, ex.err, ex.desc);
+        }
+    }
+}
+
+run_checks();

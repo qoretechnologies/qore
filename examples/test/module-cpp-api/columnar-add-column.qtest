@@ -1,0 +1,49 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  columnar-add-column.qtest Copyright 2026 Qore Technologies, s.r.o.
+    MIT License
+*/
+
+%modern
+%enable-all-warnings
+
+# the "cppapiuser" test module is built into the build tree by
+# examples/test/module-cpp-api/CMakeLists.txt and is not installed, so QORE_MODULE_DIR must include
+# the build tree (run_tests.sh does this)
+%requires cppapiuser
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+
+%exec-class ColumnarAddColumnTest
+
+#! QoreColumnarResult::addColumn() checks a schema against the column data and completes it from the data
+#! (qore#6214)
+class ColumnarAddColumnTest inherits QUnit::Test {
+    constructor() : QUnit::Test("columnar-add-column", "1.0") {
+        addTestCase("decimal parameters are completed from a decimal buffer", \decimalParams());
+        addTestCase("a kind that the data cannot hold is refused", \mismatch());
+        set_return_value(main());
+    }
+
+    decimalParams() {
+        ColumnarResult src = ColumnarResult::fromColumnHash({"n": (1.25n, NOTHING)},
+            {"n": {"native_type": "numeric(10,2)", "nullable": True}});
+        auto buf = src.getColumn("n");
+        # no precision or scale, and other ones: both are taken from the buffer
+        foreach list<int> params in ((0, 0), (5, 1), (38, 0)) {
+            ColumnarResult r = cpp_api_columnar_add_column(buf, "decimal128", params[0], params[1]);
+            assertEq({"precision": 10, "scale": 2}, r.schemaV2()[0]{"precision", "scale"}, sprintf("%y", params));
+            assertEq((map $1.n, src.toRows()), (map $1.c, r.toRows()));
+        }
+    }
+
+    mismatch() {
+        assertThrows("COLUMNAR-SCHEMA-ERROR", \cpp_api_columnar_add_column(), (new buffer<int64>((1, 2)), "binary"));
+        assertThrows("COLUMNAR-SCHEMA-ERROR", \cpp_api_columnar_add_column(), ((1.5n, 2n), "int"));
+        ColumnarResult r = cpp_api_columnar_add_column((1, 18446744073709551615n), "int");
+        assertEq("int", r.schemaV2()[0].kind);
+        assertEq((1, 18446744073709551615n), r.getColumn("c"));
+    }
+}

@@ -1,0 +1,198 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - AOT code generation and linking of qcc executables and of a qcc-compiled module
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires FsUtil
+%requires QUnit
+%requires ../../TestInterpreter.qm
+
+%exec-class OrNothingContainerCastsTest
+
+#! Or-nothing and soft list casts to typed containers give the types of the AST in every mode (qore#6174, qore#5734)
+/** In qcc-compiled code, cast<*list<int>>() and cast<*hash<string, int>>() gave a value of the type without the "*"
+    (list<int>, hash<string, int>), and cast<softlist<int>>() of a value that is not a list raised
+    RUNTIME-CAST-ERROR instead of converting it to a one-element list; in a generic method, the cast<*list<U>>()
+    whose result its *list<U> return type checks gave a value of the wrong type as well.
+
+    The probes (or-nothing-container-casts/probes.q) cast lists, hashes, scalars and NOTHING to *list, *hash,
+    softlist, *softlist and nested or-nothing containers (*list<*hash<string, int>>, *hash<string, *list<int>>) in
+    plain code, with the type parameter of static methods, normal methods and generic functions (U, with or-nothing
+    return types of U), with the T of a generic class (two instantiations), and with the T of the class and the U of
+    a generic method together, and soft list casts of values that cannot be converted (which leaked the values in
+    every mode).  They run in each execution mode in a child process, with tiered execution at the IR tier and
+    promoted to native code, as qcc-compiled executables (-O0, -O3) and in a qcc-compiled module (-O0, -O3) loaded by
+    a child in each execution mode; the AST results are the reference.
+*/
+class OrNothingContainerCastsTest inherits QUnit::Test {
+    public {
+        const ExecModes = ("ast", "ir", "jit", "tiered");
+
+        #! the forms of each context and their results with int (the type argument of the generic contexts)
+        const Forms = (
+            ("onList", "[1] *list<int>"),
+            ("onListNothing", "null nothing"),
+            ("onListBad", "RUNTIME-CAST-ERROR: cannot cast from type 'integer' to '*list<int>'"),
+            ("onHash", "{a: 1} *hash<string, int>"),
+            ("onHashNothing", "null nothing"),
+            ("softList", "[1] list<int>"),
+            ("softListList", "[1] softlist<int>"),
+            ("softListNothing", "[] list<int>"),
+            ("softListBad", "RUNTIME-TYPE-ERROR: <cast operator> expects type 'softlist<int>', but got type 'string' "
+                "instead"),
+            ("onSoftList", "[1] list<int>"),
+            ("onSoftListList", "[1] *softlist<int>"),
+            ("onSoftListNothing", "null nothing"),
+            ("onSoftListBad", "RUNTIME-TYPE-ERROR: <cast operator> expects type '*softlist<int>', but got type "
+                "'hash<string, string>' instead"),
+            ("nested", "[{a: 1}] *list<*hash<string, int>>"),
+            ("nestedNothing", "null nothing"),
+            ("hashOfList", "{a: [1]} *hash<string, *list<int>>"),
+            ("hashOfListNothing", "null nothing"),
+        );
+
+        #! the contexts of the forms
+        const Contexts = ("P", "S", "N", "f", "G");
+
+        #! the results of the probes after those of the forms
+        const Extra = (
+            ("G<string>.onList", "[\"s\"] *list<string>"),
+            ("G<string>.onHash", "{a: \"s\"} *hash<string, string>"),
+            ("G.both", "[{a: 1, b: \"s\"}] *list<hash<HD2<int, string>>>"),
+            ("G.bothNothing", "null nothing"),
+            ("G.bothHash", "{a: [\"s\"]} *hash<string, *list<string>>"),
+            ("G.bothHashNothing", "null nothing"),
+        );
+
+        #! the header of the module that the probes are compiled in
+        const ModuleHeader = "%modern
+module OrNothingContainerCasts {
+    version = \"1.0\";
+    desc = \"or-nothing container cast test module\";
+    author = \"Qore Technologies, s.r.o.\";
+    url = \"https://qore.org\";
+    license = \"MIT\";
+}
+";
+
+        #! the child that loads the compiled module and runs its probes
+        const ModuleChild = "%modern
+%requires OrNothingContainerCasts
+for (int i = 0; i < 4; ++i) {
+    map printf(\"%d: %s\\n\", i, $1), probes();
+}
+printf(\"%s\\n\", basename(get_module_hash().OrNothingContainerCasts.filename));
+";
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+        #! the output of the probes
+        string expected;
+    }
+
+    constructor() : QUnit::Test("OrNothingContainerCasts", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+
+        list<list<string>> lines;
+        foreach string ctx in (Contexts) {
+            lines += map ((ctx + "." + $1[0]), $1[1]), Forms;
+        }
+        lines += Extra;
+        for (int i = 0; i < 4; ++i) {
+            map expected += sprintf("%d: %s: %s\n", i, $1[0], $1[1]), lines;
+        }
+
+        addTestCase("interpreted and compiled programs", \testModes());
+        addTestCase("compiled module", \testModule());
+        set_return_value(main());
+    }
+
+    string getProbes() {
+        return ReadOnlyFile::readTextFile(get_script_dir() + DirSep + "or-nothing-container-casts" + DirSep
+            + "probes.q");
+    }
+
+    #! writes a program that runs the probes four times
+    string writeProgram(string dir, string name) {
+        string file = dir + DirSep + name;
+        File f();
+        f.open2(file, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(getProbes() + "\nfor (int i = 0; i < 4; ++i) {\n    map printf(\"%d: %s\\n\", i, $1), probes();\n}\n");
+        f.close();
+        return file;
+    }
+
+    testModes() {
+        TmpDir tmp("qore-or-nothing-container-casts-");
+        string file = writeProgram(tmp.path, "prog.q");
+
+        string env = sprintf("QORE_JIT_SYNC_COMPILE=1 QORE_JIT_THRESHOLD=2 LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s",
+            libqore_dir, libqore_dir);
+        foreach string mode in (ExecModes) {
+            assertEq(expected, backquote(sprintf("%s %s --exec-mode=%s %s 2>&1", env, qore_bin, mode, file)), mode);
+        }
+        assertEq(expected, backquote(sprintf("%s %s --exec-mode=tiered --jit-ir-threshold=1 "
+            "--jit-jit-threshold=1000000 %s 2>&1", env, qore_bin, file)), "tiered, IR tier");
+        assertEq(expected, backquote(sprintf("%s %s --exec-mode=tiered --jit-ir-threshold=1 --jit-jit-threshold=1 "
+            "%s 2>&1", env, qore_bin, file)), "tiered, promoted");
+        foreach string opt in (("-O0", "-O3")) {
+            string exe = file + opt;
+            string out = backquote(sprintf("QORE_LIBDIR=%s %s %s -o %s %s 2>&1", libqore_dir, qcc_bin, opt, exe,
+                file));
+            assertTrue(is_file(exe), sprintf("qcc %s compiled the executable: %s", opt, out));
+            assertEq(expected, backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s 2>&1", libqore_dir,
+                libqore_dir, exe)), "qcc " + opt);
+            assertEq(expected, backquote(sprintf("QORE_JIT_SYNC_COMPILE=1 QORE_JIT_THRESHOLD=1 LD_LIBRARY_PATH=%s "
+                "DYLD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, libqore_dir, exe)), "qcc " + opt + ", JIT");
+        }
+    }
+
+    testModule() {
+        TmpDir tmp("qore-or-nothing-container-casts-module-");
+        string src = tmp.path + DirSep + "OrNothingContainerCasts.qm";
+        string qmod = tmp.path + DirSep + "OrNothingContainerCasts.qmod";
+        string child = tmp.path + DirSep + "child.q";
+        File f();
+        f.open2(child, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(ModuleChild);
+        f.close();
+
+        # the probes are exported by the module
+        string probes = getProbes();
+        string decl = "\nlist<string> sub probes() {";
+        assertTrue(probes.find(decl) >= 0, "the probes are declared as expected");
+        probes = replace(probes, decl, "\npublic list<string> sub probes() {");
+
+        foreach string opt in (("-O0", "-O3")) {
+            f.open2(src, O_CREAT | O_WRONLY | O_TRUNC);
+            f.write(ModuleHeader + probes);
+            f.close();
+            if (is_file(qmod)) {
+                unlink(qmod);
+            }
+            string out = backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s "
+                "QORE_MODULE_DIR=%s %s %s --module --strip-source -o %s %s 2>&1", libqore_dir, libqore_dir,
+                libqore_dir, tmp.path, qcc_bin, opt, qmod, src));
+            assertTrue(is_file(qmod), sprintf("qcc %s compiled the module: %s", opt, out));
+            # the child must load the compiled module: there is no source to fall back to
+            unlink(src);
+
+            foreach string mode in (ExecModes) {
+                out = backquote(sprintf("QORE_JIT_SYNC_COMPILE=1 QORE_JIT_THRESHOLD=2 LD_LIBRARY_PATH=%s "
+                    "DYLD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --exec-mode=%s %s 2>&1", libqore_dir,
+                    libqore_dir, tmp.path, qore_bin, mode, child));
+                assertEq(expected + "OrNothingContainerCasts.qmod\n", out, sprintf("module %s, %s", opt, mode));
+            }
+        }
+    }
+}

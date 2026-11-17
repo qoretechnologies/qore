@@ -1,0 +1,350 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - AOT code generation and linking of qcc executables
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires ../TestInterpreter.qm
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+
+%exec-class ParamReassignReleaseTest
+
+#! A parameter's write releases the value that the caller passed and no longer holds, at the write
+/** The AST interpreter's parameter takes the caller's temporary argument over (UserVariantBase::setupCall()), so
+    the destructor of an object passed as a temporary runs when the parameter is assigned another value, removed or
+    its element replaced, before the function continues (QoreIRFunction::param_take_over).  The script
+    (ParamReassignRelease.qr) logs the constructions and destructions of parameters of every kind (a class, object,
+    untyped, optional, hash and list parameters, typed containers, elements of containers, native scalar parameters
+    beside an object parameter, reference parameters, functions with fast entries, default and excess arguments,
+    recursion, constructors, methods, static and final methods, closures and call references, reassignment in loops
+    and conditionals and before an exception, called from top-level code and from functions); every execution mode,
+    tiered execution on the IR tier and qcc executables at -O0 and -O3 (with and without QORE_AOT_EH) must give the AST interpreter's output.
+*/
+class ParamReassignReleaseTest inherits QUnit::Test {
+    private {
+        string qore = TestInterpreter::qore_interpreter();
+        string libdir = ENV.QORE_LIBDIR ?? dirname(qore);
+        string qcc = ENV.QCC ?? (is_file(libdir + "/qcc") ? libdir + "/qcc" : dirname(qore) + "/qcc");
+        string script = get_script_dir() + "/ParamReassignRelease.qr";
+        string env;
+        *string expected;
+
+        #! the destructions that must precede a line of the AST interpreter's output: (destruction, line)
+        const Order = (
+            ("dtor cls", "cls out cls-r"),
+            ("dtor obj", "obj out obj-r"),
+            ("dtor auto", "auto out auto-r"),
+            ("dtor opt", "opt out"),
+            ("dtor hash", "hash out hash-r"),
+            ("dtor list", "list out list-r"),
+            ("dtor thash", "thash out thash-r"),
+            ("dtor eh", "elem hash eh-e"),
+            ("dtor el", "elem list el-e"),
+            ("dtor eh-e", "elem out"),
+            ("dtor scalars", "scalars out scalars-r 2 2.5 False sx"),
+            ("dtor twice", "twice mid twice-1"),
+            ("dtor twice-1", "twice out twice-1-2"),
+            ("dtor loop", "loop 0 loop-l0"),
+            ("dtor loop-l0", "loop 1 loop-l0-l1"),
+            ("dtor cy", "cond yes cy-c"),
+            ("dtor e2", "each out"),
+            ("dtor in-loop0", "cls out in-loop0-r"),
+            ("dtor ref", "ref out ref-r"),
+            ("dtor clear", "clear out"),
+            ("dtor throws", "throws throws-t"),
+            ("dtor dflt", "default out dflt-d1"),
+            ("dtor va", "varargs out va-v2"),
+            ("dtor rec1", "recurse rec1-1"),
+            ("dtor c", "ctor out c-ctor"),
+            ("dtor meth", "meth out meth-m"),
+            ("dtor self", "meth out self-m"),
+            ("dtor stat", "stat out stat-s"),
+            ("dtor final", "final out final-f"),
+            ("dtor caller", "cls out caller-r"),
+            ("dtor caller-hash", "hash out caller-hash-r"),
+            ("dtor closure", "closure out closure-cl"),
+            ("dtor callref", "cls out callref-r"),
+            # issue #5701: functions, methods, static methods, closures, call references, two arguments, varargs,
+            # from top-level code and from a function
+            ("dtor i5701", "after clear"),
+            ("dtor i5701-tm", "after clear meth"),
+            ("dtor i5701-ts", "after clear static"),
+            ("dtor i5701-tc", "after clear closure"),
+            ("dtor i5701-tp", "after clear two p"),
+            ("dtor i5701-tq", "after clear two q"),
+            ("dtor i5701-tv", "after clear va"),
+            ("dtor cref", "after clear ref"),
+            ("dtor coe", "after clear on_exit"),
+            # parameters that are never written release the arguments in the AST interpreter's order: the callee's
+            # locals first, then the parameters in reverse order, excess arguments before the parameters
+            ("dtor two-local", "dtor trb"),
+            ("dtor trb", "dtor tra"),
+            ("dtor mrb", "dtor mra"),
+            ("dtor srb", "dtor sra"),
+            ("dtor vry", "dtor vra"),
+            ("read on_exit roe", "dtor roe-local"),
+            ("dtor roe-local", "dtor roe"),
+            # method and static method call references, call_function(), call_function_args()
+            ("dtor mref", "after m k"),
+            ("dtor sref", "after s"),
+            ("dtor mref-top", "after m top"),
+            # writes in a closure, while a closure captures the parameter, through a reference
+            ("dtor cap", "after cap"),
+            ("dtor byref", "after byref"),
+            # a local that the caller keeps is not destroyed by the callee's write
+            ("after write kept", "kept kept"),
+            ("kept kept", "dtor kept"),
+            # background, map
+            ("dtor bg", "after clear bg"),
+            ("dtor map1", "after clear 1"),
+            # on_error, the same object passed twice, a conversion when the parameter is bound
+            ("dtor onerr", "after clear on_error"),
+            ("after pair b", "dtor dup"),
+            ("dtor dup", "after dup"),
+            ("dtor soft", "after soft"),
+            # an enum argument beside a temporary one
+            ("dtor enum", "after clear enum green"),
+            # a value taken out of an lvalue, a slice's result and a method found at run time
+            ("dtor lv-rm", "after write lv-rm"),
+            ("dtor lv-sh", "after write lv-sh"),
+            ("dtor lv-pp", "after write lv-pp"),
+            ("dtor lv-ex", "after write lv-ex"),
+            ("dtor lv-he", "after write lv-he"),
+            ("dtor lv-try-rm", "after write lv-try-rm"),
+            ("dtor lv-try-sh", "after write lv-try-sh"),
+            ("dtor lv-g-rm", "after write lv-g-rm"),
+            ("dtor lv-g-sh", "after write lv-g-sh"),
+            ("dtor lv-g-pp", "after write lv-g-pp"),
+            ("dtor lv-g-ex", "after write lv-g-ex"),
+            ("dtor lv-m-rm", "after write lv-m-rm"),
+            ("dtor lv-m-sh", "after write lv-m-sh"),
+            ("dtor lv-m-pp", "after write lv-m-pp"),
+            ("dtor lv-m-ex", "after write lv-m-ex"),
+            ("dtor lv-sl", "after write lv-sl"),
+            ("dtor lv-try-sl", "after write lv-try-sl"),
+            ("dtor dyn-local", "after write dyn-local"),
+            ("dtor dyn-auto", "after write dyn-auto"),
+            ("dtor dyn-auto2", "after write dyn-auto2"),
+            ("dtor dyn-auto-try", "after write dyn-auto-try"),
+            ("dtor dyn-obj", "after write dyn-obj"),
+            ("dtor dyn-map0", "after write dyn-map0"),
+            ("dtor dyn-ov", "after write dyn-ov"),
+            ("dtor dyn-ovr-base", "after write dyn-ovr-base"),
+            ("dtor dyn-ov-try", "after write dyn-ov-try"),
+            ("dtor dyn-self", "after write dyn-self"),
+            ("dtor dyn-hl", "after write dyn-hl"),
+            ("dtor dyn-rm", "after write dyn-rm"),
+            ("dtor dyn-nine", "after write dyn-nine"),
+            ("dtor dyn-ahl", "after write dyn-ahl"),
+            ("dtor dyn-anine", "after write dyn-anine"),
+            ("dtor dyn-hc", "after write dyn-hc"),
+            ("dtor dyn-mc", "after write dyn-mc"),
+            ("dtor dyn-amc", "after write dyn-amc"),
+            # a static method of a generic class and a function with explicit type arguments through call references
+            ("dtor gen-static", "after write gen-static"),
+            ("dtor gen-fn", "after write gen-fn"),
+            # a closure in a try block; a read that the statement writes later; one call site with receivers of
+            # classes that write or read; calls with nine temporary arguments
+            ("dtor try-closure", "after write try-closure"),
+            ("dtor rw-local", "after write rw-local"),
+            ("dtor rw-global", "after write rw-global"),
+            ("dtor rw-closure", "after write rw-closure"),
+            ("dtor rw-override", "after write rw-override"),
+            ("dtor rw-untyped", "after write rw-untyped"),
+            ("dtor rw-fn", "after write rw-fn"),
+            ("dtor rw-static", "after write rw-static"),
+            ("dtor poly0", "after write poly0"),
+            ("dtor poly2", "after write poly2"),
+            ("dtor nine-a", "after write nine"),
+            ("dtor mnine-a", "after write mnine"),
+            ("dtor nine-i", "after write nine"),
+            ("dtor mnine-i", "after write mnine"),
+            # a static method in a try block; a read that a later argument writes through a closure, a function, or
+            # in another block
+            ("dtor try-static", "after write try-static"),
+            ("dtor try-snine-a", "after write try-snine"),
+            ("dtor try-snine-i", "after write try-snine"),
+            ("dtor try-static-throw", "caught DTOR-ERROR try-static-throw"),
+            ("dtor rw-clr", "after write rw-clr"),
+            ("dtor rw-setg", "after write rw-setg"),
+            ("dtor rw-cond", "after write rw-cond"),
+            # calls with seventeen temporary arguments; call references and a closure created in another Program
+            ("dtor s17-a", "after write s17"),
+            ("dtor s17-q", "after write s17"),
+            ("dtor m17-a", "after write m17"),
+            ("dtor m17-q", "after write m17"),
+            ("dtor c17-a", "after write c17"),
+            ("dtor c17-q", "after write c17"),
+            ("dtor t17-a", "after write t17"),
+            ("dtor t17-q", "after write t17"),
+            ("dtor xp-fref", "after write xp-fref"),
+            ("dtor xp-closure", "after write xp-closure"),
+            ("dtor xp-mref", "after write xp-mref"),
+            ("dtor xp-sref", "after write xp-sref"),
+            ("dtor xp-try-fref", "after write xp-try-fref"),
+            ("dtor xp-try-closure", "after write xp-try-closure"),
+            # issue #6055: the parameter's assignment destroys the argument and raises its destructor's exception; the
+            # arguments are released in reverse order on an exception; issue #6053: call_function() of a method call
+            # reference releases the argument before the call's value
+            ("own-fn ~p", "own-fn caught:PX"),
+            ("own-g2 ~b", "own-g2 ~a"),
+            ("own-g2 ~a", "own-g2 caught:DX"),
+            ("own-mr ~a", "own-mr ~t"),
+            ("va excess in vea", "dtor veb"),
+            ("dtor veb", "dtor vea"),
+            ("dtor vea", "va excess after"),
+            ("own-guard-float ~p", "own-guard-float body"),
+            ("own-guard-string ~p", "own-guard-string body"),
+            ("own-g2m ~b", "own-g2m ~a"),
+            ("own-g2t ~b", "own-g2t ~a"),
+            ("own-g2t ~a", "own-g2t inner:DX"),
+            # parameters written only in a handler that runs while an exception leaves the function (qore#6004)
+            ("dtor hw-p", "dtor hw-v"),
+            ("dtor hw-v", "dtor hw-hk"),
+            ("dtor hw-hk", "dtor hw-l0"),
+            ("dtor hw-l0", "hw handler after"),
+            ("dtor hw-error", "hw-error handler after"),
+            ("dtor hw-ok", "hw-ok handler after"),
+            ("dtor hw-m", "hw-m handler after"),
+            ("read poly1", "dtor poly1"),
+            ("read poly3", "dtor poly3"),
+            # a method that only reads its argument releases it when it returns
+            ("read dyn-auto-read", "dtor dyn-auto-read"),
+            ("base read dyn-ov-base", "dtor dyn-ov-base"),
+            ("override read dyn-ovr", "dtor dyn-ovr"),
+            # a native leaf's argument
+            ("dtor leaf", "leaf 4"),
+            # an object that the function only reads, or that the caller holds, lives until the call returns
+            # parameters bound on the runtime stack (issue #5958)
+            ("dtor tls-rh", "after write tls-rh"),
+            ("dtor tls-rl", "after write tls-rl"),
+            ("dtor tls-rth", "after write tls-rth"),
+            ("dtor tls-r2b", "after write tls-r2 1"),
+            ("after write tls-r2 1", "dtor tls-r2a"),
+            ("dtor tls-rlp", "after write tls-rlp 0"),
+            ("dtor tls-rcr", "after write tls-rcr"),
+            ("after write tls-rkept", "tls rkept tls-rkept"),
+            ("tls rkept tls-rkept", "dtor tls-rkept"),
+            ("dtor tls-rkept", "tls rkept removed"),
+            ("dtor tls-h", "after write tls-h"),
+            ("dtor tls-l", "after write tls-l"),
+            ("dtor tls-2b", "after write tls-2 b"),
+            ("after write tls-2 b", "dtor tls-2a"),
+            ("dtor tls-2a", "after write tls-2 a"),
+            ("dtor tls-oe", "after write tls-oe"),
+            ("after write tls-oe", "on_exit tls-oe null"),
+            ("dtor tls-m", "after write tls-m"),
+            ("dtor tls-s", "after write tls-s"),
+            ("dtor tls-cl", "after write tls-cl"),
+            ("dtor tls-cr", "after write tls-cr"),
+            ("after write tls-kept", "tls kept tls-kept"),
+            ("tls kept tls-kept", "dtor tls-kept"),
+            ("dtor tls-kept", "tls kept removed"),
+            ("after write tls-lkept", "tls lkept tls-lkept"),
+            ("read only ro 0", "dtor ro"),
+            ("dtor ro", "read only ret 1"),
+            ("held held", "dtor held"),
+        );
+    }
+
+    constructor() : Test("ParamReassignRelease", "1.0", \ARGV) {
+        env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s ", libdir, libdir);
+        addTestCase("the AST interpreter destroys a parameter's argument at the parameter's write", \testAst());
+        addTestCase("every execution mode destroys a parameter's argument at the parameter's write", \testModes());
+        addTestCase("compiled executables destroy a parameter's argument at the parameter's write", \testAot());
+        set_return_value(main());
+    }
+
+    private string getExpected() {
+        if (!expected) {
+            expected = ExecModeHarness::run(sprintf("%s%s -b --enable-debug --exec-mode=ast %s", env, qore,
+                script));
+        }
+        return expected;
+    }
+
+    testAst() {
+        list<string> lines = getExpected().split("\n");
+        assertEq("round end 2", lines.last() ?: lines[lines.size() - 2]);
+        # the index of the first occurrence of each line
+        hash<string, int> index();
+        foreach string line in (lines) {
+            if (!exists index{line}) {
+                index{line} = $#;
+            }
+        }
+        foreach list<string> order in (Order) {
+            *int before = index{order[0]};
+            *int after = index{order[1]};
+            assertTrue(exists before && exists after && before < after, sprintf("%y before %y", order[0], order[1]));
+        }
+    }
+
+    testModes() {
+        string exp = getExpected();
+        hash<string, list<string>> wrong();
+        foreach string mode in (ExecModeHarness::ExecModes + ExecModeHarness::IRTierName) {
+            bool ir_tier = mode == ExecModeHarness::IRTierName;
+            string cmd = sprintf("%s%s -b --enable-debug --exec-mode=%s %s", env, qore, ir_tier ? "tiered" : mode,
+                script);
+            string actual = ir_tier ? ExecModeHarness::run_ir_tier(cmd) : ExecModeHarness::run(cmd);
+            list<string> diff = differences(exp, actual);
+            if (diff) {
+                wrong{mode} = diff;
+            }
+        }
+        # native code compiled before the code that calls it runs, and call sites that the IR interpreter ran inline
+        # calling a callee once it is compiled
+        foreach string control in (("QORE_JIT_SYNC_COMPILE=1 QORE_IR_THRESHOLD=1 QORE_JIT_THRESHOLD=1 ",
+                "QORE_JIT_SYNC_COMPILE=1 QORE_IR_THRESHOLD=1 QORE_JIT_THRESHOLD=20 ")) {
+            foreach string mode in (("jit", "tiered")) {
+                string actual = ExecModeHarness::run(sprintf("%s%s%s -b --enable-debug --exec-mode=%s %s", env,
+                    control, qore, mode, script));
+                list<string> diff = differences(exp, actual);
+                if (diff) {
+                    wrong{control + mode} = diff;
+                }
+            }
+        }
+        assertEq({}, wrong);
+    }
+
+    testAot() {
+        string exp = getExpected();
+        TmpDir tmp("qore-param-reassign-release-");
+        hash<string, list<string>> wrong();
+        # QORE_AOT_EH is read when the code is compiled
+        foreach string level in (("-O0", "-O3")) {
+            foreach string prefix in (("", "QORE_AOT_EH=1 ")) {
+                string exe = tmp.path + DirSep + "fixture" + level;
+                string out = backquote(sprintf("%s%s%s %s -o %s %s 2>&1", env, prefix, qcc, level, exe, script));
+                assertTrue(is_file(exe), "compiled the executable: " + out);
+                list<string> diff = differences(exp, ExecModeHarness::run_any(env + exe));
+                if (diff) {
+                    wrong{prefix + level} = diff;
+                }
+                unlink(exe);
+            }
+        }
+        assertEq({}, wrong);
+    }
+
+    #! returns the lines of the output that differ from the expected output, as "expected -> actual"
+    static list<string> differences(string exp, string actual) {
+        list<string> el = exp.split("\n");
+        list<string> al = actual.split("\n");
+        list<string> rv = ();
+        for (int i = 0; i < max(el.size(), al.size()); ++i) {
+            if (el[i] !== al[i]) {
+                rv += sprintf("%d: %y -> %y", i, el[i], al[i]);
+            }
+        }
+        return rv;
+    }
+}

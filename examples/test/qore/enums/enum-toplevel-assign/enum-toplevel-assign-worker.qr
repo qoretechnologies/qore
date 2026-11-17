@@ -1,0 +1,176 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# the checks of enum-toplevel-assign.qtest: each line printed is "<check>=<result>", where the result is the error
+# raised, or the value and the type of the variable after the store
+
+%modern
+
+enum Color : int {
+    Red = 1,
+    Green = 2,
+    Blue = 3,
+}
+
+enum Name : string {
+    A = "a",
+    B = "b",
+}
+
+enum FColor : float {
+    Light = 1.0,
+    Dark = 2.0,
+}
+
+#! prints the result of a check that stored a value
+sub ok(string check, auto v) {
+    printf("%s=%y %s\n", check, v, v.fullType());
+}
+
+#! prints the result of a check that raised an error
+sub raised(string check, hash<ExceptionInfo> ex) {
+    printf("%s=%s\n", check, ex.err);
+}
+
+#! prints the result of a check that raised an error, with the value and the type the variable has after it
+sub err(string check, hash<ExceptionInfo> ex, auto v) {
+    printf("%s=%s %y %s\n", check, ex.err, v, v.fullType());
+}
+
+# values of the base types held in variables of no type, which the parser cannot check
+auto member_int = 3;
+auto other_int = 99;
+auto member_str = "b";
+auto other_str = "z";
+auto one = 1;
+auto member_float = 1.0;
+
+# top-level locals: initialization, then assignment
+{
+    Color c;
+    try { c = member_int; ok("top-assign-member", c); } catch (hash<ExceptionInfo> ex) { err("top-assign-member", ex, c); }
+}
+try { Color c = member_int; ok("top-init-member", c); } catch (hash<ExceptionInfo> ex) { raised("top-init-member", ex); }
+try { Color c = other_int; ok("top-init-other", c); } catch (hash<ExceptionInfo> ex) { raised("top-init-other", ex); }
+Color top = Color::Red;
+try { top = member_int; ok("top-assign-member-2", top); } catch (hash<ExceptionInfo> ex) { err("top-assign-member-2", ex, top); }
+try { top = other_int; ok("top-assign-other", top); } catch (hash<ExceptionInfo> ex) { err("top-assign-other", ex, top); }
+try { top = Color::Blue; ok("top-assign-enum", top); } catch (hash<ExceptionInfo> ex) { err("top-assign-enum", ex, top); }
+try { *Color c = member_int; ok("top-or-nothing-init", c); } catch (hash<ExceptionInfo> ex) { raised("top-or-nothing-init", ex); }
+{
+    *Color c = Color::Red;
+    try { c = member_int; ok("top-or-nothing-assign", c); } catch (hash<ExceptionInfo> ex) { err("top-or-nothing-assign", ex, c); }
+    try { c = NOTHING; ok("top-or-nothing-assign-nothing", c); } catch (hash<ExceptionInfo> ex) { err("top-or-nothing-assign-nothing", ex, c); }
+}
+try { Name n = member_str; ok("top-string-init", n); } catch (hash<ExceptionInfo> ex) { raised("top-string-init", ex); }
+{
+    Name n = Name::A;
+    try { n = other_str; ok("top-string-assign", n); } catch (hash<ExceptionInfo> ex) { err("top-string-assign", ex, n); }
+    try { n = Name::B; ok("top-string-assign-enum", n); } catch (hash<ExceptionInfo> ex) { err("top-string-assign-enum", ex, n); }
+}
+# a union with an enum accepts a value of the enum's base type only if another member type accepts it
+try { union<string, Color> u = member_int; ok("top-union-init", u); } catch (hash<ExceptionInfo> ex) { raised("top-union-init", ex); }
+{
+    union<string, Color> u = "s";
+    try { u = member_int; ok("top-union-assign", u); } catch (hash<ExceptionInfo> ex) { err("top-union-assign", ex, u); }
+}
+try { *union<string, Color> u = member_int; ok("top-or-nothing-union-init", u); } catch (hash<ExceptionInfo> ex) { raised("top-or-nothing-union-init", ex); }
+try { union<int, Color> u = member_int; ok("top-int-union-init", u); } catch (hash<ExceptionInfo> ex) { raised("top-int-union-init", ex); }
+# a float enum, whose values are floats, which the store did not check as ints are not checked
+try { FColor fc = member_float; ok("top-float-init", fc); } catch (hash<ExceptionInfo> ex) { raised("top-float-init", ex); }
+{
+    FColor fc = FColor::Dark;
+    try { fc = member_float; ok("top-float-assign", fc); } catch (hash<ExceptionInfo> ex) { err("top-float-assign", ex, fc); }
+}
+# a store repeated in a loop, as the store of a hot loop
+{
+    Color c = Color::Red;
+    try {
+        for (int i = 0; i < 100; ++i) {
+            c = Color::Green;
+            c = member_int;
+        }
+        ok("top-loop-assign", c);
+    } catch (hash<ExceptionInfo> ex) {
+        err("top-loop-assign", ex, c);
+    }
+}
+# a store by a closure to a top-level local that it captures
+{
+    Color c = Color::Red;
+    *hash<ExceptionInfo> e;
+    try {
+        sub () { c = other_int; }();
+    } catch (hash<ExceptionInfo> ex) {
+        e = ex;
+    }
+    e ? err("top-closure-assign", e, c) : ok("top-closure-assign", c);
+}
+# compound assignment, which computes an integer that the enum refuses
+{
+    Color c = Color::Red;
+    try { c += 1; ok("top-plus-equals-const", c); } catch (hash<ExceptionInfo> ex) { err("top-plus-equals-const", ex, c); }
+    try { c += one; ok("top-plus-equals-auto", c); } catch (hash<ExceptionInfo> ex) { err("top-plus-equals-auto", ex, c); }
+    int k = 1;
+    try { c += k; ok("top-plus-equals-int", c); } catch (hash<ExceptionInfo> ex) { err("top-plus-equals-int", ex, c); }
+    try { c -= 1; ok("top-minus-equals", c); } catch (hash<ExceptionInfo> ex) { err("top-minus-equals", ex, c); }
+    try { c *= 2; ok("top-multiply-equals", c); } catch (hash<ExceptionInfo> ex) { err("top-multiply-equals", ex, c); }
+    try { c |= 2; ok("top-or-equals", c); } catch (hash<ExceptionInfo> ex) { err("top-or-equals", ex, c); }
+    try { c <<= 1; ok("top-shift-left-equals", c); } catch (hash<ExceptionInfo> ex) { err("top-shift-left-equals", ex, c); }
+    try { c /= 1; ok("top-divide-equals", c); } catch (hash<ExceptionInfo> ex) { err("top-divide-equals", ex, c); }
+    try { c++; ok("top-post-increment", c); } catch (hash<ExceptionInfo> ex) { err("top-post-increment", ex, c); }
+    try { ++c; ok("top-pre-increment", c); } catch (hash<ExceptionInfo> ex) { err("top-pre-increment", ex, c); }
+    try { c--; ok("top-post-decrement", c); } catch (hash<ExceptionInfo> ex) { err("top-post-decrement", ex, c); }
+    try { --c; ok("top-pre-decrement", c); } catch (hash<ExceptionInfo> ex) { err("top-pre-decrement", ex, c); }
+}
+{
+    *Color c = Color::Red;
+    try { c += 1; ok("top-or-nothing-plus-equals", c); } catch (hash<ExceptionInfo> ex) { err("top-or-nothing-plus-equals", ex, c); }
+    try { c++; ok("top-or-nothing-increment", c); } catch (hash<ExceptionInfo> ex) { err("top-or-nothing-increment", ex, c); }
+}
+
+# globals are checked as locals are
+our Color global = Color::Red;
+try { global = member_int; ok("global-assign", global); } catch (hash<ExceptionInfo> ex) { err("global-assign", ex, global); }
+
+# the same stores in a function: in a try block and out of one
+sub in_function() {
+    auto fmember = 3;
+    auto fother = 99;
+    auto ffloat = 1.0;
+    auto fstr = "z";
+    try { Color c = fmember; ok("fn-init-member", c); } catch (hash<ExceptionInfo> ex) { raised("fn-init-member", ex); }
+    try { Color c = fother; ok("fn-init-other", c); } catch (hash<ExceptionInfo> ex) { raised("fn-init-other", ex); }
+    Color c = Color::Red;
+    try { c = fother; ok("fn-assign-other", c); } catch (hash<ExceptionInfo> ex) { err("fn-assign-other", ex, c); }
+    try { *Color oc = fmember; ok("fn-or-nothing-init", oc); } catch (hash<ExceptionInfo> ex) { raised("fn-or-nothing-init", ex); }
+    try { Name n = fstr; ok("fn-string-init", n); } catch (hash<ExceptionInfo> ex) { raised("fn-string-init", ex); }
+    try { FColor fc = ffloat; ok("fn-float-init", fc); } catch (hash<ExceptionInfo> ex) { raised("fn-float-init", ex); }
+    try { union<string, Color> u = fmember; ok("fn-union-init", u); } catch (hash<ExceptionInfo> ex) { raised("fn-union-init", ex); }
+    try { c += 1; ok("fn-plus-equals-const", c); } catch (hash<ExceptionInfo> ex) { err("fn-plus-equals-const", ex, c); }
+    try { c += fmember; ok("fn-plus-equals-auto", c); } catch (hash<ExceptionInfo> ex) { err("fn-plus-equals-auto", ex, c); }
+    try { c -= 1; ok("fn-minus-equals", c); } catch (hash<ExceptionInfo> ex) { err("fn-minus-equals", ex, c); }
+    try { c *= 2; ok("fn-multiply-equals", c); } catch (hash<ExceptionInfo> ex) { err("fn-multiply-equals", ex, c); }
+    try { c <<= 1; ok("fn-shift-left-equals", c); } catch (hash<ExceptionInfo> ex) { err("fn-shift-left-equals", ex, c); }
+    try { c /= 1; ok("fn-divide-equals", c); } catch (hash<ExceptionInfo> ex) { err("fn-divide-equals", ex, c); }
+    try { c++; ok("fn-post-increment", c); } catch (hash<ExceptionInfo> ex) { err("fn-post-increment", ex, c); }
+    try { ++c; ok("fn-pre-increment", c); } catch (hash<ExceptionInfo> ex) { err("fn-pre-increment", ex, c); }
+    try { --c; ok("fn-pre-decrement", c); } catch (hash<ExceptionInfo> ex) { err("fn-pre-decrement", ex, c); }
+}
+in_function();
+
+# a store in a function that is not in a try block: the error leaves the function
+sub assign_no_try(auto v) {
+    Color c = Color::Red;
+    c = v;
+    ok("fn-no-try-assign", c);
+}
+try { assign_no_try(other_int); } catch (hash<ExceptionInfo> ex) { raised("fn-no-try-assign", ex); }
+
+sub plus_equals_no_try() {
+    Color c = Color::Red;
+    c += 1;
+    ok("fn-no-try-plus-equals", c);
+}
+try { plus_equals_no_try(); } catch (hash<ExceptionInfo> ex) { raised("fn-no-try-plus-equals", ex); }

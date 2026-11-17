@@ -48,6 +48,9 @@ class OracleInOperatorTest inherits QUnit::Test {
         const Rows = 2100;
 
         const Day = 2026-01-01;
+
+        # why the drivers with a connection string are not tested, if any
+        *string skip_reason;
     }
 
     constructor() : Test("OracleInOperatorTest", "1.0", \ARGV) {
@@ -64,7 +67,18 @@ class OracleInOperatorTest inherits QUnit::Test {
             if (!connstr) {
                 continue;
             }
-            Datasource ds(connstr);
+            Datasource ds;
+            try {
+                ds = new Datasource(connstr);
+            } catch (hash<ExceptionInfo> ex) {
+                # the driver's module is not available: its connection is not tested (#6232)
+                if (ex.err != "LOAD-MODULE-ERROR") {
+                    rethrow;
+                }
+                skip_reason = (skip_reason ? skip_reason + "; " : "")
+                    + sprintf("%s is set, but the module of the %s driver is unavailable", i.value, i.key);
+                continue;
+            }
             ds.open();
             names{i.key} = TestRun::makeName("in_" + i.key);
             tables{i.key} = setupTable(ds, names{i.key});
@@ -136,7 +150,7 @@ class OracleInOperatorTest inherits QUnit::Test {
 
     private skipIfNone() {
         if (!tables) {
-            testSkip("no Oracle connection available");
+            testSkip(skip_reason ?? "no Oracle connection available");
         }
     }
 

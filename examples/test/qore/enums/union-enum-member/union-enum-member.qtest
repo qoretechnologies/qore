@@ -1,0 +1,73 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes and in programs compiled with qcc
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+%requires ../../../TestInterpreter.qm
+
+%exec-class UnionEnumMemberTest
+
+#! Regression test for issue #6277: a union with an enum member type accepts the enum's values in any position
+/** The values of an enum (TAG_ENUM values) were accepted by a union only when the enum was the union's first member
+    type: a basic member type before it (union<string, E>) replaced the value with its base value before it found that
+    it does not accept it, and the enum type then refused the base value (RUNTIME-TYPE-ERROR); a basic member type that
+    accepts the base value (union<int, E>) took the value as its base value.  The enum type of a union now accepts the
+    enum's values before its other member types, and a basic type takes the base value only when it accepts it.
+
+    UnionEnumMember.q assigns enum values to unions with the enum as a member type in every position (locals,
+    or-nothing types, list elements, parameters, hash values) and prints their types; its output must be the one in
+    UnionEnumMember.expected in every execution mode, on the IR tier and in programs compiled with qcc -O0 and -O3.
+*/
+class UnionEnumMemberTest inherits QUnit::Test {
+    private {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string fixture = get_script_dir() + "/UnionEnumMember.q";
+        string expected = ReadOnlyFile::readTextFile(get_script_dir() + "/UnionEnumMember.expected");
+    }
+
+    constructor() : QUnit::Test("enum values assigned to unions with the enum as a member type", "1.0", \ARGV) {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            string execution_mode = mode;
+            addTestCase("execution mode " + mode, sub () {
+                assertEq(expected, ExecModeHarness::run(command(execution_mode)));
+            });
+        }
+        addTestCase("IR tier", sub () {
+            assertEq(expected, ExecModeHarness::run_ir_tier(command("tiered")));
+        });
+        addTestCase("qcc -O0", sub () { checkQcc(0); });
+        addTestCase("qcc -O3", sub () { checkQcc(3); });
+
+        set_return_value(main());
+    }
+
+    private string command(string mode) {
+        return sprintf("%s --enable-debug --exec-mode=%s %s", shellQuote(qore_bin), mode, shellQuote(fixture));
+    }
+
+    #! compiles the fixture with qcc and compares the output of the program
+    private checkQcc(int opt) {
+        string qcc_bin = ENV.QCC_BIN ?? dirname(qore_bin) + "/qcc";
+        if (!is_file(qcc_bin)) {
+            qcc_bin = "qcc";
+        }
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        string program = dir + "/union-enum-member";
+        string output = backquote(sprintf("%s -O%d -o %s %s 2>&1", shellQuote(qcc_bin), opt, shellQuote(program),
+            shellQuote(fixture)));
+        assertTrue(is_file(program), "the fixture compiled: " + output);
+        assertEq(expected, backquote(shellQuote(program) + " 2>&1"));
+    }
+
+    private static string shellQuote(string value) {
+        return "'" + replace(value, "'", "'\\''") + "'";
+    }
+}

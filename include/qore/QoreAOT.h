@@ -157,6 +157,11 @@ struct QoreAOTFunc;
     qore_aot_script_end_batch()) on behalf of sandboxed code, nor with a
     @p metadata blob or a @p tpgm that sandboxed code chose.
 
+    It loads code into @p tpgm as a parse does, but makes none of the checks of a parse: a host calls it (and
+    qore_aot_script_end_batch()) before any thread runs code in @p tpgm, as a compiled script registers its code into
+    its own Program before it runs; it must not be called while other threads run code in @p tpgm or parse code in
+    it.
+
     Hosts calling this from a custom <tt>main()</tt> typically:
     @code{.cpp}
     QoreProgram* pgm = qore_create_program(PO_NEW_STYLE | PO_STRICT_ARGS);

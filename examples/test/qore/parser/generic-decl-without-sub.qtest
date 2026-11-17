@@ -1,0 +1,232 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+%requires ../../TestInterpreter.qm
+%exec-class GenericDeclWithoutSubTest
+
+#! issue #6323: a generic function declared without the \c sub keyword is a clean parse error
+/** <tt>T mk<T>(T v) { ... }</tt> was taken as an out-of-line method definition without a class (the scanner returns
+    one token for <tt>mk<T></tt> and <tt>Class::mk<T></tt>): at top level the parser crashed, in a namespace it
+    reported a missing class.  Every script is parsed in a child process in every execution mode and with \c qcc,
+    with and without \c %modern; a crash shows as an exit status of a signal.  An invalid out-of-line method
+    definition in a namespace, which has no method to add, crashed the parser in the same way.
+*/
+class GenericDeclWithoutSubTest inherits QUnit::Test {
+    private {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        TmpDir tmp("generic-decl-without-sub-");
+
+        const NoSub = "requires the 'sub' keyword";
+
+        #! scripts that must fail to parse: name -> source, expected error
+        /** The non-generic forms are plain syntax errors; their exact text depends on the token where the parser
+            fails, so only the error class is checked
+        */
+        const Failing = {
+            # the issue's scripts
+            "generic-t": (
+                "src": "printf(\"before\\n\");\nT mk1<T>(T v) { return v; }\nprintf(\"%y\\n\", mk1(1));\n",
+                "err": NoSub,
+            ),
+            "generic-list": (
+                "src": "list<T> mk0<T>() { return new list<T>(); }\n",
+                "err": NoSub,
+            ),
+            "generic-hash": (
+                "src": "hash<string, T> mk<T>(T v) { return {\"v\": v}; }\n",
+                "err": NoSub,
+            ),
+            "generic-or-nothing": (
+                "src": "*T mk<T>(*T v) { return v; }\n",
+                "err": NoSub,
+            ),
+            "generic-two-params": (
+                "src": "hash<string, V> mk<K, V>(K k, V v) { return {sprintf(\"%s\", k): v}; }\n",
+                "err": NoSub,
+            ),
+            "generic-bounded": (
+                "src": "T mk<T: int>(T v) { return v; }\n",
+                "err": NoSub,
+            ),
+            "generic-no-return-type": (
+                "src": "mk<T>(T v) { return v; }\n",
+                "err": NoSub,
+            ),
+            "generic-modifier": (
+                "src": "public T mk<T>(T v) { return v; }\n",
+                "err": NoSub,
+            ),
+            "generic-static": (
+                "src": "static T mk<T>(T v) { return v; }\n",
+                "err": NoSub,
+            ),
+            "generic-no-body": (
+                "src": "abstract T mk<T>(T v);\n",
+                "err": NoSub,
+            ),
+            "generic-namespace": (
+                "src": "namespace NS {\n    T mk<T>(T v) { return v; }\n}\n",
+                "err": NoSub,
+            ),
+            "generic-namespace-list": (
+                "src": "namespace NS {\n    list<T> mk0<T>() { return new list<T>(); }\n}\n",
+                "err": NoSub,
+            ),
+            "generic-nested-namespace": (
+                "src": "namespace NS {\n    namespace Inner {\n        T mk<T>(T v) { return v; }\n    }\n}\n",
+                "err": NoSub,
+            ),
+            # a qualified name is an out-of-line method definition: the class must exist
+            "generic-scoped-no-class": (
+                "src": "namespace NS {}\nT NS::mk<T>(T v) { return v; }\n",
+                "err": "reference to undefined class 'NS'",
+            ),
+            # an invalid out-of-line method definition in a namespace has no method to add to its class
+            "namespace-method-error": (
+                "src": "namespace NS {\n    class C {}\n    int C::constructor() {}\n}\n",
+                "err": "constructor methods may not declare a return type",
+            ),
+            "plain-list": (
+                "src": "list mk0() { return (); }\n",
+                "err": "PARSE-EXCEPTION",
+            ),
+            "plain-int": (
+                "src": "int mk(int v) { return v; }\n",
+                "err": "PARSE-EXCEPTION",
+            ),
+            "plain-namespace": (
+                "src": "namespace NS {\n    int mk(int v) { return v; }\n}\n",
+                "err": "PARSE-EXCEPTION",
+            ),
+        };
+
+        #! the declarations with \c sub, and methods, which may omit it
+        const Working = "T sub mk1<T>(T v) { return v; }\n"
+            "list<T> sub mk0<T>() { return new list<T>(); }\n"
+            "hash<string, T> sub mkh<T>(T v) { return {\"v\": v}; }\n"
+            "*T sub mkn<T>(*T v) { return v; }\n"
+            "hash<string, V> sub mk2<K, V>(K k, V v) { return {sprintf(\"%s\", k): v}; }\n"
+            "T sub mkb<T: int>(T v) { return v; }\n"
+            "namespace NS {\n"
+            "    T sub mk<T>(T v) { return v; }\n"
+            "}\n"
+            "class C {\n"
+            "    int plain(int v) { return v + 1; }\n"
+            "    T id<T>(T v) { return v; }\n"
+            "    list<T> wrap<T>(T v) { return (v,); }\n"
+            "    static T sid<T: int>(T v) { return v; }\n"
+            "}\n"
+            "C c();\n"
+            "printf(\"%y %y %y %y %y %y %y\\n\", mk1(1), mk0<int>(), mkh(\"a\"), mkn<int>(), mk2(\"k\", 2), mkb(3), "
+            "NS::mk(4));\n"
+            "printf(\"%y %y %y %y\\n\", c.plain(1), c.id(\"x\"), c.wrap(5), C::sid(6));\n";
+
+        const WorkingOut = "1 [] {v: \"a\"} null {k: 2} 3 4\n"
+            "2 \"x\" [5] 6\n";
+
+        #! the same without %modern, where variables have a \c $ prefix, with out-of-line methods, whose qualified
+        #! generic names are the same token as the unqualified ones (%modern forbids out-of-line methods)
+        const WorkingLegacy = "T sub mk1<T>(T $v) { return $v; }\n"
+            "class C {\n"
+            "    int plain(int $v) { return $v + 1; }\n"
+            "    T id<T>(T $v) { return $v; }\n"
+            "}\n"
+            "int C::outOfLine(int $v) { return $v + 2; }\n"
+            "T C::ool<T>(T $v) { return $v; }\n"
+            "C::nort<T>(T $v) { return $v; }\n"
+            "static T C::sm<T>(T $v) { return $v; }\n"
+            "namespace NS {\n"
+            "    class D {}\n"
+            "    T D::nm<T>(T $v) { return $v; }\n"
+            "}\n"
+            "my C $c = new C();\n"
+            "my NS::D $d = new NS::D();\n"
+            "printf(\"%y %y %y %y %y %y %y %y\\n\", mk1(1), $c.plain(1), $c.id(\"x\"), $c.outOfLine(1), $c.ool(7), "
+            "$c.nort(8), C::sm(9), $d.nm(10));\n";
+
+        const WorkingLegacyOut = "1 2 \"x\" 3 7 8 9 10\n";
+    }
+
+    constructor() : QUnit::Test("GenericDeclWithoutSubTest", "1.0", \ARGV) {
+        foreach string name in (keys Failing) {
+            string script = name;
+            addTestCase(sprintf("%s fails to parse", script), sub () { testFailing(script); });
+        }
+        addTestCase("declarations with sub and methods without it", \testWorking());
+        addTestCase("qcc compile fails", \testQcc());
+        set_return_value(main());
+    }
+
+    private testFailing(string name) {
+        foreach bool modern in ((True, False)) {
+            string label = sprintf("%s (%s)", name, modern ? "%modern" : "default");
+            string path = writeScript(name, Failing{name}.src, modern);
+            foreach string mode in (ExecModeHarness::ExecModes) {
+                hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s --exec-mode=%s %s",
+                    shellQuote(qore_bin), mode, shellQuote(path)));
+                ExecModeHarness::check_native(r, ExecModeHarness::NativeCheck::None);
+                checkParseError(label + ": " + mode, r.rc, r.out, Failing{name}.err);
+                # nothing ran
+                assertEq("", r.stdout, sprintf("%s: %s: no output", label, mode));
+            }
+        }
+    }
+
+    private testWorking() {
+        foreach bool modern in ((True, False)) {
+            string path = writeScript("working", modern ? Working : WorkingLegacy, modern);
+            # code without %modern runs only with the AST interpreter
+            foreach string mode in (modern ? ExecModeHarness::ExecModes : ("ast",)) {
+                hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s --exec-mode=%s %s",
+                    shellQuote(qore_bin), mode, shellQuote(path)));
+                ExecModeHarness::check_native(r, ExecModeHarness::NativeCheck::Jit);
+                string label = sprintf("%s: %s", modern ? "%modern" : "default", mode);
+                assertEq(0, r.rc, sprintf("%s: exit status: %s", label, r.out));
+                assertEq(modern ? WorkingOut : WorkingLegacyOut, r.out, label);
+            }
+        }
+    }
+
+    private testQcc() {
+        string qcc_bin = ENV.QCC ?? ENV.QCC_BIN ?? dirname(qore_bin) + "/qcc";
+        if (!is_file(qcc_bin)) {
+            qcc_bin = "qcc";
+        }
+        foreach string name in (("generic-t", "generic-list", "generic-namespace", "plain-list")) {
+            string path = writeScript(name, Failing{name}.src, True);
+            string exe = tmp.path + "/" + name;
+            int rc;
+            string out = backquote(sprintf("%s -o %s %s 2>&1", shellQuote(qcc_bin), shellQuote(exe),
+                shellQuote(path)), \rc);
+            checkParseError("qcc: " + name, rc, out, Failing{name}.err);
+            assertFalse(is_file(exe), sprintf("qcc: %s: no executable", name));
+        }
+    }
+
+    #! checks that a child process ended with a parse error, not a signal
+    private checkParseError(string label, int rc, string out, string err) {
+        # a shell reports a child killed by a signal with an exit status of 128 + the signal number
+        assertTrue(rc > 0 && rc < 128, sprintf("%s: exit status %d (a parse error, not a crash): %s", label, rc,
+            out));
+        assertTrue(out.find(err) >= 0, sprintf("%s: parse error %y: %s", label, err, out));
+    }
+
+    private string writeScript(string name, string src, bool modern) {
+        string path = sprintf("%s/%s-%s.q", tmp.path, name, modern ? "modern" : "default");
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write((modern ? "%modern\n" : "") + src);
+        f.close();
+        return path;
+    }
+
+    private static string shellQuote(string value) {
+        return "'" + replace(value, "'", "'\\''") + "'";
+    }
+}

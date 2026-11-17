@@ -574,6 +574,8 @@ module OpenAiDataProvider {
 /** @page openaidataprovider_relnotes Release Notes
 
     @section openaidataprovider_v1_7 OpenAiDataProvider v1.7
+    - the \c multipart/form-data boundary of a file upload is random; it was made from the current time
+      (<a href="https://github.com/qoretechnologies/qore/issues/6307">issue 6307</a>)
     - a failed request is not retried while
       @ref DataProvider::DataProviderRetryUtil::retriesSuppressed() "retries are suppressed", for example while
       example data is requested (see @ref dataprovider_retries)

@@ -9,6 +9,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires FsUtil
 %requires QUnit
+%requires ../../TestInterpreter.qm
 
 %include module-public-var-readonly/Forms.ql
 
@@ -18,13 +19,14 @@
 /** A module's public variable, and a static member of a module's class, is one value that every Program importing
     the module shares.  Sandboxed code, and code in a Program with PO_NO_PROCESS_CONTROL set, can read it, but every
     form of write raises MODULE-VARIABLE-READ-ONLY and leaves it unchanged; a child Program that such code creates
-    inherits its restriction.  The rule is decided on the Program whose code writes: the module's own code, the code of
-    other Programs that are not restricted (such as the host's functions called by sandboxed code) and the setters
-    that the module exports keep write access.
+    inherits its restriction, and an independent Program that it creates keeps it (qore#5669).  The rule is decided
+    on the Program whose code writes: the module's own code, the code of other Programs that are not restricted (such
+    as the host's functions called by sandboxed code) and the setters that the module exports keep write access.
 
     The forms are in module-public-var-readonly/Forms.ql, which the probe scripts include.  Every scenario runs in a
     child process in each execution mode, with the module from source and compiled with qcc; a restricted script
-    compiled with qcc checks the writes of native code.
+    compiled with qcc checks the writes of native code and that the independent Programs that native code creates
+    keep its restrictions.
 */
 class ModulePublicVarReadOnlyTest inherits QUnit::Test {
     private {
@@ -59,7 +61,7 @@ class ModulePublicVarReadOnlyTest inherits QUnit::Test {
         "bypath/PathMod.qm");
 
     constructor() : QUnit::Test("restricted code cannot change a trusted module's state", "1.0", \ARGV) {
-        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        qore_bin = TestInterpreter::qore_interpreter();
         libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
         qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
             ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
@@ -122,6 +124,11 @@ class ModulePublicVarReadOnlyTest inherits QUnit::Test {
             "aot.module-setter-state": ModVarForms::CalledState."module-setter",
             "aot.static-setter": "ok",
             "aot.static-setter-state": ModVarForms::CalledState."static-setter",
+            # an independent Program of the restricted script keeps its restrictions (qore#5669)
+            "aot.independent-child": ModVarForms::ErrCode,
+            "aot.independent-child-state": ModVarForms::InitialState,
+            "aot.independent-child-process": "PARSE-EXCEPTION",
+            "aot.nested-independent-child-process": "PARSE-EXCEPTION",
         };
         checkProbe(out, expected, "AOT writer");
     }
@@ -200,6 +207,14 @@ class ModulePublicVarReadOnlyTest inherits QUnit::Test {
             "sandbox-child": ModVarForms::ErrCode,
             "sandbox-child-static": ModVarForms::ErrCode,
             "sandbox-child-state": ModVarForms::InitialState,
+            # an independent Program, which has no parent, keeps the restrictions of the code that creates it
+            # (qore#5669)
+            "no-pc-independent-child": ModVarForms::ErrCode,
+            "no-pc-independent-child-static": ModVarForms::ErrCode,
+            "no-pc-independent-child-state": ModVarForms::InitialState,
+            "sandbox-independent-child": ModVarForms::ErrCode,
+            "sandbox-independent-child-static": ModVarForms::ErrCode,
+            "sandbox-independent-child-state": ModVarForms::InitialState,
             # a Program that the trusted host gives the module variable it imported
             "import-chain": ModVarForms::ErrCode,
             "import-chain-ro": "ACCESS-ERROR",

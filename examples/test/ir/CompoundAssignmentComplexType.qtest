@@ -7,6 +7,7 @@
 %no-child-restrictions
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
+%requires ../TestInterpreter.qm
 %requires FsUtil
 %requires ../ExecModeHarness.qm
 
@@ -182,7 +183,7 @@ for (int i = 0; i < 3; ++i) {
             "0 list<int>: list<int> list<int> list<int> list<int> / list<int> list<int> list<int> list<int> | list<int> True | list list list list / list list list list | list list list list list list list list / list list list list list list list list",
             "0 hash<string, int>: hash<string, int> hash<string, int> hash<string, int>/1 True hash<string, int> hash<string, int> hash<string, int> hash<string, int> | hash<auto> hash list<auto> hash hash",
             "0 hash<string, int>: hash<string, int> hash<string, int> hash<string, int> hash<string, int> / hash<string, int> hash<string, int> hash<string, int> hash<string, int> | hash<string, int> True | hash hash hash hash / hash hash hash hash | hash hash hash hash hash hash hash hash / hash hash hash hash hash hash hash hash",
-            "0 hash<HD>: nothing: integer:0 integer:0 DIVISION-BY-ZERO integer:0 integer:0 integer:0 integer:0 integer:0 integer:0 | null: integer:0 integer:0 DIVISION-BY-ZERO integer:0 integer:0 integer:0 integer:0 integer:0 integer:0",
+            "0 hash<HD>: nothing: integer:0 integer:0 DIVISION-BY-ZERO DIVISION-BY-ZERO integer:0 integer:0 integer:0 integer:0 integer:0 | null: integer:0 integer:0 DIVISION-BY-ZERO DIVISION-BY-ZERO integer:0 integer:0 integer:0 integer:0 integer:0",
             "0 integer: nothing: integer:-2 integer:0 integer:0 integer:0 integer:2 integer:0 integer:2 integer:0 integer:0 | null: integer:-2 integer:0 integer:0 integer:0 integer:2 integer:0 integer:2 integer:0 integer:0",
             "0 float: nothing: float:-1.5 float:0.0 float:0.0 integer:0 integer:1 integer:0 integer:1 integer:0 integer:0 | null: integer:-1 float:0.0 float:0.0 integer:0 integer:1 integer:0 integer:1 integer:0 integer:0",
             "1 hash<HD>: hash<HD> hash<HD> hash<HD>/1 True hash<HD> hash<HD> hash<HD> hash<HD> | hash<auto> hash list<auto> hash hash",
@@ -191,7 +192,7 @@ for (int i = 0; i < 3; ++i) {
             "1 list<int>: list<int> list<int> list<int> list<int> / list<int> list<int> list<int> list<int> | list<int> True | list list list list / list list list list | list list list list list list list list / list list list list list list list list",
             "1 hash<string, int>: hash<string, int> hash<string, int> hash<string, int>/1 True hash<string, int> hash<string, int> hash<string, int> hash<string, int> | hash<auto> hash list<auto> hash hash",
             "1 hash<string, int>: hash<string, int> hash<string, int> hash<string, int> hash<string, int> / hash<string, int> hash<string, int> hash<string, int> hash<string, int> | hash<string, int> True | hash hash hash hash / hash hash hash hash | hash hash hash hash hash hash hash hash / hash hash hash hash hash hash hash hash",
-            "1 hash<HD>: nothing: integer:0 integer:0 DIVISION-BY-ZERO integer:0 integer:0 integer:0 integer:0 integer:0 integer:0 | null: integer:0 integer:0 DIVISION-BY-ZERO integer:0 integer:0 integer:0 integer:0 integer:0 integer:0",
+            "1 hash<HD>: nothing: integer:0 integer:0 DIVISION-BY-ZERO DIVISION-BY-ZERO integer:0 integer:0 integer:0 integer:0 integer:0 | null: integer:0 integer:0 DIVISION-BY-ZERO DIVISION-BY-ZERO integer:0 integer:0 integer:0 integer:0 integer:0",
             "1 integer: nothing: integer:-2 integer:0 integer:0 integer:0 integer:2 integer:0 integer:2 integer:0 integer:0 | null: integer:-2 integer:0 integer:0 integer:0 integer:2 integer:0 integer:2 integer:0 integer:0",
             "1 float: nothing: float:-1.5 float:0.0 float:0.0 integer:0 integer:1 integer:0 integer:1 integer:0 integer:0 | null: integer:-1 float:0.0 float:0.0 integer:0 integer:1 integer:0 integer:1 integer:0 integer:0",
             "2 hash<HD>: hash<HD> hash<HD> hash<HD>/1 True hash<HD> hash<HD> hash<HD> hash<HD> | hash<auto> hash list<auto> hash hash",
@@ -200,7 +201,7 @@ for (int i = 0; i < 3; ++i) {
             "2 list<int>: list<int> list<int> list<int> list<int> / list<int> list<int> list<int> list<int> | list<int> True | list list list list / list list list list | list list list list list list list list / list list list list list list list list",
             "2 hash<string, int>: hash<string, int> hash<string, int> hash<string, int>/1 True hash<string, int> hash<string, int> hash<string, int> hash<string, int> | hash<auto> hash list<auto> hash hash",
             "2 hash<string, int>: hash<string, int> hash<string, int> hash<string, int> hash<string, int> / hash<string, int> hash<string, int> hash<string, int> hash<string, int> | hash<string, int> True | hash hash hash hash / hash hash hash hash | hash hash hash hash hash hash hash hash / hash hash hash hash hash hash hash hash",
-            "2 hash<HD>: nothing: integer:0 integer:0 DIVISION-BY-ZERO integer:0 integer:0 integer:0 integer:0 integer:0 integer:0 | null: integer:0 integer:0 DIVISION-BY-ZERO integer:0 integer:0 integer:0 integer:0 integer:0 integer:0",
+            "2 hash<HD>: nothing: integer:0 integer:0 DIVISION-BY-ZERO DIVISION-BY-ZERO integer:0 integer:0 integer:0 integer:0 integer:0 | null: integer:0 integer:0 DIVISION-BY-ZERO DIVISION-BY-ZERO integer:0 integer:0 integer:0 integer:0 integer:0",
             "2 integer: nothing: integer:-2 integer:0 integer:0 integer:0 integer:2 integer:0 integer:2 integer:0 integer:0 | null: integer:-2 integer:0 integer:0 integer:0 integer:2 integer:0 integer:2 integer:0 integer:0",
             "2 float: nothing: float:-1.5 float:0.0 float:0.0 integer:0 integer:1 integer:0 integer:1 integer:0 integer:0 | null: integer:-1 float:0.0 float:0.0 integer:0 integer:1 integer:0 integer:1 integer:0 integer:0",
         );

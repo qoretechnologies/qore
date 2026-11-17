@@ -207,6 +207,11 @@ WKEuKQ7xuGuAiIESuSDBsSg=
         #! QUIC listeners
         int quic_good_port;
         int quic_wrong_port;
+        #! the two ends of the connections that hold the TCP side of the ports of the QUIC listeners (see
+        #! addQuicListener())
+        list<Socket> quic_tcp_holds = ();
+        #! True if the IPv6 side of the ports of the QUIC listeners is held too (the host has an IPv6 loopback)
+        bool quic_tcp_v6_held = True;
     }
 
     constructor() : Test("HttpClientTlsVerifyTest", "1.0") {
@@ -221,6 +226,7 @@ WKEuKQ7xuGuAiIESuSDBsSg=
         addTestCase("HTTP/3 certificate failures are not retried", \http3CertificateFailureTest());
         addTestCase("HTTP/3 with all certificates accepted", \http3AcceptAllTest());
         addTestCase("HTTP/3 connection failures are retried", \http3ConnectFailureTest());
+        addTestCase("the TCP side of the QUIC listeners' ports refuses connections", \quicPortTcpRefusedTest());
         addTestCase("HTTP/3 and HTTP/2 race: certificate failures are not retried", \raceCertificateFailureTest());
         addTestCase("HTTPClient option errors", \optionErrorTest());
         set_return_value(main());
@@ -261,15 +267,95 @@ WKEuKQ7xuGuAiIESuSDBsSg=
             "key": new SSLPrivateKey(WrongHostKey),
         }).port;
         server.waitForAsyncIo();
-        quic_good_port = server.addQuicListener(<HttpListenerOptionInfo>{
+        quic_good_port = addQuicListener(<HttpListenerOptionInfo>{
             "cert": new SSLCertificate(GoodCert),
             "key": new SSLPrivateKey(GoodKey),
-        }).port;
-        quic_wrong_port = server.addQuicListener(<HttpListenerOptionInfo>{
+        });
+        quic_wrong_port = addQuicListener(<HttpListenerOptionInfo>{
             "cert": new SSLCertificate(WrongHostCert),
             "key": new SSLPrivateKey(WrongHostKey),
-        }).port;
+        });
         server.waitForAsyncIo();
+    }
+
+    #! A TCP connection to the port of a QUIC listener is refused, and does not wait for its timeout (qore#6347)
+    /** The race tests expect the HTTP/2 leg of a race to the port of a QUIC listener to fail with
+        SOCKET-CONNECT-ERROR; a port that drops connection requests (a socket that is bound but does not listen, on
+        macOS) leaves it to its connect timeout instead.  The timeout of the connections here is longer than any
+        refusal takes, so only a dropped connection request reaches it.
+    */
+    quicPortTcpRefusedTest() {
+        list<string> hosts = ("127.0.0.1",);
+        if (quic_tcp_v6_held) {
+            hosts += "::1";
+        }
+        foreach int port in ((quic_good_port, quic_wrong_port)) {
+            foreach string host in (hosts) {
+                string target = host =~ /:/ ? sprintf("[%s]:%d", host, port) : sprintf("%s:%d", host, port);
+                Socket s();
+                assertThrows("SOCKET-CONNECT-ERROR", \s.connect(), (target, 30s),
+                    sprintf("a connection to %s is refused", target));
+            }
+        }
+    }
+
+    #! Adds a QUIC listener on a port whose TCP side is held by a connection, and returns the port
+    /** The race tests rely on a TCP connection to the port of a QUIC listener being refused at once.  A free TCP port
+        is not enough: tests running beside this one can listen on it.  A socket that is bound but does not listen is
+        not enough either: macOS drops a connection request to such a socket instead of refusing it, so the client
+        waits for its connect timeout (qore#6347).  The port is bound without \c SO_REUSEADDR on the wildcard address
+        (dual-stack), a connection is made to it over IPv4 and, if the host has an IPv6 loopback, one over IPv6, and the
+        listening socket is closed once they are accepted: the connections hold the port, so no other socket can bind
+        it (an IPv4 connection holds only the IPv4 side of the port: without the IPv6 one, an IPv6 socket could bind
+        it), and a connection request to it finds no listening socket and is refused at once, on macOS as on Linux.
+        The QUIC listener then takes the same port number for UDP, which can be in use, in which case another port is
+        taken.
+    */
+    private int addQuicListener(hash<HttpListenerOptionInfo> opts) {
+        for (int attempt = 1; ; ++attempt) {
+            # a dual-stack socket on the wildcard address: no IPv4 or IPv6 socket can bind the port
+            Socket listener();
+            if (listener.bind(0, False)) {  # all-interfaces: the wildcard bind holds the port for IPv4 and IPv6 clients
+                throw "BIND-ERROR", strerror();
+            }
+            int port = listener.getSocketInfo().port;
+            if (listener.listen(2)) {
+                throw "LISTEN-ERROR", strerror();
+            }
+            # the connections that hold the port; the listening socket is closed once they are accepted
+            list<Socket> holds = ();
+            foreach string target in ((sprintf("127.0.0.1:%d", port), sprintf("[::1]:%d", port))) {
+                Socket client();
+                try {
+                    client.connect(target, 30s);
+                } catch (hash<ExceptionInfo> ex) {
+                    # no IPv6 loopback: only the IPv4 side of the port is held, and only it is checked
+                    if (target =~ /^\[/) {
+                        quic_tcp_v6_held = False;
+                        break;
+                    }
+                    rethrow;
+                }
+                *Socket server_end = listener.accept(30s);
+                if (!server_end) {
+                    throw "ACCEPT-ERROR", sprintf("the connection to %s that holds the TCP port was not accepted",
+                        target);
+                }
+                holds += (client, server_end);
+            }
+            listener.close();
+            try {
+                server.addQuicListener(opts, port);
+            } catch (hash<ExceptionInfo> ex) {
+                # the UDP port is in use: another port is taken
+                if (attempt == 20) {
+                    rethrow;
+                }
+                continue;
+            }
+            quic_tcp_holds += holds;
+            return port;
+        }
     }
 
     globalTearDown() {

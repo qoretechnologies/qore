@@ -25,6 +25,7 @@
 %modern
 %requires Util
 %requires FsUtil
+%requires ../../TestInterpreter.qm
 %requires ./TestRunIsolation.qm
 
 module FirebirdTestIsolation {
@@ -319,7 +320,7 @@ public class FirebirdRunDatabase {
     #! reads from the standard input, from the file \c password in the given directory, as any user of the host can
     #! see the arguments of a process
     static string getDropCommand(hash<FirebirdDatabaseLocation> location, string dir) {
-        string cmd = sprintf("%s %s", FirebirdRunDatabase::quote(ENV.QORE_EXECUTABLE ?? "qore"),
+        string cmd = sprintf("%s %s", FirebirdRunDatabase::quote(TestInterpreter::qore_interpreter()),
             FirebirdRunDatabase::quote(dir + "/drop.q"));
         foreach auto arg in ((location.host, location.port, location.path, location.user)) {
             cmd += " " + FirebirdRunDatabase::quote(arg.toString());

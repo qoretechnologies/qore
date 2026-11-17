@@ -1115,6 +1115,33 @@ private:
 */
 DLLEXPORT bool qore_sandbox_allows_uncontrolled_apis(QoreSandboxManagerHelper::Purpose purpose);
 
+//! Returns true if the code that calls into library code on the current thread is restricted from a functional domain
+/** A module is a capability: its code runs with its own Program's options, whatever the restrictions of the code that
+    calls it.  Library code that performs an operation of a functional domain on behalf of its caller, such as opening a
+    database connection from a connection string that the caller gives, uses this function to refuse a caller that is
+    restricted from that domain.
+
+    The calling code is the code of the nearest Program on the thread's call stack that is not the Program of a user
+    module: the current Program if it is not a module's, else the Program that entered the module code, through any
+    number of calls between modules.  The parse options of that Program decide (for example
+    \c PO_NO_DATABASE for \c QDOM_DATABASE), as do the restrictions of a sandboxed caller that the module code runs
+    with; the options of the module's own Program do not.
+
+    It reveals only whether the calling code is restricted, so it is not restricted itself.
+
+    @param domain the functional domains (\c QDOM_*, as a bitmask) to check; only the domains that a parse option
+    restricts are answered (the domains of the options that allow something, such as \c QDOM_INJECTION, never count as
+    restricted)
+
+    @return true if the calling code is restricted from any of the domains in \a domain
+
+    @since %Qore 3.0
+*/
+DLLEXPORT bool qore_caller_restricts_domain(int64 domain);
+
+//! defined if qore_caller_restricts_domain() is available
+#define QORE_HAVE_CALLER_RESTRICTS_DOMAIN 1
+
 //! defined if the uncontrolled-API policy of sandboxes is available
 /** QoreSandboxManager::setUncontrolledApiPolicy(), QoreSandboxManager::getUncontrolledApiPolicy() and
     qore_sandbox_allows_uncontrolled_apis()

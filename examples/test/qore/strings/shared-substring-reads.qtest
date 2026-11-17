@@ -1,0 +1,182 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-platform: macos - threads that read one shared string at once
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class SharedSubstringReadsTest
+
+#! Tests that threads can read one shared substring at once (issue #6239)
+/** A substring of 4096 bytes or more that ends at the end of its string is a view of it, which shares its bytes and
+    terminator; one in the middle of its string was a view too, whose first read copied its bytes to add a terminator,
+    unsynchronized, so that threads reading a shared one for the first time at once raced (a data race that
+    ThreadSanitizer and helgrind report, a leaked or freed buffer).  A part in the middle is now copied when it is made.
+    Threads that start at once read a part in the middle, a part at the end (a view), and a part in the middle of that
+    view, and check what they read.
+*/
+class SharedSubstringReadsTest inherits QUnit::Test {
+    public {
+        const Threads = 8;
+        #! the rounds of fresh parts that the threads read; a debug build of the code before the fix fails an assertion
+        #! of the copy of a part in the middle within a few rounds
+        const Rounds = 200;
+        #! the text the parts are taken from, with the character at each offset known: "abcdefgh" repeated
+        const Unit = "abcdefgh";
+        const Repeats = 4096;
+    }
+
+    constructor() : QUnit::Test("SharedSubstringReads", "1.0", \ARGV) {
+        addTestCase("parts read by threads at once", \testConcurrentReads());
+        addTestCase("parts of a string", \testParts());
+        addTestCase("parts from iterators", \testIteratorParts());
+        set_return_value(main());
+    }
+
+    #! the character of the source text at the given offset
+    private static string charAt(int offset) {
+        return Unit[offset % Unit.size()];
+    }
+
+    #! checks a part that starts at the given offset of the source text; returns the errors found
+    private static list<string> check(string part, int start, int len) {
+        list<string> errors = ();
+        if (part.size() != len) {
+            errors += sprintf("size %d, expected %d", part.size(), len);
+        }
+        if (part.length() != len) {
+            errors += sprintf("length %d, expected %d", part.length(), len);
+        }
+        foreach int i in ((0, 1, len / 2, len - 1)) {
+            if (part[i] != SharedSubstringReadsTest::charAt(start + i)) {
+                errors += sprintf("character %d: %y, expected %y", i, part[i],
+                    SharedSubstringReadsTest::charAt(start + i));
+            }
+        }
+        # a search reads the whole part as a C string
+        int first_h = (7 - start % 8 + 8) % 8;
+        if (part.find("h") != first_h) {
+            errors += sprintf("find: %d, expected %d", part.find("h"), first_h);
+        }
+        if (part != strmul(Unit, Repeats).substr(start, len)) {
+            errors += "content differs";
+        }
+        return errors;
+    }
+
+    testConcurrentReads() {
+        string src = strmul(Unit, Repeats);
+        int src_size = src.size();
+        int correct = 0;
+        for (int round = 0; round < Rounds; ++round) {
+            # each part is made once and shared; none has been read before the threads start
+            int start = 1000 + round;
+            string middle = src.substr(start, 10000);
+            string tail = src.substr(start);
+            string middle_of_tail = tail.substr(500, 8000);
+            Counter ready(Threads);
+            Counter go(1);
+            Queue q();
+            for (int i = 0; i < Threads; ++i) {
+                background sub () {
+                    list<string> errors;
+                    try {
+                        ready.dec();
+                        go.waitForZero();
+                        errors = SharedSubstringReadsTest::check(middle, start, 10000)
+                            + SharedSubstringReadsTest::check(tail, start, src_size - start)
+                            + SharedSubstringReadsTest::check(middle_of_tail, start + 500, 8000);
+                    } catch (hash<ExceptionInfo> ex) {
+                        errors = (sprintf("%s: %s", ex.err, ex.desc),);
+                    }
+                    q.push(errors);
+                }();
+            }
+            ready.waitForZero();
+            go.dec();
+            list<string> errors = ();
+            for (int i = 0; i < Threads; ++i) {
+                errors += q.get(60s);
+            }
+            if (errors) {
+                assertEq((), errors, sprintf("round %d", round));
+                break;
+            }
+            ++correct;
+        }
+        assertEq(Rounds, correct, "every round read the parts correctly");
+    }
+
+    #! returns the pieces of an iterator, each used as a hash key and printed as a C string
+    private static list<string> pieces(AbstractIterator i, *code get) {
+        list<string> rv = ();
+        hash<string, bool> seen;
+        while (i.next()) {
+            string piece = get ? get(i) : i.getValue();
+            seen{piece} = True;
+            rv += sprintf("%s", piece);
+        }
+        # the hash keys are the pieces themselves, with nothing of the text after them
+        if (seen.keys() != rv) {
+            throw "PIECE-ERROR", sprintf("keys %y, pieces %y", seen.keys(), rv);
+        }
+        return rv;
+    }
+
+    testIteratorParts() {
+        # the pieces of the split and regex iterators, all but the last in the middle of their string
+        assertEq(("one", "two", "three"), pieces("one two three".splitString(" ")));
+        assertEq(("a", "bb", "ccc"), pieces("a\nbb\nccc".splitLines()));
+        assertEq(("a", "b", "c"), pieces("a1b22c".splitLinesRegex("[0-9]+")));
+        assertEq(("ab", "cd", "ef"), pieces(new RegexMatchIterator(new Regex("[a-z]+", RE_Global), "ab 12 cd 3 ef"),
+            string sub (RegexMatchIterator i) { return i.getMatch(); }));
+        # pieces of a large string, shared by threads that read them at once
+        list<string> words = map sprintf("w%05d", $1), xrange(2000);
+        string src = foldl $1 + " " + $2, words;
+        list<string> shared = ();
+        AbstractIterator i = src.splitString(" ");
+        while (i.next()) {
+            shared += i.getValue();
+        }
+        Counter ready(Threads);
+        Counter go(1);
+        Queue q();
+        for (int t = 0; t < Threads; ++t) {
+            background sub () {
+                ready.dec();
+                go.waitForZero();
+                q.push((map sprintf("%s", $1), shared) == words);
+            }();
+        }
+        ready.waitForZero();
+        go.dec();
+        int correct = 0;
+        for (int t = 0; t < Threads; ++t) {
+            if (q.get(60s)) {
+                ++correct;
+            }
+        }
+        assertEq(Threads, correct, "every thread read the shared pieces correctly");
+    }
+
+    testParts() {
+        string src = strmul(Unit, Repeats);
+        # parts at the end and in the middle, below and above the size of a view, of the string and of a view
+        assertEq((), check(src.substr(100, 50), 100, 50));
+        assertEq((), check(src.substr(100, 5000), 100, 5000));
+        assertEq((), check(src.substr(100), 100, src.size() - 100));
+        assertEq((), check(src.substr(-5000), src.size() - 5000, 5000));
+        assertEq((), check(src.substr(100, -100), 100, src.size() - 200));
+        string tail = src.substr(1000);
+        assertEq((), check(tail.substr(10, 5000), 1010, 5000));
+        assertEq((), check(tail.substr(10), 1010, src.size() - 1010));
+        # a part in the middle can be changed without changing its string
+        string middle = src.substr(1000, 10000);
+        middle += "x";
+        assertEq(10001, middle.size());
+        assertEq((), check(src, 0, src.size()));
+    }
+}

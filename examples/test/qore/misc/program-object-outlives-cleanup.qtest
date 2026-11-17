@@ -14,6 +14,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
+%requires ../../TestInterpreter.qm
 %requires Util
 
 %exec-class ProgramObjectOutlivesCleanupTest
@@ -27,7 +28,7 @@ class ProgramObjectOutlivesCleanupTest inherits QUnit::Test {
     }
 
     constructor() : Test("ProgramObjectOutlivesCleanupTest", "1.0") {
-        qore_exe = ENV.QORE_EXECUTABLE ?? ENV.QORE_BINARY ?? QORE_ARGV[0];
+        qore_exe = TestInterpreter::qore_interpreter();
         if (ENV.LD_LIBRARY_PATH) {
             env_prefix += sprintf("LD_LIBRARY_PATH=%s ", ENV.LD_LIBRARY_PATH);
         }
@@ -45,7 +46,7 @@ class ProgramObjectOutlivesCleanupTest inherits QUnit::Test {
     */
     private int runChild(string statement, string mode, reference<string> output) {
         @assert(statement.find("'") == -1);
-        string out_file = sprintf("%s/qore-pgm-object-child-%d.log", tmp_location(), gettid());
+        string out_file = sprintf("%s/qore-pgm-object-child-%d-%d.log", tmp_location(), getpid(), gettid());
         on_exit unlink(out_file);
         int rc = system(sprintf("%s%s --exec-mode=%s -l staticpgmcode -e '%s' >%s 2>&1", env_prefix, qore_exe, mode,
             statement, out_file));

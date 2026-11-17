@@ -1,0 +1,176 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run qcc, which runs in a child process of its own
+# test-platform: macos - AOT code generation and linking, and the reader of the AOT image
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires ../TestInterpreter.qm
+%requires FsUtil
+
+%exec-class AOTDumpInfoFindCallRefTest
+
+#! `qcc --dump-info` reads find expressions, named call reference calls and closures in the slot maps
+/** The `--dump-info` scanner of the slot maps had no case for a find expression (AOTExprKind::FIND) or for a named
+    call reference call (AOTExprKind::CALLREF_CALL_NAMED), so it stopped at the first expression of either kind and
+    counted the function's slot map as malformed.  A call reference call writes its arguments inline, so a find
+    expression given to one is written as a FIND expression.
+*/
+class AOTDumpInfoFindCallRefTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string libqore_dir;
+        string env;
+    }
+
+    constructor() : QUnit::Test("AOTDumpInfoFindCallRefTest", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        string module_dir = libqore_dir + "/modules/reflection";
+        if (ENV.QORE_MODULE_DIR) {
+            module_dir += ":" + ENV.QORE_MODULE_DIR;
+        }
+        env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s QORE_MODULE_DIR=%s", libqore_dir,
+            libqore_dir, libqore_dir, module_dir);
+
+        addTestCase("find in a call reference call", \testFindCallRefArg());
+        addTestCase("named call reference call", \testNamedCallRef());
+        addTestCase("find in a named call reference call", \testFindNamedCallRefArg());
+        addTestCase("several of them in one function", \testMixed());
+        addTestCase("closure before another slot", \testClosureThenSlot());
+        addTestCase("missing object", \testMissingObject());
+        set_return_value(main());
+    }
+
+    private write(string path, string body) {
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(body);
+    }
+
+    #! compiles @a body in a function and returns the output of qcc --dump-info --dump-sections for the object
+    private string dump(string name, string body) {
+        TmpDir tmp("qore-aot-dump-find-callref-");
+        string src = tmp.path + "/" + name + ".qc";
+        string out = tmp.path + "/" + name + ".qo";
+        write(src, "%new-style\n"
+            "class K { auto m(auto x) { return x; } }\n"
+            "sub f(list<hash<auto>> l, code c, K k) {\n" + body + "\n}\n");
+        # skip only when there is no qcc: a source that qcc cannot compile is a failure
+        if (system(sprintf("%s %s --version >/dev/null 2>&1", env, qcc_bin))) {
+            testSkip("qcc is not available: " + qcc_bin);
+        }
+        int status;
+        string compile_out = backquote(sprintf("%s %s -c --parse-option=PO_MODERN -o %s %s 2>&1", env, qcc_bin, out,
+            src), \status);
+        assertEq(0, status, name + ": qcc compiles the source: " + compile_out);
+        assertTrue(is_file(out), name + ": qcc writes the object: " + compile_out);
+        string d = backquote(sprintf("%s %s --dump-info --dump-sections %s 2>&1", env, qcc_bin, out), \status);
+        assertEq(0, status, name + ": " + d);
+        return d;
+    }
+
+    #! checks that the slot maps of the dump have no malformed entry and no unknown expression kind
+    private checkWellFormed(string name, string d) {
+        assertRegex("slot maps: functions=[1-9][0-9]* .* malformed=0\n", d, name + ": no malformed entry: " + d);
+        assertNRegex("slot maps: error", d, name + ": no slot map error: " + d);
+        assertNRegex("UNKNOWN +\\(", d, name + ": no unknown expression kind: " + d);
+    }
+
+    #! returns the count of @a kind in the table that follows @a header in @a d, or -1 if there is no such table
+    private static int tableCount(string d, string header, string kind) {
+        bool in_table = False;
+        foreach string line in (d.split("\n")) {
+            if (!in_table) {
+                in_table = line == "      " + header + ":";
+                continue;
+            }
+            # the rows of a table are indented by 8 spaces
+            if (line !~ /^ {8}[^ ]/) {
+                return 0;
+            }
+            *list<*string> count = regex_extract(line, "^ {8}" + kind + " +\\( *[0-9]+\\): ([0-9]+)$");
+            if (count) {
+                return count[0].toInt();
+            }
+        }
+        return in_table ? 0 : -1;
+    }
+
+    #! returns the count of the encoded expression kind @a kind in @a d, at any depth
+    /** the table of all encoded kinds is left out when it has the kinds of the table of the top-level slots
+    */
+    private static int allKindCount(string d, string kind) {
+        int count = tableCount(d, "all encoded expr kinds", kind);
+        return count >= 0 ? count : tableCount(d, "top expr slot kinds", kind);
+    }
+
+    #! returns the count of the top-level slot kind @a kind in @a d
+    private static int topKindCount(string d, string kind) {
+        return tableCount(d, "top expr slot kinds", kind);
+    }
+
+    testFindCallRefArg() {
+        string d = dump("find-callref", "    c(find %v.a in l where (%v.b > 1));");
+        checkWellFormed("find in a call reference call", d);
+        assertEq(1, topKindCount(d, "CALLREF_CALL"), d);
+        assertEq(1, allKindCount(d, "FIND"), d);
+    }
+
+    testNamedCallRef() {
+        string d = dump("named-callref", "    auto x = c(a: 1, b: \"two\");\n    auto y = c(a: 3);");
+        checkWellFormed("named call reference call", d);
+        assertEq(2, topKindCount(d, "CALLREF_CALL_NAMED"), d);
+        # the arguments of the second call are read after the names of the first one
+        assertEq(2, allKindCount(d, "CONST_INT"), d);
+        assertEq(1, allKindCount(d, "CONST_STRING"), d);
+    }
+
+    testFindNamedCallRefArg() {
+        string d = dump("find-named-callref", "    auto x = c(a: find %v.a in l where (%v.b > 1), b: 2.5);");
+        checkWellFormed("find in a named call reference call", d);
+        assertEq(1, topKindCount(d, "CALLREF_CALL_NAMED"), d);
+        assertEq(1, allKindCount(d, "FIND"), d);
+        # the argument after the find expression is read
+        assertEq(1, allKindCount(d, "CONST_FLOAT"), d);
+    }
+
+    testMixed() {
+        string d = dump("mixed", "    auto x = c(a: find %v.a in l where (%v.b > 1));\n"
+            "    c(find %v.b in l where (%v.a == \"x\"));\n"
+            "    auto y = c(b: 2);\n"
+            "    auto z = k.m(3);");
+        checkWellFormed("several of them in one function", d);
+        assertEq(2, topKindCount(d, "CALLREF_CALL_NAMED"), d);
+        assertEq(1, topKindCount(d, "CALLREF_CALL"), d);
+        assertEq(2, allKindCount(d, "FIND"), d);
+        # every slot after the find expressions is read, up to the target of the method call
+        assertEq(1, topKindCount(d, "DOT_EVAL_TARGET"), d);
+    }
+
+    testClosureThenSlot() {
+        # a named call after a closure is read correctly
+        string d = dump("closure", "    auto x = auto sub () { return 1; };\n    auto y = c(a: 1);");
+        checkWellFormed("closure before another slot", d);
+        assertEq(1, topKindCount(d, "CLOSURE_CREATE"), d);
+        assertEq(1, topKindCount(d, "CALLREF_CALL_NAMED"), d);
+    }
+
+    testMissingObject() {
+        if (system(sprintf("%s %s --version >/dev/null 2>&1", env, qcc_bin))) {
+            testSkip("qcc is not available: " + qcc_bin);
+        }
+        TmpDir tmp("qore-aot-dump-find-callref-missing-");
+        string d = backquote(sprintf("%s %s --dump-info %s/missing.qo 2>&1", env, qcc_bin, tmp.path));
+        assertRegex("cannot open", d);
+        assertNRegex("slot maps:", d);
+    }
+}

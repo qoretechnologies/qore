@@ -4138,37 +4138,6 @@ static BinaryNode* qore_socket_exec_recv_binary(QoreSocket* s, qore_offset_t siz
     return bin;
 }
 
-static BinaryNode* qore_socket_exec_recv_some_binary(QoreSocket* s, size_t size, int timeout_ms,
-        const char* owner_name, ExceptionSink* xsink, int source = QORE_SOURCE_SOCKET) {
-    qore_socket_private* priv = qore_socket_private::get(*s);
-    QoreSocketRawAsyncIoGuard io_guard(*priv, xsink, NB_RECV);
-    if (!io_guard) {
-        return nullptr;
-    }
-
-    ValueHolder result(qore_socket_exec_poll(s,
-        new QoreSocketControllerRecvPollOperation(s, QoreSocketControllerRecvPollOperation::Action::RecvSome,
-            size, false, "receiving", "received"),
-        timeout_ms, owner_name, "received", xsink), xsink);
-    if (*xsink) {
-        return nullptr;
-    }
-    if (result->isNothing()) {
-        return new BinaryNode;
-    }
-    if (result->getType() != NT_BINARY) {
-        xsink->raiseException("SOCKET-RECV-ERROR", "expected binary data from async receive operation, got '%s'",
-            result->getFullTypeName());
-        return nullptr;
-    }
-
-    BinaryNode* bin = result.release().get<BinaryNode>();
-    if (source > 0) {
-        priv->do_data_event(QORE_EVENT_SOCKET_DATA_READ, source, *bin);
-    }
-    return bin;
-}
-
 struct QoreSocketInputStreamRefGuard {
     QoreSocketInputStreamRefGuard(InputStream* is, ExceptionSink* xsink) : is(is), xsink(xsink) {
         this->is->ref();
@@ -10644,6 +10613,13 @@ int SocketRecvUntilBytesPollState::doRecv(ExceptionSink* xsink) {
                 if (++loop >= max_nonblock_ops) {
                     return SOCK_POLLIN;
                 }
+#ifdef DEBUG
+                // tests hold the read here, after SSL_read() found no record, until the peer has sent its data and
+                // reset or closed the connection (#6315)
+                if (qore_dbg_tls_read_want_hook_t hook = qore_dbg_tls_read_want_hook.load()) {
+                    hook(io_use.getDescriptor());
+                }
+#endif
                 short revents;
                 int prc = qore_socket_poll_fd_revents_now(io_use.getDescriptor(), POLLIN | POLLERR | POLLHUP, revents,
                     "SOCKET-RECV-ERROR", "socket", xsink);
@@ -10653,7 +10629,10 @@ int SocketRecvUntilBytesPollState::doRecv(ExceptionSink* xsink) {
                 if (!prc || !(revents & (POLLIN | POLLERR | POLLHUP))) {
                     return SOCK_POLLIN;
                 }
-                if (revents & (POLLERR | POLLHUP)) {
+                // data that arrived with the peer's reset or close is still in the receive buffer: SSL_read() reads
+                // it, and reports the end of the connection only once nothing is left (#6315); without POLLIN, the
+                // connection ended with nothing to read
+                if (!(revents & POLLIN)) {
                     return 0;
                 }
                 continue;

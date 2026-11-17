@@ -153,7 +153,10 @@ public class QoreRemoveFieldsProcessor inherits AbstractDataProvider {
                 return removeDataFrameFields(records);
             case DataProviderShape::BufferColumns:
                 if (AbstractDataProcessor::isColumnarResult(records)) {
-                    return ColumnarResult::fromColumnHash(records.toColumnHash() - field_list);
+                    # the remaining columns keep their schema (qore#6219)
+                    hash<auto> columns = records.toColumnHash() - field_list;
+                    return AbstractDataProcessor::columnarResultWithSchemas(records, columns,
+                        (map {$1: $1}, keys columns) ?? {});
                 }
                 return records - field_list;
             case DataProviderShape::HashOfLists:

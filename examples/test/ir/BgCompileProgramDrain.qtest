@@ -22,6 +22,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
+%requires ../TestInterpreter.qm
 %requires ../ExecModeHarness.qm
 
 %exec-class BgCompileProgramDrainTest
@@ -33,7 +34,7 @@ class BgCompileProgramDrainTest inherits QUnit::Test {
     }
 
     constructor() : QUnit::Test("BgCompileProgramDrainTest", "1.0", \ARGV) {
-        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        qore_bin = TestInterpreter::qore_interpreter();
         scenario = get_script_dir() + DirSep + "BgCompileProgramDrainScenario.qr";
         addTestCase("per-Program drain is correct under forced-native load", \testDrain());
         set_return_value(main());

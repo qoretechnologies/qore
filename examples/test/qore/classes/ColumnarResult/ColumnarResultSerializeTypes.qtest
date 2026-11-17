@@ -2,6 +2,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 
 %modern
+%disable-warning return-value-ignored
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
 %requires QUnit
@@ -154,26 +155,28 @@ class ColumnarResultSerializeTypesTest inherits QUnit::Test {
         assertEq("binary", schema.bin.schema.kind);
     }
 
-    #! columns whose kind is not the kind of their buffer type keep their kind
+    #! a dictionary column in the buffer of its value kind keeps its kind; a kind that its buffer cannot hold is
+    #! refused (qore#6214)
     private bufferBackedKinds() {
         ColumnarResult result = ColumnarResult::fromColumnHash({
             "dict": ("a", "b", NOTHING, "a"),
-            "numstr": new buffer<*string>(("1.5", "2", NOTHING, "3")),
-            "date32": new buffer<*int32>((1, NOTHING, 3, 4)),
         }, {
             "dict": {"schema": {"kind": "dictionary", "dictionary_index_type": "int32", "nullable": True,
                 "children": ({"name": "value", "kind": "string"},)}},
-            "numstr": {"schema": {"kind": "number", "native_type": "varchar"}},
-            "date32": {"schema": {"kind": "date", "nullable": True}},
         });
         ColumnarResult copy = checkRoundTrip(result);
         hash<string, hash<auto>> schema = map {$1.name: $1}, copy.schema();
         assertEq("dictionary", schema.dict.schema.kind);
         assertEq("string", schema.dict.buffer_type);
-        assertEq("number", schema.numstr.schema.kind);
-        assertEq("number", schema.numstr.type);
-        assertEq("date", schema.date32.schema.kind);
-        assertEq("int32", schema.date32.buffer_type);
+
+        assertThrows("COLUMNAR-SCHEMA-ERROR", sub () {
+            ColumnarResult::fromColumnHash({"numstr": new buffer<*string>(("1.5", "2", NOTHING, "3"))},
+                {"numstr": {"schema": {"kind": "number", "native_type": "varchar"}}});
+        });
+        assertThrows("COLUMNAR-SCHEMA-ERROR", sub () {
+            ColumnarResult::fromColumnHash({"date32": new buffer<*int32>((1, NOTHING, 3, 4))},
+                {"date32": {"schema": {"kind": "date", "nullable": True}}});
+        });
     }
 
     #! results with no rows and with no columns
