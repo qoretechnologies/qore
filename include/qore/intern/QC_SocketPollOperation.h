@@ -623,7 +623,12 @@ protected:
             accepted_socket_obj->ref();
             info->setKeyValue("socket", *accepted_socket_obj, xsink);
         } else {
-            info->setKeyValue("socket", getReferencedSocketObject(xsink), xsink);
+            QoreObject* sock = getReferencedSocketObject(xsink);
+            if (!sock) {
+                // no poll info is returned with an exception: a step returns one or the other (#6525)
+                return nullptr;
+            }
+            info->setKeyValue("socket", sock, xsink);
         }
         return info.release();
     }

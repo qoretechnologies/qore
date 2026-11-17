@@ -290,6 +290,7 @@ class ExecModeMarkerTest(unittest.TestCase):
         # - ir-guard-profile-types (#6421): its checks run in child processes that set their own --exec-mode
         # - number-round-exact (#6278): its probes run in child processes that set their own --exec-mode and in qcc
         #   executables
+        # - FtpPortAcceptUnreferenced (#6525): each case runs in a child process started without an execution mode
         self.assertEqual(sorted(["examples/test/ir/AOTConstantImportStale.qtest",
                                  "examples/test/ir/JITFinalizeCancellation.qtest",
                                  "examples/test/ir/ir-guard-profile-types/ir-guard-profile-types.qtest",
@@ -305,6 +306,7 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/qore/classes/method-reference-per-class.qtest",
                                  "examples/test/qore/classes/explicit-type-param-method-call.qtest",
                                  "examples/test/qore/classes/closure-default-self-ref.qtest",
+                                 "examples/test/qore/classes/FtpClient/FtpPortAcceptUnreferenced.qtest",
                                  "examples/test/qore/classes/deleted-object-generic-variant.qtest",
                                  "examples/test/qore/classes/deleted-object-overload.qtest",
                                  "examples/test/qore/operators/empty-string-order.qtest",

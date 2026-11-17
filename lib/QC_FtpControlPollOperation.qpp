@@ -930,6 +930,10 @@ void FtpPortAcceptPollOperationPriv::deref(ExceptionSink* xsink) {
             client_sock->deref(xsink);
             client_sock = nullptr;
         }
+        if (accept_obj) {
+            accept_obj->deref(xsink);
+            accept_obj = nullptr;
+        }
         // the reference to the listener that this state holds (see ftp_ctrl_ref_sock())
         if (listener) {
             listener->deref(xsink);
@@ -1159,9 +1163,11 @@ FtpPortAcceptPollOperation::constructor(Socket[QoreSocketObject] listener_socket
         return;
     }
 
-    self->setPrivate(CID_FTPPORTACCEPTPOLLOPERATION,
-        new FtpPortAcceptPollOperationPriv(self, accept_base, *listener_socket,
-            (bool)secure_data));
+    FtpPortAcceptPollOperationPriv* priv = new FtpPortAcceptPollOperationPriv(self, accept_base, *listener_socket,
+        (bool)secure_data);
+    // the accept operation's steps read the "sock" member of its own object, which is kept with the state (#6525)
+    priv->setAcceptObject(const_cast<QoreObject*>(accept_operation));
+    self->setPrivate(CID_FTPPORTACCEPTPOLLOPERATION, priv);
 }
 
 //! Destroys the object
