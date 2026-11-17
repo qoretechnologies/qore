@@ -50,6 +50,14 @@ class HttpUntrustedCharsetNamesTest inherits QUnit::Test {
         const Count = 10000;
         #! the number of names sent to and from a server
         const ServerCount = 200;
+        #! labels of standard character sets that some platforms' iconv does not convert to: the label, the encoding
+        #! that it selects, and the charset that Accept-Charset gives for it
+        const StandardLabels = (
+            ("euc-kr", "EUC-KR", "euc-kr"),
+            ("gb2312", "GB2312", "gb2312"),
+            ("big5", "Big5", "big5"),
+            ("ks_c_5601-1987", "CP949", "CP949"),
+        );
     }
 
     constructor() : Test("HTTP untrusted charset names test", "1.0") {
@@ -67,6 +75,19 @@ class HttpUntrustedCharsetNamesTest inherits QUnit::Test {
             rv += sprintf("%s-x%d", prefix, i);
         }
         return rv;
+    }
+
+    #! returns True if this platform's iconv converts text to the encoding, as the HTTP functions require
+    private static bool iconvConverts(string enc) {
+        try {
+            convert_encoding("x", enc);
+            return True;
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "ENCODING-CONVERSION-ERROR") {
+                return False;
+            }
+            rethrow;
+        }
     }
 
     #! checks that none of the names selects an encoding
@@ -133,8 +154,22 @@ class HttpUntrustedCharsetNamesTest inherits QUnit::Test {
         binary latin2 = convert_encoding("Řeřicha", "ISO-8859-2").toBinary();
         assertEq("Řeřicha", convert_encoding(decode_http_body("text/html", binary("<meta charset=\"latin2\">")
             + latin2), "UTF-8").substr(-7));
-        assertEq("EUC-KR", get_http_body_encoding("application/xml", binary("<?xml version=\"1.0\" "
-            "encoding=\"euc-kr\"?><a/>")));
+        # a standard character set declared in a body or accepted by a client is used if this platform's iconv
+        # converts to it, otherwise it is ignored like a name that selects no encoding (musl's iconv has no EUC-KR,
+        # GB2312, Big5 or CP949, for example): the body is then read with the default of its media type (UTF-8 for
+        # XML, ISO-8859-1 for HTML), and the client's other acceptable charset is chosen
+        foreach list<string> l in (StandardLabels) {
+            string label = l[0];
+            string enc = l[1];
+            bool supported = iconvConverts(enc);
+            string what = sprintf("%y (%s, %s by iconv)", label, enc, supported ? "converted" : "not converted");
+            assertEq(supported ? enc : "UTF-8", get_http_body_encoding("application/xml",
+                binary("<?xml version=\"1.0\" encoding=\"" + label + "\"?><a/>")), "XML declaration of " + what);
+            assertEq(supported ? enc : "ISO-8859-1", get_http_body_encoding("text/html",
+                binary("<meta charset=\"" + label + "\">x")), "meta element of " + what);
+            assertEq(supported ? l[2] : "utf8", get_http_accept_charset(label + ", utf-8;q=0.5"),
+                "Accept-Charset of " + what);
+        }
         assertEq("windows-1250", get_http_accept_charset("windows-1250, utf-8;q=0.5"));
         # a label of a standard character set gives the name of its encoding, which the server converts with
         assertEq("Shift_JIS", get_http_accept_charset("x-sjis, utf-8;q=0.5"));

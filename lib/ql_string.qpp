@@ -1978,6 +1978,11 @@ nothing force_encoding() [flags=RUNTIME_NOOP] {
     \c "x-sjis", \c "EUC-JP", \c "EUC-KR", \c "ks_c_5601-1987", \c "GB18030", \c "Big5", \c "csISOLatin2"),
     which is registered then if it is not built in; any other name selects none.
 
+    Whether text can be converted to or from a standard character set depends on the platform's iconv (the iconv of
+    musl, for example, has no EUC-KR, GB2312, Big5 or CP949); a label whose encoding this iconv does not convert to is
+    ignored like a name that selects no encoding where a name declared in an HTTP body or accepted in
+    \c Accept-Charset is used.
+
     Use it for a character set name taken from data that the program does not control (the \c charset of a message
     or of a MIME part, an encoded word of a MIME header) before converting text with it:
     @ref Qore::force_encoding() "force_encoding()" and @ref Qore::convert_encoding() "convert_encoding()" register
