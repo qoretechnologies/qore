@@ -2045,7 +2045,8 @@
     - a module blacklisted with @ref Qore::qore_add_module_to_blacklist() "qore_add_module_to_blacklist()" is also
       refused when it is a @ref separated_modules "separated module", however it is loaded (issue #6450)
     - a line that starts with an unknown parse directive, such as <tt>%%require mymod</tt>, gives an error that names it
-      and suggests the closest parse directive, instead of "syntax error, unexpected identifier" (see
+      and suggests the closest parse directive, instead of "syntax error, unexpected identifier", and a directive name
+      with more after it (<tt>%%requires-x</tt>) is an unknown directive, not a directive with an argument (see
       @ref unknown_parse_directives "unknown parse directives"; issue #56)
     - a sleep with @ref Qore::usleep() "usleep()" or @ref Qore::sleep() "sleep()" that a signal interrupted while
       it slept with \c nanosleep() (2) slept its whole time again instead of the time that was left (issue #6364)
