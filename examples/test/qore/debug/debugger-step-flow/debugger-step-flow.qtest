@@ -8,6 +8,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
 %requires QUnit
+%requires ../../../TestInterpreter.qm
 %requires ../../../ExecModeHarness.qm
 
 %exec-class DebuggerStepFlowTest
@@ -619,7 +620,7 @@ class DebuggerStepFlowTest inherits QUnit::Test {
     }
 
     constructor() : QUnit::Test("DebuggerStepFlow", "1.0", \ARGV) {
-        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        qore_bin = TestInterpreter::qore_interpreter();
         tags = getTags();
         addTestCase("a return at a step event", \testReturn());
         addTestCase("a break at a step event", \testBreak());

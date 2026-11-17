@@ -19,11 +19,12 @@
 %no-child-restrictions
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
+%requires ../TestInterpreter.qm
 %exec-class AOTDebugIRFlowTest
 
 class AOTDebugIRFlowTest inherits QUnit::Test {
     private {
-        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string qore_bin = TestInterpreter::qore_interpreter();
         string libqore_dir;
         string tmp_dir;
         string src = get_script_dir() + "/aot-debug-ir-flow/flow.q";
