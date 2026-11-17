@@ -651,13 +651,31 @@ static size_t get_stack_size() {
 static int initial_thread = -1;
 
 // this structure holds all thread-specific data
-// the run-time parse options and their override are in the base class (see RuntimeParseOptionsOverrideHelper)
-class ThreadData : public ThreadRuntimeParseOptionsState {
+class ThreadData {
 public:
+    QoreParseOptions runtime_po;
+    QoreParseOptions runtime_po_override_mask;
+    QoreParseOptions runtime_po_override_value;
+    //! the options of runtime_po_override_mask whose value is that of the override, not also that of the code
+    /** see QoreCallParseOptionsOverride::replace
+    */
+    QoreParseOptions runtime_po_override_replace;
+    //! the restrictions that the code of runtime_po_module_pgm inherits from its caller
+    /** see runtime_get_own_program_state_parse_options()
+    */
+    QoreParseOptions runtime_po_caller_restrictions;
+    //! the Program of the module whose code runs with runtime_po_caller_restrictions, or nullptr
+    const QoreProgram* runtime_po_module_pgm = nullptr;
     //! the Program that the next user call is made on behalf of, or nullptr; see QoreCallbackCallerHelper
     const QoreProgram* callback_caller_pgm = nullptr;
     //! the Program running on the thread when callback_caller_pgm was set
     const QoreProgram* callback_from_pgm = nullptr;
+    //! the ID of the application Program that the code of runtime_po_module_pgm runs for
+    qore_program_id_t runtime_po_app_pgm_id = 0;
+    //! true while module code runs for a sandboxed caller; see QoreCallParseOptionsOverride::sandboxed
+    bool runtime_po_sandboxed = false;
+    //! the module Program whose code the override was set for; see QoreCallParseOptionsOverride::override_pgm
+    const QoreProgram* runtime_po_override_pgm = nullptr;
     //! the data of the thread's RuntimeConfig (rc_get_tls_impl()), once it has been looked up; see
     //! sync_runtime_config_program()
     mutable RuntimeConfig::Impl* rc = nullptr;
@@ -6970,7 +6988,7 @@ void RuntimeParseOptionsOverrideHelper::set(ThreadData* td, const QoreCallParseO
     assert(!o.caller_restrictions || o.module_pgm);
     assert(!active);
     assert(td == thread_data.get());
-    tds = td;
+    this->td = td;
     active = true;
     old_mask = td->runtime_po_override_mask;
     old_value = td->runtime_po_override_value;
@@ -6994,8 +7012,7 @@ void RuntimeParseOptionsOverrideHelper::set(ThreadData* td, const QoreCallParseO
 
 void RuntimeParseOptionsOverrideHelper::setCleared() {
     assert(!active);
-    ThreadData* td = thread_data.get();
-    tds = td;
+    td = thread_data.get();
     active = true;
     old_mask = td->runtime_po_override_mask;
     old_value = td->runtime_po_override_value;
@@ -7015,6 +7032,20 @@ void RuntimeParseOptionsOverrideHelper::setCleared() {
     td->runtime_po_sandboxed = false;
     td->runtime_po_override_pgm = nullptr;
     // an empty override leaves the runtime parse options as they are (see apply_runtime_po_override())
+}
+
+void RuntimeParseOptionsOverrideHelper::restore() {
+    assert(active);
+    assert(td == thread_data.get());
+    td->runtime_po_override_mask = old_mask;
+    td->runtime_po_override_value = old_value;
+    td->runtime_po_override_replace = old_replace;
+    td->runtime_po_caller_restrictions = old_caller_restrictions;
+    td->runtime_po_module_pgm = old_module_pgm;
+    td->runtime_po_app_pgm_id = old_app_pgm_id;
+    td->runtime_po_sandboxed = old_sandboxed;
+    td->runtime_po_override_pgm = old_override_pgm;
+    td->runtime_po = old_po;
 }
 
 void QoreThreadRuntimeParseOptions::refPrograms() {
