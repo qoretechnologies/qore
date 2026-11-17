@@ -2088,7 +2088,9 @@ int qore_class_private::initMember(QoreObject& o, bool& need_scan, const char* m
                 need_scan = true;
             }
         }
-        if (!old.isNothing()) {
+        // NOTHING is only ever stored as VAL_NOTHING, so the inline bool conversion is the check, without the call of
+        // the exported QoreValue::isNothing()
+        if (old) {
             if (needs_scan(old)) {
                 qore_object_private::incScanCount(o, -1);
             }
