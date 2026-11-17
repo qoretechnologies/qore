@@ -3541,6 +3541,7 @@ void BCList::parseAddAncestors(QoreMethod* m) {
     // the hierarchy is walked iteratively, depth first in the order of the base classes, as it can be as long as the
     // code declares it (issue #6047)
     HierarchyWalkStack<HierarchyWalkFrame> stack;
+    qcp_set_t visited;
     stack.push({this, 0});
     while (!stack.empty()) {
         HierarchyWalkFrame& f = stack.back();
@@ -3552,6 +3553,11 @@ void BCList::parseAddAncestors(QoreMethod* m) {
         // if there was a parse error finding the base class, then skip
         QoreClass* qc = n.sclass;
         if (!qc) {
+            continue;
+        }
+        // each ancestor is visited once: a class reached through another path of a diamond hierarchy has been added
+        // with its own ancestors already, at its first position (issue #6488)
+        if (!visited.insert(qc->priv).second) {
             continue;
         }
 
@@ -3573,6 +3579,7 @@ void BCList::parseAddStaticAncestors(QoreMethod* m) {
     const char* name = m->getName();
     // the hierarchy is walked iteratively, as for parseAddAncestors()
     HierarchyWalkStack<HierarchyWalkFrame> stack;
+    qcp_set_t visited;
     stack.push({this, 0});
     while (!stack.empty()) {
         HierarchyWalkFrame& f = stack.back();
@@ -3584,6 +3591,10 @@ void BCList::parseAddStaticAncestors(QoreMethod* m) {
         QoreClass* qc = n.sclass;
         // qc may be 0 if there were a parse error with an unknown class earlier
         if (!qc) {
+            continue;
+        }
+        // each ancestor is visited once, as in parseAddAncestors() (issue #6488)
+        if (!visited.insert(qc->priv).second) {
             continue;
         }
 

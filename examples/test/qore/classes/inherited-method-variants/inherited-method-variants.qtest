@@ -14,11 +14,13 @@
 
 %exec-class InheritedMethodVariantsTest
 
-#! Tests that each parent method is in the inheritance list of a method once (qore#6466)
+#! Tests that each ancestor method is in the inheritance list of a method once (qore#6466, qore#6488)
 /** A method that a class declares with the name of a parent class's method has the parent's method in its inheritance
     list; the hierarchy of the class was initialized again for each of its subclasses, which added the parent's method
     again each time, so a call tested its variants and RUNTIME-OVERLOAD-ERROR listed them once more for each
-    subclass.  The worker runs in every execution mode, in the default execution mode and as a qcc-compiled
+    subclass (qore#6466); the list also held an ancestor reached through a diamond hierarchy once per path, 2^n
+    times through n diamond levels, and a later path through a private edge hid the parent classes after it
+    (qore#6488).  The worker runs in every execution mode, in the default execution mode and as a qcc-compiled
     executable.  An invalid hierarchy (circular, or with an unknown parent class) stays a parse error with more than
     one subclass.
 */
@@ -32,6 +34,19 @@ class InheritedMethodVariantsTest inherits QUnit::Test {
             "B.m: {::B::m(string s): 1, ::A::m(int v): 1}",
             "C.m: {::B::m(string s): 1, ::A::m(int v): 1}",
             "HX::gid: {::HX::gid(string s): 1, ::G::gid(float v): 1}",
+            "DD::sid: {::DD::sid(date d): 1, ::DB::sid(string s): 1, ::DA::sid(int v): 1, ::DC::sid(bool b): 1}",
+            "DD.m: {::DD::m(date d): 1, ::DB::m(string s): 1, ::DA::m(int v): 1, ::DC::m(bool b): 1}",
+            "DG::sid: {::DG::sid(hash<auto> h): 1, ::DD::sid(date d): 1, ::DB::sid(string s): 1, "
+                "::DA::sid(int v): 1, ::DC::sid(bool b): 1, ::DF::sid(binary b): 1}",
+            "DG.m: {::DG::m(hash<auto> h): 1, ::DD::m(date d): 1, ::DB::m(string s): 1, ::DA::m(int v): 1, "
+                "::DC::m(bool b): 1, ::DF::m(binary b): 1}",
+            "DJ::sid: {::DJ::sid(code c): 1, ::DG::sid(hash<auto> h): 1, ::DD::sid(date d): 1, "
+                "::DB::sid(string s): 1, ::DA::sid(int v): 1, ::DC::sid(bool b): 1, ::DF::sid(binary b): 1}",
+            "DJ.m: {::DJ::m(code c): 1, ::DG::m(hash<auto> h): 1, ::DD::m(date d): 1, ::DB::m(string s): 1, "
+                "::DA::m(int v): 1, ::DC::m(bool b): 1, ::DF::m(binary b): 1}",
+            "diamond calls: [1, \"DB x\", False, \"2026-01-01\", 2, \"DB y\", True, \"2026-01-02\", 3, \"DB z\", 2, 1, "
+                "4, 3, 0, 5, \"DB v\", \"c\", 1, 6, False, \"d\"]",
+            "access paths: [\"PA\", \"PX\", \"PD\", \"PA\", \"PX\", \"PD\"]",
             "calls: [1, \"B x\", 2, \"B y\", 6.0, 3.0, \"B z\", 4, \"B w\", 5, \"HX v\"]",
         );
     }
@@ -103,9 +118,13 @@ class InheritedMethodVariantsTest inherits QUnit::Test {
             f.open2(file, O_CREAT | O_WRONLY | O_TRUNC);
             f.write("%modern\n" + c[1] + "printf(\"ran\\n\");\n");
             f.close();
-            # the address space is limited, so that a parse that does not end fails instead of using all memory
-            string out = backquote(sprintf("ulimit -v 4000000 2>/dev/null; LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s "
-                "%s %s 2>&1", libqore_dir, libqore_dir, qore_bin, file));
+            # the address space is limited, so that a parse that does not end fails instead of using all memory;
+            # sanitizers reserve address space of their own, so it is not limited under them
+            string limit = (!ENV.ASAN_OPTIONS && !ENV.TSAN_OPTIONS && !ENV.MSAN_OPTIONS)
+                ? "ulimit -v 4000000 2>/dev/null; "
+                : "";
+            string out = backquote(sprintf("%sLD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s %s 2>&1", limit, libqore_dir,
+                libqore_dir, qore_bin, file));
             assertTrue(out =~ /PARSE-EXCEPTION/, c[0] + ": " + out);
             assertTrue(out.find(c[2]) >= 0, c[0] + ": " + out);
             assertFalse(out =~ /^ran$/m, c[0] + ": " + out);
