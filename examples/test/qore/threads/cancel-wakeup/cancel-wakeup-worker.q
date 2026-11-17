@@ -37,12 +37,18 @@ string sub make_fifo() {
     opens the FIFO, because it failed or the child was not started, leaves the child that would open it missing, so
     the FIFO is opened in a thread of its own that pushes to \a events, where the end of the call is pushed too.
 
+    The reader closes the FIFO before it reports that it was opened: a case uses the same FIFO in every trial, and a
+    reader still holding it open when the next trial starts would let that trial's child open the FIFO, write to it
+    and close it before that trial's reader opens it, which then waits for a writer that never comes, and the trial
+    ends only when its child's command does (issue #6439).
+
     @return the end of the call if it ended first; the FIFO's reader is then released by a writer of its own
 */
 *hash<auto> sub wait_fifo(string path, Queue events) {
     background sub () {
         ReadOnlyFile f(path);
         f.readBinary(1);
+        f.close();
         events.push({"opened": True});
     }();
     hash<auto> ev = events.get();
