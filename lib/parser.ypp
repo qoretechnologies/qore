@@ -2224,18 +2224,19 @@ static AbstractQoreNode* process_dot(int sline, int eline, QoreValue l, QoreValu
     return new QoreHashObjectDereferenceOperatorNode(loc, l, r);
 }
 
-static AbstractQoreNode* process_hard_keyword_member(int sline, int scol, QoreValue left,
+//! the location of the token is that of the dot and the keyword, with any white space between them (issue #525)
+static AbstractQoreNode* process_hard_keyword_member(const YYLTYPE& tloc, QoreValue left,
         QoreStringNode* member) {
     const char* keyword = member->c_str();
     const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(
-        sline, sline, scol, scol + member->size() + 1);
+        tloc.first_line, tloc.last_line, tloc.first_col, tloc.last_col);
     QoreStringMaker replacement("{\"%s\"}", keyword);
     QoreDiagnosticMetadata metadata("HARD-KEYWORD-MEMBER-ACCESS",
         "hard keywords cannot be used with dot member syntax; use a quoted hash subscript");
     metadata.addFact("keyword", keyword);
     metadata.addFact("accessSyntax", "dot");
     metadata.addSuggestion(replacement.c_str());
-    metadata.addFix(QoreStringMaker("replace '.%s' with '%s'", keyword, replacement.c_str()).c_str(),
+    metadata.addFix(QoreStringMaker("replace '.' and '%s' with '%s'", keyword, replacement.c_str()).c_str(),
         "machine-applicable").addEdit(*loc, replacement.c_str());
     QoreStringNode* desc = new QoreStringNodeMaker("hard keyword '%s' cannot be used after '.'; "
         "write %s instead", keyword, replacement.c_str());
@@ -6504,7 +6505,7 @@ exp:
     | exp RANGE exp                     { $$ = (new QoreRangeOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); ParseNode::bindSemanticPolicy($$, @2.semantic_policy); }
     | exp '.' exp                       { $$ = (process_dot(@1.first_line, @3.last_line, $1, $3)); ParseNode::bindSemanticPolicy($$, @2.semantic_policy); }
     | exp DOT_KW_IDENTIFIER             { $$ = (new QoreHashObjectDereferenceOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col), $1, $2)); ParseNode::bindSemanticPolicy($$, @2.semantic_policy); }
-    | exp DOT_HARD_KEYWORD              { $$ = process_hard_keyword_member(@2.first_line, @2.first_col, $1, $2); ParseNode::bindSemanticPolicy($$, @2.semantic_policy); }
+    | exp DOT_HARD_KEYWORD              { $$ = process_hard_keyword_member(@2, $1, $2); ParseNode::bindSemanticPolicy($$, @2.semantic_policy); }
     ;
 
 exp_n:
@@ -6630,7 +6631,7 @@ exp_n:
     | exp_n RANGE exp                     { $$ = (new QoreRangeOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); ParseNode::bindSemanticPolicy($$, @2.semantic_policy); }
     | exp_n '.' exp                       { $$ = (process_dot(@1.first_line, @3.last_line, $1, $3)); ParseNode::bindSemanticPolicy($$, @2.semantic_policy); }
     | exp_n DOT_KW_IDENTIFIER             { $$ = (new QoreHashObjectDereferenceOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col), $1, $2)); ParseNode::bindSemanticPolicy($$, @2.semantic_policy); }
-    | exp_n DOT_HARD_KEYWORD              { $$ = process_hard_keyword_member(@2.first_line, @2.first_col, $1, $2); ParseNode::bindSemanticPolicy($$, @2.semantic_policy); }
+    | exp_n DOT_HARD_KEYWORD              { $$ = process_hard_keyword_member(@2, $1, $2); ParseNode::bindSemanticPolicy($$, @2.semantic_policy); }
     ;
 
 // adjacent strings are concatenated; the rule is left-recursive so that the parser's stack does not grow with
