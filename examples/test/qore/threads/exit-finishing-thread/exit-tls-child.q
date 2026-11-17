@@ -8,8 +8,8 @@
 %require-types
 %strict-args
 
-# the thread is held for up to 3 seconds in a thread-local destructor
-call_function("dbg_hold_next_thread_tls_exit", 3000);
+# the thread is held for up to 30 seconds in a thread-local destructor
+call_function("dbg_hold_next_thread_tls_exit", 30000);
 Counter c(1);
 background sub () { c.dec(); }();
 c.waitForZero();

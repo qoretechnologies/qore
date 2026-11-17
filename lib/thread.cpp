@@ -7107,6 +7107,10 @@ QoreException* catch_get_exception() {
     return td->catchException;
 }
 
+#ifdef DEBUG
+static void qore_dbg_release_finishing_hold();
+#endif
+
 //! Waits for the background threads that have released their TID and are finishing; returns -1 if they do not finish
 /** A background thread releases its TID (thread_list.deleteDataRelease()) before it runs the thread cleanup functions
     and leaves thread_counter, so thread_list does not count it then; exit() must not run the static destructors
@@ -7116,6 +7120,13 @@ QoreException* catch_get_exception() {
     not waited for.
 */
 static int qore_exit_wait_finishing_threads() {
+#ifdef DEBUG
+    // a held finishing thread (the debug controls of the tests of issues #6405 and #6412) is released by the wait
+    // only if the wait waits for it: a thread that exit() did not wait for is released by the static releaser
+    if (thread_counter.getCount() > qore_thread_counter_share) {
+        qore_dbg_release_finishing_hold();
+    }
+#endif
     // a condition wait on thread_counter, which wakes it when a thread leaves it
     return thread_counter.waitForCountAtMost(qore_thread_counter_share, 10 * 1000) ? -1 : 0;
 }
@@ -7211,6 +7222,10 @@ struct QoreDbgTlsHold {
             dbg_finish_hold->cv.notify_all();
             dbg_finish_hold->cv.wait_for(l, std::chrono::milliseconds(ms),
                 [] () { return dbg_finish_hold->released; });
+            if (!dbg_finish_hold->released) {
+                // the test fails on this output: the hold must end by the exit() wait or the static releaser
+                fputs("qore-dbg: a finishing thread hold ended by its timeout\n", stderr);
+            }
             dbg_finish_hold->held = false;
             dbg_finish_hold->cv.notify_all();
         }
@@ -7240,8 +7255,21 @@ static void qore_dbg_hold_thread_finish() {
     dbg_finish_hold->held = true;
     dbg_finish_hold->cv.notify_all();
     dbg_finish_hold->cv.wait_for(l, std::chrono::milliseconds(ms), [] () { return dbg_finish_hold->released; });
+    if (!dbg_finish_hold->released) {
+        // the test fails on this output: the hold must end by the exit() wait or the static releaser
+        fputs("qore-dbg: a finishing thread hold ended by its timeout\n", stderr);
+    }
     dbg_finish_hold->held = false;
     dbg_finish_hold->cv.notify_all();
+}
+
+//! Releases a held finishing thread because exit() waits for it (see qore_exit_wait_finishing_threads())
+static void qore_dbg_release_finishing_hold() {
+    std::lock_guard<std::mutex> l(dbg_finish_hold->m);
+    if (dbg_finish_hold->held) {
+        dbg_finish_hold->released = true;
+        dbg_finish_hold->cv.notify_all();
+    }
 }
 #endif
 
@@ -7600,8 +7628,9 @@ public:
                 return;
             }
             assert(!head);
-            // a thread counted in thread_counter is joined before the count can reach zero
-            assert(!counted_head);
+            // a thread counted in thread_counter can still be queued here (one that user module cleanup started in
+            // qore_cleanup(), or a stop by the static destructor without a wait): run() joins every queued thread
+            // before it returns, and a thread that comes later detaches itself (completeCounted())
             stopping = true;
             condition.signal();
         }

@@ -17,8 +17,9 @@
     and exit() treated the process as single-threaded once no TID was in use: it ran the static destructors, and the
     finishing thread then locked the destroyed thread_counter (an assertion in a debug build, a use of a destroyed
     object in a release build).  The child process holds the finishing thread between the two points with a debug
-    control and calls exit(); the hold ends when the static objects are destroyed, so that a thread that exit() did
-    not wait for uses the destroyed counter, or after 3 seconds, when exit() waits for it.
+    control and calls exit().  The hold is ended by exit() when it waits for the thread, or by the destruction of the
+    static objects, so that a thread that exit() did not wait for uses the destroyed counter and the child aborts; a
+    hold that ends by its 30 s timeout prints a line that fails the test, so the timeout cannot make it pass.
 */
 class ExitFinishingThreadTest inherits QUnit::Test {
     constructor() : QUnit::Test("ExitFinishingThreadTest", "1.0") {
