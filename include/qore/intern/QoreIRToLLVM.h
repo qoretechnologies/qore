@@ -688,6 +688,24 @@ private:
         first table; its size is set by finalizeCleanupFrame().
     */
     llvm::AllocaInst* cleanup_frame = nullptr;
+    //! the buffer of the arrays that the code of one IR instruction passes to the runtime (the operands of a call or
+    //! of the construction of a container): one entry-block alloca of the function, whose slots every instruction
+    //! uses again, so that the frame holds the arrays of one instruction instead of those of all of them (qore#6415);
+    //! made with the first array and given its size when the function is finalized (sizeCallArrayBuffer())
+    llvm::AllocaInst* call_array_buffer = nullptr;
+    //! the slots of call_array_buffer in use by the instructions being lowered (CallArrayScope)
+    unsigned call_array_top = 0;
+    //! the most slots of call_array_buffer in use at once
+    unsigned call_array_max = 0;
+
+    //! returns the address of \a slots 8-byte slots of the call array buffer for the IR instruction being lowered
+    /** the slots stay the instruction's until its lowering ends (lowerInstruction()); the address is computed in the
+        entry block, so that it is available in every block of the instruction's code
+    */
+    DLLLOCAL llvm::Value* allocCallArray(llvm::Function* llvm_func, unsigned slots);
+
+    //! gives the call array buffer the size of the most slots in use at once
+    DLLLOCAL void sizeCallArrayBuffer();
 
     //! Returns the cleanup frame of the function, making it if it has none
     llvm::AllocaInst* getCleanupFrame(llvm::Function* llvm_func);

@@ -28,6 +28,10 @@ public class FrameCheckStackTest inherits QUnit::Test {
     public {
         #! the number of entries of the hash literal of the function with a large frame
         const Entries = 300;
+
+        #! the most bytes of frame per entry of the hash literal: the arrays of the entries' constructions share
+        #! the stack (qore#6415: about 96 bytes per entry on x86_64; 184 with qcc and 328 with the JIT before)
+        const MaxFrameBytesPerEntry = 150;
     }
 
     private {
@@ -138,7 +142,10 @@ public class FrameCheckStackTest inherits QUnit::Test {
     #! thunk
     private checkCalls(string what, string out, int status, list<string> stacks) {
         assertEq(0, status, what + ": " + out);
-        assertTrue(out =~ /frame check: [^\n]*: thunk/, what + ": a thunk was made: " + out);
+        *list<*string> frame = (out =~ x/frame check: [^\n]*big[^\n:]*: ([0-9]+) bytes: thunk/);
+        assertTrue(exists frame, what + ": a thunk was made: " + out);
+        # the frame grows with the code of the entries of the literal, but not with the arrays of their constructions
+        assertLt(Entries * MaxFrameBytesPerEntry, frame[0].toInt(), what + ": frame size");
         int ok;
         int ex;
         foreach string kb in (stacks) {
