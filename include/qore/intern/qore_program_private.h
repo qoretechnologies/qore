@@ -1059,7 +1059,13 @@ public:
     }
 
     typedef std::set<q_exp_t> q_exp_set_t;
+    //! the expressions of the Program (Expression objects), guarded by exp_set_lock
     q_exp_set_t exp_set;
+    //! guards exp_set, which threads change and read while they create, run and delete the expressions of the
+    //! Program; the parse of an expression is serialized by the parse lock, but its deletion and its run are not
+    //! (qore#6493); an expression is deleted after it is removed from the set, with the lock released, as its deletion
+    //! can run code
+    mutable std::mutex exp_set_lock;
     q_exp_t new_expression = nullptr;
 
     int tclear = 0;   // clearing thread-local variables in progress? if so, this is the TID
@@ -3612,7 +3618,10 @@ public:
                 pp.warnSink = nullptr;
                 // an expression parsed before the exception is not returned
                 if (pp.new_expression) {
-                    pp.exp_set.erase(pp.new_expression);
+                    {
+                        std::lock_guard<std::mutex> el(pp.exp_set_lock);
+                        pp.exp_set.erase(pp.new_expression);
+                    }
                     delete pp.new_expression;
                     pp.new_expression = nullptr;
                 }
@@ -3767,7 +3776,10 @@ public:
         q_exp_t rv = new_expression;
         if (new_expression) {
             if (*xsink) {
-                exp_set.erase(new_expression);
+                {
+                    std::lock_guard<std::mutex> el(exp_set_lock);
+                    exp_set.erase(new_expression);
+                }
                 delete new_expression;
                 rv = nullptr;
             }
@@ -5030,7 +5042,13 @@ public:
         if (*xsink) {
             return QoreValue();
         }
-        if (exp_set.find(exp) == exp_set.end()) {
+        // the expression is not deleted while it runs: its Expression object, which deletes it, is in use
+        bool registered;
+        {
+            std::lock_guard<std::mutex> el(exp_set_lock);
+            registered = exp_set.find(exp) != exp_set.end();
+        }
+        if (!registered) {
             xsink->raiseException("INVALID-EXPRESSION", "expression not registered to this Program object");
             return QoreValue();
         }
@@ -5065,12 +5083,14 @@ public:
     }
 
     DLLLOCAL void deleteExpression(q_exp_t exp) {
-        AutoLocker al(plock);
-        q_exp_set_t::iterator i = exp_set.find(exp);
-        if (i != exp_set.end()) {
-            exp_set.erase(exp);
-            delete exp;
+        {
+            std::lock_guard<std::mutex> el(exp_set_lock);
+            if (!exp_set.erase(exp)) {
+                return;
+            }
         }
+        // deleted with the lock released: its deletion can run code, which can create or delete expressions
+        delete exp;
     }
 
     DLLLOCAL void importClass(ExceptionSink* xsink, qore_program_private& from_pgm, const char* path,
