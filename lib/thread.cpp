@@ -6045,6 +6045,29 @@ void qore_module_init_set_program(const QoreProgram* pgm) {
     }
 }
 
+//! returns true if only module code runs on the thread above the module initialization barrier \a mib
+/** That is, no code of a Program that is not a module's was called while the module is initialized (code that the
+    module's initialization calls back, such as a listener or an object of the caller's): the walk of
+    qore_get_caller_domain_restrictions() reaches the barrier without finding such a Program
+*/
+static bool qore_module_init_runs_only_module_code(ThreadData* td, const ThreadData::ModuleInitBarrier& mib) {
+    const QoreProgram* pgm = td->current_pgm;
+    if (pgm && !qore_program_is_module_inline(pgm) && (td->current_pgm_ctx != mib.ctx || pgm != mib.pgm)) {
+        return false;
+    }
+    for (const ProgramThreadCountContextHelper* ch = td->current_pgm_ctx; ch; ch = ch->getOldContext()) {
+        if (ch == mib.ctx || ch->getOldContext() == mib.ctx) {
+            return true;
+        }
+        const QoreProgram* old_pgm = ch->getOldProgram();
+        if (old_pgm && !qore_program_is_module_inline(old_pgm)) {
+            return false;
+        }
+    }
+    // the barrier was set with no program context on the stack
+    return !mib.ctx;
+}
+
 bool qore_module_init_closure_creation(const QoreProgram* pgm) {
     ThreadData* td = thread_data.get();
     if (!pgm || !td || td->module_init_barriers.empty()) {
@@ -6052,9 +6075,11 @@ bool qore_module_init_closure_creation(const QoreProgram* pgm) {
     }
     const ThreadData::ModuleInitBarrier& mib = td->module_init_barriers.back();
     // only the code of the library module that is being initialized, not code of another Program that runs while it
-    // is initialized (the loader's, or another module's)
+    // is initialized (the loader's, or another module's), and only if no such code called the module's code that
+    // creates the closure: code that the initialization calls back must not get closures of the module made for it
     return !mib.lift && mib.module_pgm == pgm
-        && qore_program_private::get(*const_cast<QoreProgram*>(pgm))->library_module;
+        && qore_program_private::get(*const_cast<QoreProgram*>(pgm))->library_module
+        && qore_module_init_runs_only_module_code(td, mib);
 }
 
 QoreSandboxManager* qore_module_init_lift_manager_ref() {

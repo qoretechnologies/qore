@@ -258,6 +258,170 @@ list<string> sub run(*string arg) {
 %requires RcLazyMod
 sub t() { DataProviderActionCatalog::registerLazyAppActions(LazyApp, sub () {}); }",
     },
+
+    # a closure that the module's code creates for code of another Program that runs while a deferred module
+    # initialization runs (a catalog change listener) is not deferred module initialization
+    "listener": {
+        "restricted": "%requires DataProvider
+%requires ConnectionProvider
+%requires RcLazyMod
+class RcListener inherits DataProviderCatalogChangeListener {
+    public {
+        *code kept;
+        int calls = 0;
+    }
+
+    catalogChanged(int revision) {
+        ++calls;
+        if (!kept) {
+            kept = getLateClosure();
+        }
+    }
+}
+
+list<string> sub run(*string arg) {
+    list<string> l = ();
+    RcListener listener();
+    int id = DataProviderActionCatalog::addCatalogChangeListener(listener);
+    on_exit DataProviderActionCatalog::removeCatalogChangeListener(id);
+    l += \"lazy actions: \" + attempt_desc(auto sub () {
+        return action_names(DataProviderActionCatalog::getActionHash(LazyApp)); });
+    l += \"lazy runs: \" + getCalls(\"lazy\");
+    l += \"listener called: \" + sprintf(\"%y\", listener.calls > 0);
+    l += \"closure kept: \" + sprintf(\"%y\", exists listener.kept);
+    if (listener.kept) {
+        l += \"kept closure qualifies: \" + sprintf(\"%y\", is_module_init_closure(listener.kept));
+        l += \"kept closure run: \" + attempt(auto sub () { return call_module_init_closure(listener.kept); });
+        l += \"kept closure called: \" + attempt(listener.kept);
+    }
+    code init = getInitClosure();
+    l += \"init closure qualifies: \" + sprintf(\"%y\", is_module_init_closure(init));
+    l += \"init closure run: \" + attempt(auto sub () { return call_module_init_closure(init); });
+    return l;
+}",
+    },
+
+    # the rollback of module loads: restricted code cannot run the rollback closures of other loads, and loads a
+    # module with ImplicitModuleTransaction::loadModule(), which rolls back only that load's registrations
+    "transaction": {
+        "restricted": "%requires DataProvider
+list<string> sub run(*string arg) {
+    list<string> l = ();
+    l += \"file api before: \" + sprintf(\"%y\", exists DataProviderActionCatalog::getAppFileApi(\"QoreTestRcFileApiApp\"));
+    foreach string m in ((\"savepoint\", \"rollback\", \"commit\")) {
+        l += m + \": \" + attempt(auto sub () {
+            return m == \"savepoint\"
+                ? call_static_method(\"DataProvider::ImplicitModuleTransaction\", m)
+                : call_static_method(\"DataProvider::ImplicitModuleTransaction\", m, 0);
+        });
+    }
+    l += \"file api after: \" + sprintf(\"%y\", exists DataProviderActionCatalog::getAppFileApi(\"QoreTestRcFileApiApp\"));
+    l += \"load: \" + attempt_desc(auto sub () { ImplicitModuleTransaction::loadModule(\"RcFileApiFail\"); });
+    l += \"failed load file api: \" + sprintf(\"%y\",
+        exists DataProviderActionCatalog::getAppFileApi(\"QoreTestRcFailApp\"));
+    l += \"file api kept: \" + sprintf(\"%y\", exists DataProviderActionCatalog::getAppFileApi(\"QoreTestRcFileApiApp\"));
+    return l;
+}",
+        # a module whose initialization registers a file API is loaded on this thread before the restricted code runs
+        "trusted_pre": "%requires DataProvider
+%requires RcFileApiMod
+list<string> sub run(*string arg) {
+    return (\"loaded: \" + sprintf(\"%y\", exists DataProviderActionCatalog::getAppFileApi(\"QoreTestRcFileApiApp\")),);
+}",
+        "trusted_post": "%requires DataProvider
+list<string> sub run(*string arg) {
+    return (\"trusted file api: \" + sprintf(\"%y\",
+        exists DataProviderActionCatalog::getAppFileApi(\"QoreTestRcFileApiApp\")),);
+}",
+        # a direct call is refused when it is parsed
+        "restricted_parse": "%requires DataProvider
+sub t() { ImplicitModuleTransaction::rollback(0); }",
+    },
+
+    # restricted code gets a table from the SqlUtil table cache only for its own datasource, and does not fill it
+    "sqlutil-identity": {
+        "trusted_pre": SqlTrustedPre + "
+    # cached for the datasource of this Program
+    AbstractTable t = TableCache::getCached(ds, \"rc_t1\");
+    return (\"trusted cached: \" + sprintf(\"%y\", t.getDatasource() == ds),);
+}",
+        "restricted": "%requires SqlUtil
+# another datasource object on the same database, with the same description
+class RcOtherDatasource inherits AbstractDatasource {
+    private {
+        Datasource ds;
+    }
+    constructor(string connstr) {
+        ds = new Datasource(connstr);
+    }
+    nothing commit() { ds.commit(); }
+    nothing rollback() { ds.rollback(); }
+    nothing beginTransaction() { ds.beginTransaction(); }
+    auto exec(string sql, ...) { return ds.vexec(sql, argv); }
+    auto vexec(string sql, *softlist<auto> args) { return ds.vexec(sql, args); }
+    auto execRaw(string sql) { return ds.execRaw(sql); }
+    auto select(string sql, ...) { return ds.vselect(sql, argv); }
+    auto selectTyped(string sql, ...) { return ds.vselectTyped(sql, argv); }
+    auto selectRow(string sql, ...) { return ds.vselectRow(sql, argv); }
+    auto selectRows(string sql, ...) { return ds.vselectRows(sql, argv); }
+    auto selectRowsTyped(string sql, ...) { return ds.vselectRowsTyped(sql, argv); }
+    auto vselect(string sql, *softlist<auto> args) { return ds.vselect(sql, args); }
+    auto vselectTyped(string sql, *softlist<auto> args) { return ds.vselectTyped(sql, args); }
+    auto vselectRow(string sql, *softlist<auto> args) { return ds.vselectRow(sql, args); }
+    auto vselectRows(string sql, *softlist<auto> args) { return ds.vselectRows(sql, args); }
+    auto vselectRowsTyped(string sql, *softlist<auto> args) { return ds.vselectRowsTyped(sql, args); }
+    *string getUserName() { return ds.getUserName(); }
+    *string getPassword() { return ds.getPassword(); }
+    *string getDBName() { return ds.getDBName(); }
+    *string getDBEncoding() { return ds.getDBEncoding(); }
+    *string getOSEncoding() { return ds.getOSEncoding(); }
+    *string getHostName() { return ds.getHostName(); }
+    *int getPort() { return ds.getPort(); }
+    string getDriverName() { return ds.getDriverName(); }
+    auto getServerVersion() { return ds.getServerVersion(); }
+    auto getClientVersion() { return ds.getClientVersion(); }
+    bool inTransaction() { return ds.inTransaction(); }
+    hash<auto> getConfigHash() { return ds.getConfigHash(); }
+    string getConfigString() { return ds.getConfigString(); }
+}
+
+list<string> sub run(*string arg) {
+    list<string> l = ();
+    RcOtherDatasource ods(\"sqlite3:@\" + arg);
+    l += \"same description: \" + sprintf(\"%y\", AbstractSqlUtilBase::makeDatasourceDesc(ods)
+        == AbstractSqlUtilBase::makeDatasourceDesc(new Datasource(\"sqlite3:@\" + arg)));
+    l += \"cached table: \" + attempt(auto sub () {
+        return TableCache::getCached(ods, \"rc_t1\").getDatasource() == ods ? \"own datasource\" : \"other datasource\";
+    });
+    l += \"resolver table: \" + attempt(auto sub () {
+        return sqlutil_get_cached_table(ods, \"rc_t1\").getDatasource() == ods ? \"own datasource\"
+            : \"other datasource\";
+    });
+    l += \"resolved table: \" + attempt(auto sub () {
+        return TableCache::getCached(ods, \"rc_t2\").getDatasource() == ods ? \"own datasource\" : \"other datasource\";
+    });
+    # the cache cannot be read by its key
+    l += \"cache get: \" + attempt(auto sub () {
+        return call_static_method(\"SqlUtil::TableCache\", \"get\", AbstractSqlUtilBase::makeDatasourceDesc(ods),
+            \"rc_t1\");
+    });
+    ods.rollback();
+    return l;
+}",
+        "trusted_post": "%requires SqlUtil
+list<string> sub run(*string arg) {
+    string desc = AbstractSqlUtilBase::makeDatasourceDesc(new Datasource(\"sqlite3:@\" + arg));
+    list<string> l = ();
+    foreach string name in ((\"rc_t1\", \"rc_t2\")) {
+        *AbstractTable t = TableCache::get(desc, name);
+        l += \"trusted \" + name + \": \" + (t ? t.getDatasource().className() : \"not cached\");
+    }
+    return l;
+}",
+        # a direct call is refused when it is parsed
+        "restricted_parse": "%requires SqlUtil
+sub t() { TableCache::get(\"sqlite3:@x\", \"rc_t1\"); }",
+    },
 };
 
 # prints the lines that the code of a case returns

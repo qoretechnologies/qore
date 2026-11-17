@@ -25,13 +25,19 @@
     - the rollback of a module load that a lookup made and that failed after registering a file API: no registration
       is left, and the original error is reported
     - the SqlUtil table resolver that an unrestricted Program or a library module registered, and the cache that it
-      fills on a miss
+      fills on a miss; restricted code gets a cached table only if its datasource is the one that it gives, and the
+      tables that it resolves are not cached, as the key of the cache is the description that the datasource gives
     - the deferred registrations that the initialization of a library module made (lazy application actions, a
       pending application, a pending connection scheme), which run as deferred module initialization; a lazy
       registration that is not deferred module initialization fails for a restricted reader without breaking the
       application for the next reader
     - restricted code cannot give its own code the exemption of deferred module initialization
-      (is_module_init_closure(), call_module_init_closure()), nor call the registration APIs
+      (is_module_init_closure(), call_module_init_closure()), nor call the registration APIs; a closure that the
+      module's code creates for code of another Program that runs while a deferred initialization runs (a catalog
+      change listener) does not qualify
+    - restricted code cannot run the rollback closures of other module loads on its thread
+      (ImplicitModuleTransaction::savepoint(), rollback(), commit()); ImplicitModuleTransaction::loadModule() rolls
+      back only the registrations of the load that it makes, and raises its error
 
     Each case runs in a child process of its own, which loads the modules freshly; the modules of the cases are in a
     directory of the process-wide module path, so they are library code.  The children use only the module path of
@@ -147,6 +153,44 @@ register pending app: INVALID-FUNCTION-ACCESS
 lazy runs: 0
 direct call: PARSE-EXCEPTION: functional domain: PROCESS_CONTROL
 ";
+
+        #! the output of the case of a closure that the module's code creates for a catalog change listener
+        const ExpectedListener = "lazy actions: \"lazy-action\"
+lazy runs: 1
+listener called: True
+closure kept: True
+kept closure qualifies: False
+kept closure run: MODULE-INIT-CLOSURE-ERROR
+kept closure called: INVALID-FUNCTION-ACCESS
+init closure qualifies: True
+init closure run: 42
+";
+
+        #! the output of the case of the rollback of module loads
+        const ExpectedTransaction = "loaded: True
+file api before: True
+savepoint: INVALID-FUNCTION-ACCESS
+rollback: INVALID-FUNCTION-ACCESS
+commit: INVALID-FUNCTION-ACCESS
+file api after: True
+load: RC-INIT-ERROR: the initialization of RcFileApiFail fails after registering a file API
+failed load file api: False
+file api kept: True
+trusted file api: True
+direct call: PARSE-EXCEPTION: functional domain: PROCESS_CONTROL
+";
+
+        #! the output of the case of the SqlUtil table cache and the datasource of restricted code
+        const ExpectedSqlIdentity = "trusted cached: True
+same description: True
+cached table: \"own datasource\"
+resolver table: \"own datasource\"
+resolved table: \"own datasource\"
+cache get: INVALID-FUNCTION-ACCESS
+trusted rc_t1: Datasource
+trusted rc_t2: not cached
+direct call: PARSE-EXCEPTION: functional domain: PROCESS_CONTROL
+";
     }
 
     constructor() : QUnit::Test("QlibRestrictedCallersTest", "1.0", \ARGV) {
@@ -169,6 +213,11 @@ direct call: PARSE-EXCEPTION: functional domain: PROCESS_CONTROL
             \testLate());
         addTestCase("restricted code cannot give its own code the exemption of deferred module initialization",
             \testClosures());
+        addTestCase("a closure that module code creates for code that a deferred initialization calls back does not "
+            "qualify", \testListener());
+        addTestCase("restricted code cannot roll back the registrations of other module loads", \testTransaction());
+        addTestCase("restricted code gets cached tables only for its own datasource and does not fill the cache",
+            \testSqlIdentity());
 
         set_return_value(main());
     }
@@ -293,6 +342,32 @@ direct call: PARSE-EXCEPTION: functional domain: PROCESS_CONTROL
             foreach bool sandbox in ((False, True)) {
                 checkCase(ExpectedClosures, "closures", mode, sandbox);
             }
+        }
+    }
+
+    testListener() {
+        # code that a sandbox governs cannot add a catalog change listener
+        foreach string mode in (Modes) {
+            checkCase(ExpectedListener, "listener", mode);
+        }
+    }
+
+    testTransaction() {
+        foreach string mode in (Modes) {
+            foreach bool sandbox in ((False, True)) {
+                checkCase(ExpectedTransaction, "transaction", mode, sandbox);
+            }
+        }
+    }
+
+    testSqlIdentity() {
+        if (!have_sqlite3) {
+            testSkip("the sqlite3 driver is not available");
+        }
+        # a SandboxManager's default policy does not allow the database file to be opened
+        foreach string mode in (Modes) {
+            checkCase(ExpectedSqlIdentity, "sqlutil-identity", mode, False,
+                sprintf("%s/sqlutil-identity-%s.db", tmp.path, mode));
         }
     }
 }

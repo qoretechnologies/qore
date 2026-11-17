@@ -3351,14 +3351,11 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
         @since DataProvider 3.5
     */
     private:internal static loadGenericApiCallBuilder(hash<DataProviderAppInfo> app) {
-        int sp = ImplicitModuleTransaction::savepoint();
         try {
-            load_module(GenericApiCallBuilderModule);
-            ImplicitModuleTransaction::commit(sp);
+            # any partial registrations from a failed load are rolled back
+            ImplicitModuleTransaction::loadModule(GenericApiCallBuilderModule);
         } catch (hash<ExceptionInfo> ex) {
-            # roll back any partial registrations from the failed load, then warn loudly: a REST app
-            # will silently lack its make-api-call action otherwise
-            ImplicitModuleTransaction::rollback(sp);
+            # warn loudly: a REST app will silently lack its make-api-call action otherwise
             DataProviderActionCatalog::reportInitializationFailure("action", app.name,
                 AbstractDataProvider::GenericApiCallActionName, ex);
             stderr.printf("DataProviderActionCatalog: REST app %y qualifies for the framework-injected "

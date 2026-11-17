@@ -1516,12 +1516,10 @@ exit(ProviderIndex::runIndexWorker(ARGV[0]));
             switch (item.type) {
                 case "module": {
                     # the same load as DataProvider::registerKnownFactoriesWithReport()
-                    int sp = ImplicitModuleTransaction::savepoint();
                     try {
-                        load_module(item.name);
-                        ImplicitModuleTransaction::commit(sp);
+                        # any partial registrations from a failed load are rolled back
+                        ImplicitModuleTransaction::loadModule(item.name);
                     } catch (hash<ExceptionInfo> ex) {
-                        ImplicitModuleTransaction::rollback(sp);
                         DataProviderActionCatalog::reportDiscoveryFailure(discovery, "factory", "load-known-factory",
                             item.name, ex.err, ex.desc, ex.arg, NOTHING, NOTHING, item.name);
                     }

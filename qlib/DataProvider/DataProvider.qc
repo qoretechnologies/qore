@@ -2397,17 +2397,14 @@ class DataProviderModuleLoader {
     #! Try to load the given module; see DataProvider::tryLoad()
     static bool tryLoad(string module_str, *bool init, *bool rethrow_exception) {
         *LoggerInterface logger = DataProvider::getGlobalLogger();
-        int sp = ImplicitModuleTransaction::savepoint();
         try {
             if (logger) {
                 logger.info("DataProvider loading module: %y", module_str);
             }
-            load_module(module_str);
-            ImplicitModuleTransaction::commit(sp);
+            # any partial registrations from the failed module are rolled back
+            ImplicitModuleTransaction::loadModule(module_str);
             return True;
         } catch (hash<ExceptionInfo> ex) {
-            # roll back any partial registrations from the failed module
-            ImplicitModuleTransaction::rollback(sp);
             if (rethrow_exception) {
                 rethrow;
             }

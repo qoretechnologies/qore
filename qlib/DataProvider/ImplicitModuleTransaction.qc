@@ -69,7 +69,20 @@ public class ImplicitModuleTransaction {
         if (sp < rollback_list.size()) {
             list<code> to_rollback = rollback_list[sp..];
             rollback_list = sp > 0 ? rollback_list[0..sp - 1] : new list<code>();
-            map $1(), to_rollback;
+            # every closure runs, even if one raises an exception; the first one is raised afterwards (qore#6337)
+            *hash<ExceptionInfo> first;
+            foreach code rb_code in (to_rollback) {
+                try {
+                    rb_code();
+                } catch (hash<ExceptionInfo> ex) {
+                    if (!first) {
+                        first = ex;
+                    }
+                }
+            }
+            if (first) {
+                throw first.err, first.desc, first.arg;
+            }
         }
     }
 
@@ -88,11 +101,42 @@ public class ImplicitModuleTransaction {
         rb.addImpl(rb_code);
     }
 
+    #! Loads a module and rolls back the registrations that its initialization made if loading it fails
+    /** The registrations of the module are kept if it is loaded; if loading it raises an exception, the rollback
+        closures added since the load started are run (all of them, even if one raises an exception) and the
+        exception of the load is raised again.  This is the only part of the API that code restricted from the
+        \c PROCESS_CONTROL domain can use: savepoint(), rollback() and commit() act on the rollback closures of other
+        loads too (qore#6337)
+
+        @param module_str the module to load, as given to @ref Qore::load_module() "load_module()"
+
+        @throw any exception raised while loading the module
+
+        @since %DataProvider 3.6
+    */
+    static loadModule(string module_str) {
+        if (!rb) {
+            rb = new ImplicitModuleTransaction();
+        }
+        int sp = rb.savepointImpl();
+        try {
+            load_module(module_str);
+            rb.commitImpl(sp);
+        } catch (hash<ExceptionInfo> ex) {
+            # the error of the load is the one raised
+            try {
+                rb.rollbackImpl(sp);
+            } catch (hash<ExceptionInfo> rex) {
+            }
+            rethrow;
+        }
+    }
+
     #! Returns the current savepoint (number of rollback closures registered so far)
     /** Call this before \c load_module() to mark the boundary between pre-existing
         rollback closures and new ones added during the module load.
     */
-    static int savepoint() {
+    static int savepoint() [dom=PROCESS_CONTROL] {
         if (!rb) {
             return 0;
         }
@@ -103,7 +147,7 @@ public class ImplicitModuleTransaction {
     /** Call this when module loading fails to clean up partial registrations from the
         failed module without affecting registrations from previous successful loads.
     */
-    static rollback(int sp) {
+    static rollback(int sp) [dom=PROCESS_CONTROL] {
         if (!rb) {
             return;
         }
@@ -115,7 +159,7 @@ public class ImplicitModuleTransaction {
     /** Call this after a successful module load to discard the rollback closures
         for that module, since its registrations should be kept.
     */
-    static commit(int sp) {
+    static commit(int sp) [dom=PROCESS_CONTROL] {
         if (!rb) {
             return;
         }
