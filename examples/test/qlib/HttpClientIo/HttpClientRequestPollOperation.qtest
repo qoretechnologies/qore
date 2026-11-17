@@ -445,8 +445,10 @@ public class HttpClientRequestPollOperationTest inherits QUnit::Test {
         before = clock_get_monotonic_us();
         d = old.getMonotonicDeadline();
         after = clock_get_monotonic_us();
-        # the conversion takes its own reading of both clocks, so allow for the time of the call
-        assertTrue(d > before && d <= after + 30000000, sprintf("the date is converted: %y", d));
+        # the conversion takes its own reading of both clocks; the 30 s offset must be applied (1 s is allowed for the
+        # time between the date's creation and the conversion)
+        assertTrue(d >= before + 30000000 - 1000000 && d <= after + 30000000,
+            sprintf("the date is converted with its offset: %y in [%d, %d]", d, before + 29000000, after + 30000000));
 
         # a deadline that has passed ends the operation with a timeout
         DeadlinePollOperation passed(mgr, url_a + "/plain");

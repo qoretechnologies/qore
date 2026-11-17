@@ -188,6 +188,8 @@ public class HttpClientRequestPollOperation inherits Qore::AbstractPollOperation
             clock does not end the request early or late (#6455).  A subclass that sets this member, as subclasses of
             earlier versions did, still sets the deadline: the date is converted to the monotonic clock when the
             operation next reads its deadline (see @ref getDeadlineUs()).  Use @ref setDeadlineTimeout() instead.
+            The class no longer sets this member: a subclass that reads it gets @ref nothing and must use
+            @ref getDeadlineUs() to read the deadline.
         */
         *date deadline;
         #! The deadline for the response, if any, on the monotonic clock in microseconds (@ref Qore::clock_get_monotonic_us() "clock_get_monotonic_us()")
