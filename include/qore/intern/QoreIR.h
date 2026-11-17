@@ -1453,7 +1453,7 @@ static constexpr uint8_t QORE_IR_GIVES_CALL_ARGS = 1;
 static constexpr uint8_t QORE_IR_GIVES_CALL_TEMPS = 2;
 //! QoreIRInstruction::interpreter_gives_call_args: the call consumes reads of the variables of foreach loops that can
 //! hold references given by elements, which own their values only when they are read through a reference (#6441): the
-//! call gives them only in a frame that has read a value through a reference (IRCleanupSlots::hasReferenceRead())
+//! call looks for them only once a frame has read a value through a reference (qore_ir_reference_read_seen)
 static constexpr uint8_t QORE_IR_GIVES_CALL_REFERENCE_READS = 4;
 
 //! The check of a call's target made by the load of the target (QoreIRInstruction::fused_call_target_check)

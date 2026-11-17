@@ -1040,18 +1040,6 @@ public:
         slot_owned_entries.clear();
         counts.assign(slot_count, 0);
         slot_owned = n_slot_owned;
-        reference_read = false;
-    }
-
-    //! records that the frame read a value through a reference held by an IR-only local, which the read owns
-    void noteReferenceRead() {
-        reference_read = true;
-    }
-
-    //! returns true if the frame has read a value through a reference held by an IR-only local (see
-    //! QORE_IR_GIVES_CALL_REFERENCE_READS)
-    bool hasReferenceRead() const {
-        return reference_read;
     }
 
     void push_back(uint32_t id) {
@@ -1254,24 +1242,32 @@ private:
         assert(it != list.end());
         list.erase(it);
     }
-    //! set by noteReferenceRead(), cleared by reset()
-    bool reference_read = false;
 };
+
+#ifndef QORE_IR_INTERPRETER_GIVEN_ARGS_UNIT
+//! Set once an IR frame of the process has read a value through a reference held by an IR-only local, which the read
+//! owns (the variable of a foreach loop given a reference by an element): until then no call can have such a read to
+//! give (QORE_IR_GIVES_CALL_REFERENCE_READS, issue #6441).  It is never cleared, and it is only a hint: a call that it
+//! lets through looks for the arguments to give (hasConsumedCallArgs()), so a frame that reads no reference after
+//! another one did costs that lookup only; a process-wide flag costs the calls that give nothing no store per frame
+static std::atomic<bool> qore_ir_reference_read_seen{false};
 
 //! Returns true if a call whose instruction has QoreIRInstruction::interpreter_gives_call_args \a gives can have a
 //! temporary to give now: a given argument has a cleanup entry, and a read of the variable of a foreach loop owns its
-//! value only if the frame has read one through a reference (QORE_IR_GIVES_CALL_REFERENCE_READS, issue #6441); the call
-//! then looks for the arguments to give (hasConsumedCallArgs())
-static inline bool qore_ir_call_may_give(uint8_t gives, const IRCleanupSlots& cleanup) {
-    // most calls give nothing: one test, as before the bits were told apart
+//! value only if it is read through a reference (QORE_IR_GIVES_CALL_REFERENCE_READS, qore_ir_reference_read_seen,
+//! issue #6441); the call then looks for the arguments to give (hasConsumedCallArgs())
+static inline __attribute__((always_inline)) bool qore_ir_call_may_give(uint8_t gives,
+        const IRCleanupSlots& cleanup) {
+    // most calls give nothing: the test of the byte, as before the bits were told apart
     if (__builtin_expect(!gives, 1)) {
         return false;
     }
     if (gives & QORE_IR_GIVES_CALL_ARGS) {
         return !cleanup.empty();
     }
-    return (gives & QORE_IR_GIVES_CALL_REFERENCE_READS) && cleanup.hasReferenceRead();
+    return qore_ir_reference_read_seen.load(std::memory_order_relaxed) && !cleanup.empty();
 }
+#endif // QORE_IR_INTERPRETER_GIVEN_ARGS_UNIT
 
 // the iterators whose addresses an IR value slot holds (see QoreIRPointerSlot.h)
 QORE_IR_POINTER_SLOT_TYPE_CHECK(FunctionalOperatorInterface);
@@ -12989,9 +12985,10 @@ dispatch_folded_step_host:
                                 return exitAfterUnwind();
                             }
                             result_slot_owned = out.needsRef();
-                            if (result_slot_owned) {
+                            if (result_slot_owned
+                                    && !qore_ir_reference_read_seen.load(std::memory_order_relaxed)) {
                                 // a call may give the value (QORE_IR_GIVES_CALL_REFERENCE_READS)
-                                cleanup.noteReferenceRead();
+                                qore_ir_reference_read_seen.store(true, std::memory_order_relaxed);
                             }
                             goto load_local_done;
                         }

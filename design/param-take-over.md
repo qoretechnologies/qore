@@ -243,8 +243,8 @@ IR interpreter gives such a read to every call (`qore_ir_element_local_may_read_
 a method that writes the referenced variable and its parameter destroys the object at the write, as in the AST
 interpreter.  Whether the call gives an argument is decided when it is made: such a call has
 `QORE_IR_GIVES_CALL_REFERENCE_READS` rather than `QORE_IR_GIVES_CALL_ARGS`, and looks for an argument to give
-(`hasConsumedCallArgs()`) only in a frame that has read a value through a reference
-(`IRCleanupSlots::hasReferenceRead()`, `qore_ir_call_may_give()`).  Native code makes a call that may give such a read in both forms and makes the call that
+(`hasConsumedCallArgs()`) only once a frame has read a value through a reference (`qore_ir_reference_read_seen`, a
+process-wide hint that costs the frames no store, `qore_ir_call_may_give()`).  Native code makes a call that may give such a read in both forms and makes the call that
 gives nothing when no slot holds its value (`emitGivenOrPlainCall()`, also for method calls), and releases a slot after
 the call only if it holds the value, tested inline.  A typed variable is never assigned a reference.
 
