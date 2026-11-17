@@ -44,6 +44,13 @@ class JITLargeFunctionBlocksBase inherits QUnit::Test {
         #! the largest ratio of the number of instructions of the function with 40 catch blocks that have a handler and
         #! a local and of the one with 20 (2.98 with the handler code inline, 2.09 with tables)
         const MaxHandlerRatio = 2.5;
+
+        #! the catch blocks of the function of testHandlerBudget() and testHandlerTablesForced()
+        const HandlerBlocks = 100;
+
+        #! the catch blocks of each slice of HandlerBlocks that testHandlerTablesForced() compiles with the inline code
+        #! of the handlers forced, in a part of its own (qore#6436)
+        const HandlerSlice = 25;
     }
 
     private {
@@ -59,18 +66,36 @@ class JITLargeFunctionBlocksBase inherits QUnit::Test {
         addPartCase(1, "the blocks of a function with many locals and exits are bounded", \testBlocks());
         addPartCase(1, "the function with shared exits returns the same results as the AST", \testResults());
         addPartCase(1, "the code that runs the handlers of a function grows with its handlers", \testHandlerSize());
-        addPartCase(1, "a function with many catch blocks that have handlers compiles, and the budget is kept",
+        # the function with 100 catch blocks with the default handler code, and the handler budget: a part of its own
+        addPartCase(7, "a function with many catch blocks that have handlers compiles, and the budget is kept",
             \testHandlerBudget());
-        # the runs with the inline code of the handlers take long to compile: each one is a part of its own
         addPartCase(2, "the function with many catch blocks gives the result of the AST with the handler tables "
             "forced on", \testHandlerTablesForced(), ("QORE_JIT_OBE_TABLE_BUDGET=0", ("jit", "tiered")));
-        addPartCase(3, "the function with many catch blocks gives the result of the AST in JIT mode with the inline "
-            "handler code forced", \testHandlerTablesForced(), ("QORE_JIT_OBE_TABLE_BUDGET=100000000", "jit"));
-        addPartCase(4, "the function with many catch blocks gives the result of the AST in tiered mode with the "
-            "inline handler code forced", \testHandlerTablesForced(),
-            ("QORE_JIT_OBE_TABLE_BUDGET=100000000", "tiered"));
+        # the runs with the inline code of the handlers forced take long to compile: the time grows with the square of
+        # the catch blocks (150 s on a debug build for 100 of them), so the 100 catch blocks are compiled in four
+        # slices of HandlerSlice of them, each slice a part of its own, in JIT mode and in tiered mode (qore#6436)
+        foreach string mode in (("jit", "tiered")) {
+            addPartCase(3, getSliceCaseName(mode, 0), \testHandlerTablesForced(), getSliceArgs(mode, 0));
+            addPartCase(4, getSliceCaseName(mode, HandlerSlice), \testHandlerTablesForced(),
+                getSliceArgs(mode, HandlerSlice));
+            addPartCase(5, getSliceCaseName(mode, 2 * HandlerSlice), \testHandlerTablesForced(),
+                getSliceArgs(mode, 2 * HandlerSlice));
+            addPartCase(6, getSliceCaseName(mode, 3 * HandlerSlice), \testHandlerTablesForced(),
+                getSliceArgs(mode, 3 * HandlerSlice));
+        }
         addPartCase(1, "the shared exits release the value of a handler's return", \testHandlerReturnOnException());
         set_return_value(main());
+    }
+
+    #! the name of the case of testHandlerTablesForced() for a slice of the catch blocks in an execution mode
+    private string getSliceCaseName(string mode, int first) {
+        return sprintf("the function with many catch blocks (catch blocks %d-%d) gives the result of the AST in %s "
+            "mode with the inline handler code forced", first, first + HandlerSlice - 1, mode == "jit" ? "JIT" : mode);
+    }
+
+    #! the arguments of testHandlerTablesForced() for a slice of the catch blocks in an execution mode
+    private list<auto> getSliceArgs(string mode, int first) {
+        return ("QORE_JIT_OBE_TABLE_BUDGET=100000000", mode, first, HandlerSlice);
     }
 
     #! adds a case if it is in the part that this test runs
@@ -247,7 +272,11 @@ printf(\"rv:%%d\\n\", t);
     }
 
     #! A function with n try statements whose catch blocks have a local and an on_exit handler (qore#6104)
-    private string getHandlerCode(int n) {
+    /** @param n the number of try statements
+        @param first the index of the first try statement: the try statements of a slice of a larger function are
+        those of the larger function from this index (qore#6436)
+    */
+    private string getHandlerCode(int n, int first = 0) {
         string code = "%modern
 
 int sub may_throw(int i) { if (i < 0) { throw \"NEG\", \"negative\"; } return i + 1; }
@@ -255,7 +284,7 @@ int sub may_throw(int i) { if (i < 0) { throw \"NEG\", \"negative\"; } return i 
 int sub big(int n) {
     int r = 0;
 ";
-        for (int i = 0; i < n; ++i) {
+        for (int i = first; i < first + n; ++i) {
             code += sprintf("    try {
         r += may_throw(n - %d);
     } catch (hash<ExceptionInfo> ex) {
@@ -295,7 +324,7 @@ printf(\"rv:%d\\n\", t);
     */
     testHandlerBudget() {
         # the code that runs the handlers uses tables for a function this size, so it is compiled
-        string big = getHandlerCode(100);
+        string big = getHandlerCode(HandlerBlocks);
         string out = runTrace(big, "");
         assertFalse(out =~ /handler budget exceeded/, "a function with 100 catch blocks with handlers is compiled");
         assertRegex("compiled 'big[^']*' and promoted to JIT tier", out);
@@ -316,12 +345,14 @@ printf(\"rv:%d\\n\", t);
     #! The function of testHandlerBudget() gives the result of the AST with the tables forced on or off
     /** @param env the environment that forces the tables on or off
         @param modes the execution modes to run the function in
+        @param first the first catch block of the slice of the function to compile
+        @param n the catch blocks of the slice of the function to compile
 
         These are cases of their own, in parts of their own, as the inline code of the handlers of this function takes
-        long to compile
+        long to compile: with it forced, each case compiles a slice of the catch blocks of the function (qore#6436)
     */
-    testHandlerTablesForced(string env, softlist<string> modes) {
-        string big = getHandlerCode(100);
+    testHandlerTablesForced(string env, softlist<string> modes, int first = 0, int n = HandlerBlocks) {
+        string big = getHandlerCode(n, first);
         string expected = runResultLine(big, "ast");
         foreach string mode in (modes) {
             assertEq(expected, runResultLineEnv(big, mode, env), env + " " + mode);

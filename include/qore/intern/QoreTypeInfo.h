@@ -491,8 +491,12 @@ public:
         return nullptr;
     }
 
-    // static version of method, checking for null pointer
-    DLLLOCAL static const QoreParameterizedClassTypeInfo* getParameterizedClassType(const QoreTypeInfo* ti) {
+    // static version of method, checking for null pointer; always inlined: tryExecuteInterpreterInlineIRMethod() is
+    // forced into the IR interpreter's execute() by the early inliner, before its callees are inlined into it, and
+    // after that GCC's own inlining into the very large execute() is held back by its growth limits, which left this
+    // function as an out-of-line call on the IR method call path (issue #6381)
+    DLLLOCAL static QORE_INTERN_ALWAYS_INLINE const QoreParameterizedClassTypeInfo* getParameterizedClassType(
+            const QoreTypeInfo* ti) {
         if (!ti || ti->return_vec.empty() || !hasType(ti)) {
             return nullptr;
         }
@@ -1676,16 +1680,37 @@ public:
     DLLLOCAL QoreTypeParameterTypeInfo(const UserSignature* owner, size_t index, const char* name, bool or_nothing,
             const QoreTypeParameterTypeInfo* value_type = nullptr);
 
+    //! Returns the class that declares the type parameter, if any; nullptr once the class is destroyed
     DLLLOCAL const QoreClass* getOwnerClass() const {
-        return owner_class;
+        return owner_class.load(std::memory_order_relaxed);
     }
 
+    //! Returns the hashdecl that declares the type parameter, if any; nullptr once the hashdecl is destroyed
     DLLLOCAL const TypedHashDecl* getOwnerHashDecl() const {
-        return owner_hashdecl;
+        return owner_hashdecl.load(std::memory_order_relaxed);
     }
 
+    //! Returns the signature that declares the type parameter, if any; nullptr once the signature is destroyed
     DLLLOCAL const UserSignature* getOwnerSignature() const {
-        return owner_signature;
+        return owner_signature.load(std::memory_order_relaxed);
+    }
+
+    //! Returns true if the declaration of the type parameter was destroyed (see orphan())
+    DLLLOCAL bool isOrphaned() const {
+        return !getOwnerClass() && !getOwnerHashDecl() && !getOwnerSignature();
+    }
+
+    //! Clears the pointer to the declaration of the type parameter, which is being destroyed (issue #6419)
+    /** The type is not freed with its declaration: it is kept until library cleanup with the other derived types
+        (qore_purge_derived_types()), so that its declaration does not have to be kept for it.  Only the declaration's
+        own code, which is destroyed with it, and the types derived from the type parameter use the type; a type
+        check against it substitutes nothing once it is orphaned.  The pointers are atomic, so that a type check that
+        reads them in another thread reads either the declaration or nullptr.
+    */
+    DLLLOCAL void orphan() const {
+        owner_class.store(nullptr, std::memory_order_relaxed);
+        owner_hashdecl.store(nullptr, std::memory_order_relaxed);
+        owner_signature.store(nullptr, std::memory_order_relaxed);
     }
 
     DLLLOCAL size_t getIndex() const {
@@ -1707,9 +1732,9 @@ public:
     DLLLOCAL const QoreTypeInfo* getBoundTypeInfo() const;
 
 protected:
-    const QoreClass* owner_class = nullptr;
-    const TypedHashDecl* owner_hashdecl = nullptr;
-    const UserSignature* owner_signature = nullptr;
+    mutable std::atomic<const QoreClass*> owner_class{nullptr};
+    mutable std::atomic<const TypedHashDecl*> owner_hashdecl{nullptr};
+    mutable std::atomic<const UserSignature*> owner_signature{nullptr};
     size_t index;
     std::string param_name;
     bool or_nothing;

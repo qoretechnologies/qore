@@ -307,6 +307,11 @@
     refuse text that is no number or date.  Code that catches a refused value by its error code must use the new
     codes.  See @ref dataprovider_v3_11.
 
+    @par File Pollers Keep Polling After an Error in a File Event Handler
+    When a \c singleFileEvent() (or an observer it notifies) throws, a @ref filepollererrors "FilePoller" now logs the
+    error and retries that file at the next poll, and an @ref ftppollererrors "FtpPoller" or \c SftpPoller after the
+    \c "error_delay", instead of stopping polling; code that relied on the stop must call \c stop() itself.
+
     @par date() Raises an Exception for Text After a Date or Time
     @ref Qore::date(string) "date(string)" and @ref Qore::TimeZone::date(string) "TimeZone::date(string)" raise
     \c INVALID-DATE for text after a date or time other than white space, a zone designator, \c UTC, \c GMT or the
@@ -818,6 +823,12 @@
     \c date lvalue, is a \c PARSE-TYPE-ERROR in every mode, as an assignment of the result is, where it raised an
     exception when it ran (see @ref compound_assignment_parse_checks "parse-time checks"; issue #6103).
 
+    @par A Variable Used in Its Own Initializer Is a Parse Error
+    A use of a local variable, member or static class variable in its own initialization expression, where it has no
+    value yet (ex: <tt>int a = a + 1;</tt>, <tt>list&lt;auto&gt; l = (l,);</tt>), is a parse error in every mode; a use
+    in a closure created there and a global, which keeps its value, are not affected (see
+    @ref variable_initializer_scope; issue #526).
+
     @par Calls Through Method References on Deleted Objects Name the Method
     The \c OBJECT-ALREADY-DELETED exception of a call through a method call reference on a deleted object names the
     method (<tt>cannot call U::m() ...</tt>) instead of <tt>cannot call a method ...</tt>, in every execution mode
@@ -862,6 +873,12 @@
     @ref Qore::pow() "pow()" of a negative float and an exponent that is not an integer returns NaN, as the other math
     functions do for an argument outside their domain (see @ref undefined_arithmetic); 2.2.1 raised
     \c INVALID-POW-ARGUMENTS (issue #1034).
+
+    @par HTTP Servers Choose the Response Encoding from Accept-Charset by Its Weights
+    An HTTP server takes the response encoding of a request (\c cx."response-encoding") from \c Accept-Charset as
+    RFC 9110 defines it, with weights and optional whitespace (see
+    @ref Qore::get_http_accept_charset() "get_http_accept_charset()"); 2.2.1 took the first charset unless the value
+    or an element directly after a comma began with UTF-8 or \c "*", whatever the weights (issue #6343).
 
     @subsection qore_3_0_0_new_features New Features in Qore
     @par Strict Number Parsing
@@ -1439,7 +1456,16 @@
       - resources with their metadata (see @ref filelocationhandler_resources), and \c conn:// locations
       - see @ref filelocationhandler_v3_0 for all changes
 
+    - @ref filepollerintro "FilePoller" module
+      - an error while a polled file is handled (ex: an observer that refuses the file event) keeps the file for the
+        next poll instead of stopping polling (see @ref filepollererrors;
+        <a href="https://github.com/qoretechnologies/qore/issues/6400">issue 6400</a>)
+      - see @ref file_poller_2_1 for all changes
+
     - @ref ftppollerintro "FtpPoller" module
+      - an error while a polled file is handled (ex: an observer that refuses the file event) keeps the remote file
+        and retries the poll after the \c "error_delay" option's delay instead of stopping polling (see
+        @ref ftppollererrors; <a href="https://github.com/qoretechnologies/qore/issues/6400">issue 6400</a>)
       - see @ref ftppollerv2_2 for all changes
 
     - @ref gmaildataproviderintro "GmailDataProvider" module
@@ -2011,6 +2037,13 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - when more than one class of a hierarchy declares a member with an initialization expression, the value that a
+      later one replaces is released, so that an object that a base class stored there is destroyed (see
+      @ref member_initialization; issue #6411)
+    - argument and parameter values are released in the same order in every execution mode; compiled code released
+      some of them only at the end of the statement (issue #6262)
+    - a module blacklisted with @ref Qore::qore_add_module_to_blacklist() "qore_add_module_to_blacklist()" is also
+      refused when it is a @ref separated_modules "separated module", however it is loaded (issue #6450)
     - a sleep with @ref Qore::usleep() "usleep()" or @ref Qore::sleep() "sleep()" that a signal interrupted while
       it slept with \c nanosleep() (2) slept its whole time again instead of the time that was left (issue #6364)
     - an out-of-line method definition in a namespace block resolves its class path relative to that namespace
@@ -2027,11 +2060,23 @@
       @ref push-parse-options "%push-parse-options", code parsed before a directive) are no longer visible to other
       threads, and changes to the Program's options made meanwhile are kept; @ref lock-options "%lock-options" in a
       file with %push-parse-options keeps its restrictions after the file (issues #6175, #6207)
+    - the time zone of a @ref Qore::Program "Program" is read and set atomically: setting it with
+      @ref Qore::TimeZone::setRegion() "TimeZone::setRegion()" and the other @ref Qore::TimeZone "TimeZone" methods
+      while other threads of the Program read it was a data race (issue #6346)
+    - with @ref broken-list-range "%broken-list-range", a range past the end of a list whose element type does not
+      allow @ref nothing (ex: \c list<int>) gives @ref nothing for the elements outside of the list in a list with the
+      or-nothing element type instead of raising a \c RUNTIME-TYPE-ERROR exception (issue #5757)
+    - a range of the @ref list_element_operator "[] operator" over a typed list holding @ref nothing in the range (a
+      hole left by @ref delete "delete" or @ref remove "remove", or a gap filled by an assignment past the end of the
+      list) gives a list with the or-nothing element type instead of raising a \c RUNTIME-TYPE-ERROR exception, which
+      failed an assertion in debug builds (issue #6435)
     - the report of an unhandled exception or of a warning on stderr is written whole, so that the output of other
       threads is no longer mixed into its lines (see @ref exception_handling; issue #6290)
     - a range of the @ref list_element_operator "[] operator" (ex: <tt>x[-9..1]</tt>) gives only elements of its
       value: a range of an empty value is empty, of the same type, and a range of a string with multi-byte
       characters is resolved against its characters (issue #6306)
+    - @ref Qore::qore_add_module_to_blacklist() "qore_add_module_to_blacklist()" refuses a module whose load is in
+      progress; it accepted it, and the module was then loaded and registered anyway (issue #6454)
     - the summary and the junit report of a @ref qunitintro "QUnit" test count skipped test cases, which they gave
       as succeeded, and the junit report has a \c testsuite element and counts assertion failures apart from errors
       (see @ref unittestformats; issue #2297)
@@ -2047,6 +2092,9 @@
     - a child process created with @ref Qore::fork() "fork()" while another thread changed the parse options of a
       %Program or of a module, or created a %Program that copies the external data of its parent, could block when it
       did the same, or when the %Program was destroyed (issue #6403)
+    - a @ref call_reference_pseudo_method "call reference to a pseudo-method" (ex: <tt>\\l.size()</tt> for a list
+      \c l, or <tt>\\o.className()</tt>) refers to the pseudo-method of the value; it raised a parse or run-time
+      exception (issue #995)
     - an allocation that fails while a thread enters another %Program (ex: in a binary module's
       \c QoreExternalProgramContextHelper or a parse commit) leaves the thread in the calling %Program and releases
       its thread count in the entered %Program, which could otherwise not be deleted (issue #6198)
@@ -2922,6 +2970,10 @@
         (<a href="https://github.com/qoretechnologies/qore/issues/4996">issue 4996</a>)
     - \c qpp writes its output files to relative paths correctly and reports an error for a hashdecl member without
       a <tt>//!</tt> comment and for unexpected text after the comment of a function or constant group
+    - \c qpp reports an error for a function or constant with a <tt>//!</tt> comment outside a group and for a %Qore
+      declaration without one instead of dropping it or copying it unprocessed, takes <tt>-vv</tt> and
+      <tt>-v</tt><i>n</i> (not <tt>-v</tt> <i>n</i>), and gives generated code its source lines; see the \c qpp(1)
+      manual page
     - fixed a deadlock when a @ref Qore::Program "Program" was created from a Program in which a binary module such
       as \c python keeps data while another thread used the module
     - a value whose return is interrupted by an exception that a \c catch block handles is not returned; see
@@ -3038,6 +3090,9 @@
     - a class or hashdecl member or static class variable initialization expression that uses a top-level local
       variable no longer crashes the process when the class or hashdecl is first used in a closure and then used
       elsewhere (see @ref member_initialization and @ref hashdecl_initializer_scope; issue #6268)
+    - a reference to \c self or to a member through \c self (ex: <tt>\\self.a</tt>), and an assignment through
+      \c self (ex: <tt>self.a = 20</tt>), in a @ref closure_default_values "default value of a closure" created in a
+      method ended the process with a segmentation fault (issues #6417, #5949)
     - fixed a @ref where_clauses "where clause" key of @ref sqlutilintro "SqlUtil" that is both a column of the table
       and a column alias of the query, which gave the alias's definition in the SQL (ex:
       <tt>items.distinct items.ddt_number is not null</tt>): the column is used, as in SQL

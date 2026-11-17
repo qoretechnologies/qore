@@ -1,0 +1,58 @@
+object method: 1
+object pseudo-method: "Ble"
+object own method named like no pseudo-method: "own"
+list size: 3
+list join with an argument: "1+2+3"
+list first: 1
+long string size: 26
+short string size: 2
+string type: "string"
+hash keys: ["a", "b"]
+hash hasKey with an argument: True
+binary size: 2
+int typeCode: 1
+float typeCode: 2
+date durationSeconds: 4
+nothing typeCode: 0
+closure typeCode: 29
+auto list size: 2
+auto string size: 3
+auto unknown pseudo-method: PSEUDO-METHOD-DOES-NOT-EXIST: no pseudo method <string>::noSuchMethod() has been defined
+kept value: 3
+current value: 4
+equal references: True
+references to other methods: False
+references to other values: False
+call_function: 3
+call_function_args: "1/2/3"
+map: [1, 2, 3]
+callref type: True
+deleted object, direct call: OBJECT-ALREADY-DELETED: cannot call Ble::className() on an object that has already been deleted
+deleted object, reference: OBJECT-ALREADY-DELETED: cannot call Ble::className() on an object that has already been deleted
+temporary object: "Ble"
+auto object pseudo-method: "Ble"
+auto object method: 1
+object holding its own reference: "Holder"
+destructor hash cycle
+destructor list cycle
+after the cycles
+hash code member, direct call: 99
+hash code member, reference: 99
+hash code member with arguments, direct call: 6
+hash code member with arguments, reference: 6
+object code member, direct call: "member"
+object code member, reference: "member"
+class context, direct call: True
+class context, reference made in the class: True
+class context, reference made outside the class: False
+class context of a direct call: "typed ok; auto ok"
+named arguments to a pseudo-method of an object, direct call: False
+named arguments to a pseudo-method of an object, reference: False
+named arguments to a code member named like a pseudo-method, reference: NAMED-CALL-NOT-SUPPORTED: cannot call Mem::className() with named arguments: it is a member of the class, whose code takes the arguments of the call by position
+named arguments, member holding no code, direct call: False
+named arguments, member holding no code, reference: False
+member holding no value, reference: False
+named arguments, member holding no value, reference: False
+named arguments, direct call: "world"
+named arguments, reference: "world"
+list held by the reference: 2

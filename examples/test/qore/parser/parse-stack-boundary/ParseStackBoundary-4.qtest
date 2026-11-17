@@ -1,0 +1,22 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - thread stack sizes and the parse-time stack limit
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%include ParseStackBoundary.qc
+
+%exec-class ParseStackBoundaryPart4
+
+#! runs part 4 of 5 of the cases of ParseStackBoundaryBase: chains of classes, with methods most derived first
+class ParseStackBoundaryPart4 inherits ParseStackBoundaryBase {
+    constructor() : ParseStackBoundaryBase("ParseStackBoundaryPart4", 4) {
+    }
+}

@@ -35,7 +35,9 @@
 
 #include "qore/SocketPollOperationBase.h"
 #include "qore/ReferenceHolder.h"
+#include "qore/QoreThreadLock.h"
 
+#include <atomic>
 #include <string>
 
 //! C++ base for HTTP client ping/verify poll operations
@@ -81,7 +83,7 @@ public:
     // --- SocketPollOperationBase overrides ---
 
     DLLLOCAL bool goalReached() const override {
-        return goal_reached;
+        return goal_reached.load(std::memory_order_acquire);
     }
 
     DLLLOCAL bool needsWorkerDispatch() const override {
@@ -94,20 +96,19 @@ public:
 
     // --- Accessors ---
 
+    //! Returns true if the operation was closed or aborted; can be called from any thread
     DLLLOCAL bool isClosed() const {
-        return closed;
+        return closed.load(std::memory_order_acquire);
     }
 
-    DLLLOCAL bool hasError() const {
-        return error_info != nullptr;
-    }
+    //! Returns true if an error was recorded; can be called from any thread (reads @ref has_error, without a lock)
+    DLLLOCAL bool hasError() const;
 
-    DLLLOCAL QoreHashNode* getErrorInfo() const {
-        if (error_info) {
-            error_info->ref();
-        }
-        return error_info;
-    }
+    //! Returns the recorded error with a new reference, or nullptr if none was recorded; can be called from any thread
+    /** Read under @ref error_lock, which the writer holds while it stores the complete error hash, so the hash is
+        returned complete and safely published to the calling thread
+    */
+    DLLLOCAL QoreHashNode* getErrorInfo() const;
 
     DLLLOCAL void cleanup(ExceptionSink* xsink);
 
@@ -122,13 +123,18 @@ private:
     QoreObject* inner_obj;
 
     //! Whether the operation has completed (success or failure)
-    bool completed = false;
+    /** The flags are set by the thread that drives the operation (or by abort()) and read by any thread: they are
+        stored with release and loaded with acquire ordering, so a thread that sees a flag set also sees what was
+        written before it: setError() stores the error before it sets @ref completed and @ref closed, and
+        continuePoll() stores the output before it sets @ref goal_reached and @ref completed
+    */
+    std::atomic<bool> completed{false};
 
     //! Whether the goal has been reached (response validated successfully)
-    bool goal_reached = false;
+    std::atomic<bool> goal_reached{false};
 
     //! Whether the operation has been closed/aborted
-    bool closed = false;
+    std::atomic<bool> closed{false};
 
     // --- Validation configuration ---
 
@@ -150,16 +156,21 @@ private:
     //! Pre-computed expected Sec-WebSocket-Accept value (empty = no WS check)
     std::string expected_ws_accept;
 
-    //! Cached state returned from the inner poll operation
-    mutable std::string inner_state;
-
     // --- Output ---
 
-    //! Response output hash (ref'd or nullptr)
+    //! Response output hash (ref'd or nullptr); stored complete under @ref error_lock, which getOutput() takes
     QoreHashNode* output = nullptr;
 
-    //! Error info hash (ref'd or nullptr)
+    //! Protects @ref error_info and @ref output, which the thread driving the operation records and any thread reads
+    /** A leaf lock: no other lock is taken and no Qore code runs while it is held
+    */
+    mutable QoreThreadLock error_lock;
+
+    //! Error info hash (ref'd or nullptr); protected by @ref error_lock
     QoreHashNode* error_info = nullptr;
+    //! Set (release) when @ref error_info is stored, under the lock that protects it; read (acquire) without a lock
+    //! by hasError()
+    std::atomic<bool> has_error{false};
 
     //! Validates the HTTP response and sets goal_reached or error
     DLLLOCAL void validateResponse(ExceptionSink* xsink);
