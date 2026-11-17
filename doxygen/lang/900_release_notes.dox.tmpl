@@ -2150,9 +2150,6 @@
     - a \c private:internal member of a class with the same name as one of a base class was not initialized in an
       object of a subclass, so the class's methods read no value, and was serialized without its value (see
       @ref private_members; issue #6402)
-    - parsing or loading a long chain of classes, each inheriting the previous one (see @ref inheritance), took time
-      that grew with the fourth power of its length, as each class walked the whole hierarchy again for each of its
-      ancestors; it now grows about with the square of the length (issue #6106)
     - an absolute date literal without its day (<tt>2015-11-</tt>) is no longer read as a date with a day made of
       the text after it, which also ignored a UTC offset there (<tt>2015-11-+10</tt> is now the integer \c 1994), and
       a leap second in a date literal (<tt>2016-12-31T23:59:60Z</tt>) is a parse error that says so, also where
