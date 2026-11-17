@@ -15,7 +15,7 @@
 
 %exec-class ParseStackBoundaryPart3
 
-#! runs part 3 of 3 of the cases of ParseStackBoundaryBase: chains of classes with methods
+#! runs part 3 of 5 of the cases of ParseStackBoundaryBase: a chain of classes with methods
 class ParseStackBoundaryPart3 inherits ParseStackBoundaryBase {
     constructor() : ParseStackBoundaryBase("ParseStackBoundaryPart3", 3) {
     }
