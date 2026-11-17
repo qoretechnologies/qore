@@ -283,11 +283,12 @@ public:
     DLLLOCAL void resumeCharge(QoreSandboxCharge* saved);
 
 private:
-    //! Makes the charge of the budget of \a sm current again if it is below the innermost trusted build
-    /** @param entry_start the number of frames when the enter() call that calls it started: a charge that a frame
-        pushed since then made current is combined with the budget's charge
+    //! Makes the charges of the budgets of \a managers that are below the innermost trusted build current again
+    /** Pushes a frame for each budget below the build of a manager with a memory limit that has no frame in the build
+        yet, in the order of the stack, so that the charge of the latest, which charges the accounts of the earlier
+        ones, is current; only called inside a trusted build
     */
-    DLLLOCAL void enterBelowBuild(int tid, QoreSandboxManager* sm, const void* owner, size_t entry_start);
+    DLLLOCAL void enterBelowBuild(int tid, const std::vector<QoreSandboxManager*>& managers, const void* owner);
 
 public:
 
@@ -337,9 +338,6 @@ private:
         QoreSandboxCharge* saved_charge;
         //! true if the frame made its budget's charge the thread's charge
         bool charge_set;
-        //! a charge that the frame created and made the thread's charge (referenced), or nullptr; see
-        //! enterBelowBuild()
-        QoreSandboxCharge* owned_charge = nullptr;
     };
     std::vector<Frame> frames;
     //! the number of frames when each trusted build that the thread runs started (see suspendCharge())

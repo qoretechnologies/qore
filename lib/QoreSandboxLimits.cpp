@@ -594,9 +594,17 @@ void QoreSandboxBudgetStack::enter(int tid, QoreSandboxManager* sm, const void* 
     if (lost_owner) {
         return;
     }
-    // the frames pushed from here on are this entry's (see enterBelowBuild())
-    const size_t entry_start = frames.size();
     if (const std::vector<QoreSandboxManager*>* members = QoreSandboxComposition::members(sm)) {
+        // inside a trusted build, the constituents whose budgets are below the build are entered first, in the order
+        // of their budgets: a budget started for another constituent then charges their accounts as well, as a
+        // nested call does, and a continuation that captures the budgets keeps all of them (the members are ordered
+        // by address, not by call)
+        if (!charge_floors.empty()) {
+            enterBelowBuild(tid, *members, owner);
+            if (lost_owner) {
+                return;
+            }
+        }
         for (QoreSandboxManager* member : *members) {
             // the constituents are plain managers, so their getters report their own limits
             int64 limit = member->getWallTimeLimit();
@@ -608,8 +616,6 @@ void QoreSandboxBudgetStack::enter(int tid, QoreSandboxManager* sm, const void* 
                 if (lost_owner) {
                     return;
                 }
-            } else if (memory > 0) {
-                enterBelowBuild(tid, member, owner, entry_start);
             }
         }
         return;
@@ -620,8 +626,9 @@ void QoreSandboxBudgetStack::enter(int tid, QoreSandboxManager* sm, const void* 
     int64 memory = sm->getMemoryLimit();
     if ((limit > 0 || cpu > 0 || stack > 0 || memory > 0) && !hasBudgetFor(sm)) {
         startBudget(tid, sm, limit, cpu, stack, memory, owner);
-    } else if (memory > 0) {
-        enterBelowBuild(tid, sm, owner, entry_start);
+    } else if (memory > 0 && !charge_floors.empty()) {
+        const std::vector<QoreSandboxManager*> single{sm};
+        enterBelowBuild(tid, single, owner);
     }
 }
 
@@ -636,63 +643,54 @@ void QoreSandboxBudgetStack::resumeCharge(QoreSandboxCharge* saved) {
     qore_sb_set_charge(saved);
 }
 
-void QoreSandboxBudgetStack::enterBelowBuild(int tid, QoreSandboxManager* sm, const void* owner,
-        size_t entry_start) {
-    // only inside a trusted build, for a sandbox whose budget is below it and that has no frame in the build yet
-    if (charge_floors.empty()) {
-        return;
-    }
-    size_t floor = charge_floors.back();
-    QoreSandboxCallBudget* below = nullptr;
-    for (size_t i = 0; i < frames.size(); ++i) {
-        if (frames[i].budget->manager == sm) {
-            if (i >= floor) {
-                return;
-            }
-            below = frames[i].budget;
+void QoreSandboxBudgetStack::enterBelowBuild(int tid, const std::vector<QoreSandboxManager*>& managers,
+        const void* owner) {
+    assert(!charge_floors.empty());
+    const size_t floor = charge_floors.back();
+    // the budgets below the build of the managers with a memory limit that have no frame in the build yet, in the
+    // order of the stack: a budget started later charges the accounts of the budgets that were current then as well,
+    // so the last one made current charges them all
+    std::vector<size_t> below;
+    for (QoreSandboxManager* sm : managers) {
+        if (sm->getMemoryLimit() <= 0) {
+            continue;
         }
-    }
-    if (!below || !below->charge) {
-        return;
-    }
-    // a charge that this entry made current already (a budget of another constituent of a composite manager) is
-    // kept: the memory is charged to its accounts as well; a charge made current before this entry (that of the
-    // Program that created the capability, entered by the build) is not: the caller's code is charged to the caller
-    // only, as when the caller calls it directly
-    QoreSandboxCharge* current = nullptr;
-    for (size_t i = entry_start; i < frames.size(); ++i) {
-        if (frames[i].charge_set) {
-            current = qore_sb_mem.charge;
-            break;
-        }
-    }
-    QoreSandboxCharge* combined = nullptr;
-    try {
-        if (current && current != below->charge) {
-            std::vector<QoreSandboxMemoryAccount*> accounts(below->charge->accounts);
-            for (QoreSandboxMemoryAccount* account : current->accounts) {
-                if (std::find(accounts.begin(), accounts.end(), account) == accounts.end()) {
-                    accounts.push_back(account);
+        size_t found = frames.size();
+        bool in_build = false;
+        for (size_t i = 0; i < frames.size(); ++i) {
+            if (frames[i].budget->manager == sm) {
+                if (i >= floor) {
+                    in_build = true;
+                    break;
                 }
-            }
-            combined = new QoreSandboxCharge(std::move(accounts));
-            for (QoreSandboxMemoryAccount* account : combined->accounts) {
-                account->ref();
+                found = i;
             }
         }
-        frames.push_back({below, owner, true, 0, 0, nullptr, false, combined});
-    } catch (std::bad_alloc&) {
-        if (combined) {
-            combined->deref();
+        if (in_build || found == frames.size() || !frames[found].budget->charge) {
+            continue;
         }
-        // the caller's code is refused at its next cancellation point rather than run uncharged
-        lose(tid, owner, below);
-        return;
+        try {
+            below.push_back(found);
+        } catch (std::bad_alloc&) {
+            // the caller's code is refused at its next cancellation point rather than run uncharged
+            lose(tid, owner, frames[found].budget);
+            return;
+        }
     }
-    below->ref();
-    Frame& frame = frames.back();
-    frame.saved_charge = qore_sb_set_charge(combined ? combined : below->charge);
-    frame.charge_set = true;
+    std::sort(below.begin(), below.end());
+    for (size_t index : below) {
+        QoreSandboxCallBudget* budget = frames[index].budget;
+        try {
+            frames.push_back({budget, owner, true, 0, 0, nullptr, false});
+        } catch (std::bad_alloc&) {
+            lose(tid, owner, budget);
+            return;
+        }
+        budget->ref();
+        Frame& frame = frames.back();
+        frame.saved_charge = qore_sb_set_charge(budget->charge);
+        frame.charge_set = true;
+    }
 }
 
 void QoreSandboxBudgetStack::pushFrame(QoreSandboxCallBudget* budget, const void* owner) {
@@ -713,9 +711,6 @@ QoreSandboxCallBudget* QoreSandboxBudgetStack::popFrame() {
     Frame& frame = frames.back();
     if (frame.charge_set) {
         qore_sb_set_charge(frame.saved_charge);
-    }
-    if (frame.owned_charge) {
-        frame.owned_charge->deref();
     }
     if (frame.applied_stack_limit) {
         qore_sandbox_restore_stack(frame.saved_stack_limit);

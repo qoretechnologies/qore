@@ -579,16 +579,17 @@ sub release() {
         # manager of its own: its code is governed by both sandboxes, and in a build each of their limits applies;
         # the members of a composite sandbox are ordered by address, so each pair of managers is used in both roles:
         # one of the two runs enters the Program's own sandbox (no budget yet) before the tenant's (whose budget is
-        # below the build)
+        # below the build); and each of the two has the small limit in turn
         SandboxManager x();
         SandboxManager y();
-        foreach list<SandboxManager> roles in ((x, y), (y, x)) {
-            SandboxManager tenant_sm = roles[0];
-            SandboxManager own_sm = roles[1];
+        foreach list<auto> run in ((x, y, True), (y, x, True), (x, y, False), (y, x, False)) {
+            SandboxManager tenant_sm = run[0];
+            SandboxManager own_sm = run[1];
+            bool own_small = run[2];
             tenant_sm.setUncontrolledApiPolicy(True);
-            tenant_sm.setMemoryLimit(256 * 1024 * 1024);
+            tenant_sm.setMemoryLimit(own_small ? 256 * 1024 * 1024 : 1024 * 1024);
             own_sm.setUncontrolledApiPolicy(True);
-            own_sm.setMemoryLimit(1024 * 1024);
+            own_sm.setMemoryLimit(own_small ? 1024 * 1024 : 256 * 1024 * 1024);
             Program tenant(PO_MODERN);
             tenant.setSandboxManager(tenant_sm);
             # mk() creates a Program from the source given
@@ -603,12 +604,34 @@ code sub mk() {
         return l.size();
     };
 }
+# the same allocation in a thread that the closure starts: the error of the thread is returned
+code sub mk_thread() {
+    return string sub () {
+        Qore::Thread::Queue q();
+        background sub () {
+            try {
+                list<string> l = ();
+                for (int i = 0; i < 200000; ++i) {
+                    l += sprintf(\"composite thread entry %d with some padding to use memory\", i);
+                }
+                q.push(\"allocated\");
+            } catch (hash<ExceptionInfo> ex) {
+                q.push(ex.err);
+            }
+        }();
+        return q.get();
+    };
+}
 ");
             p.setSandboxManager(own_sm);
             code c = tenant.callFunction("call", \p.callFunction(), "mk");
-            # called by the tenant directly, and through a build: the Program's own limit applies
+            # called by the tenant directly, and through a build: the smaller limit applies
             assertThrows("SANDBOX-MEMORY-LIMIT", \tenant.callFunction(), ("call", c));
             assertThrows("SANDBOX-MEMORY-LIMIT", \tenant.callFunction(), ("call", BuildCalling, c));
+            # also in a thread that the closure starts, which continues its call
+            code t = tenant.callFunction("call", \p.callFunction(), "mk_thread");
+            assertEq("SANDBOX-MEMORY-LIMIT", tenant.callFunction("call", t));
+            assertEq("SANDBOX-MEMORY-LIMIT", tenant.callFunction("call", BuildCalling, t));
         }
     }
 
