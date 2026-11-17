@@ -595,3 +595,119 @@ auto sub facts_closure_caller(int n, code attach, code detach, code log) {
     }
     return total;
 }
+
+# the calls of each kind that a frame makes after it attached the debugger, whose request in the callee is taken as
+# with the AST interpreter: a call that starts while a debugger is attached runs on the AST interpreter (#6201)
+class CallPathTarget {
+    auto m(int i) {
+        int v = i * 10;                             ### callpath_method
+        return v + 1;
+    }
+
+    static auto s(int i) {
+        int v = i * 10;                             ### callpath_static
+        return v + 1;
+    }
+}
+
+auto sub callpath_function(int i) {
+    int v = i * 10;                                 ### callpath_function
+    return v + 1;
+}
+
+auto sub callpath_ref(int i) {
+    int v = i * 10;                                 ### callpath_ref
+    return v + 1;
+}
+
+# a leaf that the IR interpreter and the JIT can run inline
+auto sub callpath_leaf(int i) {
+    return i * 10 + 1;                              ### callpath_leaf
+}
+
+auto sub callpath_function_caller(int n, code attach, code detach, code log) {
+    on_exit detach();
+    for (int i = 0; i < n; ++i) {
+        if (i == 2) {
+            attach();
+        }
+        log(sprintf("%y", callpath_function(i)));
+    }
+    return n;
+}
+
+auto sub callpath_method_caller(int n, code attach, code detach, code log) {
+    on_exit detach();
+    CallPathTarget t();
+    for (int i = 0; i < n; ++i) {
+        if (i == 2) {
+            attach();
+        }
+        log(sprintf("%y", t.m(i)));
+    }
+    return n;
+}
+
+auto sub callpath_static_caller(int n, code attach, code detach, code log) {
+    on_exit detach();
+    for (int i = 0; i < n; ++i) {
+        if (i == 2) {
+            attach();
+        }
+        log(sprintf("%y", CallPathTarget::s(i)));
+    }
+    return n;
+}
+
+auto sub callpath_closure_caller(int n, code attach, code detach, code log) {
+    on_exit detach();
+    code c = auto sub (int i) {
+        int v = i * 10;                             ### callpath_closure
+        return v + 1;
+    };
+    for (int i = 0; i < n; ++i) {
+        if (i == 2) {
+            attach();
+        }
+        log(sprintf("%y", c(i)));
+    }
+    return n;
+}
+
+auto sub callpath_ref_caller(int n, code attach, code detach, code log) {
+    on_exit detach();
+    code r = \callpath_ref();
+    for (int i = 0; i < n; ++i) {
+        if (i == 2) {
+            attach();
+        }
+        log(sprintf("%y", r(i)));
+    }
+    return n;
+}
+
+auto sub callpath_leaf_caller(int n, code attach, code detach, code log) {
+    on_exit detach();
+    for (int i = 0; i < n; ++i) {
+        if (i == 2) {
+            attach();
+        }
+        log(sprintf("%y", callpath_leaf(i)));
+    }
+    return n;
+}
+
+# a loop that runs until the debugger, attached by another thread while the loop runs, stops it (#6201): started() is
+# called once the loop runs, and running() returns False to end it
+string sub spin_loop(code started, code running) {
+    float f = 0.0;
+    int total = 0;
+    for (int i = 0; running(i); ++i) {
+        if (i == 1) {
+            started();
+        }
+        f = f + 1.5;
+        total += 1;                                 ### spin_total
+    }
+    return sprintf("f=%y total=%y", f, total);
+}

@@ -5820,6 +5820,12 @@ static bool executeInterpreterInlineIRMethodTarget(DirectMethodInst* inst, const
         QoreObject* self, const QoreTypeInfo* receiver_type_info, int8_t inline_state,
         uint64_t* args, int nargs, QoreValue& result, ExceptionSink* xsink,
         bool* may_invalidate_external_caches = nullptr, uint64_t** arg_cleanups = nullptr) {
+    // the inlined callee has no frame of its own on the stack of local variables, and a call that starts while a
+    // debugger is attached runs on the AST interpreter, which takes the debugger's flow requests (#6201): the callee
+    // is called through the call path then, as an inline function is (tryExecuteInterpreterInlineIRFunction())
+    if (irFunctionDebuggerAttached(inst->cached_callee_ir)) {
+        return false;
+    }
     QoreSandboxProvenanceHelper provenance(self);
     const UserVariantBase* uvb = inst->cached_uvb;
     if (uvb->hasCachedFunction()) {
@@ -6127,6 +6133,10 @@ static bool tryExecuteInterpreterInlineIRStaticMethod(QoreIRCallStaticDirectInst
     int8_t inline_state = caller_pgm
         ? ensureInterpreterResolvedInlineIRCallState(inst, inst->method, inst->variant, caller_pgm, nargs, false) : -1;
     if (inline_state <= 0) {
+        return false;
+    }
+    // called through the call path while a debugger is attached (see executeInterpreterInlineIRMethodTarget())
+    if (irFunctionDebuggerAttached(inst->cached_callee_ir)) {
         return false;
     }
 

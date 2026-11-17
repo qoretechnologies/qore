@@ -27,7 +27,9 @@
     attached ignores them as native code, and the IR interpreter takes a return (the frame returns without a value)
     and ignores a break or a continue; the step events are still reported, so that an ignored request gives the run
     without the request.  A call that starts while the debugger is attached runs on the AST interpreter in every
-    execution mode, and takes every request.
+    execution mode, and takes every request: the calls of each kind that the frame makes after the attach, and with
+    \c again, the next call of the function, which also checks that the function runs without being compiled again
+    after the debugger detached.  SpinFlowDebugger.q attaches the debugger from another thread while a loop runs.
 
     The rest of this description is the behaviour of the AST interpreter.
 
@@ -81,12 +83,15 @@ class DebuggerStepFlowTest inherits QUnit::Test {
               native code (JIT and tiered execution) or in the IR interpreter (IR execution and the IR tier of tiered
               execution), where they are not those of an ignored request (the run without the request) or, for a
               return in the IR interpreter, of the AST interpreter (#6201)
+            - \c again: the function is called again with the debugger attached, which takes the request as the AST
+              interpreter in every mode (#6201); the value is the result of that call
         */
         const Cases = (
             {"function": "for_loop", "flow": "return", "tag": "for_first", "hit": 2, "block": False,
                 "result": "null",
                 "log": (),
                 "steps": (17, 18, "b14", 14, 17),
+                "again": "null",
             },
             {"function": "for_loop", "flow": "return", "tag": "for_body", "hit": 2, "block": True,
                 "result": "null",
@@ -167,6 +172,7 @@ class DebuggerStepFlowTest inherits QUnit::Test {
                 "result": "33",
                 "log": (),
                 "steps": (17, 18, "b14", 14, 17, 20),
+                "again": "11",
             },
             {"function": "for_loop", "flow": "break", "tag": "for_second", "hit": 2, "block": False,
                 "result": "43",
@@ -177,6 +183,7 @@ class DebuggerStepFlowTest inherits QUnit::Test {
                 "result": "44",
                 "log": (),
                 "steps": (17, 18, "b14", 14, 17, "b14", 14, 17, 18, 20),
+                "again": "44",
             },
             {"function": "for_loop", "flow": "break", "tag": "for_body", "hit": 2, "block": True,
                 "result": "44",
@@ -275,6 +282,7 @@ class DebuggerStepFlowTest inherits QUnit::Test {
                 "result": "44",
                 "log": ("exit0", "exit2-0", "exit1", "exit2-1", "exit2", "exit2-2"),
                 "steps": (282, 286, 287, "b283", 283, 284, "b279", 279, 282, 286, 287, "b283", 283, 289),
+                "again": "22",
             },
             {"function": "handler_flow", "flow": "continue", "tag": "handler_flow_body", "hit": 2, "block": False,
                 "handler": True,
@@ -339,6 +347,7 @@ class DebuggerStepFlowTest inherits QUnit::Test {
                     "steps": (320, 321, 325, 326, "b322", 322, 323, "b317", 317, 320, 321, 325, 326, "b322", 322,
                     "b317", 317, 320, 321, 325, 326, "b322", 322, 323, 328),
                 },
+                "again": "null",
             },
             {"function": "return_twice", "flow": "return", "tag": "return_twice_first", "hit": 2, "block": False,
                 "flow2": "return", "tag2": "return_twice_handler", "hit2": 1,
@@ -375,6 +384,7 @@ class DebuggerStepFlowTest inherits QUnit::Test {
                     "steps": (412, "b413", 413, 418, 419, "b414", 414, "b409", 409, 412, "b413", 413, 418, "b414",
                     414, "b415", 415),
                 },
+                "again": "null",
             },
             {"function": "promoted_float", "flow": "break", "tag": "promoted_float_total", "hit": 2, "block": False,
                 "promoted": True,
@@ -458,6 +468,128 @@ class DebuggerStepFlowTest inherits QUnit::Test {
                 "log": (),
                 "steps": (556, 557, "b558", 558, "b564", 564),
             },
+            # a continue in while loops
+            {"function": "while_loop", "flow": "continue", "tag": "while_first", "hit": 2, "block": False,
+                "again": "55",
+                "result": "55",
+                "log": (),
+                "steps": (32, 33, 34, "b29", 29, 32, "b29", 29, 32, 33, 34, "b29", 29, 32, 33, 34, 36),
+            },
+            {"function": "while_call_loop", "flow": "continue", "tag": "while_call_first", "hit": 2, "block": False,
+                "result": "55",
+                "log": ("cond0", "cond1", "cond2", "cond3", "cond3", "cond4", "cond5"),
+                "steps": (48, 49, 50, "b45", 45, 48, "b45", 45, 48, 49, 50, "b45", 45, 48, 49, 50, 52),
+            },
+            # the calls of each kind that a frame running when the debugger attached makes after the attach, which
+            # start with the debugger attached and take the request as with the AST interpreter (#6201); a function
+            # that the native code of the frame calls directly (a callee of its JIT batch) runs as native code,
+            # which ignores the request and makes no event for the callee's block (#6289)
+            {"function": "callpath_function_caller", "flow": "return", "tag": "callpath_function", "hit": 1, "block": False,
+                "call_path": True, "calls": True,
+                "result": "5",
+                "log": ("1", "11", "null", "31", "41"),
+                "steps": (634, "b614", 614, "b631", 631, 634, "b614", 614, 615, "b631", 631, 634, "b614", 614, 615,
+                    636, "b629", 629),
+                "native": {
+                    "result": "5",
+                    "log": ("1", "11", "21", "31", "41"),
+                    "steps": (634, 614, 615, "b631", 631, 634, 614, 615, "b631", 631, 634, 614, 615, 636, "b629",
+                    629),
+                },
+            },
+            {"function": "callpath_function_caller", "flow": "break", "tag": "callpath_function", "hit": 1, "block": False,
+                "call_path": True, "calls": True,
+                "result": "5",
+                "log": ("1", "11", "null", "31", "41"),
+                "steps": (634, "b614", 614, "b631", 631, 634, "b614", 614, 615, "b631", 631, 634, "b614", 614, 615,
+                    636, "b629", 629),
+                "native": {
+                    "result": "5",
+                    "log": ("1", "11", "21", "31", "41"),
+                    "steps": (634, 614, 615, "b631", 631, 634, 614, 615, "b631", 631, 634, 614, 615, 636, "b629",
+                    629),
+                },
+            },
+            {"function": "callpath_method_caller", "flow": "return", "tag": "callpath_method", "hit": 1, "block": False,
+                "call_path": True, "calls": True,
+                "result": "5",
+                "log": ("1", "11", "null", "31", "41"),
+                "steps": (646, "b603", 603, "b643", 643, 646, "b603", 603, 604, "b643", 643, 646, "b603", 603, 604,
+                    648, "b640", 640),
+            },
+            {"function": "callpath_method_caller", "flow": "break", "tag": "callpath_method", "hit": 1, "block": False,
+                "call_path": True, "calls": True,
+                "result": "5",
+                "log": ("1", "11", "null", "31", "41"),
+                "steps": (646, "b603", 603, "b643", 643, 646, "b603", 603, 604, "b643", 643, 646, "b603", 603, 604,
+                    648, "b640", 640),
+            },
+            {"function": "callpath_static_caller", "flow": "return", "tag": "callpath_static", "hit": 1, "block": False,
+                "call_path": True, "calls": True,
+                "result": "5",
+                "log": ("1", "11", "null", "31", "41"),
+                "steps": (657, "b608", 608, "b654", 654, 657, "b608", 608, 609, "b654", 654, 657, "b608", 608, 609,
+                    659, "b652", 652),
+            },
+            {"function": "callpath_static_caller", "flow": "break", "tag": "callpath_static", "hit": 1, "block": False,
+                "call_path": True, "calls": True,
+                "result": "5",
+                "log": ("1", "11", "null", "31", "41"),
+                "steps": (657, "b608", 608, "b654", 654, 657, "b608", 608, 609, "b654", 654, 657, "b608", 608, 609,
+                    659, "b652", 652),
+            },
+            {"function": "callpath_closure_caller", "flow": "return", "tag": "callpath_closure", "hit": 1, "block": False,
+                "call_path": True, "calls": True,
+                "result": "5",
+                "log": ("1", "11", "null", "31", "41"),
+                "steps": (672, "b665", 665, "b669", 669, 672, "b665", 665, 666, "b669", 669, 672, "b665", 665, 666,
+                    674, "b663", 663),
+            },
+            {"function": "callpath_closure_caller", "flow": "break", "tag": "callpath_closure", "hit": 1, "block": False,
+                "call_path": True, "calls": True,
+                "result": "5",
+                "log": ("1", "11", "null", "31", "41"),
+                "steps": (672, "b665", 665, "b669", 669, 672, "b665", 665, 666, "b669", 669, 672, "b665", 665, 666,
+                    674, "b663", 663),
+            },
+            {"function": "callpath_ref_caller", "flow": "return", "tag": "callpath_ref", "hit": 1, "block": False,
+                "call_path": True, "calls": True,
+                "result": "5",
+                "log": ("1", "11", "null", "31", "41"),
+                "steps": (684, "b619", 619, "b681", 681, 684, "b619", 619, 620, "b681", 681, 684, "b619", 619, 620,
+                    686, "b678", 678),
+            },
+            {"function": "callpath_ref_caller", "flow": "break", "tag": "callpath_ref", "hit": 1, "block": False,
+                "call_path": True, "calls": True,
+                "result": "5",
+                "log": ("1", "11", "null", "31", "41"),
+                "steps": (684, "b619", 619, "b681", 681, 684, "b619", 619, 620, "b681", 681, 684, "b619", 619, 620,
+                    686, "b678", 678),
+            },
+            {"function": "callpath_leaf_caller", "flow": "return", "tag": "callpath_leaf", "hit": 1, "block": False,
+                "call_path": True, "calls": True,
+                "result": "5",
+                "log": ("1", "11", "null", "31", "41"),
+                "steps": (695, "b625", 625, "b692", 692, 695, "b625", 625, "b692", 692, 695, "b625", 625, 697,
+                    "b690", 690),
+                "native": {
+                    "result": "5",
+                    "log": ("1", "11", "21", "31", "41"),
+                    "steps": (695, 625, "b692", 692, 695, 625, "b692", 692, 695, 625, 697, "b690", 690),
+                },
+            },
+            {"function": "callpath_leaf_caller", "flow": "break", "tag": "callpath_leaf", "hit": 1, "block": False,
+                "call_path": True, "calls": True,
+                "result": "5",
+                "log": ("1", "11", "null", "31", "41"),
+                "steps": (695, "b625", 625, "b692", 692, 695, "b625", 625, "b692", 692, 695, "b625", 625, 697,
+                    "b690", 690),
+                "native": {
+                    "result": "5",
+                    "log": ("1", "11", "21", "31", "41"),
+                    "steps": (695, 625, "b692", 692, 695, 625, "b692", 692, 695, 625, 697, "b690", 690),
+                },
+            },
         );
     }
 
@@ -478,6 +610,8 @@ class DebuggerStepFlowTest inherits QUnit::Test {
         addTestCase("a request in a handler and the requests of a return", \testHandler());
         addTestCase("a return in a callee whose return facts its native caller relies on", \testReturnFacts());
         addTestCase("the events of the handlers run by an exception after a debugger attached", \testNoRequest());
+        addTestCase("the calls of each kind that a frame makes after it attached a debugger", \testCallPaths());
+        addTestCase("a debugger attached by another thread while a loop runs", \testSpin());
         set_return_value(main());
     }
 
@@ -512,8 +646,9 @@ class DebuggerStepFlowTest inherits QUnit::Test {
         if (c{tier}) {
             return getExpected(c + c{tier});
         }
-        # the IR interpreter's return takes the request as the AST interpreter does
-        if (c.flow == "none" || (tier == "ir" && c.flow == "return")) {
+        # a call that starts after the debugger attached, and the IR interpreter's return, take the request as the
+        # AST interpreter does
+        if (c.flow == "none" || c.call_path || (tier == "ir" && c.flow == "return")) {
             return getExpected(c);
         }
         # an ignored request: the run without it
@@ -545,6 +680,12 @@ class DebuggerStepFlowTest inherits QUnit::Test {
             args += sprintf(" %s %d %d", c.flow2, tags{c.tag2}, c.hit2);
             what += sprintf(", %s at %s#%d", c.flow2, c.tag2, c.hit2);
         }
+        string ir_args = args;
+        if (c.again) {
+            args += " again";
+        }
+        # the calls that start with the debugger attached, as with the AST interpreter
+        *string again_ast;
         foreach string mode in (ExecModeHarness::ExecModes) {
             string expected = mode == "ast"
                 ? getExpected(c)
@@ -554,6 +695,25 @@ class DebuggerStepFlowTest inherits QUnit::Test {
                 ? ExecModeHarness::TraceEnv + " QORE_IR_OPT_STATS=1" : NOTHING);
             ExecModeHarness::check_native(r);
             assertEq(expected, getOutput(r.out), sprintf("%s: %s", what, mode));
+            if (c.again) {
+                *list<*string> again = r.out =~ x/^(AGAIN-RESULT:.*)$/m;
+                *list<*string> detached = r.out =~ x/^DETACHED-RESULT:(.*) COMPILED:(.*)$/m;
+                string again_line = again[0] ?? r.out;
+                if (mode == "ast") {
+                    again_ast = again_line;
+                    assertEq(c.again, (again_line =~ x/^AGAIN-RESULT:(.*) LOG:/)[0], sprintf("%s: %s: next call",
+                        what, mode));
+                } else {
+                    assertEq(again_ast, again_line, sprintf("%s: %s: next call", what, mode));
+                }
+                # the code runs as before the debugger attached, without being compiled again
+                assertEq((getNoRequest(c) =~ x/^RESULT:(.*) LOG:/)[0], detached[0], sprintf("%s: %s: after the "
+                    "debugger detached", what, mode));
+                if (detached[1] != "-") {
+                    assertEq("0", detached[1], sprintf("%s: %s: functions compiled after the debugger attached", what,
+                        mode));
+                }
+            }
             # the locals that the IR keeps in native registers in the function (SSA promotion)
             if (c.promoted && mode != "ast") {
                 *list<*string> stats = regex_extract(r.stderr, "IR-OPT: " + c.function
@@ -572,12 +732,38 @@ class DebuggerStepFlowTest inherits QUnit::Test {
             return;
         }
         assertEq(getRunningExpected(c, "ir"), getOutput(ExecModeHarness::run_ir_tier(sprintf("%s --enable-debug "
-            "--exec-mode=tiered %s", qore_bin, args))), sprintf("%s: %s", what, ExecModeHarness::IRTierName));
+            "--exec-mode=tiered %s", qore_bin, ir_args))), sprintf("%s: %s", what, ExecModeHarness::IRTierName));
+    }
+
+    #! a debugger that another thread attaches while a loop runs (#6201)
+    /** The loop runs as native code with JIT and tiered execution, which ignores the break, and with the IR
+        interpreter with IR execution, which ignores it too: its float and int locals then grow together, until the
+        debugger stops the loop; with the AST interpreter, the break before the second statement leaves the float one
+        step ahead.  The next call, with the debugger attached, takes the break in every mode.
+    */
+    testSpin() {
+        string dir = get_script_dir();
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s --enable-debug "
+                "--exec-mode=%s %s/SpinFlowDebugger.q %s/StepFlowTarget.q %d", qore_bin, mode, dir, dir,
+                tags.spin_total));
+            ExecModeHarness::check_native(r);
+            *list<*string> m = r.out =~ x/^RUNNING:f=([0-9.]+) total=([0-9]+) AGAIN:(.*)$/m;
+            if (!m) {
+                fail(sprintf("%s: unexpected output: %y", mode, r.out));
+                continue;
+            }
+            float f = m[0].toFloat();
+            int total = m[1].toInt();
+            assertEq(mode == "ast" ? 1.5 * (total + 1) : 1.5 * total, f, sprintf("%s: running loop: f=%y total=%y",
+                mode, f, total));
+            assertEq("f=3.0 total=1", m[2], sprintf("%s: next call", mode));
+        }
     }
 
     testReturn() {
         foreach hash<auto> c in (Cases) {
-            if (c.flow == "return" && !c.handler && !c.facts) {
+            if (c.flow == "return" && !c.handler && !c.facts && !c.call_path) {
                 checkCase(c);
             }
         }
@@ -585,7 +771,7 @@ class DebuggerStepFlowTest inherits QUnit::Test {
 
     testBreak() {
         foreach hash<auto> c in (Cases) {
-            if (c.flow == "break" && !c.handler && !c.facts) {
+            if (c.flow == "break" && !c.handler && !c.facts && !c.call_path) {
                 checkCase(c);
             }
         }
@@ -593,7 +779,7 @@ class DebuggerStepFlowTest inherits QUnit::Test {
 
     testContinue() {
         foreach hash<auto> c in (Cases) {
-            if (c.flow == "continue" && !c.handler && !c.facts) {
+            if (c.flow == "continue" && !c.handler && !c.facts && !c.call_path) {
                 checkCase(c);
             }
         }
@@ -610,6 +796,14 @@ class DebuggerStepFlowTest inherits QUnit::Test {
     testNoRequest() {
         foreach hash<auto> c in (Cases) {
             if (c.flow == "none") {
+                checkCase(c);
+            }
+        }
+    }
+
+    testCallPaths() {
+        foreach hash<auto> c in (Cases) {
+            if (c.call_path) {
                 checkCase(c);
             }
         }
