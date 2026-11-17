@@ -1158,39 +1158,6 @@ DLLLOCAL bool runtime_module_call_override_in_effect(const QoreProgram* module_p
 //! runtime_module_call_override_in_effect() for the data of the current thread, \a td
 DLLLOCAL bool runtime_module_call_override_in_effect(ThreadData* td, const QoreProgram* module_pgm);
 
-//! The runtime parse options of a thread, a part of its data (ThreadData), which RuntimeParseOptionsOverrideHelper sets
-//! and restores
-/** In a header so that RuntimeParseOptionsOverrideHelper::restore(), which runs at the end of every call of a user
-    variant, is inlined at its callers wherever they are
-*/
-class QoreThreadRuntimeParseOptionsState {
-public:
-    QoreParseOptions runtime_po;
-    QoreParseOptions runtime_po_override_mask;
-    QoreParseOptions runtime_po_override_value;
-    //! the options of runtime_po_override_mask whose value is that of the override, not also that of the code
-    /** see QoreCallParseOptionsOverride::replace
-    */
-    QoreParseOptions runtime_po_override_replace;
-    //! the restrictions that the code of runtime_po_module_pgm inherits from its caller
-    /** see runtime_get_own_program_state_parse_options()
-    */
-    QoreParseOptions runtime_po_caller_restrictions;
-    //! the Program of the module whose code runs with runtime_po_caller_restrictions, or nullptr
-    const QoreProgram* runtime_po_module_pgm = nullptr;
-    //! the ID of the application Program that the code of runtime_po_module_pgm runs for
-    qore_program_id_t runtime_po_app_pgm_id = 0;
-    //! true while module code runs for a sandboxed caller; see QoreCallParseOptionsOverride::sandboxed
-    bool runtime_po_sandboxed = false;
-    //! the module Program whose code the override was set for; see QoreCallParseOptionsOverride::override_pgm
-    const QoreProgram* runtime_po_override_pgm = nullptr;
-};
-
-#ifdef DEBUG
-//! returns true if \a state is that of the current thread
-DLLLOCAL bool qore_runtime_po_state_is_current(const QoreThreadRuntimeParseOptionsState* state);
-#endif
-
 class RuntimeParseOptionsOverrideHelper {
 public:
     //! sets no override; see set()
@@ -1238,7 +1205,7 @@ private:
     //! by restore() only), so it takes no initialization: the helper is created on every call of a user variant
     bool active = false;
     bool old_sandboxed;
-    QoreThreadRuntimeParseOptionsState* td;
+    ThreadData* td;
     QoreParseOptions old_mask;
     QoreParseOptions old_value;
     QoreParseOptions old_replace;
@@ -1248,19 +1215,7 @@ private:
     qore_program_id_t old_app_pgm_id;
     const QoreProgram* old_override_pgm;
 
-    DLLLOCAL QORE_INTERN_ALWAYS_INLINE void restore() {
-        assert(active);
-        assert(qore_runtime_po_state_is_current(td));
-        td->runtime_po_override_mask = old_mask;
-        td->runtime_po_override_value = old_value;
-        td->runtime_po_override_replace = old_replace;
-        td->runtime_po_caller_restrictions = old_caller_restrictions;
-        td->runtime_po_module_pgm = old_module_pgm;
-        td->runtime_po_app_pgm_id = old_app_pgm_id;
-        td->runtime_po_sandboxed = old_sandboxed;
-        td->runtime_po_override_pgm = old_override_pgm;
-        td->runtime_po = old_po;
-    }
+    DLLLOCAL void restore();
 };
 
 //! The run-time parse options in effect on a thread: its options and the override that they were computed with
