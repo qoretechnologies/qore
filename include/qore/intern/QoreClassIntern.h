@@ -3880,6 +3880,31 @@ public:
         return info;
     }
 
+    //! returns the member that a call of the name made through the code that a member holds may use (qore#6487)
+    /** this = the object's class; a call through a member (`o.x(...)` where `x` is a member that holds a closure or a
+        call reference) applies the access rules of a read of the member, exactly: the class context is used only if
+        it is in the hierarchy of the object's class (as qore_object_private::checkMemberAccess() callers make it:
+        runtimeCheckPrivateClassAccess()), and a private or internal member is not accessible without one
+
+        @param mem the member name
+        @param class_ctx the class context of the call; set to nullptr if it cannot access private members of this
+        class, so that the caller continues with the context that the member read would use
+
+        @return the member, or nullptr if there is none or the member is not accessible: the call then goes on as for
+        a name that is no member (a pseudo-method, the methodGate or METHOD-DOES-NOT-EXIST)
+    */
+    DLLLOCAL const QoreMemberInfo* runtimeGetCallableMemberInfo(const char* mem,
+            const qore_class_private*& class_ctx) const {
+        if (class_ctx && !runtimeCheckPrivateClassAccess(class_ctx)) {
+            class_ctx = nullptr;
+        }
+        const QoreMemberInfo* info = runtimeGetMemberInfo(mem, class_ctx);
+        if (info && info->access > Public && !class_ctx) {
+            return nullptr;
+        }
+        return info;
+    }
+
     DLLLOCAL const QoreMemberInfo* parseFindMember(const char* mem, const qore_class_private*& qc, ClassAccess& access) const {
         access = Public;
         const_cast<qore_class_private*>(this)->initialize();

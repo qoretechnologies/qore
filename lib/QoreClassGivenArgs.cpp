@@ -44,7 +44,7 @@
 // documented in QoreClassIntern.h
 bool qore_class_eval_member_code_given_args(const qore_class_private& qcp, QoreObject* self, const char* nme,
         QoreListNode* args, const qore_class_private* class_ctx, ExceptionSink* xsink, QoreValue& rv) {
-    const QoreMemberInfo* mi = qcp.runtimeGetMemberInfo(nme, class_ctx);
+    const QoreMemberInfo* mi = qcp.runtimeGetCallableMemberInfo(nme, class_ctx);
     if (!mi) {
         return false;
     }
