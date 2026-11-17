@@ -4614,9 +4614,9 @@ endif()
 
     # Tag files imported by each bundled native module's final documentation pass: the modules whose pages the
     # module's documentation links to (see qore_bundled_module_two_phase_docs()); importing every module's tag
-    # file instead copies all their symbols into the module's search index (#6350).  A missing entry is only a
-    # Doxygen warning in the module's final pass (nothing fails; the reference renders as plain text): add the
-    # module here, do not widen the set.  A name that is not a module fails the configure.  Like
+    # file instead copies all their symbols into the module's search index (#6350).  A missing entry fails the
+    # module's final pass with an error that names the module to add here (doxygen/check-module-doc-references.py,
+    # #6367); do not widen the set.  A name that is not a module fails the configure.  Like
     # QORE_DOC_EXTRA_MODULES_<mod> for user modules, these are the documentation references.
     set(QORE_DOC_REFERENCE_MODULES_astparser Qdx QoreApiMetadata QoreCodeFormat)
     set(QORE_DOC_REFERENCE_MODULES_avro AvroUtil DataProvider)

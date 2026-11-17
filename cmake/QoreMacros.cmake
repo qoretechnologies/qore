@@ -4327,7 +4327,18 @@ ENDMACRO (QORE_EXTERNAL_USER_MODULE)
 #     qore_binary_module_two_phase_docs(krb5 "Krb5Util")
 # Keep tag files owned by the initial pass. Parallel final passes read the same
 # complete indexes and must never truncate or rewrite them while another reads.
+# Optional arguments after _dependencies: the file that the final pass writes its
+# Doxygen warnings to (WARN_LOGFILE), then the command that checks them, which
+# runs Doxygen itself (given after "--"), prints the log whatever its exit code
+# (Doxygen then writes its errors only to the log) and fails the target (see
+# QORE_BUNDLED_MODULE_TWO_PHASE_DOCS()).
 function(_QORE_ADD_MODULE_DOC_FINAL_PASS _target _doxyfile _html _tags _dependencies)
+    set(_warn_log "")
+    set(_check_command "")
+    if (ARGC GREATER 5)
+        list(GET ARGN 0 _warn_log)
+        list(SUBLIST ARGN 1 -1 _check_command)
+    endif()
     file(READ "${_doxyfile}" _existing_config)
     separate_arguments(_candidate_tags UNIX_COMMAND "${_tags}")
     set(_additional_tags "")
@@ -4342,11 +4353,22 @@ function(_QORE_ADD_MODULE_DOC_FINAL_PASS _target _doxyfile _html _tags _dependen
     file(APPEND "${_doxyfile}.final"
         "\n# Final pass: resolve cross-references without rewriting shared indexes\n"
         "TAGFILES += ${_additional_tags}\nWARN_IF_DOC_ERROR = YES\nGENERATE_TAGFILE =\n")
+    if (_warn_log)
+        # the check runs the pass and prints its warnings and errors
+        file(APPEND "${_doxyfile}.final" "WARN_LOGFILE = \"${_warn_log}\"\n")
+    else()
+        set(_check_command "")
+    endif()
     file(APPEND "${_doxyfile}"
         "\n# Initial pass: generate the index before resolving reverse references\n"
         "WARN_IF_DOC_ERROR = NO\n")
+    if (_check_command)
+        set(_doxygen_command ${_check_command} -- ${DOXYGEN_EXECUTABLE} "${_doxyfile}.final")
+    else()
+        set(_doxygen_command ${DOXYGEN_EXECUTABLE} "${_doxyfile}.final")
+    endif()
     add_custom_target(${_target}-final
-        COMMAND ${DOXYGEN_EXECUTABLE} "${_doxyfile}.final"
+        COMMAND ${_doxygen_command}
         COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND}
             --post "${_html}" "${_html}/search"
         WORKING_DIRECTORY "${CMAKE_BINARY_DIR}"
@@ -4384,6 +4406,9 @@ MACRO (QORE_BINARY_MODULE_TWO_PHASE_DOCS _binary_module _user_modules)
     endif()
 ENDMACRO (QORE_BINARY_MODULE_TWO_PHASE_DOCS)
 
+# the directory of this file, for the scripts of the Qore source tree that its functions use
+set(_QORE_MACROS_DIR "${CMAKE_CURRENT_LIST_DIR}")
+
 # Called after all bundled native and user documentation targets are registered.
 # User modules already import the initial native indexes. A native module's final
 # pass imports only the tag files of the modules its documentation references,
@@ -4392,9 +4417,8 @@ ENDMACRO (QORE_BINARY_MODULE_TWO_PHASE_DOCS)
 # the peers its pages @ref); a module without the variable imports no peer tags.
 # Importing every index would copy the symbols of all of them into the module's
 # own search data (about 38 MB per module) and its namespace lists. A missing entry
-# is only a Doxygen warning in the final pass (WARN_IF_DOC_ERROR = YES): nothing
-# fails and the reference renders as plain text, so check the warnings after
-# changing a module's documentation.
+# makes the reference a Doxygen warning in the final pass (WARN_IF_DOC_ERROR = YES),
+# which the check described below turns into an error.
 # This is the native-module counterpart of QORE_DOC_EXTRA_MODULES_<module> (user
 # modules: the %requires closure plus these documentation-only extras): the
 # listed modules are the documentation-only references, but a native module has no
@@ -4403,6 +4427,10 @@ ENDMACRO (QORE_BINARY_MODULE_TWO_PHASE_DOCS)
 # configure fails (a typo would otherwise silently drop the tag). The one
 # exception is a name in _binary_modules that is not built in this configuration
 # (an optional module such as mongodb), which is skipped.
+# With Python 3, the final pass fails when its documentation refers to a symbol
+# or page that the tag file of a module outside the list defines
+# (doxygen/check-module-doc-references.py, issue #6367): a missing entry would
+# otherwise only be a warning.
 function(QORE_BUNDLED_MODULE_TWO_PHASE_DOCS _binary_modules _user_modules)
     if (NOT DOXYGEN_FOUND)
         return()
@@ -4418,6 +4446,22 @@ function(QORE_BUNDLED_MODULE_TWO_PHASE_DOCS _binary_modules _user_modules)
     foreach(_module IN LISTS _user_modules)
         list(APPEND _dependencies docs-${_module})
     endforeach()
+    # the tag files of every module, which the check of the warnings of a final pass maps a reference with
+    set(_check_tags "")
+    if (NOT DEFINED QORE_DOC_REFERENCE_CHECK_SCRIPT)
+        set(QORE_DOC_REFERENCE_CHECK_SCRIPT "${_QORE_MACROS_DIR}/../doxygen/check-module-doc-references.py")
+    endif()
+    if (NOT Python3_EXECUTABLE)
+        find_package(Python3 COMPONENTS Interpreter QUIET)
+    endif()
+    if (Python3_EXECUTABLE AND EXISTS "${QORE_DOC_REFERENCE_CHECK_SCRIPT}")
+        foreach(_peer IN LISTS _binaries)
+            list(APPEND _check_tags --tag "${_peer}=${CMAKE_BINARY_DIR}/modules/${_peer}/${_peer}.tag")
+        endforeach()
+        foreach(_peer IN LISTS _user_modules)
+            list(APPEND _check_tags --tag "${_peer}=${CMAKE_BINARY_DIR}/${_peer}.tag")
+        endforeach()
+    endif()
     foreach(_module IN LISTS _binaries)
         set(_tags "")
         foreach(_peer IN LISTS QORE_DOC_REFERENCE_MODULES_${_module})
@@ -4439,9 +4483,20 @@ function(QORE_BUNDLED_MODULE_TWO_PHASE_DOCS _binary_modules _user_modules)
                     "bundled binary module nor a user module")
             endif()
         endforeach()
+        set(_check "")
+        if (_check_tags)
+            set(_allowed "")
+            foreach(_peer IN LISTS QORE_DOC_REFERENCE_MODULES_${_module})
+                list(APPEND _allowed --allowed "${_peer}")
+            endforeach()
+            set(_warn_log "${CMAKE_BINARY_DIR}/modules/${_module}/doc-final-warnings.log")
+            set(_check "${_warn_log}" "${Python3_EXECUTABLE}" -I
+                "${QORE_DOC_REFERENCE_CHECK_SCRIPT}" --module "${_module}" --log "${_warn_log}"
+                --list-variable "QORE_DOC_REFERENCE_MODULES_${_module}" ${_allowed} ${_check_tags})
+        endif()
         _qore_add_module_doc_final_pass(docs-${_module}
             "${CMAKE_BINARY_DIR}/modules/${_module}/Doxyfile"
-            "${CMAKE_BINARY_DIR}/docs/modules/${_module}/html" "${_tags}" "${_dependencies}")
+            "${CMAKE_BINARY_DIR}/docs/modules/${_module}/html" "${_tags}" "${_dependencies}" ${_check})
     endforeach()
 endfunction()
 
