@@ -9543,7 +9543,7 @@ void UserVariantBase::SpecializedIRCache::evictDeadTypes(const std::set<const Qo
 
 QORE_INTERN_ALWAYS_INLINE void QoreConstructorCompletion::capture(ExceptionSink* xsink) const {
     const qore_es_private* es = qore_es_private::get(*xsink);
-    completed = !es->head && !es->thread_exit;
+    completed = !es->isPending();
 }
 
 template <typename Completion>
