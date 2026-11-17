@@ -457,7 +457,8 @@ public class HttpConnectPollOperation inherits HttpClientIoPollOperation {
         if (http_opts.connect_timeout) {
             # the option may be given as a relative date or as an integer number of milliseconds
             timeout timeout_ms = http_opts.connect_timeout;
-            deadline = now_us() + milliseconds(timeout_ms);
+            # on the monotonic clock (#6455)
+            setDeadlineTimeout(timeout_ms);
         }
     }
 

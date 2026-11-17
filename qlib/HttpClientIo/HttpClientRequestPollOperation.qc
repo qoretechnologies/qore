@@ -183,10 +183,17 @@ public class HttpClientRequestPollOperation inherits Qore::AbstractPollOperation
         bool auth_retry = False;
         #! True once a proxy authentication challenge for a CONNECT request was answered
         bool proxy_connect_answered = False;
-        #! The deadline for the response, if any
+        #! The deadline for the response, if any, as a wall-clock date: only for subclasses that set it (deprecated)
+        /** The operation keeps its deadline on the monotonic clock (@ref deadline_us), so that a change of the system
+            clock does not end the request early or late (#6455).  A subclass that sets this member, as subclasses of
+            earlier versions did, still sets the deadline: the date is converted to the monotonic clock when the
+            operation next reads its deadline (see @ref getDeadlineUs()).  Use @ref setDeadlineTimeout() instead.
+        */
         *date deadline;
-        #! The time the current request was sent, for the inactivity timeout
-        *date sent;
+        #! The deadline for the response, if any, on the monotonic clock in microseconds (@ref Qore::clock_get_monotonic_us() "clock_get_monotonic_us()")
+        *int deadline_us;
+        #! The time the current request was sent, for the inactivity timeout, on the monotonic clock in microseconds
+        *int sent_us;
 
         #! The current state
         string state = ST_CONNECTING;
@@ -274,9 +281,41 @@ public class HttpClientRequestPollOperation inherits Qore::AbstractPollOperation
         self.body = body;
         # 0 means no overall deadline; see the io_timeout option of the connection manager
         timeout to = self.opts.timeout > 0 ? self.opts.timeout : mgr.getRequestTimeout();
-        if (to > 0) {
-            deadline = now_us() + milliseconds(to);
+        setDeadlineTimeout(to);
+    }
+
+    #! Sets the deadline of the operation to the given time from now, on the monotonic clock
+    /** @param to the time from now; 0 or less removes the deadline
+
+        @since HttpClientIo 1.0
+    */
+    private setDeadlineTimeout(timeout to) {
+        remove deadline;
+        deadline_us = to > 0 ? clock_get_monotonic_us() + to * 1000 : NOTHING;
+    }
+
+    #! Returns the deadline of the operation on the monotonic clock in microseconds, if any
+    /** A deadline that a subclass set as a wall-clock date in @ref deadline (deprecated) is converted to the monotonic
+        clock here, once
+
+        @since HttpClientIo 1.0
+    */
+    private *int getDeadlineUs() {
+        if (deadline) {
+            deadline_us = clock_get_monotonic_us() + (deadline - now_us()).durationMicroseconds();
+            remove deadline;
         }
+        return deadline_us;
+    }
+
+    #! Returns the time left until the deadline in milliseconds, rounded up, at least 1, or @ref nothing without one
+    private *int getDeadlineWaitMs() {
+        *int d = getDeadlineUs();
+        if (!d) {
+            return;
+        }
+        int left_us = d - clock_get_monotonic_us();
+        return left_us > 0 ? (left_us + 999) / 1000 : 1;
     }
 
     #! Returns the goal
@@ -407,7 +446,7 @@ hash<HttpClientResponseInfo> resp = f.get(30s);
                 "sock": info.socket,
                 "spop": self,
                 # the operation raises its own timeout errors first; a negative value means no timeout
-                "to": deadline ? max(1, (deadline - now_us()).durationMilliseconds()) + PollTimeoutMs : -1,
+                "to": getDeadlineUs() ? getDeadlineWaitMs() + PollTimeoutMs : -1,
                 "owner": "httpclient-request:" + self.uniqueHash(),
                 "has_on_complete": True,
             });
@@ -576,12 +615,9 @@ hash<HttpClientResponseInfo> resp = f.get(30s);
                     try {
                         # the operation's deadline bounds the acquisition too (#6429); checkDeadline() above raised
                         # the timeout if it has passed
-                        stream = mgr.acquireStream(origin, NOTHING,
-                            deadline ? max(1, (deadline - now_us()).durationMilliseconds()) : NOTHING);
+                        stream = mgr.acquireStream(origin, NOTHING, getDeadlineWaitMs());
                         # the stream's wait for its connection ends at the operation's deadline as well
-                        stream.setRequestDeadline(deadline
-                            ? clock_get_monotonic_us() + (deadline - now_us()).durationMicroseconds()
-                            : NOTHING);
+                        stream.setRequestDeadline(getDeadlineUs());
                         # the cookie jar supplies the cookies for each target
                         # the body is decoded unless the stream is handed over
                         stream.startStreaming(rf.getMethod(), target, mgr.prepareRequestHeaders(rf, auth,
@@ -599,7 +635,7 @@ hash<HttpClientResponseInfo> resp = f.get(30s);
                     }
                     # a used connection that closes later is not a failed connection attempt
                     remove tracked;
-                    sent = now_us();
+                    sent_us = clock_get_monotonic_us();
                     state = ST_RECEIVING;
                     continue;
                 }
@@ -818,13 +854,14 @@ hash<HttpClientResponseInfo> resp = f.get(30s);
     #! Raises \c HTTPCLIENT-TIMEOUT if the deadline has passed, or if no data was received for the request for the
     #! \c io_timeout option of the connection manager
     private checkDeadline() {
-        if (deadline && now_us() >= deadline) {
+        *int d = getDeadlineUs();
+        if (d && clock_get_monotonic_us() >= d) {
             throw "HTTPCLIENT-TIMEOUT", sprintf("timed out waiting for the %s from %s", state == ST_CONNECTING
                 ? "connection" : "response", opts.connect_only ? rf.getOrigin() : rf.getRequestUrl());
         }
         timeout io_timeout = mgr.getIoTimeout();
         if (io_timeout > 0 && state == ST_RECEIVING && stream
-                && stream.getInactiveTime(sent) >= io_timeout * 1000) {
+                && stream.getInactiveTimeSince(sent_us) >= io_timeout * 1000) {
             throw "HTTPCLIENT-TIMEOUT", sprintf("no data received for %d ms from %s (io_timeout)", io_timeout,
                 rf.getRequestUrl());
         }
@@ -883,8 +920,9 @@ hash<HttpClientResponseInfo> resp = f.get(30s);
     #! Returns poll information for the given notifier
     private hash<SocketPollInfo> getPollInfo(EventNotifier notifier) {
         int wait_ms = PollTimeoutMs;
-        if (deadline) {
-            wait_ms = min(wait_ms, (deadline - now_us()).durationMilliseconds());
+        *int deadline_ms = getDeadlineWaitMs();
+        if (deadline_ms) {
+            wait_ms = min(wait_ms, deadline_ms);
         }
         return <SocketPollInfo>{
             "events": SOCK_POLLIN,
