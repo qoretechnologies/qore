@@ -5545,9 +5545,7 @@ void QoreIRToLLVM::emitExitStatementCleanup(llvm::Module& module, bool pending_s
             if (persistent_cleanup_allocas.count(alloca_ptr) || (hold_returns && isReturnValueAlloca(alloca_ptr))) {
                 continue;
             }
-            llvm::Value* val = builder->CreateLoad(i64_type, alloca_ptr);
-            builder->CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), alloca_ptr);
-            builder->CreateCall(helper, {val, xsink_arg});
+            emitCleanupSlotRelease(alloca_ptr, helper);
         }
     }
     if (pending_ssa) {
@@ -5725,11 +5723,28 @@ void QoreIRToLLVM::emitTempReleaseSequence(llvm::Module& module, const std::vect
         if (!((i - begin + 1) % 100)) {
             (void)qore_check_cancel(nullptr, "LLVM temp release");
         }
-        llvm::Value* alloca_ptr = temps[i];
-        llvm::Value* val = builder->CreateLoad(i64_type, alloca_ptr);
-        builder->CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), alloca_ptr);
-        builder->CreateCall(helper, {val, xsink_arg});
+        emitCleanupSlotRelease(temps[i], helper);
     }
+}
+
+// documented in QoreIRToLLVM.h
+void QoreIRToLLVM::emitCleanupSlotRelease(llvm::Value* alloca_ptr, llvm::FunctionCallee decref) {
+    llvm::Value* val = builder->CreateLoad(i64_type, alloca_ptr);
+    builder->CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), alloca_ptr);
+    if (!branching_slot_release || !rarely_held_cleanup_allocas.count(alloca_ptr)) {
+        builder->CreateCall(decref, {val, xsink_arg});
+        return;
+    }
+    // a slot that holds a value only on a rare path is released at the end of a statement only if it holds one
+    llvm::Function* llvm_func = builder->GetInsertBlock()->getParent();
+    llvm::BasicBlock* release_bb = llvm::BasicBlock::Create(ctx, "held_slot_release", llvm_func);
+    llvm::BasicBlock* done_bb = llvm::BasicBlock::Create(ctx, "held_slot_released", llvm_func);
+    builder->CreateCondBr(builder->CreateICmpNE(val, llvm::ConstantInt::get(i64_type, VAL_NOTHING)), release_bb,
+        done_bb, llvm::MDBuilder(ctx).createBranchWeights(1, 1000));
+    builder->SetInsertPoint(release_bb);
+    builder->CreateCall(decref, {val, xsink_arg});
+    builder->CreateBr(done_bb);
+    builder->SetInsertPoint(done_bb);
 }
 
 llvm::BasicBlock* QoreIRToLLVM::emitExceptionTempRelease(llvm::Module& module, llvm::Function* llvm_func,
@@ -6151,7 +6166,10 @@ void QoreIRToLLVM::emitDiscardTemps(llvm::Module& module, uint32_t scope_id, boo
                 release.push_back(alloca_ptr);
             }
         }
+        // the release at the end of the statement is emitted in the block being lowered, which it can split
+        branching_slot_release = true;
         emitTempReleaseSequence(module, release, 0, release.size());
+        branching_slot_release = false;
     }
 
     if (pending_ssa_cleanup.size() > mark.pending_ssa_count) {
@@ -7868,6 +7886,8 @@ llvm::Value* QoreIRToLLVM::loadLocalCacheValue(const void* key, const LocalCache
         llvm::AllocaInst* previous = alloca_builder.CreateAlloca(i64_type, nullptr,
             "element_reference_read_previous");
         alloca_builder.CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), previous);
+        rarely_held_cleanup_allocas.insert(current);
+        rarely_held_cleanup_allocas.insert(previous);
         registerInvokeCleanupAlloca(current);
         registerInvokeCleanupAlloca(previous);
         if (reference_read_slot) {
@@ -14847,6 +14867,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     invoke_cleanup_slot.clear();
     exit_temp_cleanup_slot.clear();
     persistent_cleanup_allocas.clear();
+    rarely_held_cleanup_allocas.clear();
     temp_cleanup_marks.clear();
     exception_edges.clear();
     ir_block_predecessor_counts.clear();

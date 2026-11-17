@@ -801,6 +801,16 @@ private:
     // discard.temps must not clear them while the local alloca still borrows
     // their owned reference.
     std::unordered_set<llvm::Value*> persistent_cleanup_allocas;
+    //! Cleanup slots that hold a value only on a rare path (the reads through a reference of the variable of a
+    //! foreach loop, see loadLocalCacheValue()): their inline releases test the slot before the call
+    std::unordered_set<llvm::Value*> rarely_held_cleanup_allocas;
+    //! Set while emitDiscardTemps() emits the release at the end of a statement, in the block being lowered, which
+    //! the release can split; the other releases (exits, exception edges) are emitted where no block can be split
+    bool branching_slot_release = false;
+    //! Emits the inline release of the cleanup slot \a alloca_ptr with \a decref, which leaves NOTHING in it; a slot in
+    //! rarely_held_cleanup_allocas is released at the end of a statement (branching_slot_release) only if it holds a
+    //! value
+    DLLLOCAL void emitCleanupSlotRelease(llvm::Value* alloca_ptr, llvm::FunctionCallee decref);
     // Map from local key (LocalVar* as void*) to invoke-result cleanup allocas
     // that hold references to values stored in this local.  Used by
     // UninstantiateLocal to clear cleanup allocas when block-scoped locals
