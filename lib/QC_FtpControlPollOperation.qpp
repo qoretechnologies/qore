@@ -32,6 +32,7 @@
 */
 
 #include "qore/Qore.h"
+#include "qore/intern/QC_SocketPollOperationBase.h"
 #include "qore/intern/QC_FtpControlPollOperation.h"
 #include "qore/intern/QC_SocketPollOperation.h"
 #include "qore/intern/QC_Socket.h"
@@ -44,12 +45,22 @@
 // FtpControlPollOperationPriv implementation
 // ============================================================
 
+// takes a reference to a socket that a poll operation's state uses: the state holds its own reference, so that the
+// deletion of the operation's object, which releases its "sock" member, does not release a socket that an I/O
+// thread still uses in a step of the operation (#6505)
+static QoreSocketObject* ftp_ctrl_ref_sock(QoreSocketObject* sock) {
+    if (sock) {
+        sock->ref();
+    }
+    return sock;
+}
+
 FtpControlPollOperationPriv::FtpControlPollOperationPriv(QoreObject* self,
         QoreSocketObject* ctrl_sock, SocketPollOperationBase* connect_op,
         bool secure, bool secure_data,
         const char* user, const char* pass)
     : SocketPollOperationBase(self),
-      ctrl_sock(ctrl_sock),
+      ctrl_sock(ftp_ctrl_ref_sock(ctrl_sock)),
       current_op(connect_op),
       secure(secure),
       secure_data(secure_data),
@@ -74,9 +85,11 @@ void FtpControlPollOperationPriv::deref(ExceptionSink* xsink) {
             current_op->deref(xsink);
             current_op = nullptr;
         }
-        // ctrl_sock is NOT ref'd by us — it's owned by the "sock" member QoreObject.
-        // We just hold a raw pointer for convenience. Clear it to prevent use-after-free.
-        ctrl_sock = nullptr;
+        // the reference to the control socket that this state holds (see ftp_ctrl_ref_sock())
+        if (ctrl_sock) {
+            ctrl_sock->deref(xsink);
+            ctrl_sock = nullptr;
+        }
         delete this;
     }
 }
@@ -763,6 +776,9 @@ FtpControlPollOperation::constructor(string host, int port = 21, bool secure = F
 /** Releases control socket and any in-flight inner operations.
 */
 FtpControlPollOperation::destructor() {
+    // the controller that continues a submitted operation holds references to it; it cancels the operation, whose
+    // state is released with its last reference (#6505)
+    qore_socket_poll_op_object_deleted(priv);
     priv->deref(xsink);
 }
 
@@ -886,7 +902,7 @@ FtpPortAcceptPollOperationPriv::FtpPortAcceptPollOperationPriv(QoreObject* self,
         SocketPollOperationBase* accept_op, QoreSocketObject* listener, bool secure_data)
     : SocketPollOperationBase(self),
       current_op(accept_op),
-      listener(listener),
+      listener(ftp_ctrl_ref_sock(listener)),
       client_sock_obj(nullptr, nullptr),
       secure_data(secure_data) {
 }
@@ -914,8 +930,11 @@ void FtpPortAcceptPollOperationPriv::deref(ExceptionSink* xsink) {
             client_sock->deref(xsink);
             client_sock = nullptr;
         }
-        // listener is a raw pointer (owned by "sock" member) — don't deref
-        listener = nullptr;
+        // the reference to the listener that this state holds (see ftp_ctrl_ref_sock())
+        if (listener) {
+            listener->deref(xsink);
+            listener = nullptr;
+        }
         delete this;
     }
 }
@@ -1149,6 +1168,9 @@ FtpPortAcceptPollOperation::constructor(Socket[QoreSocketObject] listener_socket
 /** Releases all internal references.
 */
 FtpPortAcceptPollOperation::destructor() {
+    // the controller that continues a submitted operation holds references to it; it cancels the operation, whose
+    // state is released with its last reference (#6505)
+    qore_socket_poll_op_object_deleted(priv);
     priv->deref(xsink);
 }
 

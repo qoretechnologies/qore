@@ -2139,6 +2139,9 @@
     - deleting a socket, HTTP or WebSocket poll operation that was submitted to the asynchronous I/O controller
       cancels it, and its state is released with its last reference in its %Program, so the deletion can no longer
       crash the process (issue #6464)
+    - deleting a submitted @ref Qore::Socket "Socket", @ref Qore::File "File", FTP or @ref Qore::HTTPClient "HTTPClient"
+      poll operation cancels it as well, and an FTP poll operation keeps its sockets until its state is released, so
+      deleting one during a step can no longer crash the process (issue #6505)
     - a channel or server-sent events completion action releases its notifier objects after its lock, so the
       destructor of a user notifier class can no longer block on the action (issue #6465)
     - @ref httpserverintro "HttpServer" module: a server whose last reference is released while a request runs in it

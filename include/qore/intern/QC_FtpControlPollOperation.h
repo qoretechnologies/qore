@@ -261,7 +261,7 @@ protected:
 
 private:
     SocketPollOperationBase* current_op = nullptr; //!< current inner op (ref'd)
-    QoreSocketObject* listener = nullptr;          //!< listener socket (raw, not ref'd)
+    QoreSocketObject* listener = nullptr;          //!< listener socket (ref'd)
     QoreSocketObject* client_sock = nullptr;       //!< accepted client socket (ref'd)
     mutable ReferenceHolder<QoreObject> client_sock_obj;  //!< QoreObject wrapper (ref'd)
     AcceptState state = AcceptState::ACCEPTING;
