@@ -479,8 +479,12 @@ public:
         return nullptr;
     }
 
-    // static version of method, checking for null pointer
-    DLLLOCAL static const QoreParameterizedClassTypeInfo* getParameterizedClassType(const QoreTypeInfo* ti) {
+    // static version of method, checking for null pointer; always inlined: tryExecuteInterpreterInlineIRMethod() is
+    // forced into the IR interpreter's execute() by the early inliner, before its callees are inlined into it, and
+    // after that GCC's own inlining into the very large execute() is held back by its growth limits, which left this
+    // function as an out-of-line call on the IR method call path (issue #6381)
+    DLLLOCAL static QORE_INTERN_ALWAYS_INLINE const QoreParameterizedClassTypeInfo* getParameterizedClassType(
+            const QoreTypeInfo* ti) {
         if (!ti || ti->return_vec.empty() || !hasType(ti)) {
             return nullptr;
         }
