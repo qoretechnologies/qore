@@ -1036,6 +1036,24 @@ private:
     */
     DLLLOCAL bool expressionReadsWeakCapableLocal(const QoreValue& expr) const;
 
+    //! Returns true if evaluating \a expr reads, other than as its own value, a local variable whose value can be or
+    //! hold an object and whose release by the cleanups of a return statement can be observed (see
+    //! localReleaseObservedByReturn())
+    /** The value read is a temporary of the statement, which can keep the variable's object after the variable is
+        released: the AST interpreter releases the temporaries of the statement first, so the object is destroyed when
+        its variable is, in reverse declaration order with the other locals (qore#6309).
+    */
+    DLLLOCAL bool expressionReadsReleasedObjectLocal(const QoreValue& expr) const;
+
+    //! Returns true if the cleanups of a return statement release the local and then release or run something else
+    //! that can see when the local's object is destroyed
+    /** The local is one of a block that the return leaves, or the variable of a catch block that it leaves; what
+        is released after it is a local declared before it in its block that can be or hold an object, or a cleanup of
+        an enclosing block (an object local, a catch variable, a handler, a foreach).  A temporary of the statement
+        that keeps the local's object is observable only then.
+    */
+    DLLLOCAL bool localReleaseObservedByReturn(const LocalVar* lv) const;
+
     //! Emits the block that an exception leaving the body of a value foreach loop goes to before \a outer_target
     /** Releases the element (if valid), the values that map expressions gave from it last (the valid ones, in their
         order: the list holds a reference of its own), the partial result (if valid: the list that a functional operator built so far), the
