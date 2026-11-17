@@ -1894,15 +1894,18 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
             remove async_races;
         }
 
-        # close the candidates of the synchronous races that go on in the background (#6429): their threads wake,
-        # see the shutdown and end; the in_flight drain below waits for them
+        # close the candidates of the synchronous races that go on in the background (#6429): closing a candidate
+        # signals the race's notifier at once (setClosed() notifies the ready notifiers), so the watch of each race
+        # completes, and its step, on a callback worker, sees the shutdown and ends the race; the callback barrier
+        # and the in_flight drain below wait for it, so the drain does not depend on a race's own bound, which can
+        # be longer than its ceiling once an HTTP/1.1 candidate started.  The candidates are closed outside the lock.
         {
-            AutoLock al(create_mutex);
-            # closing a candidate signals the race's notifier (setClosed() notifies the ready notifiers at once), so
-            # each thread wakes at once, finds every candidate settled and ends: the in_flight drain below does not
-            # wait for a race's own bound, which can be longer than its ceiling once an HTTP/1.1 candidate started
-            foreach string race_claim in (keys bg_races) {
-                hash<auto> race = bg_races{race_claim};
+            list<hash<auto>> races;
+            {
+                AutoLock al(create_mutex);
+                races = (map bg_races{$1}, keys bg_races) ?? ();
+            }
+            foreach hash<auto> race in (races) {
                 heCloseLegs(race.h3conn, race.h2conn, race.h1conn);
             }
         }
@@ -3093,7 +3096,7 @@ printf("%d connection(s) migrated\n", migrated);
         @param key the host:port pool key
         @param deadline the time by which the race must end for the caller, if any, on the monotonic clock in
         microseconds (#6429); when it passes first, the race goes on in the background, bounded by the candidates'
-        connect timeouts, and its winner is pooled for later requests (see @ref heFinishRaceInBackground()), and
+        connect timeouts, and its winner is pooled for later requests (see @ref heHandOverRace()), and
         \c HTTPCLIENT-TIMEOUT is raised
         @param claim the caller's claim of the creation of the key (see @ref creating), which a race that goes on in
         the background takes over
@@ -3218,7 +3221,7 @@ printf("%d connection(s) migrated\n", migrated);
             # its winner is pooled for later requests (#6429)
             log(LoggerLevel::DEBUG, "happy eyeballs: the request's time for %s ran out in the race; the race goes on "
                 "in the background", key);
-            # the background owns the claim from here on, whether or not its thread could be started
+            # the background race owns the claim from here on, whether or not it could be watched
             handed_over = True;
             heHandOverRace(url_info, key, h3conn, h2conn, h1conn, race_notifier, race_deadline, claim);
             log(LoggerLevel::DEBUG, "happy eyeballs: handed the race for %s over to the background", key);
@@ -3296,27 +3299,150 @@ printf("%d connection(s) migrated\n", migrated);
         }
     }
 
-    #! Internal: hands a synchronous happy-eyeballs race whose caller's deadline passed over to a background thread
-    /** The creation of a connection for the key stays claimed (see @ref bg_races) until the race ends; the thread
-        is counted in @ref in_flight, so that @ref closeAll() waits for it, and @ref closeAll() closes its candidates
+    #! Internal: hands a synchronous happy-eyeballs race whose caller's deadline passed over to the I/O controller
+    /** No thread is started (the module does no thread control): the race's notifier is watched by an operation on
+        the async I/O controller (@ref HttpClientRaceWatchOperation), whose completion callback, on a callback worker
+        of the controller, takes one step of the race (@ref heStepBackgroundRace()) and watches the notifier again
+        until the race ends.  The race keeps the caller's claim of the key's creation (see @ref bg_races) until it
+        ends; it is counted in @ref in_flight, so that @ref closeAll() waits for it, and @ref closeAll() closes its
+        candidates, which signals the notifier, so that the race ends at once.
     */
     private heHandOverRace(hash<auto> url_info, string key, Http3ClientConnection h3conn, Http2ClientConnection h2conn,
             *Http1ClientConnection h1conn, EventNotifier race_notifier, int race_deadline, int claim) {
         {
             AutoLock al(create_mutex);
-            bg_races{claim} = {"key": key, "h3conn": h3conn, "h2conn": h2conn, "h1conn": h1conn};
+            bg_races{claim} = {
+                "key": key,
+                "url_info": url_info,
+                "h3conn": h3conn,
+                "h2conn": h2conn,
+                "h1conn": h1conn,
+                "race_notifier": race_notifier,
+                "race_deadline": race_deadline,
+            };
         }
         in_flight.inc();
         try {
-            background heFinishRaceInBackground(url_info, key, h3conn, h2conn, h1conn, race_notifier, race_deadline,
-                claim);
+            heWatchBackgroundRace(claim, race_notifier, race_deadline);
         } catch (hash<ExceptionInfo> ex) {
-            # no thread: the race ends here
-            in_flight.dec();
-            heEndBackgroundRace(key, claim);
+            # the race cannot be watched: it ends here
             heCloseLegs(h3conn, h2conn, h1conn);
+            heEndBackgroundRace(key, claim);
+            in_flight.dec();
             log(LoggerLevel::DEBUG, "happy eyeballs: the race for %s could not go on in the background: %s: %s", key,
                 ex.err, ex.desc);
+        }
+    }
+
+    #! Internal: watches the notifier of a race that goes on in the background until it is signaled or the race's bound
+    /** The completion callback runs on a callback worker of the controller, not on its I/O thread; it is counted for
+        the manager's owner id, so that @ref closeAll() drains it
+
+        @param claim the race's claim (its key in @ref bg_races)
+        @param race_notifier the race's notifier
+        @param race_deadline the race's bound on the monotonic clock in microseconds
+    */
+    private heWatchBackgroundRace(int claim, EventNotifier race_notifier, int race_deadline) {
+        HttpClientRaceWatchOperation op(race_notifier, sub () { heStepBackgroundRace(claim); });
+        controller.submit(<SocketPollOperationInfo>{
+            "sock": race_notifier,
+            "spop": op,
+            "owner": owner_id,
+            "to": ceilMs(race_deadline - clock_get_monotonic_us()),
+            "has_on_complete": True,
+        });
+    }
+
+    #! Internal: takes a step of a happy-eyeballs race that goes on in the background (#6429)
+    /** Called by the completion of the race's watch (see @ref heWatchBackgroundRace()), on a callback worker of the
+        I/O controller; it does not block.  The winner is committed (the losers are closed and its protocol cached,
+        as in a normal race) and pooled for later requests, which reserve its streams as usual; when every candidate
+        settled without connecting, or the race's bound passed, heThrowConnectError() applies the cache rules of a
+        failed race and closes the candidates, and the error is logged.  Otherwise the notifier is watched again.
+        When the race ends, it releases its claim of the key's creation (if it is still its own) and its count in
+        @ref in_flight.
+
+        @param claim the race's claim (its key in @ref bg_races)
+    */
+    private heStepBackgroundRace(int claim) {
+        # Pin @c pool_lock across this method: see @ref pool_lock_pin.
+        RWLock pool_lock_pin = pool_lock;
+        *hash<auto> race;
+        {
+            AutoLock al(create_mutex);
+            race = bg_races{claim};
+        }
+        if (!race) {
+            return;
+        }
+        string key = race.key;
+        Http3ClientConnection h3conn = race.h3conn;
+        Http2ClientConnection h2conn = race.h2conn;
+        *Http1ClientConnection h1conn = race.h1conn;
+        EventNotifier race_notifier = race.race_notifier;
+        int race_deadline = race.race_deadline;
+        bool ended = True;
+        on_exit {
+            if (ended) {
+                heEndBackgroundRace(key, claim);
+                in_flight.dec();
+            }
+        }
+        try {
+            race_notifier.acknowledge();
+            while (True) {
+                if (shutdown) {
+                    heCloseLegs(h3conn, h2conn, h1conn);
+                    return;
+                }
+                *HttpClientConnection w = hePickReady(h3conn, h2conn, h1conn);
+                if (w) {
+                    heCommitWinner(w, h3conn, h2conn, h1conn, key);
+                    AutoWriteLock al(pool_lock);
+                    if (shutdown) {
+                        try { w.close(); } catch () {}
+                        return;
+                    }
+                    if (!pool.hasKey(key)) {
+                        pool{key} = ();
+                    }
+                    push pool{key}, w;
+                    w.setControllerRef(controller);
+                    submitConnectionToController(key, w);
+                    log(LoggerLevel::DEBUG, "happy eyeballs: pooled %s connection %d, the winner of the race for %s "
+                        "that went on in the background", w.getProtocol(), w.getConnectionId(), key);
+                    return;
+                }
+                # as in heRunRace(): HTTP/1.1 starts at once when the server refuses HTTP/2 via ALPN
+                if (!h1conn && heH2RefusedViaAlpn(h2conn)) {
+                    h1conn = heStartH1Leg(race.url_info, key);
+                    h1conn.registerReadyNotifier(notifier: race_notifier);
+                    race_deadline = clock_get_monotonic_us() + (opts.connect_timeout + AsyncQueueSafetyGraceMs) * 1000;
+                    {
+                        AutoLock al(create_mutex);
+                        if (bg_races{claim}) {
+                            bg_races{claim}.h1conn = h1conn;
+                            bg_races{claim}.race_deadline = race_deadline;
+                        }
+                    }
+                    continue;
+                }
+                if (heSettled(h3conn) && heSettled(h2conn) && (!h1conn || heSettled(h1conn))) {
+                    break;
+                }
+                if (clock_get_monotonic_us() >= race_deadline) {
+                    log(LoggerLevel::DEBUG, "happy eyeballs: no outcome of the race for %s in time", key);
+                    break;
+                }
+                heWatchBackgroundRace(claim, race_notifier, race_deadline);
+                ended = False;
+                return;
+            }
+            heThrowConnectError(h3conn, h2conn, h1conn, key);
+        } catch (hash<ExceptionInfo> ex) {
+            heCloseLegs(h3conn, h2conn, h1conn);
+            log(LoggerLevel::DEBUG, "happy eyeballs: the race for %s that went on in the background failed: %s: %s",
+                key, ex.err, ex.desc);
         }
     }
 
@@ -3354,52 +3480,6 @@ printf("%d connection(s) migrated\n", migrated);
         if (creating{key} == claim) {
             remove creating{key};
             create_cond.broadcast();
-        }
-    }
-
-    #! Internal: finishes a happy-eyeballs race in the background after its caller's deadline passed (#6429)
-    /** Bounded by the candidates' connect timeouts.  The winner is committed (the losers are closed and its protocol
-        cached, as in a normal race) and pooled for later requests, which reserve its streams as usual; when no
-        candidate connects, heThrowConnectError() applies the cache rules of a failed race and closes the candidates,
-        and the error is logged.
-    */
-    private heFinishRaceInBackground(hash<auto> url_info, string key, Http3ClientConnection h3conn,
-            Http2ClientConnection h2conn, *Http1ClientConnection h1conn, EventNotifier race_notifier,
-            int race_deadline, int claim) {
-        # Pin @c pool_lock across this method: see @ref pool_lock_pin.
-        RWLock pool_lock_pin = pool_lock;
-        on_exit {
-            heEndBackgroundRace(key, claim);
-            in_flight.dec();
-        }
-        try {
-            bool expired = False;
-            *HttpClientConnection w = heRunRace(url_info, key, h3conn, h2conn, \h1conn, race_notifier,
-                \race_deadline, NOTHING, \expired, claim);
-            if (!w) {
-                if (shutdown) {
-                    heCloseLegs(h3conn, h2conn, h1conn);
-                    return;
-                }
-                heThrowConnectError(h3conn, h2conn, h1conn, key);
-            }
-            AutoWriteLock al(pool_lock);
-            if (shutdown) {
-                try { w.close(); } catch () {}
-                return;
-            }
-            if (!pool.hasKey(key)) {
-                pool{key} = ();
-            }
-            push pool{key}, w;
-            w.setControllerRef(controller);
-            submitConnectionToController(key, w);
-            log(LoggerLevel::DEBUG, "happy eyeballs: pooled %s connection %d, the winner of the race for %s that went "
-                "on in the background", w.getProtocol(), w.getConnectionId(), key);
-        } catch (hash<ExceptionInfo> ex) {
-            heCloseLegs(h3conn, h2conn, h1conn);
-            log(LoggerLevel::DEBUG, "happy eyeballs: the race for %s that went on in the background failed: %s: %s",
-                key, ex.err, ex.desc);
         }
     }
 
@@ -5191,6 +5271,31 @@ class CookieExtractingFuture inherits Future<auto> {
 
     bool cancel() {
         return real_future.cancel();
+    }
+}
+
+#! Watches the notifier of a happy-eyeballs race that went on in the background, and steps the race on completion
+/** The completion is delivered on a callback worker of the async I/O controller (not on its I/O thread), where the
+    race's step runs; see @ref HttpClientConnectionManager::heHandOverRace().  The step is a closure of the manager,
+    which does not keep the manager alive.
+*/
+class HttpClientRaceWatchOperation inherits AsyncSocketIo::NotifierPollOperation {
+    private {
+        #! the step of the race, called on completion
+        code<nothing()> step;
+    }
+
+    constructor(EventNotifier notifier, code<nothing()> step) : AsyncSocketIo::NotifierPollOperation(notifier) {
+        self.step = step;
+    }
+
+    #! Steps the race, whatever the outcome of the watch (signaled, timed out or canceled)
+    nothing onComplete(hash<SocketPollResultInfo> result) {
+        try {
+            step();
+        } catch (hash<ExceptionInfo> ex) {
+            # the manager is gone; its closeAll() ended the race
+        }
     }
 }
 
