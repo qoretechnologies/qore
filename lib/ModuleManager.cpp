@@ -5259,6 +5259,17 @@ int QoreModuleManager::addModuleToBlacklist(const char* name, const char* msg) {
     if (mi) {
         return -1;
     }
+    // a module whose load is in progress cannot be blacklisted either: every loader checks the blacklist before it
+    // reserves the module's feature name in module_load_map with the mutex held, and then releases the mutex while
+    // the module is parsed and initialized, so a module blacklisted then would still be loaded and registered.  A
+    // terminal entry (loaded or failed) that is only kept for the threads waiting on it is not a load in progress:
+    // a loaded module is found above, and a module that failed to load can be blacklisted
+    {
+        module_load_map_t::const_iterator li = module_load_map.find(name);
+        if (li != module_load_map.end() && li->second.state == MLS_INITIALIZING) {
+            return -1;
+        }
+    }
 
     // check if it's been blacklisted
     auto i = mod_blacklist.lower_bound(name);

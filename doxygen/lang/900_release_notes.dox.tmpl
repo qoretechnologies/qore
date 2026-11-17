@@ -2071,6 +2071,8 @@
     - a range of the @ref list_element_operator "[] operator" (ex: <tt>x[-9..1]</tt>) gives only elements of its
       value: a range of an empty value is empty, of the same type, and a range of a string with multi-byte
       characters is resolved against its characters (issue #6306)
+    - @ref Qore::qore_add_module_to_blacklist() "qore_add_module_to_blacklist()" refuses a module whose load is in
+      progress; it accepted it, and the module was then loaded and registered anyway (issue #6454)
     - the summary and the junit report of a @ref qunitintro "QUnit" test count skipped test cases, which they gave
       as succeeded, and the junit report has a \c testsuite element and counts assertion failures apart from errors
       (see @ref unittestformats; issue #2297)
