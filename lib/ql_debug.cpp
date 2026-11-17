@@ -24898,7 +24898,8 @@ static QoreValue f_dbg_hold_child_program_create_clear(const QoreListNode* param
     teardown (the poll operation of an HTTP/3 client connection, read for its error, or the inner operation of an HTTP
     client ping poll operation) has taken it, and is about to use it; \c "stream-end-dispatched": an HTTP/1.1 or
     HTTP/3 client poll operation dispatched the end of a request's response and released the reference to the
-    request's action that the dispatch held (with a release Counter of 0, the point only reports it)
+    request's action that the dispatch held, on the I/O thread or, for an HTTP/3 response that arrived before its
+    request was registered, on the thread that registered it (with a release Counter of 0, the point only reports it)
     @param reached decremented when a thread reaches the point
     @param release the thread waits until it reaches zero
     @param target if given, only a thread that reaches the point for this object is held: the poll operation of the
@@ -25023,7 +25024,7 @@ static QoreValue f_dbg_run_h3_connection_teardown_read_test(const QoreListNode* 
         ExceptionSink* xsink) {
     UnitTestCounters c;
     // a UDP port that receives the client's datagrams and never answers them
-    int ufd = socket(AF_INET, SOCK_DGRAM, 0);
+    int ufd = ::socket(AF_INET, SOCK_DGRAM, 0);
     if (ufd < 0) {
         ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
         rv->setKeyValue("skip", new QoreStringNodeMaker("cannot create a UDP socket: %s", strerror(errno)), xsink);
@@ -25034,8 +25035,9 @@ static QoreValue f_dbg_run_h3_connection_teardown_read_test(const QoreListNode* 
     addr.sin_family = AF_INET;
     addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
     socklen_t addr_len = sizeof(addr);
+    // ::bind() and not bind(): where namespace std is used, bind() is std::bind(), which binds nothing
     if (::bind(ufd, reinterpret_cast<sockaddr*>(&addr), sizeof(addr))
-        || getsockname(ufd, reinterpret_cast<sockaddr*>(&addr), &addr_len)) {
+        || ::getsockname(ufd, reinterpret_cast<sockaddr*>(&addr), &addr_len)) {
         ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
         rv->setKeyValue("skip", new QoreStringNodeMaker("cannot bind a UDP socket: %s", strerror(errno)), xsink);
         return rv.release();

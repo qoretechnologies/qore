@@ -106,9 +106,10 @@ class CheckingNotifier inherits EventNotifier {
     the operation again: the cancellation of a stream releases the kept action of a completed request after the
     operation's lock is released.  The code run by the release reads the operation's error in another thread, which
     uses the operation's lock, and waits for the read: a read that needs a lock held by the releasing thread is not
-    done while that thread waits for it.  The I/O thread holds the action while it dispatches the end of its response;
-    the test waits for that dispatch to be done (the "stream-end-dispatched" hold point of debug builds) before the
-    cancellation releases the action.
+    done while that thread waits for it.  The thread that dispatches the end of the response holds the action while it
+    does so: the I/O thread, or the thread that submits the request when the response arrives before the request is
+    registered; the test waits for that dispatch to be done (the "stream-end-dispatched" hold point of debug builds,
+    which both paths reach) before the cancellation releases the action.
 */
 class Http3PollOperationLockReleaseTest inherits QUnit::Test {
     constructor() : Test("HTTP/3 poll operation lock release test", "1.0") {
