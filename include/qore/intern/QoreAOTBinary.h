@@ -1765,6 +1765,14 @@ public:
     const uint8_t* getInputData() const { return input_data; }
     uint32_t getInputSize() const { return input_size; }
 
+    //! Returns the offset of a pointer into the (decompressed) metadata, or SIZE_MAX if it points elsewhere
+    /** For metadata written uncompressed, it is the offset in the encoded metadata (QORE_AOT_TRACE_IR_DESER prints it
+        for each IR instruction, which tests use to find the instructions in a module)
+    */
+    size_t getDataOffset(const uint8_t* p) const {
+        return (data && p >= data && p < data + total_size) ? static_cast<size_t>(p - data) : SIZE_MAX;
+    }
+
     //! Get the number of sections
     uint32_t getSectionCount() const { return static_cast<uint32_t>(sections.size()); }
 

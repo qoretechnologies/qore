@@ -9628,6 +9628,16 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             && dot_eval_only_bases[i->result.id];
     };
 
+    // the parent slots of a handler are its first slots and those of its parent: a count that either does not hold,
+    // which only IR read from a malformed AOT module can give, is refused before the slots are used (qore#6451)
+    if (func.parent_slot_count && (func.parent_slot_count > locals_slot_cache.vector().size()
+            || (parent_slot_cache && func.parent_slot_count > parent_slot_cache->size()))) {
+        xsink->raiseException("IR-ERROR", "IR function '%s' has %u parent slots, more than its frame (%zu) or that of "
+            "its parent (%zu) holds", func.name.c_str(), func.parent_slot_count, locals_slot_cache.vector().size(),
+            parent_slot_cache ? parent_slot_cache->size() : static_cast<size_t>(0));
+        return false;
+    }
+
     // Phase B2: Build reverse map for parent slot TLS access.
     // Maps slot_id -> LocalVar* for slots 0..parent_slot_count-1.
     // Dirty parent-slot writeback uses this to read the authoritative runtime
@@ -12037,6 +12047,9 @@ dispatch_folded_step_host:
             case QoreIROpcode::ExceptionResume: {
                 // no exception check: the code that follows routes the exceptions
                 qore_rt_exception_resume(ir_value_pointer<void>(getIRValue(values, inst->operands[0])), xsink);
+                // the object is released: the slot no longer holds its address, so that IR that uses it again (only IR
+                // read from a malformed AOT module) finds no object (qore#6451)
+                setValueSlotDirect(values, inst->operands[0].id, QoreValue(static_cast<int64_t>(0)));
                 ++ip;
                 break;
             }
@@ -16519,6 +16532,9 @@ load_local_done:
             case QoreIROpcode::ContextDestroy: {
                 QoreValue state_val = getIRValue(values, inst->operands[0]);
                 qore_rt_context_destroy(ir_value_handle(state_val), xsink);
+                // the object is released: the slot no longer holds its address, so that IR that uses it again (only IR
+                // read from a malformed AOT module) finds no object (qore#6451)
+                setValueSlotDirect(values, inst->operands[0].id, QoreValue(static_cast<int64_t>(0)));
                 ++ip;
                 break;
             }
@@ -16678,8 +16694,10 @@ load_local_done:
                 const QoreValue& list_val = values[next_inst->iterator.id];
                 size_t index = static_cast<size_t>(values[next_inst->index.id].getAsBigInt());
                 size_t limit = static_cast<size_t>(values[next_inst->limit.id].getAsBigInt());
-                const QoreListNode* list = list_val.get<const QoreListNode>();
-                if (index >= limit || index >= list->size()) {
+                // the lowering iterates a list here; IR read from a malformed AOT module can give another value, which
+                // ends the loop (qore#6451)
+                const QoreListNode* list = list_val.getType() == NT_LIST ? list_val.get<const QoreListNode>() : nullptr;
+                if (!list || index >= limit || index >= list->size()) {
                     prev_block = block;
                     block = next_inst->done_target;
                     ip = 0;
@@ -16923,6 +16941,9 @@ load_local_done:
                 QoreValue state_val = getIRValue(values, inst->operands[0]);
                 QoreValue fill_val = getIRValue(values, inst->operands[1]);
                 qore_rt_ref_foreach_finalize(ir_value_handle(state_val), fill_val.getAsBigInt(), xsink);
+                // the object is released: the slot no longer holds its address, so that IR that uses it again (only IR
+                // read from a malformed AOT module) finds no object (qore#6451)
+                setValueSlotDirect(values, inst->operands[0].id, QoreValue(static_cast<int64_t>(0)));
                 if (xsink && *xsink) {
                     // the write-back raised an exception (the lvalue refused the list, or a destructor of a value
                     // released): it goes to the handler of an enclosing try block (qore#6197)
@@ -16939,6 +16960,9 @@ load_local_done:
             case QoreIROpcode::RefForeachCleanup: {
                 QoreValue state_val = getIRValue(values, inst->operands[0]);
                 qore_rt_ref_foreach_cleanup(ir_value_handle(state_val), xsink);
+                // the object is released: the slot no longer holds its address, so that IR that uses it again (only IR
+                // read from a malformed AOT module) finds no object (qore#6451)
+                setValueSlotDirect(values, inst->operands[0].id, QoreValue(static_cast<int64_t>(0)));
                 ++ip;
                 break;
             }
