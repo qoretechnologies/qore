@@ -10762,7 +10762,8 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     // Returns true if a call whose instruction has QoreIRInstruction::interpreter_gives_call_args set has a temporary
     // argument to give to the callee now (see IRConsumedCallArgs::give()), with the test of releaseConsumedCallArgs():
     // a call that has none (a value that holds no reference, such as an int) is made with the code of a call that
-    // gives nothing (IRNoGivenCallArgs)
+    // gives nothing (IRNoGivenCallArgs); a given argument has a cleanup entry, so the calls test that the frame has one
+    // before they call it (an int read by the variable of a foreach loop, issue #6441)
     auto hasConsumedCallArgs = [&](const QoreIRInstruction* call_inst) -> bool {
         int arg_start = qore_ir_call_arg_start(call_inst);
         for (size_t i = call_inst->operands.size(); i > static_cast<size_t>(arg_start); --i) {
@@ -12097,7 +12098,7 @@ dispatch_folded_step_host:
                         result = fromBits(qore_rt_call_closure_0(ref_bits, xsink));
                     }
                 } else {
-                    if (inst->interpreter_gives_call_args && hasConsumedCallArgs(inst)) {
+                    if (inst->interpreter_gives_call_args && !cleanup.empty() && hasConsumedCallArgs(inst)) {
                         // the references of the temporary arguments are given to the call, which releases them in the
                         // callee's frame, as the AST interpreter moves its argument list into the parameters
                         used_inline_ir = irCallClosureGiven(IRConsumedCallArgs{values, cleanup, consumed_call_args,
@@ -12370,7 +12371,7 @@ dispatch_folded_step_host:
                     // the references of the temporary arguments of a call are given to the call, which releases
                     // them in the callee's frame (see IRGivenCallArgs); a call that gives nothing runs the code of
                     // evalInvoke() instantiated for none
-                    if (inv->interpreter_gives_call_args && hasConsumedCallArgs(inv)) {
+                    if (inv->interpreter_gives_call_args && !cleanup.empty() && hasConsumedCallArgs(inv)) {
                         res = irEvalInvokeGiven(IRConsumedCallArgs{values, cleanup, consumed_call_args,
                             weak_load_temp_slots, borrowed_temp_remaining}, inv, values, xsink, &func, block, ip,
                             preserve_hash_key_weak_result);
@@ -14594,7 +14595,7 @@ load_local_done:
                 // the call
                 qore_ir_set_call_site(rl_cache.loc_ptr, inst->loc);
                 uint64_t rv;
-                if (no_inst->interpreter_gives_call_args && hasConsumedCallArgs(no_inst)) {
+                if (no_inst->interpreter_gives_call_args && !cleanup.empty() && hasConsumedCallArgs(no_inst)) {
                     // the references of the temporary arguments are given to the call, which moves them into the
                     // constructor's argument list, as the AST interpreter does (see IRGivenCallArgs)
                     rv = irNewObjectGiven(IRConsumedCallArgs{values, cleanup, consumed_call_args, weak_load_temp_slots,
@@ -19752,7 +19753,7 @@ load_local_done:
                     QoreValue res;
                     bool inline_may_invalidate_external_caches = true;
                     bool used_inline_ir;
-                    if (inst->interpreter_gives_call_args && hasConsumedCallArgs(inst)) {
+                    if (inst->interpreter_gives_call_args && !cleanup.empty() && hasConsumedCallArgs(inst)) {
                         // the references of the temporary arguments are given to the call, which releases them in the
                         // callee's frame, as the AST interpreter moves its argument list into the parameters
                         used_inline_ir = irCallStaticDirectGiven(IRConsumedCallArgs{values, cleanup, consumed_call_args,
@@ -20040,7 +20041,8 @@ load_local_done:
                     QoreValue res;
                     bool inline_may_invalidate_external_caches = true;
                     bool used_inline_ir;
-                    if (direct_inst->interpreter_gives_call_args && hasConsumedCallArgs(direct_inst)) {
+                    if (direct_inst->interpreter_gives_call_args && !cleanup.empty()
+                            && hasConsumedCallArgs(direct_inst)) {
                         // the references of the temporary arguments are given to the call, which releases them in the
                         // callee's frame, as the AST interpreter moves its argument list into the parameters
                         used_inline_ir = irCallMethodDirectGiven(IRConsumedCallArgs{values, cleanup, consumed_call_args,
@@ -20170,7 +20172,8 @@ load_local_done:
                     QoreValue res;
                     bool inline_may_invalidate_external_caches = true;
                     bool used_inline_ir;
-                    if (invoke_inst->interpreter_gives_call_args && hasConsumedCallArgs(invoke_inst)) {
+                    if (invoke_inst->interpreter_gives_call_args && !cleanup.empty()
+                            && hasConsumedCallArgs(invoke_inst)) {
                         // the references of the temporary arguments are given to the call, which releases them in the
                         // callee's frame, as the AST interpreter moves its argument list into the parameters
                         used_inline_ir = irInvokeMethodDirectGiven(IRConsumedCallArgs{values, cleanup,
@@ -20338,7 +20341,7 @@ load_local_done:
                 const QoreTypeParamInstantiation* explicit_inst = direct_inst->explicit_type_param_inst;
                 QoreValue res;
                 bool called_external = false;  // Track if we called external code
-                if (direct_inst->interpreter_gives_call_args && hasConsumedCallArgs(direct_inst)) {
+                if (direct_inst->interpreter_gives_call_args && !cleanup.empty() && hasConsumedCallArgs(direct_inst)) {
                     // the references of the temporary arguments are given to the call, which releases them in the
                     // callee's frame, as the AST interpreter moves its argument list into the parameters
                     called_external = irDotEvalMethodDirectGiven(IRConsumedCallArgs{values, cleanup, consumed_call_args,
@@ -20411,7 +20414,8 @@ load_local_done:
                 const QoreTypeParamInstantiation* explicit_inst = de_invoke_inst->explicit_type_param_inst;
                 QoreValue res;
                 bool called_external = false;  // Track if we called external code
-                if (de_invoke_inst->interpreter_gives_call_args && hasConsumedCallArgs(de_invoke_inst)) {
+                if (de_invoke_inst->interpreter_gives_call_args && !cleanup.empty()
+                        && hasConsumedCallArgs(de_invoke_inst)) {
                     // the references of the temporary arguments are given to the call, which releases them in the
                     // callee's frame, as the AST interpreter moves its argument list into the parameters
                     called_external = irInvokeDotEvalMethodDirectGiven(IRConsumedCallArgs{values, cleanup,
