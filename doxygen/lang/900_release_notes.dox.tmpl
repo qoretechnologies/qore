@@ -2714,6 +2714,13 @@
     - %Qore and modules built with its CMake macros now link executables, libraries and binary modules to a temporary
       file that is renamed into place, so a build killed during a link no longer leaves a truncated binary that the
       next build treats as up to date
+    - a @ref binary "binary" value that grows by appends (\c +=, @ref Qore::BinaryOutputStream "BinaryOutputStream",
+      @ref Qore::Serializable::serialize() "Serializable::serialize()") grows its buffer geometrically; it was
+      reallocated for every append, which was quadratic with an allocator whose \c realloc() copies (issue #6312)
+    - @ref splice "splice" of a @ref binary "binary" or @ref string "string" value, and the C++ API operations of
+      \c BinaryNode and \c QoreString that take a source (such as \c writeTo(), \c concat(), \c insert(),
+      \c sprintf() and \c set()) give the correct result when the source is part of the value being modified, also
+      when the value is a view of another string (issue #6312)
     - an AOT module refused by the restrictions of the @ref Qore::Program "Program" loading it now raises
       \c AOT-MODULE-RESTRICTED instead of the generic \c MODULE-LOAD-ERROR (see @ref module_parse_option_masks)
     - when an AOT module could not be loaded (for example, refused by the restrictions of the

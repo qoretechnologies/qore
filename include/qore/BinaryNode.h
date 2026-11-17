@@ -40,6 +40,12 @@
  */
 class BinaryNode : public SimpleValueQoreNode {
 private:
+    //! the capacity of the buffer: 0 = the buffer holds \c len bytes, else (4 + (code & 3)) << ((code >> 2) - 2) bytes
+    /** The capacities that a code gives grow by factors of 1.14 to 1.25.  It is placed in the tail padding of the base
+        class, so the size of the class and the offsets of the other members are unchanged (asserted in
+        BinaryNode.cpp): a module built with the previous header creates and uses the object as before.
+    */
+    unsigned char cap_code;
     //! pointer to memory owned by the object
     void* ptr;
     //! size of the memory block owned by the object
@@ -48,6 +54,16 @@ private:
     // not yet implemented
     DLLLOCAL BinaryNode(const BinaryNode&);
     DLLLOCAL BinaryNode& operator=(const BinaryNode&);
+
+    //! returns the number of bytes that the buffer can hold
+    DLLLOCAL size_t capacity() const {
+        // a code has an exponent of at least 4 (16 bytes)
+        assert(!cap_code || (cap_code >> 2) >= 4);
+        return cap_code ? (static_cast<size_t>(4 + (cap_code & 3)) << ((cap_code >> 2) - 2)) : len;
+    }
+
+    //! ensures that the buffer can hold \a new_len bytes; returns 0 if OK, -1 if out of memory (the node unchanged)
+    DLLLOCAL int reserveIntern(size_t new_len);
 
 protected:
     //! frees and memory owned by the object
@@ -134,6 +150,12 @@ public:
     DLLEXPORT const void* getPtr() const;
 
     //! resizes the object and appends a copy of the data passed to the object
+    /** The buffer of a value that already has data grows geometrically, so a series of appends reallocates it a
+        logarithmic number of times; the first data of an empty value is allocated with its exact size.  The data may
+        be part of the object itself.  If the memory cannot be allocated, the object is unchanged.
+
+        @since %Qore 3.0 the buffer grows geometrically (issue #6312)
+    */
     DLLEXPORT void append(const void* nptr, size_t size);
 
     //! resizes the object and appends a copy of the data passed to the object
@@ -150,14 +172,18 @@ public:
         @param nptr the data to copy to the object
         @param size the number of bytes to copy to the object
 
-        @return -1 if the resize failed (out of memory; the object is then empty) or \a pos + \a size cannot be
-        represented (the object is unchanged), 0 if OK
+        @return -1 if the resize failed (out of memory) or \a pos + \a size cannot be represented (the object is
+        unchanged in both cases), 0 if OK; the data may be part of the object itself
 
-        @since %Qore 1.12; since %Qore 3.0 a write past the end extends the size of the value
+        @since %Qore 1.12; since %Qore 3.0 a write past the end extends the size of the value, and a failed resize
+        leaves the object unchanged (it emptied it)
     */
     DLLEXPORT int writeTo(size_t pos, const void* nptr, size_t size);
 
     //! resizes the object and prepends a copy of the data passed to the beginning of the object
+    /** The buffer grows as with append(); the data may be part of the object itself.  If the memory cannot be
+        allocated, the object is unchanged.
+    */
     DLLEXPORT void prepend(const void* nptr, size_t size);
 
     //! returns the data being managed and leaves this object empty
@@ -226,6 +252,13 @@ public:
 
     //! frees any managed memory and sets the size to 0
     DLLEXPORT void clear();
+
+    //! frees the unused capacity of a value that grew by appends, when it is complete
+    /** If the memory cannot be reallocated, the value keeps its buffer.
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT void trim();
 
     // references the object and returns itself
     /** @since %Qore 0.9
