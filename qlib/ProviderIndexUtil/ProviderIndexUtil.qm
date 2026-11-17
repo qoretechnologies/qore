@@ -91,8 +91,9 @@ if (!info.reloaded) {
     Code that a @ref Qore::SandboxManager "SandboxManager" governs reads the files of the configured index (the
     directory given by @ref ProviderIndexUtil::ProviderIndexEnvVar "ProviderIndexEnvVar" and the index files in it)
     with the module's access, also when its sandbox refuses it file system access, so it sees the same index as
-    trusted code, and the index it reads first is the index of the process.  Its sandbox still governs every other
-    file access, including the index directory given to
+    trusted code, and the index it reads first is the index of the process.  Symbolic links are not followed for it:
+    an index directory or an index file that is a symbolic link is not read for sandboxed code.  Its sandbox still
+    governs every other file access, including the index directory given to
     @ref ProviderIndexUtil::ProviderIndexUtil::readSerializedDataProviderIndex() "ProviderIndexUtil::readSerializedDataProviderIndex()"
     and the other APIs that take one.  The module reads the files with a system-policy capability
     (@ref Qore::SandboxManager::createSystemPolicyCall() "SandboxManager::createSystemPolicyCall()") that it creates

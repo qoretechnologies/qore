@@ -557,6 +557,12 @@ public class ProviderIndexUtil {
         /** Created when the module is loaded; see initIndexFileReader().  Kept where no subclass can read it.
         */
         static *code index_file_reader = ProviderIndexUtil::initIndexFileReader();
+
+%ifdef QoreDebug
+        #! For tests (debug builds only): called by the capability with the path of an index file after it was
+        #! checked and before it is opened; see setIndexFileOpenTestHook()
+        static *code index_file_open_test_hook;
+%endif
     }
 
     #! Enters or leaves index build mode
@@ -4769,14 +4775,36 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
         }
     }
 
+%ifdef QoreDebug
+    #! Sets a hook that the capability that reads the index for sandboxed code calls before it opens an index file
+    /** For tests (debug builds only): the hook is called with the path of an index file after the file was checked
+        and before it is opened
+
+        @param hook the hook, or @ref NOTHING to remove it
+
+        @throw PERMISSION-DENIED the caller is restricted with @ref Qore::PO_NO_PROCESS_CONTROL, or a sandbox
+        governs it
+    */
+    static setIndexFileOpenTestHook(*code hook) [dom=PROCESS_CONTROL] {
+        if (Program::getCallerCapabilityMask() & PO_NO_PROCESS_CONTROL) {
+            throw "PERMISSION-DENIED", "cannot set an index test hook from a context with restricted process control";
+        }
+        # test hooks are for trusted test code only
+        if (SandboxManager::isSandboxed()) {
+            throw "PERMISSION-DENIED", "code that a sandbox governs cannot use the index test hooks";
+        }
+        index_file_open_test_hook = hook;
+    }
+%endif
+
     #! Creates the capability that reads the files of the configured index for code that a sandbox governs
     /** The index is the module's configuration, published in the directory that the process configured (with the
         @ref ProviderIndexEnvVar environment variable), and what is read from it is the index of the whole process:
         code that a sandbox governs reads it with the module's access, so that a sandbox that refuses its code file
         system access neither hides the index from that code nor leaves an empty index for the process when that
         code reads it first.  The capability reads only the configured index directory and the index files in it
-        (see isConfiguredIndexPath()); the sandbox still governs every other file access, including an index
-        directory that the caller names itself.  Only the files' data is read with it: the index is parsed, and its
+        (see isConfiguredIndexPath()), and follows no symbolic link (see indexFileOp()); the sandbox still governs
+        every other file access, including an index directory that the caller names itself.  Only the files' data is read with it: the index is parsed, and its
         metadata restored, by the caller's code.
 
         Called when the module is loaded, in the context of the code loading it.  The capability can only be created
@@ -4799,46 +4827,123 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
     }
 
     #! Performs a file operation on the configured index directory or an index file in it; see initIndexFileReader()
-    /** @param op \c "stat" (returns the file's @ref Qore::StatInfo "StatInfo" or @ref NOTHING if it does not exist),
+    /** Symbolic links are not followed: the configured index directory and the index file must not be symbolic
+        links, and the file read must be a regular file, the same file that was checked before it was opened.
+
+        @param op \c "stat" (returns the file's @ref Qore::StatInfo "StatInfo" or @ref NOTHING if it does not exist),
         \c "binary" (returns its contents as binary data), or \c "text" (returns its contents as a string)
         @param path the path of the configured index directory, or of an index file in it
 
-        @throw PROVIDER-INDEX-ERROR the path is not the configured index directory or an index file in it, or the
-        operation is unknown
+        @throw PROVIDER-INDEX-ERROR the path is not the configured index directory or an index file in it, the
+        directory or the file is a symbolic link, the file is not a regular file or was replaced while it was
+        opened, or the operation is unknown
+        @throw FILE-OPEN2-ERROR the file does not exist (with \c ENOENT as the exception argument)
     */
     private:internal static auto indexFileOp(string op, string path) {
+        if (op != "stat" && op != "binary" && op != "text") {
+            throw "PROVIDER-INDEX-ERROR", sprintf("unknown index file operation %y", op);
+        }
         # the capability's arguments are given by its caller: they are checked here
-        if (!ProviderIndexUtil::isConfiguredIndexPath(path)) {
+        *string name = ProviderIndexUtil::getConfiguredIndexName(path);
+        if (!exists name) {
             throw "PROVIDER-INDEX-ERROR", sprintf("%y is not the configured data provider index directory or a file "
                 "of its index", path);
         }
-        switch (op) {
-            case "stat": return hstat(path);
-            case "binary": return ReadOnlyFile::readBinaryFile(path);
-            case "text": return File::readTextFile(path);
+        string dir = ProviderIndexUtil::getConfiguredIndexDir();
+        *hash<StatInfo> dir_info = hlstat(dir);
+        if (dir_info.type == "SYMBOLIC-LINK") {
+            throw "PROVIDER-INDEX-ERROR", sprintf("the configured data provider index directory %y is a symbolic "
+                "link; it is not read for code that a sandbox governs", dir);
         }
-        throw "PROVIDER-INDEX-ERROR", sprintf("unknown index file operation %y", op);
+        if (name == "") {
+            if (op != "stat") {
+                throw "PROVIDER-INDEX-ERROR", sprintf("%y is a directory", path);
+            }
+            return dir_info;
+        }
+        if (!dir_info) {
+            if (op == "stat") {
+                return;
+            }
+            throw "FILE-OPEN2-ERROR", sprintf("%y: no such file or directory", path), ENOENT;
+        }
+        # the file is accessed in the directory as it resolves now, so that it is the file checked below
+        string file = realpath(dir) + DirSep + name;
+        *hash<StatInfo> info = hlstat(file);
+        if (info.type == "SYMBOLIC-LINK") {
+            throw "PROVIDER-INDEX-ERROR", sprintf("the data provider index file %y is a symbolic link; it is not read "
+                "for code that a sandbox governs", path);
+        }
+        if (op == "stat") {
+            return info;
+        }
+        if (!info) {
+            throw "FILE-OPEN2-ERROR", sprintf("%y: no such file or directory", path), ENOENT;
+        }
+        if (info.type != "REGULAR") {
+            throw "PROVIDER-INDEX-ERROR", sprintf("the data provider index file %y is not a regular file (type %y); "
+                "it is not read for code that a sandbox governs", path, info.type);
+        }
+%ifdef QoreDebug
+        if (*code hook = index_file_open_test_hook) {
+            hook(file);
+        }
+%endif
+        ReadOnlyFile f(file);
+        # the file opened must be the regular file checked above, not one that replaced it since
+        hash<StatInfo> opened = f.hstat();
+        if (opened.type != "REGULAR" || opened.dev != info.dev || opened.inode != info.inode) {
+            throw "PROVIDER-INDEX-ERROR", sprintf("the data provider index file %y was replaced while it was "
+                "opened; it is not read for code that a sandbox governs", path);
+        }
+        if (op == "binary") {
+            return f.readBinary(-1) ?? binary();
+        }
+        return f.read(-1) ?? "";
+    }
+
+    #! Returns the configured index directory, normalized, or @ref NOTHING if none is configured
+    /** Decided from the configuration alone, without any file system access
+    */
+    private:internal static *string getConfiguredIndexDir() {
+        *string dir = ENV{ProviderIndexEnvVar};
+        if (!dir.val()) {
+            return;
+        }
+        dir =~ s/[\/\\]+$//;
+        return normalize_dir(dir);
+    }
+
+    #! Returns the name of the index file that the path names directly in the configured index directory
+    /** Decided from the path alone, without any file system access
+
+        @return the file name, an empty string if the path is the configured index directory itself, or
+        @ref NOTHING if it is neither
+    */
+    private:internal static *string getConfiguredIndexName(string path) {
+        *string dir = ProviderIndexUtil::getConfiguredIndexDir();
+        if (!exists dir) {
+            return;
+        }
+        if (path == dir) {
+            return "";
+        }
+        string prefix = dir + DirSep;
+        if (!path.equalPartial(prefix)) {
+            return;
+        }
+        # a file name of the index, with no directory separator
+        string name = path.substr(prefix.size());
+        if (name =~ /^qore-[-A-Za-z0-9_.]+\.(yaml|msgpack)$/) {
+            return name;
+        }
     }
 
     #! Returns @ref True if the path is the configured index directory, or an index file directly in it
     /** Decided from the path alone, without any file system access
     */
     private:internal static bool isConfiguredIndexPath(string path) {
-        *string dir = ENV{ProviderIndexEnvVar};
-        if (!dir.val()) {
-            return False;
-        }
-        dir =~ s/[\/\\]+$//;
-        dir = normalize_dir(dir);
-        if (path == dir) {
-            return True;
-        }
-        string prefix = dir + DirSep;
-        if (!path.equalPartial(prefix)) {
-            return False;
-        }
-        # a file name of the index, with no directory separator
-        return path.substr(prefix.size()) =~ /^qore-[-A-Za-z0-9_.]+\.(yaml|msgpack)$/;
+        return exists ProviderIndexUtil::getConfiguredIndexName(path);
     }
 
     #! Returns the capability if a file access to the given path uses the module's access instead of the caller's

@@ -20,8 +20,9 @@
 /** The index is the module's configuration, read from the directory that the process configured: code whose
     sandbox refuses it file system access reads it with the module's access, and what it reads is the index of the
     whole process, the same as when trusted code reads it first.  The sandbox still refuses that code the files of
-    an index directory that it names itself.  A copy of the module that cannot read the index for sandboxed code
-    does not keep an index that such code could not read.
+    an index directory that it names itself.  No symbolic link is followed for that code: an index directory or
+    an index file that is one, or an index file replaced before it is opened, is not read for it.  A copy of the
+    module that cannot read the index for sandboxed code does not keep an index that such code could not read.
 */
 class ProviderIndexUtilSandboxedFirstReadTest inherits QUnit::Test {
     public {
@@ -84,6 +85,14 @@ printf(\"trusted: %y\\n\", trusted.callFunction(\"app_desc\", \"QoreTestOrders\"
             \firstReadCanonicalTest());
         addTestCase("a sandboxed reader cannot read an index directory that it names", \namedDirTest());
         addTestCase("an index that a sandboxed reader could not read is not kept", \noCapabilityTest());
+        addTestCase("index files that are symbolic links are not checked for a sandboxed reader",
+            \linkedFilesStatTest());
+        addTestCase("an index file that is a symbolic link is not read for a sandboxed reader",
+            \linkedFileReadTest());
+        addTestCase("an index directory that is a symbolic link is not read for a sandboxed reader",
+            \linkedDirTest());
+        addTestCase("an index file replaced before it is opened is not read for a sandboxed reader",
+            \replacedFileTest());
         set_return_value(main());
     }
 
@@ -139,6 +148,104 @@ printf(\"trusted: %y\\n\", trusted.callFunction(\"app_desc\", \"QoreTestOrders\"
         # the module logs the refused read
         list<string> results = select out.split("\n"), $1 =~ /^(sandboxed|trusted): /;
         assertEq(("sandboxed: null", "trusted: \"orders\""), results, out);
+    }
+
+    linkedFilesStatTest() {
+        TmpDir tmp("provider-index-sandboxed-links-");
+        string real_dir = tmp.path + DirSep + "real";
+        string link_dir = tmp.path + DirSep + "index";
+        mkdir(real_dir);
+        mkdir(link_dir);
+        useIndex(real_dir, False);
+        # every file of the configured index is a symbolic link to the published one; the routing index is checked
+        # before it is read
+        map symlink(real_dir + DirSep + $1, link_dir + DirSep + $1), ProviderIndexUtilSandboxedFirstReadTest::getFiles(real_dir);
+        useIndexDir(link_dir);
+        checkRefused("symbolic link");
+    }
+
+    linkedFileReadTest() {
+        if (!ProviderIndexUtil::hasMessagePack()) {
+            testSkip("no msgpack module: the canonical index file is checked before it is read");
+        }
+        TmpDir tmp("provider-index-sandboxed-link-");
+        string real_dir = tmp.path + DirSep + "real";
+        string link_dir = tmp.path + DirSep + "index";
+        mkdir(real_dir);
+        mkdir(link_dir);
+        useIndex(real_dir, False);
+        # the routing index is a regular file; the metadata cache files, which are read without being checked
+        # first, are symbolic links
+        foreach string name in (ProviderIndexUtilSandboxedFirstReadTest::getFiles(real_dir)) {
+            if (name == "qore-routing-index.yaml") {
+                copy_file(real_dir + DirSep + name, link_dir + DirSep + name);
+            } else {
+                symlink(real_dir + DirSep + name, link_dir + DirSep + name);
+            }
+        }
+        useIndexDir(link_dir);
+        Program reader = ProviderIndexUtilSandboxedFirstReadTest::getReader();
+        assertEq(NOTHING, reader.callFunction("app_info", App));
+        assertRegex("symbolic link", reader.callFunction("read_error") ?? "");
+    }
+
+    linkedDirTest() {
+        TmpDir tmp("provider-index-sandboxed-dir-link-");
+        string real_dir = tmp.path + DirSep + "real";
+        string link_dir = tmp.path + DirSep + "index";
+        mkdir(real_dir);
+        useIndex(real_dir, False);
+        symlink(real_dir, link_dir);
+        useIndexDir(link_dir);
+        checkRefused("symbolic link");
+    }
+
+    replacedFileTest() {
+%ifdef QoreDebug
+        TmpDir tmp("provider-index-sandboxed-replaced-");
+        string dir = tmp.path + DirSep + "index";
+        mkdir(dir);
+        useIndex(dir, False);
+        string routing = realpath(dir) + DirSep + "qore-routing-index.yaml";
+        # before the routing index is opened, it is replaced by a symbolic link to a copy of it; the hook runs for
+        # the sandboxed reader, so it does not remove itself
+        ProviderIndexUtil::setIndexFileOpenTestHook(sub (string path) {
+            if (path == routing && hlstat(path).type == "REGULAR") {
+                string copy = tmp.path + DirSep + "copy.yaml";
+                copy_file(path, copy);
+                unlink(path);
+                symlink(copy, path);
+            }
+        });
+        on_exit ProviderIndexUtil::setIndexFileOpenTestHook();
+        checkRefused("replaced");
+%else
+        testSkip("the index test hooks are only available in debug builds");
+%endif
+    }
+
+    #! Checks that the sandboxed reader reads no index, with an error with the given text, which is not kept
+    private checkRefused(string err) {
+        Program reader = ProviderIndexUtilSandboxedFirstReadTest::getReader();
+        *hash<auto> sandboxed_info = reader.callFunction("app_info", App);
+        *string sandboxed_error = reader.callFunction("read_error");
+        assertEq(NOTHING, sandboxed_info, "sandboxed reader");
+        assertRegex(err, sandboxed_error ?? "", "sandboxed reader");
+        # trusted code reads the index
+        assertEq("orders", ProviderIndexUtil::tryGetAppInfo(App).desc, "trusted reader");
+    }
+
+    #! Returns the names of the files in the given directory
+    private static list<string> getFiles(string dir) {
+        Dir d();
+        d.chdir(dir);
+        return d.listFiles() ?? ();
+    }
+
+    #! Makes the given directory the index directory of the process, not read yet
+    private useIndexDir(string dir) {
+        ProviderIndexUtil::setEnvironmentVariable(dir);
+        ProviderIndexUtilSandboxedFirstReadTest::resetIndexState();
     }
 
     private checkFirstRead(bool canonical) {
