@@ -101,6 +101,12 @@
     @endparblock
 
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
+    @par An Octal Integer Literal Cannot Contain 8 or 9
+    An integer literal with a leading zero is octal (<tt>010</tt> is \c 8), and one that contains \c 8 or \c 9
+    (<tt>08</tt>, <tt>019</tt>), which was read as a decimal, is a parse error, as is an octal literal too large for a
+    64-bit integer, which was read as the largest integer (see
+    @ref octal_integer_literals "octal integer literals"; issue #504).
+
     @par A Keyword After a Dot and White Space Is a Member Name
     A keyword after the @ref dot_operator ". operator" and white space is a member or method name, as it is without
     the white space, so an operator keyword there is no longer an operator: <tt>h . keys h2</tt>, which was
