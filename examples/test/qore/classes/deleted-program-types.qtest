@@ -128,6 +128,14 @@ class DeletedProgramTypesTest inherits QUnit::Test {
             addTestCase("a cycle of AOT and user modules through a run time load is deleted: " + mode,
                 sub () { testRuntimeCycleUserModules(mode); });
         }
+        foreach string mode in (ExecModes) {
+            addTestCase("a user module that an AOT module loads at run time and its native module are deleted "
+                + "after it: " + mode, sub () { testRuntimeUserLoad(mode); });
+        }
+        foreach string mode in (ExecModes) {
+            addTestCase("a native module required by a user module in a cycle with an AOT module is deleted after "
+                + "them: " + mode, sub () { testRuntimeUserCycle(mode); });
+        }
         set_return_value(main());
     }
 
@@ -282,6 +290,30 @@ class DeletedProgramTypesTest inherits QUnit::Test {
     testRuntimeCycleUserModules(string mode) {
         runRuntimeLoad(mode, ("RuntimeCycleUtil", "RuntimeCycleClient"), "runtime-cycle-user-modules.qr", "1",
             ("RuntimeCycleServer", "RuntimeCycleFile"));
+    }
+
+    #! A user module that an AOT module loads at run time, and the native module that it requires, are deleted after
+    #! the AOT module (issue #6501)
+    /** RuntimeUserLoadAot loads the source module RuntimeUserLoaded from its own Program, which imports its hashdecl,
+        whose member is of a class of the native module reflection.  The load was not recorded, so the end of the
+        process deleted the user module and then the native module, which no module left required, before the AOT
+        module: the teardown of the AOT module's Program read the freed class type of the hashdecl (a debug build
+        asserts in qore_type_owner_add_name(); seen with ProviderIndexUtil loading TypeScriptActionInterface from
+        source).
+    */
+    testRuntimeUserLoad(string mode) {
+        runRuntimeLoad(mode, ("RuntimeUserLoadAot",), "runtime-user-load.qr", "1", ("RuntimeUserLoaded",));
+    }
+
+    #! A native module that a user module requires is deleted after an AOT module that requires the user module, when
+    #! the user module is deleted first to break a cycle (issue #6501)
+    /** RuntimeUserCycleAot loads the source module RuntimeUserCycleLoaded at run time, which requires it and the native
+        module reflection, as ProviderIndexUtil loads TypeScriptActionInterface, which requires it.  The end of the
+        process breaks the cycle at the user module; the native module, which no module left required then, was
+        deleted next, before the AOT module, whose Program holds the user module's hashdecl naming a class of it.
+    */
+    testRuntimeUserCycle(string mode) {
+        runRuntimeLoad(mode, ("RuntimeUserCycleAot",), "runtime-user-cycle.qr", "1", ("RuntimeUserCycleLoaded",));
     }
 
     #! Runs \a script with the modules \a modules compiled to AOT modules and the source modules \a sources
