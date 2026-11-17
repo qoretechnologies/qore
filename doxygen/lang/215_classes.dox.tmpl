@@ -204,7 +204,11 @@ int made = f.get();
       <tt>IntFactory::make(10)</tt> is <tt>Factory&lt;int&gt;::make(10)</tt>; the same holds for a call through the
       generic class or an implicit call in the code of such a class, and for a call reference
       (<tt>\\IntFactory::make()</tt>), @ref Qore::call_static_method() "call_static_method()" and
-      @ref Qore::call_static_method_args() "call_static_method_args()"
+      @ref Qore::call_static_method_args() "call_static_method_args()"; the classes between can be generic
+      (<tt>class Base&lt;U&gt; inherits Factory&lt;U&gt;</tt> and <tt>class IntBase inherits Base&lt;int&gt;</tt>) or
+      not, and the class can declare a static method of the same name, whose variants are then selected with those of
+      the generic class (<tt>static string make(string s)</tt> in <tt>IntFactory</tt>:
+      <tt>IntFactory::make(10)</tt> still calls <tt>Factory&lt;int&gt;::make(10)</tt>)
     - in the code of the generic class or of a generic class that inherits it (<tt>make(10)</tt>,
       <tt>Factory::make(10)</tt> or <tt>\\Factory::make()</tt> in a method of <tt>Factory&lt;T&gt;</tt>), they are
       those of the running instantiation

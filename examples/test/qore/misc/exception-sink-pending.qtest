@@ -1,0 +1,272 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class ExceptionSinkPendingTest
+
+#! the pending event of an exception sink follows every change of its exceptions and of its thread exit (qore#6370)
+/** A sink keeps one pending flag, which every check of the sink reads instead of its exception list and its thread
+    exit; each case changes a sink in another way (raise, catch, rethrow, on_error, an exception of a destructor, a
+    thread exit, an exception handed from another thread or Program) and checks that the next check sees it, and that
+    a check after it was handled sees nothing.  A debug build of the library also asserts in each check that the flag
+    is that of the exception list and the thread exit.
+*/
+class ExceptionSinkPendingTest inherits QUnit::Test {
+    public {
+        #! the time a thread of a case may take: long, as JIT compilation under valgrind takes seconds
+        const Timeout = 120s;
+    }
+
+    constructor() : QUnit::Test("ExceptionSinkPendingTest", "1.0", \ARGV) {
+        addTestCase("raise and catch", \raiseCatchTest());
+        addTestCase("rethrow and nested handlers", \rethrowTest());
+        addTestCase("on_error, on_exit and on_success handlers", \blockExitTest());
+        addTestCase("exceptions of destructors", \destructorTest());
+        addTestCase("thread exit", \threadExitTest());
+        addTestCase("exceptions of handlers, rethrow and thread exit in handlers", \assimilateTest());
+        addTestCase("exceptions of other threads and Programs", \handoffTest());
+        set_return_value(main());
+    }
+
+    static int thrower(int i) {
+        if (i % 2) {
+            throw "ODD", sprintf("%d", i);
+        }
+        return i;
+    }
+
+    raiseCatchTest() {
+        int caught;
+        int sum;
+        for (int i = 0; i < 100; ++i) {
+            try {
+                sum += ExceptionSinkPendingTest::thrower(i);
+            } catch (hash<ExceptionInfo> ex) {
+                assertEq("ODD", ex.err);
+                ++caught;
+            }
+        }
+        assertEq(50, caught);
+        assertEq(2450, sum);
+        # a call after the handled exceptions raises nothing
+        assertEq(4, ExceptionSinkPendingTest::thrower(4));
+    }
+
+    rethrowTest() {
+        string err;
+        try {
+            try {
+                try {
+                    ExceptionSinkPendingTest::thrower(1);
+                } catch (hash<ExceptionInfo> ex) {
+                    rethrow "OUTER", ex.desc;
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                err = ex.err;
+                # an exception handled in a handler
+                try {
+                    throw "INNER";
+                } catch (hash<ExceptionInfo> ex2) {
+                    err += ":" + ex2.err;
+                }
+                rethrow;
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            err += ":" + ex.err;
+        }
+        assertEq("OUTER:INNER:OUTER", err);
+        assertEq(2, ExceptionSinkPendingTest::thrower(2));
+    }
+
+    static string blocks(bool fail) {
+        string log;
+        try {
+            on_exit log += "exit;";
+            on_success log += "success;";
+            on_error {
+                log += "error;";
+                try {
+                    throw "IN-HANDLER";
+                } catch () {
+                    log += "handled;";
+                }
+            }
+            if (fail) {
+                throw "FAIL";
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            log += ex.err + ";";
+        }
+        return log;
+    }
+
+    blockExitTest() {
+        assertEq("success;exit;", ExceptionSinkPendingTest::blocks(False));
+        assertEq("error;handled;exit;FAIL;", ExceptionSinkPendingTest::blocks(True));
+        assertEq("success;exit;", ExceptionSinkPendingTest::blocks(False));
+    }
+
+    destructorTest() {
+        string err;
+        try {
+            DestructorThrows d();
+            delete d;
+        } catch (hash<ExceptionInfo> ex) {
+            err = ex.err;
+        }
+        assertEq("DESTRUCTOR", err);
+        # an exception of a destructor run while another exception is pending is added to it
+        list<string> errs;
+        try {
+            DestructorThrows d();
+            throw "FIRST";
+        } catch (hash<ExceptionInfo> ex) {
+            errs += ex.err;
+            for (*hash<ExceptionInfo> n = ex.next; n; n = n.next) {
+                errs += n.err;
+            }
+        }
+        assertEq("FIRST", errs[0]);
+        assertTrue(errs.contains("DESTRUCTOR"), sprintf("%y", errs));
+        assertEq(4, ExceptionSinkPendingTest::thrower(4));
+    }
+
+    #! an on_exit handler that throws: its exception is assimilated into the block's sink, with or without another
+    static list<string> onExitThrows(bool fail) {
+        list<string> errs;
+        try {
+            on_exit throw "ON-EXIT";
+            if (fail) {
+                throw "BODY";
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            errs += ex.err;
+            for (*hash<ExceptionInfo> n = ex.next; n; n = n.next) {
+                errs += n.err;
+            }
+        }
+        return errs;
+    }
+
+    #! an on_error handler that rethrows: the sink's exception is cleared and replaced (a pending thread exit stays)
+    static string onErrorRethrows() {
+        try {
+            on_error rethrow "REPLACED", "x";
+            throw "ORIGINAL";
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+        return "";
+    }
+
+    assimilateTest() {
+        assertEq(("ON-EXIT",), ExceptionSinkPendingTest::onExitThrows(False));
+        list<string> errs = ExceptionSinkPendingTest::onExitThrows(True);
+        assertEq("BODY", errs[0]);
+        assertTrue(errs.contains("ON-EXIT"), sprintf("%y", errs));
+        assertEq("REPLACED", ExceptionSinkPendingTest::onErrorRethrows());
+        assertEq(4, ExceptionSinkPendingTest::thrower(4));
+
+        # a thread exit while an exception is pending, and in an on_exit handler of a block that raised one
+        Queue q();
+        background sub () {
+            on_exit q.push("exit");
+            try {
+                on_exit thread_exit;
+                throw "PENDING";
+            } catch () {
+                q.push("caught");
+            }
+            q.push("after");
+        }();
+        assertEq("exit", q.get(Timeout));
+        # a rethrow by an on_error handler of a block whose exit is pending: the handlers run in reverse order, so the
+        # thread exit of on_exit is pending when on_error rethrows the exception, which replaces the exception and
+        # leaves the thread exit pending (qore_es_private::clearForRethrow())
+        background sub () {
+            on_exit q.push("exit2");
+            try {
+                on_error rethrow "R";
+                on_exit thread_exit;
+                throw "E";
+            } catch () {
+                q.push("caught2");
+            }
+            q.push("after2");
+        }();
+        assertEq("exit2", q.get(Timeout));
+        assertEq(0, q.size());
+
+        # an unhandled exception of a background thread is handled by the thread's sink
+        Counter c(1);
+        background sub () {
+            on_exit c.dec();
+            throw "UNHANDLED-IN-THREAD", "this exception is expected (exception-sink-pending.qtest)";
+        }();
+        assertEq(0, c.waitForZero(Timeout));
+    }
+
+    threadExitTest() {
+        Queue q();
+        background sub () {
+            on_exit q.push("exit");
+            try {
+                thread_exit;
+            } catch () {
+                # thread_exit is not an exception
+                q.push("caught");
+            }
+            q.push("after");
+        }();
+        assertEq("exit", q.get(Timeout));
+        # a thread exit in a handler of an exception: the exception is not reported, the thread ends
+        background sub () {
+            on_exit q.push("exit2");
+            try {
+                throw "X";
+            } catch () {
+                thread_exit;
+            }
+            q.push("after2");
+        }();
+        assertEq("exit2", q.get(Timeout));
+        assertEq(0, q.size());
+    }
+
+    handoffTest() {
+        # an exception of another thread, handed to this one through a Counter and a Queue
+        Queue q();
+        background sub () {
+            try {
+                ExceptionSinkPendingTest::thrower(3);
+            } catch (hash<ExceptionInfo> ex) {
+                q.push(ex.err);
+            }
+        }();
+        assertEq("ODD", q.get(Timeout));
+        # an exception of a call into another Program
+        Program p(PO_NEW_STYLE);
+        p.parse("int sub t(int i) { if (i) throw \"PGM\", \"x\"; return i; }", "pending");
+        string err;
+        try {
+            p.callFunction("t", 1);
+        } catch (hash<ExceptionInfo> ex) {
+            err = ex.err;
+        }
+        assertEq("PGM", err);
+        assertEq(0, p.callFunction("t", 0));
+    }
+}
+
+class DestructorThrows {
+    destructor() {
+        throw "DESTRUCTOR";
+    }
+}

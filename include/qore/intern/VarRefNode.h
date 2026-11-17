@@ -333,14 +333,30 @@ protected:
     }
 
     DLLLOCAL void setThreadSafeIntern() {
-        ref.id->setClosureUse();
+        // a variable whose storage cannot change is left as it is: the parse error fails the parse
+        if (!checkTopLevelStorage()) {
+            ref.id->setClosureUse();
+        }
         type = VT_LOCAL_TS;
     }
 
     DLLLOCAL void setClosureIntern() {
-        ref.id->setClosureUse();
+        // a variable whose storage cannot change is left as it is: the parse error fails the parse
+        if (!checkTopLevelStorage()) {
+            ref.id->setClosureUse();
+        }
         type = VT_CLOSURE;
     }
+
+    //! raises a parse error if the variable is a top-level local variable of an earlier parse that threads may have
+    //! instantiated as a plain local variable, whose storage cannot become that of a closure-bound one (issue #6462)
+    /** The top-level local variables of a Program with PO_ALLOW_REPARSE are closure-bound from their declaration
+        (see push_local_var()), so this is only raised for a Program that had no PO_ALLOW_REPARSE when it declared
+        the variable.
+
+        @return -1 if the error was raised, 0 if not
+    */
+    DLLLOCAL int checkTopLevelStorage() const;
 
     DLLLOCAL VarRefNode(const QoreProgramLocation* loc, char* n, ClosureVarValue* cvv)
             : ParseNode(loc, NT_VARREF, true, false), name(n), type(VT_IMMEDIATE), new_decl(false),
