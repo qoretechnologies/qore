@@ -125,8 +125,15 @@ void BinaryNode::clear() {
     }
 }
 
-int BinaryNode::reserveIntern(size_t new_len) {
-    size_t old_cap = capacity();
+//! the internal operations of BinaryNode that its public header does not declare (qore#4380)
+class qore_binary_node_private {
+public:
+    //! ensures that the buffer of \a b can hold \a new_len bytes; 0 if OK, -1 if out of memory (the node unchanged)
+    DLLLOCAL static int reserve(BinaryNode& b, size_t new_len);
+};
+
+int qore_binary_node_private::reserve(BinaryNode& b, size_t new_len) {
+    size_t old_cap = b.capacity();
     if (new_len <= old_cap) {
         return 0;
     }
@@ -134,22 +141,22 @@ int BinaryNode::reserveIntern(size_t new_len) {
     // unused memory); a value that grows again grows geometrically by factors of 1.14 to 1.25, so a series of appends
     // reallocates the buffer a logarithmic number of times (issue #6312: an allocator whose realloc() copies made it
     // quadratic)
-    unsigned code = len ? qore_binary_capacity_code(new_len) : 0;
+    unsigned code = b.len ? qore_binary_capacity_code(new_len) : 0;
     size_t new_cap = code ? qore_binary_code_capacity(code) : new_len;
-    void* np = realloc(ptr, new_cap);
+    void* np = realloc(b.ptr, new_cap);
     if (!np && code) {
         // the exact size may still be available
         code = 0;
         new_cap = new_len;
-        np = realloc(ptr, new_cap);
+        np = realloc(b.ptr, new_cap);
     }
     if (!np) {
         // the old buffer is unchanged
         return -1;
     }
-    ptr = np;
-    cap_code = static_cast<unsigned char>(code);
-    qore_sb_binary_resize_check(this, old_cap, new_cap);
+    b.ptr = np;
+    b.cap_code = static_cast<unsigned char>(code);
+    qore_sb_binary_resize_check(&b, old_cap, new_cap);
     return 0;
 }
 
@@ -227,7 +234,7 @@ int BinaryNode::writeTo(size_t pos, const void* nptr, size_t size) {
     size_t self_offset = self ? static_cast<size_t>(own) : 0;
     if ((pos + size) > len) {
         // resize buffer; the value is unchanged if it fails
-        if (reserveIntern(pos + size)) {
+        if (qore_binary_node_private::reserve(*this, pos + size)) {
             return -1;
         }
         if (self) {
@@ -261,7 +268,7 @@ void BinaryNode::append(const void* nptr, size_t size) {
     int64 own = qore_binary_own_offset(ptr, len, src);
     bool self = own >= 0;
     size_t self_offset = self ? static_cast<size_t>(own) : 0;
-    if (reserveIntern(len + size)) {
+    if (qore_binary_node_private::reserve(*this, len + size)) {
         return;
     }
     if (self) {
@@ -293,7 +300,7 @@ void BinaryNode::prepend(const void* nptr, size_t size) {
     int64 own = qore_binary_own_offset(ptr, len, src);
     bool self = own >= 0;
     size_t self_offset = self ? static_cast<size_t>(own) : 0;
-    if (reserveIntern(len + size)) {
+    if (qore_binary_node_private::reserve(*this, len + size)) {
         return;
     }
     // move memory forward
@@ -491,7 +498,7 @@ void BinaryNode::splice(qore_offset_t offset, qore_offset_t length, const void* 
         size_t ol = len;
 
         // resize buffer
-        if (reserveIntern(len - length + data_len)) {
+        if (qore_binary_node_private::reserve(*this, len - length + data_len)) {
             return;
         }
 

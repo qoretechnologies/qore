@@ -1371,6 +1371,18 @@ struct qore_ds_private : public QoreDbiForkObject {
         return ds.priv;
     }
 
+    //! creates a connection of a DatasourcePool with the creators of the pool (qore#6142)
+    /** The connection's creators are the creators of the pool, not the code that runs when the pool grows.
+
+        @param driver the DBIDriver object to use for the connection
+        @param dsh the interface of the real C++ parent object
+        @param rec the creators of the pool
+
+        @return the new object; the caller owns it
+    */
+    DLLLOCAL static Datasource* createPoolConnection(DBIDriver* driver, DatasourceStatementHelper* dsh,
+            const qore_ds_pool_record& rec);
+
 private:
     // set of active SQLStatements on this datasource
     stmt_set_t stmt_set;
