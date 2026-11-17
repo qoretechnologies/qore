@@ -1,0 +1,200 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - sandbox file-system policy and the system-policy capability that reads the index files
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../TestInterpreter.qm
+%requires FsUtil
+%requires Util
+%requires Logger
+%requires ProviderIndexUtil
+
+%exec-class ProviderIndexUtilSandboxedFirstReadTest
+
+#! The data provider index read first by code that a sandbox governs
+/** The index is the module's configuration, read from the directory that the process configured: code whose
+    sandbox refuses it file system access reads it with the module's access, and what it reads is the index of the
+    whole process, the same as when trusted code reads it first.  The sandbox still refuses that code the files of
+    an index directory that it names itself.  A copy of the module that cannot read the index for sandboxed code
+    does not keep an index that such code could not read.
+*/
+class ProviderIndexUtilSandboxedFirstReadTest inherits QUnit::Test {
+    public {
+        #! the app in the test index
+        const App = "QoreTestOrders";
+
+        #! the code of the sandboxed reader
+        const ReaderSource = "%new-style
+%require-types
+%strict-args
+*hash<auto> sub app_info(string app) {
+    return ProviderIndexUtil::tryGetAppInfo(app);
+}
+*list<hash<auto>> sub actions(string app) {
+    return ProviderIndexUtil::tryGetActionMetadataForApp(app);
+}
+*string sub read_error() {
+    return ProviderIndexUtil::getIndexReadError();
+}
+bool sub read_dir(string dir) {
+    return exists ProviderIndexUtil::readSerializedDataProviderIndex(dir);
+}
+";
+
+        #! the child: the module is loaded first by code restricted with PO_NO_UNCONTROLLED_APIS, so it has no
+        #! capability to read the index for sandboxed code; a sandboxed reader reads first, then a trusted one
+        const ChildSource = "%new-style
+%require-types
+%strict-args
+Program loader(PO_NEW_STYLE | PO_NO_UNCONTROLLED_APIS);
+loader.loadModule(\"ProviderIndexUtil\");
+string code = \"%new-style
+*string sub app_desc(string app) { return ProviderIndexUtil::tryGetAppInfo(app).desc; }
+\";
+Program sandboxed(PO_NEW_STYLE);
+sandboxed.loadModule(\"ProviderIndexUtil\");
+sandboxed.parse(code, \"sandboxed\");
+sandboxed.setSandboxManager(new SandboxManager());
+Program trusted(PO_NEW_STYLE);
+trusted.loadModule(\"ProviderIndexUtil\");
+trusted.parse(code, \"trusted\");
+printf(\"sandboxed: %y\\n\", sandboxed.callFunction(\"app_desc\", \"QoreTestOrders\"));
+printf(\"trusted: %y\\n\", trusted.callFunction(\"app_desc\", \"QoreTestOrders\"));
+";
+    }
+
+    private {
+        #! the original value of the index directory environment variable
+        *string saved_dir;
+    }
+
+    constructor() : Test("ProviderIndexUtilSandboxedFirstReadTest", "1.0", \ARGV) {
+        # the errors of the sandboxed reads are checked by the test cases, not printed
+        if (m_options.verbose <= 2) {
+            ProviderIndexUtil::setGlobalLogger(new Logger("provider-index-test", LoggerLevel::LevelOff));
+        }
+        saved_dir = ENV{ProviderIndexEnvVar};
+        addTestCase("an index read first by a sandboxed reader is the index of the process", \firstReadTest());
+        addTestCase("a canonical index read first by a sandboxed reader is the index of the process",
+            \firstReadCanonicalTest());
+        addTestCase("a sandboxed reader cannot read an index directory that it names", \namedDirTest());
+        addTestCase("an index that a sandboxed reader could not read is not kept", \noCapabilityTest());
+        set_return_value(main());
+    }
+
+    globalTearDown() {
+        if (exists saved_dir) {
+            ProviderIndexUtil::setEnvironmentVariable(saved_dir);
+        } else {
+            unsetenv(ProviderIndexEnvVar);
+            remove ENV{ProviderIndexEnvVar};
+        }
+        ProviderIndexUtilSandboxedFirstReadTest::resetIndexState();
+    }
+
+    firstReadTest() {
+        checkFirstRead(False);
+    }
+
+    firstReadCanonicalTest() {
+        checkFirstRead(True);
+    }
+
+    namedDirTest() {
+        TmpDir tmp("provider-index-sandboxed-dir-");
+        useIndex(tmp.path, False);
+        Program reader = ProviderIndexUtilSandboxedFirstReadTest::getReader();
+        # the index cannot be read
+        assertFalse(reader.callFunction("read_dir", tmp.path));
+        # trusted code reads it
+        assertEq(App, ProviderIndexUtil::readSerializedDataProviderIndex(tmp.path).index.appinfomap.firstKey());
+    }
+
+    noCapabilityTest() {
+        TmpDir tmp("provider-index-sandboxed-nocap-");
+        string dir = tmp.path + DirSep + "index";
+        mkdir(dir);
+        useIndex(dir, False);
+        string script = tmp.path + DirSep + "child.q";
+        File f();
+        f.open2(script, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(ChildSource);
+        f.close();
+        string output = tmp.path + DirSep + "output.txt";
+        # the child inherits the index directory, and loads the modules as this process does
+        string module_dir = normalize_dir(get_script_dir() + "/../../../../qlib");
+        if (ENV.QORE_MODULE_DIR) {
+            module_dir += PathSep + ENV.QORE_MODULE_DIR;
+        }
+        int rc = system(sprintf("QORE_MODULE_DIR='%s' '%s' '%s' > '%s' 2>&1", module_dir,
+            TestInterpreter::qore_interpreter(), script, output));
+        string out = ReadOnlyFile::readTextFile(output);
+        assertEq(0, rc, out);
+        # without the capability, the sandbox refuses its reader the index files; the trusted reader then reads them
+        # the module logs the refused read
+        list<string> results = select out.split("\n"), $1 =~ /^(sandboxed|trusted): /;
+        assertEq(("sandboxed: null", "trusted: \"orders\""), results, out);
+    }
+
+    private checkFirstRead(bool canonical) {
+        TmpDir tmp("provider-index-sandboxed-first-");
+        useIndex(tmp.path, canonical);
+
+        # the sandboxed reader reads the index first; its sandbox refuses it file system access
+        Program reader = ProviderIndexUtilSandboxedFirstReadTest::getReader();
+        *hash<auto> sandboxed_info = reader.callFunction("app_info", App);
+        *string sandboxed_error = reader.callFunction("read_error");
+        *list<hash<auto>> sandboxed_actions = reader.callFunction("actions", App);
+
+        # trusted code then uses the index of the process
+        assertEq("orders", ProviderIndexUtil::tryGetAppInfo(App).desc, "trusted reader");
+        assertEq(NOTHING, ProviderIndexUtil::getIndexReadError(), "trusted reader");
+        assertEq(("create-order",), map $1.action, ProviderIndexUtil::tryGetActionMetadataForApp(App),
+            "trusted reader");
+
+        # the sandboxed reader read the same index
+        assertEq("orders", sandboxed_info.desc, "sandboxed reader");
+        assertEq(NOTHING, sandboxed_error, "sandboxed reader");
+        assertEq(("create-order",), map $1.action, sandboxed_actions, "sandboxed reader");
+    }
+
+    #! Publishes a test index in the given directory and makes it the index of the process, not read yet
+    private useIndex(string dir, bool canonical) {
+        ProviderIndexUtil::setEnvironmentVariable(dir);
+        hash<auto> actions = {
+            App: {
+                "create-order": {"app": App, "action": "create-order", "desc": "creates an order"},
+            },
+        };
+        hash<auto> maps = {
+            "factorymap": {},
+            "appmap": {App: {"QoreTestModule": True}},
+            "schememap": {},
+            "appinfomap": {App: {"name": App, "desc": "orders"}},
+        };
+        ProviderIndexUtil::writeDataProviderIndexByApp(maps, keys actions, *hash<auto> sub (string app) {
+            return actions{app};
+        }, 0s, {}, canonical);
+        ProviderIndexUtilSandboxedFirstReadTest::resetIndexState();
+    }
+
+    #! Returns a Program whose sandbox refuses it file system access, with the reader's code
+    private static Program getReader() {
+        Program reader(PO_NEW_STYLE);
+        reader.loadModule("ProviderIndexUtil");
+        reader.parse(ReaderSource, "sandboxed-reader");
+        reader.setSandboxManager(new SandboxManager());
+        return reader;
+    }
+
+    #! Discards the index state of this process, so that the next lookup reads the published index
+    private static resetIndexState() {
+        ProviderIndexUtil::setBuildMode(True);
+        ProviderIndexUtil::setBuildMode(False);
+    }
+}

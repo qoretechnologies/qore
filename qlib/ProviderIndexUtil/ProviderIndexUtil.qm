@@ -85,6 +85,22 @@ if (!info.reloaded) {
     returns for a published index, so a process can check whether the index has been published again since it read
     it.
 
+    @section providerindexutil_sandbox Sandboxed Readers
+
+    The published index is the module's configuration, and what a process reads from it is used by all its code.
+    Code that a @ref Qore::SandboxManager "SandboxManager" governs reads the files of the configured index (the
+    directory given by @ref ProviderIndexUtil::ProviderIndexEnvVar "ProviderIndexEnvVar" and the index files in it)
+    with the module's access, also when its sandbox refuses it file system access, so it sees the same index as
+    trusted code, and the index it reads first is the index of the process.  Its sandbox still governs every other
+    file access, including the index directory given to
+    @ref ProviderIndexUtil::ProviderIndexUtil::readSerializedDataProviderIndex() "ProviderIndexUtil::readSerializedDataProviderIndex()"
+    and the other APIs that take one.  The module reads the files with a system-policy capability
+    (@ref Qore::SandboxManager::createSystemPolicyCall() "SandboxManager::createSystemPolicyCall()") that it creates
+    when it is loaded from the module path; a copy of the module loaded first by code restricted with
+    @ref Qore::PO_NO_UNCONTROLLED_APIS "PO_NO_UNCONTROLLED_APIS", or by sandboxed code by path, has none, and a
+    sandboxed reader then reads the index with its own access; an index that it cannot read is not kept for the
+    process.
+
     @section providerindexutil_summaries Listing and Selecting Indexed Actions
 
     Restoring an indexed action restores the descriptions of its option types and of its data provider info, which
