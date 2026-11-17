@@ -762,11 +762,14 @@ lock();
     class, a static method of the class, a member holding a call reference, a pseudo-method of objects or the
     @ref methodGate_methods "methodGate()" method of the class.  A call on an object that has been deleted raises
     \c OBJECT-ALREADY-DELETED; when the arguments of the call delete the object, the call raises it after them and
-    nothing is called: <tt>cannot call C::m() on an object that has already been deleted</tt>, naming the class of the
-    method that the call would run (\c C::methodGate() for a call that \c methodGate() would receive), or, for a member
-    holding a call reference or a pseudo-method, the class of the object and the name of the call.  A static method
-    called in a method of its class without an object (<tt>s()</tt>) is called whatever its arguments did to the
-    object.  The behavior is the same in every @ref exec_mode_overview "execution mode".
+    nothing is called: <tt>cannot call C::m() on an object that has already been deleted</tt>, naming, for a method or
+    a static method, the class of the method that the call would run and the method; for a call by a name that the
+    class has no method of, the class of the object and the name of the call, or \c C::methodGate() for a class with
+    a \c methodGate() method that has no pseudo-method of the name and no member of the name whose declared type can
+    hold a call reference (the error is chosen from the declaration of the member, whose value is gone with the
+    object).  A static method called in a method of its class without an object (<tt>s()</tt>) is called whatever its
+    arguments did to the object.  The behavior is the same in every @ref exec_mode_overview "execution mode", also for
+    calls with named arguments.
 
     @anchor methodGate_methods
     @par methodGate() methods

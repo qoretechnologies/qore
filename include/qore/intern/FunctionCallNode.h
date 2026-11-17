@@ -687,13 +687,14 @@ DLLLOCAL void qore_raise_deleted_method_call_after_args(QoreObject* self, const 
 //! Raises the exception of a call by the name @a name on the object @a self that the call's arguments deleted, when
 //! the class of the object has no method of that name (issue #6056)
 /** The call is made to a member holding a call reference, to a pseudo-method of \<object\> or to methodGate(), as
-    qore_eval_missing_method() chooses it; the AST interpreter chooses it before the arguments are evaluated, and raises
-    the error after them: "cannot call <class>::<name>()", naming the class of the object, for a member or a
-    pseudo-method, or "cannot call <class>::methodGate()", naming the class of methodGate(), which the call of
-    methodGate() raises when it starts, before its variant is resolved.
+    qore_eval_missing_method() chooses it before the arguments are evaluated.  The error is "cannot call
+    <class>::<name>()", naming the class of the object, or "cannot call <class>::methodGate()", naming the class of
+    methodGate(), for a class with methodGate() that has no pseudo-method of the name and no member of the name whose
+    declared type can hold a call reference; it is raised before the variant of methodGate() is resolved.
 
-    The members of a deleted object are gone: a member that the call would have called is recognized by its
-    declaration, as a member whose type accepts a call reference.
+    The members of a deleted object are gone in the compiled modes, which evaluate the arguments before the call: the
+    error is chosen from the declaration of the member, and the AST interpreter raises the same error (also when it
+    chose methodGate() because the member held no call reference), so that every mode raises the same error.
 */
 DLLLOCAL void qore_raise_deleted_missing_method_call_after_args(QoreObject* self, const char* name,
         const qore_class_private* class_ctx, ExceptionSink* xsink);
@@ -731,6 +732,14 @@ protected:
     DLLLOCAL virtual const QoreTypeInfo* getTypeInfo() const;
 
     //! Keeps the owned argument copy of a reusable background call out of the ordinary method-call frame.
+    //! evaluates the arguments of a named call to a member holding code or to a pseudo-method of the object @a o,
+    //! then checks the object again: arguments that deleted it raise the error of
+    //! qore_raise_deleted_missing_method_call_after_args() (issue #6056)
+    /** @return -1 if an exception was raised, 0 if not
+    */
+    DLLLOCAL int evalArgsCheckObject(QoreObject* o, const char* c_str, const qore_class_private* ctx,
+            QoreListNodeEvalOptionalRefHolder& call_args, ExceptionSink* xsink) const;
+
     template <bool Lexical>
     DLLLOCAL QoreValue execReusableTmpArgs(LexicalSemanticPolicy policy, const QoreMethod& target,
             RuntimeConfig& rc, QoreObject* o, const qore_class_private* ctx,

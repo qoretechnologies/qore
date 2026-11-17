@@ -22,14 +22,18 @@
     through the object, as for a method (issue #5824); the AST interpreter made the call, except to methodGate(), and
     the compiled modes named the method called instead of methodGate().
 
-    DeletedByArgsCallTargets.q makes these calls with objects deleted by an argument, deleted before the call and not
-    deleted; its output must be the one in DeletedByArgsCallTargets.expected in every execution mode, on the IR tier
-    and in programs compiled with qcc -O0 and -O3.
+    DeletedByArgsCallTargets.qi makes these calls with objects deleted by an argument, deleted before the call and not
+    deleted, with positional and named arguments; DeletedByArgsCallTargets.q runs it with the default semantic policy
+    and DeletedByArgsCallTargetsLegacy.q with a legacy one, which only the AST interpreter runs (its calls take the
+    policy).  The output must be the one in DeletedByArgsCallTargets.expected in every execution mode, on the IR tier, in
+    programs compiled with qcc -O0 and -O3, and for the legacy fixture.
 */
 class DeletedByArgsCallTargetsTest inherits QUnit::Test {
     private {
         string qore_bin = TestInterpreter::qore_interpreter();
         string fixture = get_script_dir() + "/DeletedByArgsCallTargets.q";
+        #! the calls with a legacy semantic policy, which only the AST interpreter runs (the code is not %modern)
+        string legacy_fixture = get_script_dir() + "/DeletedByArgsCallTargetsLegacy.q";
         string expected = ReadOnlyFile::readTextFile(get_script_dir() + "/DeletedByArgsCallTargets.expected");
     }
 
@@ -37,24 +41,27 @@ class DeletedByArgsCallTargetsTest inherits QUnit::Test {
         foreach string mode in (ExecModeHarness::ExecModes) {
             string execution_mode = mode;
             addTestCase("execution mode " + mode, sub () {
-                assertEq(expected, ExecModeHarness::run(command(execution_mode)));
+                assertEq(expected, ExecModeHarness::run(command(fixture, execution_mode)));
             });
         }
         addTestCase("IR tier", sub () {
-            assertEq(expected, ExecModeHarness::run_ir_tier(command("tiered")));
+            assertEq(expected, ExecModeHarness::run_ir_tier(command(fixture, "tiered")));
         });
-        addTestCase("qcc -O0", sub () { checkQcc(0); });
-        addTestCase("qcc -O3", sub () { checkQcc(3); });
+        addTestCase("qcc -O0", sub () { checkQcc(fixture, 0); });
+        addTestCase("qcc -O3", sub () { checkQcc(fixture, 3); });
+        addTestCase("legacy semantic policy (AST)", sub () {
+            assertEq(expected, ExecModeHarness::run(command(legacy_fixture, "ast")));
+        });
 
         set_return_value(main());
     }
 
-    private string command(string mode) {
+    private string command(string fixture, string mode) {
         return sprintf("%s --enable-debug --exec-mode=%s %s", shellQuote(qore_bin), mode, shellQuote(fixture));
     }
 
     #! compiles the fixture with qcc and compares the output of the program
-    private checkQcc(int opt) {
+    private checkQcc(string fixture, int opt) {
         string qcc_bin = ENV.QCC_BIN ?? dirname(qore_bin) + "/qcc";
         if (!is_file(qcc_bin)) {
             qcc_bin = "qcc";

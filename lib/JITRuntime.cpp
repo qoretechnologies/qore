@@ -2149,10 +2149,6 @@ static int qore_check_method_call_after_args(QoreValue base, const char* name, c
         qore_raise_deleted_missing_method_call_after_args(obj, name, class_ctx, xsink);
         return -1;
     }
-    if (m->isStatic() && arg_names) {
-        // a named call of a static method through an object raises the error of its dispatch
-        return 0;
-    }
     // the AST interpreter raises the error when it enters the code of the variant that the call resolves with its
     // arguments, naming the variant's class (issue #5824)
     if (!args.build) {
