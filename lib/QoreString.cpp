@@ -3967,6 +3967,13 @@ static QORE_INTERN_NOINLINE QoreString* qore_own_source_copy(const QoreString* s
     return new (std::nothrow) QoreString(str->c_str(), str->size(), str->getEncoding());
 }
 
+QORE_INTERN_NOINLINE void qore_string_private::concatOwnText(const char* str) {
+    size_t slen = ::strlen(str);
+    if (slen) {
+        concat_intern(str, slen);
+    }
+}
+
 QORE_INTERN_NOINLINE const char* qore_string_private::growKeepingSource(size_t i, const char* src) {
     qore_offset_t own = ownDataOffset(src);
     check_char(i);

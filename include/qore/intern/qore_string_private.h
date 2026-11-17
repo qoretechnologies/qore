@@ -437,6 +437,9 @@ public:
         return &target == &src || (src.len && target.ownDataOffset(src.effective_buf()) >= 0);
     }
 
+    //! appends a null-terminated source that is part of the string's text
+    DLLLOCAL void concatOwnText(const char* str);
+
     //! the view path of ownDataOffset(): the text is in the parent's buffer
     DLLLOCAL qore_offset_t ownDataOffsetViewPath(const char* p) const;
 
@@ -1385,12 +1388,10 @@ public:
     }
 
     DLLLOCAL void concat(const char *str) {
-        // a source that is part of the string is appended with its size, as the string grows while it is read
+        // a source that is part of the string is appended with its size, as the string grows while it is read (out
+        // of line, so that this function stays small enough to be inlined)
         if (str && ownDataOffset(str) >= 0) {
-            size_t slen = ::strlen(str);
-            if (slen) {
-                concat_intern(str, slen);
-            }
+            concatOwnText(str);
             return;
         }
         // if it's not a null string
