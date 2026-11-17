@@ -13,6 +13,7 @@
 %requires Util
 %requires Logger
 %requires ProviderIndexUtil
+%requires reflection
 
 %exec-class ProviderIndexUtilSandboxedFirstReadTest
 
@@ -115,6 +116,9 @@ printf(\"trusted: %y\\n\", trusted.callFunction(\"app_desc\", \"QoreTestOrders\"
     }
 
     namedDirTest() {
+        if (!ProviderIndexUtil::hasMessagePack()) {
+            testSkip("no msgpack module: an index directory is read by name from its routing index");
+        }
         TmpDir tmp("provider-index-sandboxed-dir-");
         useIndex(tmp.path, False);
         Program reader = ProviderIndexUtilSandboxedFirstReadTest::getReader();
@@ -201,27 +205,47 @@ printf(\"trusted: %y\\n\", trusted.callFunction(\"app_desc\", \"QoreTestOrders\"
     }
 
     replacedFileTest() {
-%ifdef QoreDebug
+        # the hook is in the module only when it was built by a debug build of Qore; it is called by name, so that
+        # this test is parsed whatever build the module comes from
+        if (!ProviderIndexUtilSandboxedFirstReadTest::hasOpenTestHook()) {
+            testSkip("the index test hooks are only available in debug builds");
+        }
         TmpDir tmp("provider-index-sandboxed-replaced-");
         string dir = tmp.path + DirSep + "index";
         mkdir(dir);
         useIndex(dir, False);
-        string routing = realpath(dir) + DirSep + "qore-routing-index.yaml";
-        # before the routing index is opened, it is replaced by a symbolic link to a copy of it; the hook runs for
-        # the sandboxed reader, so it does not remove itself
-        ProviderIndexUtil::setIndexFileOpenTestHook(sub (string path) {
-            if (path == routing && hlstat(path).type == "REGULAR") {
-                string copy = tmp.path + DirSep + "copy.yaml";
+        string real_dir = realpath(dir);
+        # before an index file is opened, it is replaced by a symbolic link to a copy of it; the hook runs for the
+        # sandboxed reader, so it does not remove itself
+        ProviderIndexUtilSandboxedFirstReadTest::setOpenTestHook(sub (string path) {
+            if (dirname(path) == real_dir && hlstat(path).type == "REGULAR") {
+                string copy = tmp.path + DirSep + "copy-" + basename(path);
                 copy_file(path, copy);
                 unlink(path);
                 symlink(copy, path);
             }
         });
-        on_exit ProviderIndexUtil::setIndexFileOpenTestHook();
+        on_exit ProviderIndexUtilSandboxedFirstReadTest::setOpenTestHook();
         checkRefused("replaced");
-%else
-        testSkip("the index test hooks are only available in debug builds");
-%endif
+    }
+
+    #! Returns @ref True if the module has the index test hook of debug builds
+    private static bool hasOpenTestHook() {
+        try {
+            Class cls = Class::forName("ProviderIndexUtil::ProviderIndexUtil");
+            cls.findStaticMethod("setIndexFileOpenTestHook");
+            return True;
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "UNKNOWN-METHOD" || ex.err == "METHOD-ERROR") {
+                return False;
+            }
+            rethrow;
+        }
+    }
+
+    #! Sets or removes the index test hook of debug builds
+    private static setOpenTestHook(*code hook) {
+        call_static_method("ProviderIndexUtil::ProviderIndexUtil", "setIndexFileOpenTestHook", hook);
     }
 
     #! Checks that the sandboxed reader reads no index, with an error with the given text, which is not kept
