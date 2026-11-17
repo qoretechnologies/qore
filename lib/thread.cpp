@@ -3820,7 +3820,7 @@ __attribute__((noinline, cold)) void swap_toplevel_code_parse_options(const Qore
 
 __attribute__((noinline, cold)) void set_toplevel_code_parse_options(const QoreParseOptions& po) {
     ThreadData* td = thread_data.get();
-    td->runtime_po = apply_runtime_po_override(td, po);
+    td->runtime_po_state.po = apply_runtime_po_override(td, po);
     rc_get_tls_ref().setParseOptions(po);
 }
 
