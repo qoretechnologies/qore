@@ -2087,6 +2087,8 @@
     - a call of a method in a diamond class hierarchy tests the variants of a method of a shared ancestor once, not
       once for each path to the ancestor, so that a later path through a private edge no longer hides the parent
       classes after it, and a \c RUNTIME-OVERLOAD-ERROR lists them once (see @ref overloading_intro; issue #6488)
+    - @ref connectionproviderintro "ConnectionProvider" module: a list connection option with allowed element values
+      accepts its allowed elements; every non-empty list was refused (see @ref connectionprovider_3_1; issue #6490)
     - an absolute date literal without its day (<tt>2015-11-</tt>) is no longer read as a date with a day made of
       the text after it, which also ignored a UTC offset there (<tt>2015-11-+10</tt> is now the integer \c 1994), and
       a leap second in a date literal (<tt>2016-12-31T23:59:60Z</tt>) is a parse error that says so, also where

@@ -956,7 +956,7 @@ public class ConnectionSchemeCache {
                     foreach auto val in (i.value) {
                         bool ok;
                         foreach hash<AllowedValueInfo> v in (info.element_allowed_values) {
-                            if (v == val) {
+                            if (v.value == val) {
                                 ok = True;
                                 break;
                             }

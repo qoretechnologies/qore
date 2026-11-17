@@ -1,0 +1,91 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# The elements of a list connection option with allowed element values are checked against the values of those
+# allowed values: ConnectionSchemeCache::validateConnectionOptions() compared each allowed value's hash with the
+# element, which a hash never equals, so every non-empty list was refused, its allowed elements too (issue #6490).
+# No connection scheme in qlib declares allowed element values, so a scheme of the test's own declares them.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires reflection
+%requires Util
+%requires DataProvider
+%requires ConnectionProvider
+
+%exec-class ConnectionOptionElementAllowedValuesTest
+
+public class ConnectionOptionElementAllowedValuesTest inherits QUnit::Test {
+    constructor() : QUnit::Test("ConnectionOptionElementAllowedValues", "1.0") {
+        addTestCase("allowed elements are accepted", \allowedTest());
+        addTestCase("an element that is not allowed is refused", \refusedTest());
+        addTestCase("creatable element values accept any element", \creatableTest());
+        addTestCase("a scalar option is checked against its allowed values", \scalarTest());
+        set_return_value(main());
+    }
+
+    #! Returns a connection scheme with a list option whose elements are "GET" or "POST"
+    private static hash<ConnectionSchemeInfo> getScheme(bool creatable = False) {
+        list<hash<AllowedValueInfo>> verbs = (
+            <AllowedValueInfo>{"value": "GET", "desc": "a read"},
+            <AllowedValueInfo>{"value": "POST", "desc": "a write"},
+        );
+        return <ConnectionSchemeInfo>{
+            "display_name": "Element Allowed Values Test",
+            "desc": "a connection scheme with a list option with allowed element values",
+            "schemes": {"evtest": True},
+            "base_scheme_map": {"evtest": "evtest"},
+            "cls": Class::forName("ConnectionProvider::AbstractConnection"),
+            "options": {
+                "verbs": <ConnectionOptionInfo>{
+                    "display_name": "Verbs",
+                    "type": "list",
+                    "desc": "the request verbs allowed",
+                    "element_allowed_values": verbs,
+                    "element_allowed_values_creatable": creatable,
+                },
+                "mode": <ConnectionOptionInfo>{
+                    "display_name": "Mode",
+                    "type": "string",
+                    "desc": "the mode",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "fast", "desc": "fast"},
+                        <AllowedValueInfo>{"value": "safe", "desc": "safe"},
+                    ),
+                },
+            },
+        };
+    }
+
+    allowedTest() {
+        hash<auto> opts = ConnectionSchemeCache::validateConnectionOptions("evtest-conn", getScheme(),
+            {"verbs": ("GET", "POST")});
+        assertEq(("GET", "POST"), opts.verbs);
+        opts = ConnectionSchemeCache::validateConnectionOptions("evtest-conn", getScheme(), {"verbs": ("POST",)});
+        assertEq(("POST",), opts.verbs);
+    }
+
+    refusedTest() {
+        assertThrows("CONNECTION-OPTION-ERROR", "element value \"DELETE\"",
+            \ConnectionSchemeCache::validateConnectionOptions(), ("evtest-conn", getScheme(),
+                {"verbs": ("GET", "DELETE")}));
+    }
+
+    creatableTest() {
+        hash<auto> opts = ConnectionSchemeCache::validateConnectionOptions("evtest-conn", getScheme(True),
+            {"verbs": ("GET", "DELETE")});
+        assertEq(("GET", "DELETE"), opts.verbs);
+    }
+
+    scalarTest() {
+        hash<auto> opts = ConnectionSchemeCache::validateConnectionOptions("evtest-conn", getScheme(),
+            {"mode": "safe"});
+        assertEq("safe", opts.mode);
+        assertThrows("CONNECTION-OPTION-ERROR", "value \"slow\"",
+            \ConnectionSchemeCache::validateConnectionOptions(), ("evtest-conn", getScheme(), {"mode": "slow"}));
+    }
+}
