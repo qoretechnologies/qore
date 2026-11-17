@@ -687,6 +687,15 @@ constexpr uint16_t QORE_AOT_FLAG_IS_MODULE    = 0x0002;
 //! The encoded metadata is followed by its checksum (QORE_AOT_METADATA_CHECKSUM_VERSION)
 constexpr uint16_t QORE_AOT_FLAG_METADATA_CHECKSUM = 0x0004;
 
+//! Returns the length of the encoded AOT metadata at \a data without its checksum, from its header
+/** The data can be longer than the metadata (\a avail): a symbol of an object file, whose size is taken up to the next
+    symbol in a format without symbol sizes; compressed metadata is decompressed to find its end.  Used by the reader to
+    find the checksum after the metadata in such data, and by qcc to cut a symbol's data to its metadata (qore#6451)
+
+    @return true if \a data has the header of encoded AOT metadata that fits in \a avail bytes, with its length set
+*/
+bool qore_aot_encoded_metadata_length(const uint8_t* data, size_t avail, size_t& len);
+
 //! Returns the checksum of encoded AOT metadata: the XXH64 (seed 0) of its bytes (QORE_AOT_METADATA_CHECKSUM_VERSION)
 DLLLOCAL uint64_t qore_aot_metadata_checksum(const uint8_t* data, size_t size);
 
