@@ -153,7 +153,11 @@ qore_object_private::qore_object_private(QoreObject* n_obj, const QoreClass* oc,
         in_destructor(false),
         recursive_ref_found(false),
         obj(n_obj) {
-    std::unique_ptr<QoreSandboxContext> provenance(qore_capture_sandbox_provenance());
+    // an object of a class of library module code records the restrictions of the code that creates it (qore#6520):
+    // the class's source Program, read inline (the namespace's Program only for a class without one)
+    QoreProgram* code_pgm = qore_class_private::get(*oc)->spgm.load(std::memory_order_acquire);
+    std::unique_ptr<QoreSandboxContext> provenance(qore_capture_sandbox_provenance(code_pgm ? code_pgm
+        : oc->getProgram()));
     //printd(5, "qore_object_private::qore_object_private() this: %p obj: %p '%s'\n", this, obj, oc->getName());
 #ifdef QORE_DEBUG_OBJ_REFS
     printd(QORE_DEBUG_OBJ_REFS, "qore_object_private::qore_object_private() this: %p obj: %p pgm: %p class: %s "
