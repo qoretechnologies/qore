@@ -1407,99 +1407,45 @@ unsigned qore_program_private::renderParseDiagnosticFrames(const char* source_te
     return errors;
 }
 
-const QoreProgramLocation* qore_program_private_base::getLocation(int sline, int eline) {
-    std::lock_guard<std::recursive_mutex> lock(runtime_metadata_lock);
-    QoreProgramLocation loc(sline, eline);
-
-    loc_set_t::iterator i = loc_set.find(&loc);
-    if (i == loc_set.end()) {
-        QoreProgramLocation* lp = new QoreProgramLocation(loc);
-        // fork() waits for the change (see recordLock())
-        std::lock_guard<std::mutex> rl(threadContainerLock());
-        pgmloc.push_back(lp);
-        loc_set.insert(lp);
-        return lp;
-    }
-
-    /*
+const QoreProgramLocation* qore_program_private_base::getLocationIntern(const QoreProgramLocation& loc) {
+    // the unique locations are protected by the stripe lock alone: a lookup that adds a location (most of them, at
+    // parse time) takes one lock, and fork() waits for the change (see recordLock()); nothing else is acquired here
+    std::lock_guard<std::mutex> rl(threadContainerLock());
     loc_set_t::iterator i = loc_set.lower_bound(&loc);
-    if (i == loc_set.end() || (**i != loc)) {
-        QoreProgramLocation* lp = new QoreProgramLocation(loc);
-        pgmloc.push_back(lp);
-        loc_set.insert(i, lp);
-        return lp;
+    if (i == loc_set.end() || ltpgm()(&loc, *i)) {
+        std::unique_ptr<QoreProgramLocation> lp(new QoreProgramLocation(loc));
+        pgmloc.push_back(lp.get());
+        // the vector owns the location now
+        const QoreProgramLocation* rv = lp.release();
+        loc_set.insert(i, rv);
+        return rv;
     }
-    */
-
-    //printd(0, "gL: REUSE RV %d-%d\n", (*i)->start_line, (*i)->end_line);
     return *i;
+}
+
+const QoreProgramLocation* qore_program_private_base::getLocation(int sline, int eline) {
+    return getLocationIntern(QoreProgramLocation(sline, eline));
 }
 
 const QoreProgramLocation* qore_program_private_base::getLocation(int sline, int eline, int scol, int ecol) {
-    std::lock_guard<std::recursive_mutex> lock(runtime_metadata_lock);
-    QoreProgramLocation loc(sline, eline, scol, ecol);
-
-    loc_set_t::iterator i = loc_set.find(&loc);
-    if (i == loc_set.end()) {
-        QoreProgramLocation* lp = new QoreProgramLocation(loc);
-        // fork() waits for the change (see recordLock())
-        std::lock_guard<std::mutex> rl(threadContainerLock());
-        pgmloc.push_back(lp);
-        loc_set.insert(lp);
-        return lp;
-    }
-
-    return *i;
+    return getLocationIntern(QoreProgramLocation(sline, eline, scol, ecol));
 }
 
 const QoreProgramLocation* qore_program_private_base::getLocation(const QoreProgramLocation& loc, int sline, int eline) {
-    std::lock_guard<std::recursive_mutex> lock(runtime_metadata_lock);
     QoreProgramLocation loc1(loc);
     loc1.start_line = sline;
     loc1.end_line = eline;
-
-    loc_set_t::iterator i = loc_set.find(&loc1);
-    if (i == loc_set.end()) {
-        QoreProgramLocation* lp = new QoreProgramLocation(loc1);
-        // fork() waits for the change (see recordLock())
-        std::lock_guard<std::mutex> rl(threadContainerLock());
-        pgmloc.push_back(lp);
-        loc_set.insert(lp);
-        return lp;
-    }
-
-    /*
-    loc_set_t::iterator i = loc_set.lower_bound(&loc1);
-    if (i == loc_set.end() || **i != loc1) {
-        QoreProgramLocation* lp = new QoreProgramLocation(loc1);
-        pgmloc.push_back(lp);
-        loc_set.insert(i, lp);
-    }
-    */
-
-    return *i;
+    return getLocationIntern(loc1);
 }
 
 const QoreProgramLocation* qore_program_private_base::getLocation(const QoreProgramLocation& loc, int sline,
         int eline, int scol, int ecol) {
-    std::lock_guard<std::recursive_mutex> lock(runtime_metadata_lock);
     QoreProgramLocation loc1(loc);
     loc1.start_line = sline;
     loc1.end_line = eline;
     loc1.start_column = QoreProgramLineLocation::normalizeColumn(scol);
     loc1.end_column = QoreProgramLineLocation::normalizeColumn(ecol);
-
-    loc_set_t::iterator i = loc_set.find(&loc1);
-    if (i == loc_set.end()) {
-        QoreProgramLocation* lp = new QoreProgramLocation(loc1);
-        // fork() waits for the change (see recordLock())
-        std::lock_guard<std::mutex> rl(threadContainerLock());
-        pgmloc.push_back(lp);
-        loc_set.insert(lp);
-        return lp;
-    }
-
-    return *i;
+    return getLocationIntern(loc1);
 }
 
 int64 qore_program_private_base::setModuleOwnDomainsIntern(int64 n_dom, bool apply) {

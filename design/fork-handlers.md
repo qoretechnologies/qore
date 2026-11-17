@@ -263,28 +263,28 @@ Besides the locks:
 - **Thread counters**: `thread_counter` and `tp_thread_counter` keep only the forking thread's share
   (`qore_thread_counter_share`, `qore_tp_thread_counter_share`: its own run, and the ThreadPool task it runs), so
   that the end of the child's Programs and `qore_cleanup()` do not wait for threads that do not exist.
-- **Programs**: each Program's locks are initialized again (also its parse options mutex), its thread counts keep
-  only the forking thread, and parse ownership held by another thread is released; the counts of the calls in
-  progress into its debug program and of the copies in progress of its external data keep only those of the forking
-  thread (`QoreForkCountedHold`).  The locks of the Program data of every thread (the forking thread's, and those of
-  the other threads that have data in a Program or are registered with a Program family) are initialized again.
-  The records that other threads change at run time are changed under the stripe locks that `fork()` waits for, so
-  the child gets them consistent, although the owners' locks are only initialized again: the containers that record
-  a Program's threads (the thread counts, the threads admitted during a commit, the deferred releases, the threads'
-  data in the Program and the thread-local data registry of a family); the records of a thread's Program data (its
-  Programs and its thread-local data in each family); the records of a Program that change at run time and at module
-  load (its feature lists; its defines and the expressions parsed at run time; its interned strings and locations
-  and its local variables, which lazily loaded AOT code adds; the list of its user variants; its IR and plugin
+- **Programs**: each Program's locks are initialized again (also its parse options mutex), its thread counts keep only
+  the forking thread, and parse ownership held by another thread is released; the counts of the calls in progress into
+  its debug program and of the copies in progress of its external data keep only those of the forking thread
+  (`QoreForkCountedHold`).  The locks of the Program data of every thread (the forking thread's, and those of the
+  other threads that have data in a Program or are registered with a Program family) are initialized again. The
+  records that other threads change at run time are changed under the stripe locks that `fork()` waits for, so the
+  child gets them consistent, although the owners' locks are only initialized again: the containers that record a
+  Program's threads (the thread counts, the threads admitted during a commit, the deferred releases, the threads' data
+  in the Program and the thread-local data registry of a family); the records of a thread's Program data (its Programs
+  and its thread-local data in each family); the records of a Program that change at run time and at module load (its
+  feature lists; its defines and the expressions parsed at run time; its interned strings and locations and its local
+  variables, which lazily loaded AOT code adds, where the locations have no lock of their own: the stripe lock alone
+  protects them, so that a lookup that adds one takes a single lock; the list of its user variants; its IR and plugin
   fallback records; its external data and saved objects; the statement IDs and the debug blocks that the debugger
   adds); its breakpoints and their statements and thread IDs.  A record and the references that go with it are one
-  change (a thread's entry into a Program and its references to the Program and to the thread's data, a breakpoint
-  and the Program's reference to it, a saved object and its reference), and a record leaves its container before
-  what it refers to is deleted or released (the data of a thread in a Program being cleared, which runs
-  destructors; the breakpoints of a Program; the value of a define), so that neither the child nor another thread
-  finds a record without its reference or one that refers to deleted data.  The entry of a thread in a Program
-  being cleared stays, without data, while its data is deleted, and leaves the Program right before the references
-  that it records are released; the clearing thread gets new data if it enters the Program again while destructors
-  run.
+  change (a thread's entry into a Program and its references to the Program and to the thread's data, a breakpoint and
+  the Program's reference to it, a saved object and its reference), and a record leaves its container before what it
+  refers to is deleted or released (the data of a thread in a Program being cleared, which runs destructors; the
+  breakpoints of a Program; the value of a define), so that neither the child nor another thread finds a record
+  without its reference or one that refers to deleted data.  The entry of a thread in a Program being cleared stays,
+  without data, while its data is deleted, and leaves the Program right before the references that it records are
+  released; the clearing thread gets new data if it enters the Program again while destructors run.
 - **Debug programs**: each debug program's lock is initialized again, its count of calls in progress keeps only the
   forking thread's, and its Programs are consistent (they and each Program's debug program are changed together
   under its stripe lock).

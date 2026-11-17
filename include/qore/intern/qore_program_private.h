@@ -499,7 +499,8 @@ class qore_program_private_base {
     friend class QoreProgramAccessHelper;
 
 public:
-    //! Protects Program-owned local, string, location, and AOT signature metadata.
+    //! Protects Program-owned local, string, and AOT signature metadata (the unique locations are protected by the
+    //! stripe lock alone; see getLocation()).
     /** Recursive because signature interning allocates locals through createLocalVar().
         Hold only around metadata operations, never namespace lookup or user execution.
     */
@@ -579,7 +580,7 @@ public:
     // file name and unique string storage
     cstr_vector_t str_vec;
 
-    // unique program location storage
+    // unique program location storage; protected by the stripe lock (threadContainerLock()), as loc_set
     pgmloc_vec_t pgmloc;
 
     // high water marks for atomic rollback support (used with PO_ALLOW_REPARSE)
@@ -590,7 +591,8 @@ public:
     typedef std::set<const char*, ltstr> str_set_t;
     str_set_t str_set;
 
-    // temporary while parsing: unique locations; must be a set for performance reasons
+    // temporary while parsing: unique locations; must be a set for performance reasons; protected by the stripe
+    // lock (threadContainerLock()) alone, which getLocation() takes once (see recordLock())
     typedef std::set<const QoreProgramLocation*, ltpgm> loc_set_t;
     loc_set_t loc_set;
 
@@ -888,16 +890,16 @@ public:
     // ("program_thread_containers"; QFLM_STRIPED), so that the child never gets one of them in the middle of a
     // change.  An update of a value in place (a thread's count) changes no structure and needs no stripe lock.
     //
-    // The same stripes protect the other records that other threads change at run time under locks that a child
-    // only initializes again (see recordLock()): the records of a thread's Program data (ThreadProgramData: the
-    // Programs that the thread has data in and its thread-local data in each family, under its pslock), the records
-    // of a Program that change at run time and at module load (the feature lists under featureLock; the strings,
-    // locations and local variables of runtime_metadata_lock; the list of the user variants; the IR and plugin
-    // fallback records; the external data, the saved objects, the defines, the expressions parsed at run time, the
-    // statement IDs and the debug blocks under plock), its breakpoints (under lck_breakpoint), and the Programs of a
-    // debug program (qore_debug_program_private).  A record and the references that go with it are changed together,
-    // and a record leaves its container before the reference that it holds is released, so that a child never finds
-    // a record without its reference, or with one that was released.
+    // The same stripes protect the other records that other threads change at run time under locks that a child only
+    // initializes again (see recordLock()): the records of a thread's Program data (ThreadProgramData: the Programs
+    // that the thread has data in and its thread-local data in each family, under its pslock), the records of a Program
+    // that change at run time and at module load (the feature lists under featureLock; the strings and local variables
+    // of runtime_metadata_lock; the unique locations, which the stripe lock alone protects; the list of the user
+    // variants; the IR and plugin fallback records; the external data, the saved objects, the defines, the expressions
+    // parsed at run time, the statement IDs and the debug blocks under plock), its breakpoints (under lck_breakpoint),
+    // and the Programs of a debug program (qore_debug_program_private).  A record and the references that go with it
+    // are changed together, and a record leaves its container before the reference that it holds is released, so that a
+    // child never finds a record without its reference, or with one that was released.
     //
     // Each stripe lock is a LEAF lock: it is taken with the owner's own lock held, and nothing else is acquired
     // while it is held (including another stripe's lock); it is held only around the change itself, never across a
@@ -1389,6 +1391,8 @@ public:
     DLLLOCAL const QoreProgramLocation* getLocation(const QoreProgramLocation&, int sline, int eline);
     DLLLOCAL const QoreProgramLocation* getLocation(const QoreProgramLocation&, int sline, int eline,
         int scol, int ecol);
+    //! returns the unique location equal to \a loc, which is added if it is not there yet
+    DLLLOCAL const QoreProgramLocation* getLocationIntern(const QoreProgramLocation& loc);
 
     //! Returns true if the parse options have every option of %modern (PO_MODERN)
     DLLLOCAL static bool isModern(const QoreParseOptions& po) {
