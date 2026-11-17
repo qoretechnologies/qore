@@ -5732,20 +5732,7 @@ void QoreIRToLLVM::emitTempReleaseSequence(llvm::Module& module, const std::vect
 void QoreIRToLLVM::emitCleanupSlotRelease(llvm::Value* alloca_ptr, llvm::FunctionCallee decref) {
     llvm::Value* val = builder->CreateLoad(i64_type, alloca_ptr);
     builder->CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), alloca_ptr);
-    if (!branching_slot_release || !rarely_held_cleanup_allocas.count(alloca_ptr)) {
-        builder->CreateCall(decref, {val, xsink_arg});
-        return;
-    }
-    // a slot that holds a value only on a rare path is released at the end of a statement only if it holds one
-    llvm::Function* llvm_func = builder->GetInsertBlock()->getParent();
-    llvm::BasicBlock* release_bb = llvm::BasicBlock::Create(ctx, "held_slot_release", llvm_func);
-    llvm::BasicBlock* done_bb = llvm::BasicBlock::Create(ctx, "held_slot_released", llvm_func);
-    builder->CreateCondBr(builder->CreateICmpNE(val, llvm::ConstantInt::get(i64_type, VAL_NOTHING)), release_bb,
-        done_bb, llvm::MDBuilder(ctx).createBranchWeights(1, 1000));
-    builder->SetInsertPoint(release_bb);
     builder->CreateCall(decref, {val, xsink_arg});
-    builder->CreateBr(done_bb);
-    builder->SetInsertPoint(done_bb);
 }
 
 llvm::BasicBlock* QoreIRToLLVM::emitExceptionTempRelease(llvm::Module& module, llvm::Function* llvm_func,
@@ -6167,10 +6154,35 @@ void QoreIRToLLVM::emitDiscardTemps(llvm::Module& module, uint32_t scope_id, boo
                 release.push_back(alloca_ptr);
             }
         }
-        // the release at the end of the statement is emitted in the block being lowered, which it can split
-        branching_slot_release = true;
+        // the slots of the reads of foreach variables through references hold a value only if the frame has read
+        // one (element_read_held_flag): they are released after the others, behind one test of the flag, so that a
+        // statement of a frame that never reads one through a reference makes no call for them (issue #6441)
+        std::vector<llvm::Value*> held;
+        if (element_read_held_flag && !rarely_held_cleanup_allocas.empty()) {
+            std::vector<llvm::Value*> others;
+            others.reserve(release.size());
+            for (llvm::Value* alloca_ptr : release) {
+                (rarely_held_cleanup_allocas.count(alloca_ptr) ? held : others).push_back(alloca_ptr);
+            }
+            if (!held.empty()) {
+                release.swap(others);
+            }
+        }
         emitTempReleaseSequence(module, release, 0, release.size());
-        branching_slot_release = false;
+        if (!held.empty()) {
+            llvm::Function* llvm_func = builder->GetInsertBlock()->getParent();
+            llvm::BasicBlock* release_bb = llvm::BasicBlock::Create(ctx, "element_read_release", llvm_func);
+            llvm::BasicBlock* done_bb = llvm::BasicBlock::Create(ctx, "element_read_released", llvm_func);
+            llvm::Value* flag = builder->CreateLoad(llvm::Type::getInt8Ty(ctx), element_read_held_flag);
+            builder->CreateCondBr(builder->CreateICmpNE(flag, llvm::ConstantInt::get(llvm::Type::getInt8Ty(ctx), 0)),
+                release_bb, done_bb, llvm::MDBuilder(ctx).createBranchWeights(1, 1000));
+            builder->SetInsertPoint(release_bb);
+            for (llvm::Value* alloca_ptr : held) {
+                emitCleanupSlotRelease(alloca_ptr, helper);
+            }
+            builder->CreateBr(done_bb);
+            builder->SetInsertPoint(done_bb);
+        }
     }
 
     if (pending_ssa_cleanup.size() > mark.pending_ssa_count) {
@@ -7894,9 +7906,14 @@ llvm::Value* QoreIRToLLVM::loadLocalCacheValue(const void* key, const LocalCache
         if (reference_read_slot) {
             *reference_read_slot = current;
         }
+        if (!element_read_held_flag) {
+            element_read_held_flag = alloca_builder.CreateAlloca(llvm::Type::getInt8Ty(ctx), nullptr,
+                "element_read_held");
+            alloca_builder.CreateStore(llvm::ConstantInt::get(llvm::Type::getInt8Ty(ctx), 0), element_read_held_flag);
+        }
         auto held_fn = module.getOrInsertFunction("qore_rt_read_element_local_held",
-            llvm::FunctionType::get(i64_type, {i64_type, ptr_type, ptr_type, ptr_type}, false));
-        read = b.CreateCall(held_fn, {stored, current, previous, xsink_arg});
+            llvm::FunctionType::get(i64_type, {i64_type, ptr_type, ptr_type, ptr_type, ptr_type}, false));
+        read = b.CreateCall(held_fn, {stored, current, previous, element_read_held_flag, xsink_arg});
     } else {
         read = b.CreateCall(read_fn, {stored, xsink_arg});
     }
@@ -14950,6 +14967,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     exit_temp_cleanup_slot.clear();
     persistent_cleanup_allocas.clear();
     rarely_held_cleanup_allocas.clear();
+    element_read_held_flag = nullptr;
     temp_cleanup_marks.clear();
     exception_edges.clear();
     ir_block_predecessor_counts.clear();

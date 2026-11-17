@@ -232,11 +232,16 @@ The untyped variable of a foreach loop is assigned each element as it is, so it 
 element, and it reads as the referenced lvalue too (issue #6441).  Native code keeps such an IR-only variable as an
 element local (`QoreIRToLLVM::loadLocalCacheValue()`), whose read through the reference owned its value and never
 released it, so the object was leaked: the read now holds the value in the slots of its read site
-(`qore_rt_read_element_local_held()`), released and given to calls as the slots of `emitReferenceLocalRead()` are.  The
+(`qore_rt_read_element_local_held()`), released and given to calls as the slots of `emitReferenceLocalRead()` are.
+The helper also sets a flag of the frame (`element_read_held_flag`), and the end of a statement releases these slots
+behind one test of the flag, so that a frame that never reads a reference through such a variable pays one load and
+one branch per statement.  The
 IR interpreter gives such a read to every call (`qore_ir_element_local_may_read_reference()` in
 `buildValueUseCounts()` and in the test of `QORE_IR_GIVES_CALL_TEMPS`): the variable does not hold the value read, so
 a method that writes the referenced variable and its parameter destroys the object at the write, as in the AST
-interpreter.  A typed variable is never assigned a reference.
+interpreter.  Whether the call gives an argument is decided when it is made (`hasConsumedCallArgs()`, which tests
+first that the value holds a reference), so a read of an int or of a borrowed value makes the call that gives
+nothing.  A typed variable is never assigned a reference.
 
 The value of a cast is not one of them: the AST interpreter holds a temporary operand of a cast until the statement
 ends (issue #5712), and so do the other modes.

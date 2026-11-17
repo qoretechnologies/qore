@@ -10767,8 +10767,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
         int arg_start = qore_ir_call_arg_start(call_inst);
         for (size_t i = call_inst->operands.size(); i > static_cast<size_t>(arg_start); --i) {
             uint32_t id = call_inst->operands[i - 1].id;
+            // a value that holds no reference (an int read by the variable of a foreach loop that holds no reference)
+            // has nothing to give, which is tested before the lookups (issue #6441)
             if (!call_inst->operands[i - 1].isValid() || id >= values.size() || id >= consumed_call_args.size()
-                    || !consumed_call_args[id]
+                    || !consumed_call_args[id] || !values[id].needsRef()
                     || !hasCleanupEntry(cleanup, id) || weak_load_temp_slots.count(id)
                     || (id < borrowed_temp_remaining.size() && borrowed_temp_remaining[id] > 0)) {
                 continue;

@@ -2902,10 +2902,11 @@ extern "C" DLLEXPORT uint64_t qore_rt_read_element_local(uint64_t val, Exception
     a local with a reference flag (QoreIRToLLVM::emitReferenceLocalRead()).  Native code releases the slots at the
     end of the statement and at the exit of the function, or gives \a current to a call that takes the value as an
     argument (issue #6441: the value was never released).  A weak reference reads as its target, borrowed, and any
-    other value is returned as it is.
+    other value is returned as it is.  \a held, the flag of the frame, is set when the slots are given a value, so
+    that the end of a statement tests the slots only in a frame that has read a reference.
 */
 extern "C" DLLEXPORT uint64_t qore_rt_read_element_local_held(uint64_t val, uint64_t* current, uint64_t* previous,
-        ExceptionSink* xsink) {
+        uint8_t* held, ExceptionSink* xsink) {
     QoreValue v = fromBits(val);
     if (!v.hasNode()) {
         return val;
@@ -2918,6 +2919,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_read_element_local_held(uint64_t val, uint
     uint64_t old_previous = *previous;
     *previous = *current;
     *current = rv;
+    *held = 1;
     qore_rt_decref(old_previous, xsink);
     return rv;
 }
