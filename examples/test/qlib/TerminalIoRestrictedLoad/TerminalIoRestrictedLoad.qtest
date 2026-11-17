@@ -34,6 +34,8 @@ class TerminalIoRestrictedLoadTest inherits QUnit::Test {
             "Logger", "DatasourceProvider", "ConnectionProvider", "DataProvider", "SqlUtil", "Schema", "Swagger",
             "RestClient", "TelnetClient", "Connect", "YamlRpcClient", "McpClientDataProvider", "EdifactUtil",
             "DataStreamClient", "DataStreamRequestHandler",
+            # its data types read the member defaults of its own typed hashes through DataProvider's code (qore#6481)
+            "Pop3ClientDataProvider",
         );
 
         #! the code that the restricted Program runs after loading the module, if any
