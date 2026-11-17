@@ -3,6 +3,9 @@
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 # test-exec-mode: children - every load runs in a child process; the hand-picked cases set their own execution modes
 # test-platform: macos - the AOT module loader reads the sections of patched, ad hoc re-signed modules
+# test-timeout: 240
+# (measured with debug builds: 30 s on macOS, the sample, under qbuild --heavy and 43 s beside a run_tests load;
+# 76 s on Linux, the full case, under load)
 
 %modern
 %no-child-restrictions
@@ -44,6 +47,11 @@ hashdecl AotSection {
     The size of a section is patched in the section directory, so its bytes stay in the file: the test cannot tell
     a read past the end of a section from a valid read, only its consequences (a crash, an assertion, an allocation
     for a count that the data cannot hold).
+
+    On macOS every patched copy is signed again ad hoc before it is loaded, which makes a load several times as
+    expensive: there the systematic case takes a sample of every section instead, still deterministic, with at most
+    DarwinMaxTruncations truncated sizes and DarwinMaxCountOffsets evenly spaced offsets for each count value per
+    section (about 950 loads instead of about 5400); the Linux jobs run the full case.
 */
 class AotSectionBoundsTest inherits QUnit::Test {
     public {
@@ -74,6 +82,12 @@ class AotSectionBoundsTest inherits QUnit::Test {
         const CountValues = (0xffffffff, 0x7fffffff);
         #! the number of loads that run at once
         const Workers = 4;
+        #! the number of loads that run at once on macOS, where a load also signs the patched copy
+        const DarwinWorkers = 6;
+        #! the most truncated sizes tested per section on macOS
+        const DarwinMaxTruncations = 8;
+        #! the most offsets patched per section and count value on macOS
+        const DarwinMaxCountOffsets = 24;
     }
 
     private {
@@ -291,19 +305,25 @@ class AotSectionBoundsTest inherits QUnit::Test {
     }
 
     systematic() {
+        # macOS takes a sample of every section (see the class description)
+        bool sample = PlatformOS == "Darwin";
+        int max_truncations = sample ? DarwinMaxTruncations : MaxTruncations;
+        int workers = sample ? DarwinWorkers : Workers;
         # each variant is a 4-byte patch of the module, made in the worker that loads it
         list<hash<auto>> variants = ();
         foreach hash<AotSection> sec in (sections) {
             # evenly spaced truncated sizes, every size for a small section
-            int step = max(1, sec.size / MaxTruncations);
+            int step = max(1, sec.size / max_truncations);
             for (int size = 0; size < sec.size; size += step) {
                 variants += {"label": sprintf("section %d truncated to %d of %d bytes", sec.type, size, sec.size),
                     "pos": sec.size_pos, "value": size, "id": nextId()};
             }
-            # each count value at every offset, which sets every count in turn to it
+            # each count value at every offset, which sets every count in turn to it; evenly spaced offsets in a
+            # large optional section, and in every section on macOS
             int last = sec.size - 4;
-            step = (inlist(sec.type, LargeOptionalSections) && last >= MaxCountOffsets)
-                ? last / MaxCountOffsets : 1;
+            int max_offsets = sample ? DarwinMaxCountOffsets
+                : (inlist(sec.type, LargeOptionalSections) ? MaxCountOffsets : 0);
+            step = (max_offsets && last >= max_offsets) ? last / max_offsets : 1;
             foreach int value in (CountValues) {
                 for (int off = 0; off <= last; off += step) {
                     variants += {"label": sprintf("section %d with 0x%X at offset %d", sec.type, value, off),
@@ -315,13 +335,13 @@ class AotSectionBoundsTest inherits QUnit::Test {
         Queue q();
         map q.push($1), variants;
         # a NOTHING ends a worker
-        for (int i = 0; i < Workers; ++i) {
+        for (int i = 0; i < workers; ++i) {
             q.push(NOTHING);
         }
         Mutex m();
         list<hash<auto>> results = ();
-        Counter done(Workers);
-        for (int i = 0; i < Workers; ++i) {
+        Counter done(workers);
+        for (int i = 0; i < workers; ++i) {
             background sub () {
                 on_exit done.dec();
                 while (True) {
