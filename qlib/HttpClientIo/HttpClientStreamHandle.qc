@@ -230,16 +230,37 @@ public class HttpClientStreamHandle {
     }
 
     #! Returns the time without data received on the connection of the stream since the given time
-    /** @param since the time the wait started; the time without data is never longer than the time since then
+    /** @param since the time the wait started, on the wall clock; the time without data is never longer than the
+        time since then
+
+        @return the time in microseconds without data received on the connection
+
+        @note The time since \a since is measured on the wall clock, which a change of the system clock affects; use
+        @ref getInactiveTimeSince() with a time on the monotonic clock instead
+
+        @since HttpClientIo 1.0
+    */
+    int getInactiveTime(date since) {
+        return inactiveTime((now_us() - since).durationMicroseconds());
+    }
+
+    #! Returns the time without data received on the connection of the stream since the given time on the monotonic clock
+    /** @param since_us the time the wait started on the monotonic clock in microseconds, as returned by
+        @ref Qore::clock_get_monotonic_us() "clock_get_monotonic_us()"; the time without data is never longer than
+        the time since then
 
         @return the time in microseconds without data received on the connection
 
         @since HttpClientIo 1.0
     */
-    int getInactiveTime(date since) {
-        int since_us = (now_us() - since).durationMicroseconds();
+    int getInactiveTimeSince(int since_us) {
+        return inactiveTime(clock_get_monotonic_us() - since_us);
+    }
+
+    #! Returns the time without data received on the connection, at most the given time
+    private int inactiveTime(int elapsed_us) {
         int idle_us = conn.getIdleTime();
-        return idle_us < 0 || idle_us > since_us ? since_us : idle_us;
+        return idle_us < 0 || idle_us > elapsed_us ? elapsed_us : idle_us;
     }
 
     #! Sets whether the content encoding of a whole response body is decoded
@@ -615,7 +636,7 @@ public class HttpClientStreamHandle {
     /** @param f the Future of the response
         @param end_us the overall deadline, if any, on the monotonic clock in microseconds
         @param wait_timeout the overall timeout, for the error message
-        @param submitted the time the request was submitted
+        @param submitted the time the request was submitted, on the monotonic clock in microseconds
         @param deadline_bound @ref True if \a end_us is the deadline of the stream's request; its expiry then sets
         @ref request_deadline_expired
 
@@ -624,7 +645,7 @@ public class HttpClientStreamHandle {
         @throw HTTPCLIENT-TIMEOUT the response was not received before the deadline, or no data was received on the
         connection for the inactivity timeout; the stream is canceled
     */
-    private auto waitForResponse(Future f, *int end_us, timeout wait_timeout, date submitted,
+    private auto waitForResponse(Future f, *int end_us, timeout wait_timeout, int submitted,
             bool deadline_bound = False) {
         while (True) {
             # the wait is bounded by the deadline and by the inactivity timeout, if any; 0 waits indefinitely
@@ -641,7 +662,7 @@ public class HttpClientStreamHandle {
                 }
             }
             if (io_timeout > 0) {
-                int io_us = io_timeout * 1000 - getInactiveTime(submitted);
+                int io_us = io_timeout * 1000 - getInactiveTimeSince(submitted);
                 if (io_us <= 0) {
                     cancel();
                     throw "HTTPCLIENT-TIMEOUT", sprintf("no data received for %d ms (io_timeout)", io_timeout);
@@ -750,7 +771,7 @@ public class HttpClientStreamHandle {
         reservation_held = False;
 
         try {
-            auto rv = waitForResponse(f, end_time, wait_timeout, now_us(), deadline_bound);
+            auto rv = waitForResponse(f, end_time, wait_timeout, clock_get_monotonic_us(), deadline_bound);
             {
                 AutoLock al(lock);
                 state = HttpClientStreamState::Complete;

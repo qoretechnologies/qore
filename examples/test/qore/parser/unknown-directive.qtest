@@ -1,0 +1,126 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class UnknownDirectiveTest
+
+#! issue #56: a line that starts with a parse directive that Qore does not know gives an error that names it
+/** The scanner had no rule for an unknown directive: "%require mymod" gave the bare "syntax error, unexpected
+    identifier".  A syntax error on a line that starts with % and a name that no directive's rule matches names the
+    directive and suggests the closest known one, or reports a known directive with invalid syntax; such a line is
+    still scanned as a context reference, which is valid code in a context statement.
+*/
+public class UnknownDirectiveTest inherits QUnit::Test {
+    constructor() : QUnit::Test("unknown parse directive", "1.0") {
+        addTestCase("unknown directive with a suggestion", \suggestion());
+        addTestCase("unknown directive without a suggestion", \noSuggestion());
+        addTestCase("known directive with invalid syntax", \invalidSyntax());
+        addTestCase("directive alone on its line", \aloneOnLine());
+        addTestCase("context reference at the start of a line", \contextReference());
+        addTestCase("statement end in a string or comment", \statementEndInText());
+        addTestCase("short names and the end of the input", \shortNamesAndEnd());
+        addTestCase("unknown directive at the end of the input", \atEnd());
+        addTestCase("known directives", \knownDirectives());
+        addTestCase("every directive of the scanner is known", \directiveList());
+        set_return_value(main());
+    }
+
+    #! parses the code; returns the description of its parse exception, if any
+    private *string parseError(string code) {
+        Program p(PO_MODERN | PO_NO_CHILD_PO_RESTRICTIONS);
+        try {
+            p.parse(code, "unknown-directive");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("PARSE-EXCEPTION", ex.err);
+            return ex.desc;
+        }
+    }
+
+    private suggestion() {
+        *string desc = parseError("%require mymod\nint x = 1;\n");
+        assertRegex("^unknown parse directive '%require'; did you mean '%requires'\\? \\(syntax error", desc);
+    }
+
+    private noSuggestion() {
+        assertRegex("^unknown parse directive '%frobnicate' \\(syntax error", parseError("%frobnicate x\nint x = 1;\n"));
+    }
+
+    private invalidSyntax() {
+        *string desc = parseError("%modern extra\nint x = 1;\n");
+        assertRegex("^invalid syntax for parse directive '%modern'", desc);
+    }
+
+    #! a directive alone on its line: the syntax error is at the next code, on the next line
+    private aloneOnLine() {
+        *string desc = parseError("%modrn\nint x = 1;\n");
+        assertRegex("^unknown parse directive '%modrn'; did you mean '%modern'\\? \\(syntax error", desc);
+        desc = parseError("%no-frob\n\n# a comment\nint x = 1;\n");
+        assertRegex("^unknown parse directive '%no-frob'", desc);
+    }
+
+    #! a ; in a string or comment on the directive's line does not end its statement
+    private statementEndInText() {
+        assertRegex("^unknown parse directive '%frob'", parseError("%frob \";\" y\nint x = 1;\n"));
+        assertRegex("^unknown parse directive '%frob'", parseError("%frob /* ; */ x\nint x = 1;\n"));
+        assertRegex("^unknown parse directive '%frob'", parseError("%frob # a;b\nx y\n"));
+        # a ; in the code ends it: the error after it is not the directive's
+        *string desc = parseError("hash<auto> h = {\"a\": 1};\ncontext (h) {\n%a;\n    x y;\n}\n");
+        assertNothing(desc =~ /parse directive/ ? desc : NOTHING);
+    }
+
+    #! a name of one or two letters suggests nothing; a known directive at the end of the input is not invalid
+    private shortNamesAndEnd() {
+        assertEq("unknown parse directive '%a' (syntax error, unexpected integer value)",
+            parseError("int a = 1;\n%a 1\n"));
+        *string desc = parseError("int x = 1;\n%modern");
+        assertNothing(desc =~ /parse directive/ ? desc : NOTHING);
+    }
+
+    #! a context reference at the start of a line is valid code, as before
+    private contextReference() {
+        Program p(PO_MODERN | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.parse("list<auto> sub get() {\n    list<auto> l = ();\n    hash<auto> h = {\"a\": (1, 2)};\n"
+            "    context (h) {\n        push l,\n%a;\n    }\n    return l;\n}\n", "context");
+        assertEq((1, 2), p.callFunction("get"));
+    }
+
+    private atEnd() {
+        assertRegex("^unknown parse directive '%nonsense' \\(syntax error", parseError("int x = 1;\n%nonsense"));
+    }
+
+    private knownDirectives() {
+        Program p(PO_MODERN | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.parse("%define X\n%ifdef X\nint sub get() { return 1; }\n%endif\n", "known");
+        assertEq(1, p.callFunction("get"));
+    }
+
+    #! the rules of the scanner for parse directives (^%name) and the list that the suggestions come from agree
+    private directiveList() {
+        string path = get_script_dir() + "/../../../../lib/scanner.lpp";
+        if (!is_file(path)) {
+            testSkip("the scanner's source is not available at " + path);
+        }
+        string src = ReadOnlyFile::readTextFile(path);
+        *list<*string> rules = (src =~ x/\n\^%([a-z][a-z0-9-]*)/g);
+        assertTrue(rules.size() > 100, "the scanner's directive rules");
+        int start = src.find("qore_parse_directive_names[] = {");
+        assertGt(0, start, "the list of directive names");
+        string listed = src.substr(start, src.find("};", start) - start);
+        hash<string, bool> rule_names = map {$1: True}, rules;
+        foreach string name in (keys rule_names) {
+            assertTrue(listed.find("\"" + name + "\"") >= 0, sprintf("'%%%s' is in qore_parse_directive_names", name));
+        }
+        # and every listed name has a rule
+        *list<*string> names = (listed =~ x/"([a-z][a-z0-9-]*)"/g);
+        assertEq(rule_names.size(), names.size(), "the number of listed names");
+        foreach string name in (names) {
+            assertTrue(rule_names{name}, sprintf("'%%%s' in qore_parse_directive_names has a rule", name));
+        }
+    }
+}

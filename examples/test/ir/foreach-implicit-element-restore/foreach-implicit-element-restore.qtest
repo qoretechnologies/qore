@@ -1,0 +1,104 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - JIT and AOT code generation of the implicit index of foreach statements
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - every check runs the script in a child process that sets its own --exec-mode, or AOT
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../TestInterpreter.qm
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%exec-class ForeachImplicitElementRestoreTest
+
+#! issue #6432: the handlers that an exception from a foreach runs see the $# of the code around the loop
+/** An exception that left the body of a foreach did not restore the implicit element that the loop set before the
+    handlers of the enclosing blocks of the function ran, so an on_error or on_exit handler of an outer loop body saw
+    the inner loop's index instead of its own in ir, jit, tiered and AOT executables.
+
+    foreach-implicit-element-restore.q prints the values; the AST interpreter's output must be the expected one,
+    and every other execution mode, the IR tier and AOT executables compiled with -O0 and -O3 must give the same.
+*/
+class ForeachImplicitElementRestoreTest inherits QUnit::Test {
+    public {
+        #! the output of the script
+        const Expected = (
+            "ref/ref on_error 0 7",
+            "value/ref on_error 0 7",
+            "value/fused on_error 0 7",
+            "value/value on_error 0 7",
+            "ref/value on_error 0 7",
+            "on_exit throw 0 7",
+            "block on_error 0 7",
+            "inner on_error 1",
+            "outer on_error 0",
+            "catch continue [0, 0, 1, 1]",
+            "three levels on_error 0 7",
+            "assign on_error 0 7",
+            "fused assign on_error 0 7",
+            "D a destroyed",
+            "catch var on_error",
+        );
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string env;
+        string script;
+    }
+
+    constructor() : QUnit::Test("foreach implicit element restore", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir, libqore_dir);
+        script = get_script_dir() + "/foreach-implicit-element-restore.q";
+
+        addTestCase("AST interpreter", \astTest());
+        addTestCase("execution modes", \modesTest());
+        addTestCase("AOT executable -O0", \aotTest(), "-O0");
+        addTestCase("AOT executable -O3", \aotTest(), "-O3");
+        set_return_value(main());
+    }
+
+    #! checks the output of the AST interpreter, which the other modes must give
+    private astTest() {
+        list<string> lines = select ast().split("\n"), $1;
+        assertEq(Expected, lines);
+    }
+
+    #! runs the script in every execution mode and on the IR tier
+    private modesTest() {
+        string exp = ast();
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            if (mode == "ast") {
+                continue;
+            }
+            assertEq(exp, ExecModeHarness::run(sprintf("%s %s --exec-mode=%s %s", env, qore_bin, mode, script)), mode);
+        }
+        assertEq(exp, ExecModeHarness::run_ir_tier(sprintf("%s %s --exec-mode=tiered %s", env, qore_bin, script)),
+            ExecModeHarness::IRTierName);
+    }
+
+    #! compiles the script with qcc and checks that the executable gives the output of the AST interpreter
+    private aotTest(string opt) {
+        if (!is_file(qcc_bin)) {
+            testSkip("qcc is not available at " + qcc_bin);
+        }
+        TmpDir dir("foreach-implicit-element-restore-aot-");
+        string exe = dir.path + "/foreach-implicit-element-restore";
+        string out = ExecModeHarness::run_any(sprintf("%s %s %s -o %s %s", env, qcc_bin, opt, exe, script));
+        assertTrue(is_file(exe), "qcc " + opt + " compiles the script: " + out);
+        assertEq(ast(), ExecModeHarness::run_any(sprintf("%s %s", env, exe)), "AOT " + opt);
+    }
+
+    #! returns the output of the script with the AST interpreter
+    private string ast() {
+        return ExecModeHarness::run(sprintf("%s %s --exec-mode=ast %s", env, qore_bin, script));
+    }
+}

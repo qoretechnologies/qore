@@ -79,6 +79,10 @@ class BCAList;
 class QoreOperatorNode;
 class BarewordNode;
 class QoreFunction;
+
+//! Returns true if a variant with the given number of parameters can take a call with the given number of arguments
+//! at run time under strict arguments: it has no more arguments than parameters, or takes extra arguments (qore#6152)
+DLLLOCAL bool qore_variant_takes_call_arity(unsigned num_args, unsigned nparams, bool uses_extra_args);
 class qore_class_private;
 class qore_ns_private;
 class QoreClosureBase;
@@ -2584,6 +2588,14 @@ public:
     */
     DLLLOCAL bool hasInheritedVariants() const;
 
+    //! Returns true if the inheritance list of the method has a method of a generic class
+    /** The method of a class without type parameters that declares a method of the same name as one of a generic
+        parent class has the variants of the generic class's method too (qore#6448)
+    */
+    DLLLOCAL bool hasGenericClassAncestor() const {
+        return has_generic_class_ancestor;
+    }
+
     //! Returns true if a call of the function can resolve to its single variant only (no overloads, no inherited
     //! variants); inline for the fast call paths, as functions and most methods have only themselves in the
     //! inheritance list
@@ -2633,6 +2645,7 @@ public:
 
     DLLLOCAL void addAncestor(QoreFunction* ancestor, ClassAccess access) {
         ilist.push_back(INode(ancestor, access));
+        noteAncestor(*ancestor);
     }
 
     DLLLOCAL void addNewAncestor(QoreFunction* ancestor, ClassAccess access) {
@@ -2640,6 +2653,7 @@ public:
             if ((*i).func == ancestor)
                 return;
         ilist.push_back(INode(ancestor, access));
+        noteAncestor(*ancestor);
     }
 
     // resolves all types in signatures and return types in pending variants; called during the "parseInit" phase
@@ -3086,6 +3100,11 @@ protected:
     //! resolves the signatures of the pending variants in the thread's current parse context
     DLLLOCAL void resolvePendingSignaturesIntern();
 
+    //! records an ancestor added to the inheritance list for hasGenericClassAncestor()
+    /** out of line: the inheritance lists are built when classes are initialized, not on a call's path
+    */
+    DLLLOCAL void noteAncestor(const QoreFunction& ancestor);
+
     std::string name;
 
     // list of function variants
@@ -3115,6 +3134,8 @@ protected:
     bool check_parse : 1;
     bool has_priv : 1;                   // has at least 1 private variant
     bool all_priv : 1;                   // all variants are private
+    //! the inheritance list has a method of a generic class; see hasGenericClassAncestor()
+    bool has_generic_class_ancestor = false;
 
     const QoreTypeInfo* nn_uniqueReturnType = nullptr;
 
@@ -3360,6 +3381,7 @@ public:
         for (; i != e; ++i) {
             ilist.push_back(*i);
         }
+        has_generic_class_ancestor = old.has_generic_class_ancestor;
     }
 
     DLLLOCAL void resolveCopy() {
