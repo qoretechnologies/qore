@@ -1,0 +1,157 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - HTTP client ping poll operation inner operation used by one thread while another destroys it
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class PingPollOperationTeardownRaceTest
+
+#! records what was done with an inner operation
+class InnerRecord {
+    public {
+        bool polled = False;
+        bool aborted = False;
+        bool destroyed = False;
+    }
+}
+
+#! an inner poll operation that reaches its goal with an HTTP response and records its use
+class RecordingPollOperation inherits AbstractPollOperation<auto> {
+    private {
+        InnerRecord record;
+    }
+
+    constructor(InnerRecord record) {
+        self.record = record;
+    }
+
+    destructor() {
+        record.destroyed = True;
+    }
+
+    string getGoal() {
+        return "reached";
+    }
+
+    string getState() {
+        return "running";
+    }
+
+    bool goalReached() {
+        return record.polled;
+    }
+
+    *hash<SocketPollInfo> continuePoll() {
+        record.polled = True;
+    }
+
+    *hash<auto> getOutput() {
+        return {"code": 200, "body": "ok"};
+    }
+
+    abort() {
+        record.aborted = True;
+    }
+}
+
+#! The inner operation of an HTTP client ping poll operation stays usable by a thread that uses it while another thread
+#! destroys the ping operation (issue #6453)
+/** The destruction of the ping operation releases its inner operation; a thread that uses the inner operation at the
+    same time takes it with a reference of its own, and the inner operation is released when the last of them is done.
+    The thread is held after it took the inner operation with the "teardown-read" hold point of debug builds, the ping
+    operation is destroyed, and the inner operation must still exist until the held thread is done with it.
+*/
+class PingPollOperationTeardownRaceTest inherits QUnit::Test {
+    private {
+        #! the longest wait for a thread to reach a hold point: a hang guard only
+        const HoldWait = 60s;
+    }
+
+    constructor() : Test("Ping poll operation teardown race test", "1.0") {
+        addTestCase("the state of the inner operation is read while the operation is destroyed", \stateTest());
+        addTestCase("the inner operation is aborted while the operation is destroyed", \abortTest());
+        addTestCase("the inner operation is polled while the operation is destroyed", \pollTest());
+        set_return_value(main());
+    }
+
+    stateTest() {
+        InnerRecord record();
+        auto state = useDuringTeardown(record, auto sub (HttpClientPingPollOperationBase op) {
+            return op.getState();
+        });
+        assertEq("running", state, "the state of the inner operation was read");
+    }
+
+    abortTest() {
+        InnerRecord record();
+        useDuringTeardown(record, auto sub (HttpClientPingPollOperationBase op) {
+            op.abort();
+        });
+        assertTrue(record.aborted, "the inner operation was aborted");
+    }
+
+    pollTest() {
+        InnerRecord record();
+        useDuringTeardown(record, auto sub (HttpClientPingPollOperationBase op) {
+            return op.continuePoll();
+        });
+        assertTrue(record.polled, "the inner operation was polled");
+    }
+
+    #! runs the code with the ping operation in another thread while the operation is destroyed
+    /** @return the value returned by the code
+    */
+    private auto useDuringTeardown(InnerRecord record, code user) {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("needs a debug build of the library (dbg_http_hold_at())");
+        }
+        # the ping operation holds the only references of its inner operation
+        HttpClientPingPollOperationBase op(new DelegatingPollOperation(new RecordingPollOperation(record)), 200, 299,
+            "PING-TEARDOWN-ERROR");
+
+        # waited for after the held thread is released (on_exit code runs in reverse order)
+        Counter done(1);
+        bool started;
+        on_exit if (started) { done.waitForZero(); }
+        Counter reached(1);
+        Counter release(1);
+        on_exit if (release.getCount()) { release.dec(); }
+        on_exit call_function("dbg_http_hold_clear");
+        call_function("dbg_http_hold_at", "teardown-read", reached, release, op);
+
+        auto rv;
+        *hash<ExceptionInfo> user_ex;
+        background sub () {
+            on_exit done.dec();
+            try {
+                rv = user(op);
+            } catch (hash<ExceptionInfo> ex) {
+                user_ex = ex;
+            }
+        }();
+        started = True;
+
+        # only the hold point decrements the Counter: a thread that does not reach it fails the test here
+        if (reached.waitForZero(HoldWait)) {
+            throw "TEST-ERROR", sprintf("the thread did not reach the hold point with the inner operation%s",
+                user_ex ? sprintf(": %s: %s", user_ex.err, user_ex.desc) : "");
+        }
+        assertEq(0, reached.getCount(), "the thread reached the hold point");
+        assertEq(1, release.getCount(), "the thread is held with the inner operation");
+        # the destruction releases the inner operation of the ping operation
+        delete op;
+        assertFalse(record.destroyed, "the inner operation exists while the held thread uses it");
+        release.dec();
+        done.waitForZero();
+        if (user_ex) {
+            throw user_ex.err, user_ex.desc;
+        }
+        assertTrue(record.destroyed, "the inner operation is released when the held thread is done with it");
+        return rv;
+    }
+}

@@ -24802,12 +24802,16 @@ static QoreValue f_dbg_hold_child_program_create_clear(const QoreListNode* param
     for it (armed with the release Counter of \c "error-record" as its \a reached Counter and a release Counter of 0,
     the read releases the thread that records the error once it is certain to wait for it); \c "value-record" and
     \c "value-read": the same for the output of an HTTP client ping poll operation and the close reason of a
-    WebSocket server poll operation
+    WebSocket server poll operation; \c "teardown-read": a thread that uses state that another thread can release in a
+    teardown (the poll operation of an HTTP/3 client connection, read for its error, or the inner operation of an HTTP
+    client ping poll operation) has taken it, and is about to use it; \c "stream-end-dispatched": an HTTP/1.1 or
+    HTTP/3 client poll operation dispatched the end of a request's response and released the reference to the
+    request's action that the dispatch held (with a release Counter of 0, the point only reports it)
     @param reached decremented when a thread reaches the point
     @param release the thread waits until it reaches zero
     @param target if given, only a thread that reaches the point for this object is held: the poll operation of the
-    \c "error-record", \c "error-read", \c "value-record" and \c "value-read" points (the object is compared, not
-    referenced)
+    \c "error-record", \c "error-read", \c "value-record", \c "value-read", \c "teardown-read" and
+    \c "stream-end-dispatched" points (the object is compared, not referenced)
 
     @throw DBG-ARGUMENT-ERROR unknown point, or the point is already armed
 */
@@ -24840,6 +24844,10 @@ static QoreValue f_dbg_http_hold_at(const QoreListNode* params, RuntimeConfig& r
         point = static_cast<int>(QoreDbgHttpHoldPoint::ValueRecord);
     } else if (!strcmp(name->c_str(), "value-read")) {
         point = static_cast<int>(QoreDbgHttpHoldPoint::ValueRead);
+    } else if (!strcmp(name->c_str(), "teardown-read")) {
+        point = static_cast<int>(QoreDbgHttpHoldPoint::TeardownRead);
+    } else if (!strcmp(name->c_str(), "stream-end-dispatched")) {
+        point = static_cast<int>(QoreDbgHttpHoldPoint::StreamEndDispatched);
     } else {
         xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_http_hold_at(): unknown point '%s'", name->c_str());
         return QoreValue();
@@ -24908,6 +24916,113 @@ static QoreValue f_dbg_http_hold_clear(const QoreListNode* params, RuntimeConfig
         }
     }
     return QoreValue();
+}
+
+//! An HTTP/3 client connection's error is read while another thread tears down the connection attempt (#6453)
+/** The connection is made to a UDP port that receives the client's packets and never answers, so that its only
+    connection attempt stays in its handshake.  A thread reads the connection's error and is held with the
+    "teardown-read" hold point once it has taken the attempt's poll operation; the connection is then closed, which
+    tears the attempt down and releases its poll operation, and the reading thread is released: the poll operation that
+    it took must still be usable.
+
+    @return a hash with the unit test counts, or with a \c skip key giving the reason that the test could not run
+*/
+static QoreValue f_dbg_run_h3_connection_teardown_read_test(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    UnitTestCounters c;
+    // a UDP port that receives the client's datagrams and never answers them
+    int ufd = socket(AF_INET, SOCK_DGRAM, 0);
+    if (ufd < 0) {
+        ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+        rv->setKeyValue("skip", new QoreStringNodeMaker("cannot create a UDP socket: %s", strerror(errno)), xsink);
+        return rv.release();
+    }
+    ON_BLOCK_EXIT([ufd] () { ::close(ufd); });
+    sockaddr_in addr{};
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    socklen_t addr_len = sizeof(addr);
+    if (bind(ufd, reinterpret_cast<sockaddr*>(&addr), sizeof(addr))
+        || getsockname(ufd, reinterpret_cast<sockaddr*>(&addr), &addr_len)) {
+        ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+        rv->setKeyValue("skip", new QoreStringNodeMaker("cannot bind a UDP socket: %s", strerror(errno)), xsink);
+        return rv.release();
+    }
+    int port = ntohs(addr.sin_port);
+
+    ExceptionSink conn_xsink;
+    ReferenceHolder<Http3ClientConnection> conn(new Http3ClientConnection("127.0.0.1", port,
+        /* max_streams */ 100, &conn_xsink), &conn_xsink);
+    if (conn_xsink) {
+        QoreStringValueHelper err(conn_xsink.getExceptionErr());
+        QoreStringValueHelper desc(conn_xsink.getExceptionDesc());
+        conn_xsink.clear();
+        ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+        rv->setKeyValue("skip", new QoreStringNodeMaker("HTTP/3 connection not available: %s: %s", err->c_str(),
+            desc->c_str()), xsink);
+        return rv.release();
+    }
+    HttpClientConnectionBase* base = *conn;
+    UT_ASSERT(c, !base->isReady() && !base->isClosed(), "the connection attempt is in its handshake");
+
+    // the hold takes over one reference of each Counter; the test keeps one of its own
+    Counter* reached = new Counter(1);
+    Counter* release = new Counter(1);
+    reached->ref();
+    release->ref();
+    {
+        std::lock_guard<std::mutex> l(dbg_http_hold_m);
+        DbgHttpHold& h = dbg_http_holds[static_cast<int>(QoreDbgHttpHoldPoint::TeardownRead)];
+        if (h.reached) {
+            h.reached->deref(xsink);
+            h.release->deref(xsink);
+        }
+        h.reached = reached;
+        h.release = release;
+        h.target = base;
+    }
+
+    bool read_done = false;
+    std::thread reader([&] () {
+        QoreForeignThreadHelper fth;
+        ExceptionSink rxsink;
+        // the error of an attempt that was torn down without one is no error, or the error of its abort
+        ReferenceHolder<QoreHashNode> info(base->getReferencedErrorInfo(), &rxsink);
+        read_done = true;
+        rxsink.clear();
+    });
+
+    ExceptionSink wxsink;
+    bool held = !reached->waitForZero(&wxsink, 60000);
+    wxsink.clear();
+    UT_ASSERT(c, held, "the reading thread took the connection attempt's poll operation");
+    // the close tears the attempt down and releases its poll operation while the reading thread holds it
+    ExceptionSink close_xsink;
+    base->closeConnection(&close_xsink);
+    close_xsink.clear();
+    UT_ASSERT(c, base->isClosed(), "the connection is closed");
+    if (!held) {
+        std::lock_guard<std::mutex> l(dbg_http_hold_m);
+        DbgHttpHold& h = dbg_http_holds[static_cast<int>(QoreDbgHttpHoldPoint::TeardownRead)];
+        if (h.reached) {
+            h.reached->deref(xsink);
+            h.release->deref(xsink);
+            h = DbgHttpHold();
+        }
+    }
+    release->dec(xsink);
+    reader.join();
+    UT_ASSERT(c, read_done, "the error was read after the attempt was torn down");
+    // the error of the closed connection is read again
+    {
+        ExceptionSink rxsink;
+        ReferenceHolder<QoreHashNode> info(base->getReferencedErrorInfo(), &rxsink);
+        UT_ASSERT(c, !rxsink, "the closed connection's error is read");
+        rxsink.clear();
+    }
+    reached->deref(xsink);
+    release->deref(xsink);
+    return make_unit_test_result(c, xsink);
 }
 
 namespace {
@@ -26593,6 +26708,8 @@ void init_debug_functions(QoreNamespace& qns) {
         stringTypeInfo, QORE_PARAM_NO_ARG, "point", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "reached",
         QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "release", objectOrNothingTypeInfo, QORE_PARAM_NO_ARG,
         "target");
+    qns.addBuiltinVariant("dbg_run_h3_connection_teardown_read_test", f_dbg_run_h3_connection_teardown_read_test,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, hashTypeInfo);
     qns.addBuiltinVariant("dbg_http_hold_clear", f_dbg_http_hold_clear, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         nothingTypeInfo);
     qns.addBuiltinVariant("dbg_http_concurrent_closes", f_dbg_http_concurrent_closes, QCF_NO_FLAGS,
