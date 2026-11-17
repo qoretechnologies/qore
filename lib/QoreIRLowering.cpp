@@ -9396,7 +9396,9 @@ static bool qore_ir_is_enum_lvalue_type(const QoreTypeInfo* ti) {
     edge for it, which would make the handler of an enclosing try block reachable from the operation and constrain the
     optimization of the code around it.  An enum lvalue never takes the fused path (see qore_ir_is_enum_lvalue_type());
     any other type is given the handler, as an exception that it raises goes to the handler of an enclosing try block
-    (qore#6197)
+    (qore#6197).  The or-nothing types (*int, *softint) are listed defensively: they never reach the fused path, as +=
+    and -= take the lvalue path for an or-nothing lvalue (lowerPlusEquals(), lowerMinusEquals()), and the parser
+    gives ++ and -- the int operators only for an int or softint lvalue (QoreIntPreIncrementOperatorNode)
 */
 static bool qore_ir_fused_int_change_may_raise(const QoreTypeInfo* ti) {
     return ti != bigIntTypeInfo && ti != bigIntOrNothingTypeInfo && ti != softBigIntTypeInfo
