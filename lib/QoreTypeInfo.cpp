@@ -2850,6 +2850,36 @@ QoreExternalTypeDeclRefs::~QoreExternalTypeDeclRefs() {
     delete priv;
 }
 
+QoreTypeDeclRefs::~QoreTypeDeclRefs() {
+    delete priv;
+}
+
+void QoreTypeDeclRefs::add(const type_vec_t& types) {
+    std::unique_ptr<qore_type_decl_refs_private> p(priv);
+    priv = nullptr;
+    {
+        // under the type lock, as for QoreExternalTypeDeclRefs
+        AutoLocker al(ctl);
+        for (const QoreTypeInfo* ti : types) {
+            qore_type_decl_refs_private::add(p, ti, 0);
+        }
+    }
+    priv = p.release();
+}
+
+void QoreTypeDeclRefs::add(const QoreTypeInfo* ti) {
+    if (!ti) {
+        return;
+    }
+    std::unique_ptr<qore_type_decl_refs_private> p(priv);
+    priv = nullptr;
+    {
+        AutoLocker al(ctl);
+        qore_type_decl_refs_private::add(p, ti, 0);
+    }
+    priv = p.release();
+}
+
 const QoreTypeInfo* qore_substitute_type_params_if_needed(const QoreTypeInfo* ti) {
     return qore_type_contains_type_parameter(ti)
         ? qore_substitute_type_params(ti, qore_get_current_receiver_type_info())

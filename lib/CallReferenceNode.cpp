@@ -2152,6 +2152,8 @@ QoreValue LocalFunctionCallReferenceNode::evalImpl(RuntimeConfig& rc, bool& need
         if (qore_resolve_explicit_type_param_instantiation(*explicit_inst, resolved)) {
             rv->explicit_inst = std::make_shared<QoreTypeParamInstantiation>(std::move(resolved));
         }
+        // the reference can outlive the Program of a type argument (issue #6489)
+        rv->holdExplicitTypeArgDecls();
     }
     return rv;
 }

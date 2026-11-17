@@ -352,6 +352,19 @@ static QoreValue f_dbg_retired_type_declarations(const QoreListNode* params, Run
     return static_cast<int64>(qore_retired_type_owner_count());
 }
 
+//! Returns the number of class, hashdecl and enum declarations of Programs that are not freed, or -1 if the library
+//! does not count them (release builds)
+/** A test can check that a holder of types keeps the declarations of a deleted Program for as long as it lives
+    (issue #6489)
+*/
+static QoreValue f_dbg_live_type_declarations(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+#ifdef DEBUG
+    return static_cast<int64>(qore_count_live_user_type_owners());
+#else
+    return static_cast<int64>(-1);
+#endif
+}
+
 //! Returns the declarations and derived types kept until library cleanup, by kind, and the sizes of the derived type
 //! caches (issue #6419)
 static QoreValue f_dbg_type_retention_breakdown(const QoreListNode* params, RuntimeConfig& rc,
@@ -26080,6 +26093,8 @@ void init_debug_functions(QoreNamespace& qns) {
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_type_retention_breakdown", f_dbg_type_retention_breakdown, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, hashTypeInfo);
+    qns.addBuiltinVariant("dbg_live_type_declarations", f_dbg_live_type_declarations, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_cyclic_type_declarations", f_dbg_cyclic_type_declarations, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_get_ns_info", f_dbg_get_ns_info, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, hashTypeInfo);

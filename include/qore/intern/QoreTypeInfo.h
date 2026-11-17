@@ -4592,6 +4592,34 @@ struct QoreTypeParamInstantiation {
     }
 };
 
+class qore_type_decl_refs_private;
+
+//! Keeps the declarations (classes, hashdecls and enums) that types refer to, for a value that holds the types
+/** The type of a class, hashdecl or enum is freed with its declaration, which the Program that declared it releases
+    when it is deleted; a value that holds types without being a value of them (the explicit type arguments of a call
+    reference, the type arguments that a closure captures) keeps their declarations with this object, as
+    QoreExternalTypeDeclRefs does for the API (issue #6489).  Nothing is allocated for types without declarations.
+*/
+class QoreTypeDeclRefs {
+public:
+    DLLLOCAL QoreTypeDeclRefs() = default;
+
+    //! Releases the references
+    DLLLOCAL ~QoreTypeDeclRefs();
+
+    DLLLOCAL QoreTypeDeclRefs(const QoreTypeDeclRefs&) = delete;
+    DLLLOCAL QoreTypeDeclRefs& operator=(const QoreTypeDeclRefs&) = delete;
+
+    //! References the declarations that the types refer to, in addition to those already referenced
+    DLLLOCAL void add(const type_vec_t& types);
+
+    //! References the declarations that the type refers to, in addition to those already referenced
+    DLLLOCAL void add(const QoreTypeInfo* ti);
+
+private:
+    qore_type_decl_refs_private* priv = nullptr;
+};
+
 //! Returns the current call-local generic type-parameter instantiation, if any
 DLLLOCAL const QoreTypeParamInstantiation* runtime_get_type_param_instantiation();
 

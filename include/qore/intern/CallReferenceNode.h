@@ -498,8 +498,20 @@ public:
         return pgm;
     }
 
+    //! keeps the declarations of the explicit type arguments; called once they are final
+    /** The reference can outlive the Program that declared a type argument (a reference made by generic code of
+        one Program for a class of another), whose declarations are freed with it (issue #6489)
+    */
+    DLLLOCAL void holdExplicitTypeArgDecls() {
+        if (explicit_inst) {
+            explicit_type_arg_decls.add(explicit_inst->type_args);
+        }
+    }
+
 protected:
     QoreProgram* pgm;
+    //! the declarations of the explicit type arguments (see holdExplicitTypeArgDecls())
+    QoreTypeDeclRefs explicit_type_arg_decls;
 
     DLLLOCAL virtual bool derefImpl(ExceptionSink* xsink);
 };
