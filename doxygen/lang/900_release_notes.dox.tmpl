@@ -2058,6 +2058,10 @@
     - with @ref broken-list-range "%broken-list-range", a range past the end of a list whose element type does not
       allow @ref nothing (ex: \c list<int>) gives @ref nothing for the elements outside of the list in a list with the
       or-nothing element type instead of raising a \c RUNTIME-TYPE-ERROR exception (issue #5757)
+    - a range of the @ref list_element_operator "[] operator" over a typed list holding @ref nothing in the range (a
+      hole left by @ref delete "delete" or @ref remove "remove", or a gap filled by an assignment past the end of the
+      list) gives a list with the or-nothing element type instead of raising a \c RUNTIME-TYPE-ERROR exception, which
+      failed an assertion in debug builds (issue #6435)
     - the report of an unhandled exception or of a warning on stderr is written whole, so that the output of other
       threads is no longer mixed into its lines (see @ref exception_handling; issue #6290)
     - a range of the @ref list_element_operator "[] operator" (ex: <tt>x[-9..1]</tt>) gives only elements of its
