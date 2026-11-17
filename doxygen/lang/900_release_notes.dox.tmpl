@@ -2109,6 +2109,9 @@
       be an lvalue (<tt>trim ("x ")</tt>) call the function, as without the white space, instead of raising
       "expecting lvalue"; with an argument that can be an lvalue, they are the operator, which changes it, as before
       (see @ref keyword_operator_or_function "the operator or the function"; issue #1867)
+    - parsing or loading a long chain of classes, each inheriting the previous one (see @ref inheritance), took time
+      that grew with the fourth power of its length, as each class walked the whole hierarchy again for each of its
+      ancestors; it now grows about with the square of the length (issue #6106)
     - when more than one class of a hierarchy declares a member with an initialization expression, the value that a
       later one replaces is released, so that an object that a base class stored there is destroyed (see
       @ref member_initialization; issue #6411)

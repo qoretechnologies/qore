@@ -970,6 +970,7 @@ qore_class_private::qore_class_private(const qore_class_private& old, qore_ns_pr
         deref_source_program(old.deref_source_program),
         from_module(old.from_module),
         lang(old.lang) {
+    hierarchy_initialized = old.hierarchy_initialized;
     system_constructor = old.system_constructor ? old.system_constructor->copy(cls) : nullptr;
 
     // set pointer to new copy
@@ -1107,6 +1108,8 @@ qore_class_private::qore_class_private(const qore_class_private& old, qore_ns_pr
         from_module(old.from_module),
         lang(old.lang) {
     QORE_TRACE("qore_class_private::qore_class_private(const qore_class_private& old)");
+    // the copy is committed: a later parse must not write its parse state (issue #6106)
+    hierarchy_initialized = old.hierarchy_initialized;
     if (!old.initialized)
         const_cast<qore_class_private&>(old).initialize();
 
@@ -1436,6 +1439,12 @@ int qore_class_private::initialize() {
 // issue #2657: initialize class hierarchy first before initializing code and members
 int qore_class_private::initializeHierarchy(qcp_set_t& qcp_set) {
     assert(scl);
+    // the hierarchy of a class is initialized once, not again for each subclass: its base classes and the
+    // inheritance lists of its methods are already set up, and it is not part of a circular hierarchy (issue #6106)
+    if (hierarchy_initialized) {
+        return 0;
+    }
+    QORE_CLASS_HIERARCHY_STEP();
     // the hierarchy is initialized recursively from each class to its most distant base class: a long chain of
     // inheritance stops while enough stack remains (issue #6047)
     if (parse_check_stack(loc) || scl->initializeHierarchy(cls, qcp_set)) {
@@ -1463,6 +1472,22 @@ int qore_class_private::initializeHierarchy(qcp_set_t& qcp_set) {
         }
     }
 
+    // a committed or builtin class can be in use by other threads, so its parse state is never written here; one
+    // with a base class that could not be resolved, or with a base class that is initialized again for this reason,
+    // is initialized again, so that the error is reported again for each subclass, as before
+    if (!committed && !sys) {
+        bool resolved = true;
+        for (auto& i : *scl) {
+            const qore_class_private* bc = i->sclass ? i->sclass->priv : nullptr;
+            if (!bc || (bc->scl && !bc->hierarchy_initialized && !bc->committed && !bc->sys)) {
+                resolved = false;
+                break;
+            }
+        }
+        if (resolved) {
+            hierarchy_initialized = true;
+        }
+    }
     return 0;
 }
 
@@ -1558,6 +1583,9 @@ int qore_class_private::initializeIntern() {
         int rc = scl->initialize(cls);
         if (rc) {
             return -1;
+        }
+        if (!sys) {
+            scl->setSmlComplete();
         }
     }
 
@@ -1778,8 +1806,11 @@ void qore_class_private::finalizeBuiltin(const char* nspath) {
     // A builtin class is shared by every Program and can be used by other threads as soon as it is registered, which a
     // binary module loaded at runtime does while other threads run: the parse state that a parse would otherwise
     // resolve the first time it reaches the class is resolved now, before the class is published, so that no later
-    // parse writes it while the class is in use
-    parseResolveHierarchy();
+    // parse writes it while the class is in use; its hierarchy is marked initialized here, as initializeHierarchy()
+    // does not write the parse state of a builtin class (issue #6106)
+    if (!parseResolveHierarchy()) {
+        hierarchy_initialized = true;
+    }
     parseResolveAbstract();
     // the one-time runtime initialization that a parse commit would otherwise make the first time it reaches the
     // class, writing flags that share a word with the ones that method calls read
@@ -3308,6 +3339,22 @@ int BCList::initializeMembers(QoreClass* cls) {
     return err;
 }
 
+void BCList::setSmlComplete() {
+    if (!valid) {
+        return;
+    }
+    for (auto& i : *this) {
+        // a builtin class's ancestors are added when it is registered; a user class whose base classes are not all
+        // complete yet, or that is still being initialized (when a class is initialized while one of its base classes
+        // is), must have its base classes walked
+        const qore_class_private* bc = i->sclass ? i->sclass->priv : nullptr;
+        if (!bc || (!bc->sys && bc->scl && !bc->scl->smlComplete())) {
+            return;
+        }
+    }
+    sml_complete = true;
+}
+
 int BCList::initialize(QoreClass* cls) {
     printd(5, "BCList::initialize(%s) this: %p empty: %d\n", cls->getName(), this, empty());
     for (bclist_t::iterator i = begin(), e = end(); i != e; ++i) {
@@ -3534,6 +3581,7 @@ void BCList::parseAddAncestors(QoreMethod* m) {
             continue;
         }
         const BCNode& n = *(*f.list)[f.next++];
+        QORE_CLASS_HIERARCHY_STEP();
         // if there was a parse error finding the base class, then skip
         QoreClass* qc = n.sclass;
         if (!qc) {
@@ -3619,7 +3667,22 @@ QoreVarInfo* BCList::parseFindStaticVar(const char* vname, const QoreClass*& qc,
     return nullptr;
 }
 
+const QoreClass* BCList::findInSml(const qore_class_private& qc) const {
+    for (auto& i : sml) {
+        QORE_CLASS_HIERARCHY_STEP();
+        if (i.first->priv->equal(qc)) {
+            return i.first;
+        }
+    }
+    return nullptr;
+}
+
 const QoreClass* BCList::findInHierarchy(const qore_class_private& qc) {
+    // a complete sml has every class in the hierarchy once, while walking the base classes visits a class once for
+    // each path to it (issue #6106)
+    if (smlComplete()) {
+        return findInSml(qc);
+    }
     // the hierarchy is walked iteratively, depth first in the order of the base classes, as it can be as long as the
     // code declares it (issue #6047)
     HierarchyWalkStack<HierarchyWalkFrame> stack;
@@ -3635,11 +3698,18 @@ const QoreClass* BCList::findInHierarchy(const qore_class_private& qc) {
         if (!n.sclass) {
             continue;
         }
+        QORE_CLASS_HIERARCHY_STEP();
         if (n.sclass->priv->equal(qc)) {
             return n.sclass->priv->cls;
         }
-        if (n.sclass->priv->scl) {
-            stack.push({n.sclass->priv->scl, 0});
+        if (BCList* l = n.sclass->priv->scl) {
+            if (l->smlComplete()) {
+                if (const QoreClass* rv = l->findInSml(qc)) {
+                    return rv;
+                }
+            } else {
+                stack.push({l, 0});
+            }
         }
     }
     return nullptr;
@@ -4600,6 +4670,7 @@ const QoreMethod* qore_class_private::parseResolveSelfMethod(const QoreProgramLo
 
 // finds a non-static method in the class hierarchy at parse time, optionally initializes classes
 const QoreMethod* qore_class_private::parseFindNormalMethodIntern(const char* mname, const qore_class_private* class_ctx) {
+    QORE_CLASS_HIERARCHY_STEP();
     initialize();
     const QoreMethod* m = parseFindLocalMethod(mname);
     if (m && doParseMethodAccess(m, class_ctx)) {
@@ -4956,7 +5027,12 @@ void BCSMList::processMemberInitializationList(const QoreMemberMap& members, mem
 
         //printd(5, "BCSMList::processMemberInitializationList() processing %p '%s'\n", i.first->priv,
         //    i.first->getName());
-        for (auto& mi : i.first->priv->members.getList()) {
+        // the members imported from base classes are skipped: they are at the start of the list (issue #6106)
+        const QoreMemberMap& bmembers = i.first->priv->members;
+        for (QoreMemberMap::const_iterator mii = bmembers.endOfFront(), mie = bmembers.getList().end(); mii != mie;
+                ++mii) {
+            QORE_CLASS_HIERARCHY_STEP();
+            const QoreMemberMap::member_list_element_t& mi = *mii;
             // skip imported members
             if (!mi.second->local()) {
                 //printd(5, "BCSMList::processMemberInitializationList() %p '%s::%s' NOT LOCAL\n", i.first->priv,
@@ -5005,16 +5081,45 @@ void BCSMList::align(QoreClass* thisclass, QoreClass* qc, bool is_virtual) {
     assert(thisclass->getID() != qc->getID());
 
     // see if class already exists in vector
-    for (auto& i : *this) {
-        if (i.first->getID() == qc->getID()) {
+    if (useIndex()) {
+        if (id_index.count(qc->getID())) {
             return;
         }
-        assert(i.first->getID() != thisclass->getID());
+        assert(!id_index.count(thisclass->getID()));
+    } else {
+        for (auto& i : *this) {
+            if (i.first->getID() == qc->getID()) {
+                return;
+            }
+            assert(i.first->getID() != thisclass->getID());
+        }
     }
-    qore_class_private::refClass(*qc);
 
     // append to the end of the vector
+    append(qc, is_virtual);
+}
+
+bool BCSMList::useIndex() {
+    if (size() < SML_INDEX_MIN) {
+        return false;
+    }
+    if (id_index.size() != size()) {
+        id_index.clear();
+        id_index.reserve(size() * 2);
+        for (auto& i : *this) {
+            id_index.emplace(i.first->getID(), i.first);
+        }
+    }
+    return true;
+}
+
+void BCSMList::append(QoreClass* qc, bool is_virtual) {
+    qore_class_private::refClass(*qc);
     push_back(std::make_pair(qc, is_virtual));
+    // keep a used index current; an index that is not used yet is built when the list reaches SML_INDEX_MIN entries
+    if (!id_index.empty()) {
+        id_index.emplace(qc->getID(), qc);
+    }
 }
 
 int BCSMList::addBaseClassesToSubclass(QoreClass* thisclass, QoreClass* sc, bool is_virtual) {
@@ -5038,9 +5143,22 @@ int BCSMList::add(QoreClass* thisclass, QoreClass* qc, bool is_virtual) {
         return -1;
     }
 
+    QORE_CLASS_HIERARCHY_STEP();
     // see if class already exists in list
+    if (useIndex()) {
+        // the list is only scanned when it has another class with the ID of thisclass, to find out if it is a
+        // circular reference; an entry for thisclass itself is skipped by the scan
+        auto ti = id_index.find(thisclass->getID());
+        if (ti == id_index.end() || ti->second->priv == thisclass->priv) {
+            if (!id_index.count(qc->getID())) {
+                append(qc, is_virtual);
+            }
+            return 0;
+        }
+    }
     class_list_t::const_iterator i = begin();
     while (i != end()) {
+        QORE_CLASS_HIERARCHY_STEP();
         if (i->first->getID() == qc->getID())
             return 0;
         if (i->first->getID() == thisclass->getID()) {
@@ -5063,10 +5181,9 @@ int BCSMList::add(QoreClass* thisclass, QoreClass* qc, bool is_virtual) {
         }
         ++i;
     }
-    qore_class_private::refClass(*qc);
 
     // append to the end of the list
-    push_back(std::make_pair(qc, is_virtual));
+    append(qc, is_virtual);
 
     return 0;
 }
@@ -5120,7 +5237,13 @@ const QoreClass* BCSMList::getClass(qore_classid_t cid) const {
     return nullptr;
 }
 
+#ifdef DEBUG
+std::atomic<int64> qore_class_hierarchy_steps{0};
+#endif
+
 void BCSMList::resolveCopy() {
+    // the index refers to the classes replaced here
+    id_index.clear();
     for (class_list_t::iterator i = begin(), e = end(); i != e; ++i) {
         assert(i->first->priv->new_copy);
         QoreClass* old = i->first;
@@ -6022,8 +6145,11 @@ int BCList::addBaseClassesToSubclass(QoreClass* thisparent, QoreClass* child, bo
     while (!stack.empty()) {
         AddBaseClassesFrame& f = stack.back();
         BCList* l = f.c->scl;
-        if (l && f.next < l->size()) {
+        // a complete sml already holds every class that walking the base classes would add, in the same order and
+        // with the same virtual flags (issue #6106)
+        if (l && f.next < l->size() && !l->smlComplete()) {
             BCNode& n = *(*l)[f.next++];
+            QORE_CLASS_HIERARCHY_STEP();
             // issue #2318 must check for duplicate base classes here; sclass may be 0 in case of a parse exception
             if (!n.sclass) {
                 continue;
@@ -6795,6 +6921,7 @@ void collect_final_methods(const qore_class_private& qc, bool is_static,
 // returns the first method of the given name found depth-first in the parent classes, as calls are resolved
 const MethodFunctionBase* find_first_parent_method(const qore_class_private& qc, const std::string& name,
         bool is_static) {
+    QORE_CLASS_HIERARCHY_STEP();
     if (!qc.scl) {
         return nullptr;
     }
@@ -6854,6 +6981,15 @@ int qore_class_private::parseCheckReturnTypeHierarchy() const {
     std::vector<std::pair<std::string, const MethodFunctionBase*>> methods;
     std::unordered_set<qore_classid_t> visited;
     collect_parent_methods(*this, methods, visited);
+    // the first method of each name in the parent classes: the methods are collected in the order in which
+    // find_first_parent_method() searches the parent classes, so this is the method that it finds, without searching
+    // the hierarchy for each method (issue #6106)
+    std::unordered_map<std::string, const MethodFunctionBase*> first_methods;
+    if (!single_parent) {
+        for (const auto& i : methods) {
+            first_methods.emplace(i.first, i.second);
+        }
+    }
     for (const auto& i : methods) {
         hm_method_t::const_iterator mi = hm.find(i.first);
         if (single_parent && mi == hm.end()) {
@@ -6861,7 +6997,7 @@ int qore_class_private::parseCheckReturnTypeHierarchy() const {
         }
         const MethodFunctionBase* start = mi != hm.end()
             ? qore_method_private::get(*mi->second)->getFunction()
-            : find_first_parent_method(*this, i.first, false);
+            : first_methods[i.first];
         assert(start);
         if (start->checkReturnTypeResolution(*this, *i.second, single_parent)) {
             return -1;
@@ -7131,13 +7267,30 @@ void qore_class_private::parseWarnAmbiguousOverloads() {
         }
     }
 
-    // warn when multiple base classes supply a method with the same name
+    // warn when multiple base classes supply a method with the same name; only a name in the hierarchies of two
+    // base classes can have two providers, and looking up each name of the hierarchy through each base class would
+    // take time that grows with the square of the depth of the hierarchy for each class (issue #6106)
+    if (scl->size() < 2) {
+        return;
+    }
     std::set<std::string> base_names;
-    std::unordered_set<qore_classid_t> visited;
-    collect_base_method_names(*this, false, base_names, visited);
+    // the number of base classes with each name in their hierarchy
+    std::unordered_map<std::string, unsigned> name_count;
+    for (auto& bci : *scl) {
+        if (!bci->sclass) {
+            continue;
+        }
+        std::set<std::string> names;
+        std::unordered_set<qore_classid_t> visited;
+        collect_base_method_names(*bci->sclass->priv, false, names, visited);
+        for (const auto& i : names) {
+            ++name_count[i];
+        }
+        base_names.merge(names);
+    }
 
     for (const auto& name_it : base_names) {
-        if (hm.find(name_it) != hm.end()) {
+        if (hm.find(name_it) != hm.end() || name_count[name_it] < 2) {
             continue;
         }
 
@@ -9636,17 +9789,18 @@ const QoreMethod* QoreStaticMethodIterator::getMethod() const {
 QoreMemberInfo::QoreMemberInfo(const QoreMemberInfo& old, const qore_class_private* cls) :
     QoreMemberInfoBaseAccess(old, old.access),
     accessors(old.accessors),
-    cls_vec(old.cls_vec),
+    // the new class owner is in the initial position
+    decl_cls(cls),
+    cls_list(old.cls_list),
     cls_context_map(old.cls_context_map ? new cls_context_map_t(*old.cls_context_map) : nullptr),
     member_info_list(old.member_info_list ? new member_info_list_t(*old.member_info_list) : nullptr), is_local(old.is_local) {
-    // write new class owner in initial position
-    cls_vec[0] = cls;
 }
 
 QoreMemberInfo::QoreMemberInfo(const QoreMemberInfo& old, const qore_class_private* cls, ClassAccess cls_access) :
     QoreMemberInfoBaseAccess(old, (old.access == Internal) ? Inaccessible : QORE_MAX(old.access, cls_access)),
     accessors(old.accessors),
-    cls_vec(old.cls_vec),
+    decl_cls(old.decl_cls),
+    cls_list(old.cls_list),
     cls_context_map(old.cls_context_map ? new cls_context_map_t(*old.cls_context_map) : nullptr),
     member_info_list(old.member_info_list ? new member_info_list_t(*old.member_info_list) : nullptr), is_local(false) {
     //printd(5, "QoreMemberInfo::QoreMemberInfo() copy cls: %p '%s' member_info_list: %p old.access: '%s' "
@@ -9656,16 +9810,16 @@ QoreMemberInfo::QoreMemberInfo(const QoreMemberInfo& old, const qore_class_priva
     //    member_info_list ? member_info_list->size() : nullptr);
     // add inheriting class to class vector if accessible
     if (access < Inaccessible) {
-        cls_vec.push_back(cls);
+        cls_list = std::make_shared<QoreMemberClassNode>(cls, std::move(cls_list));
         //printd(5, "QoreMemberInfo::QoreMemberInfo() added class %p '%s' to inheritance list\n", cls,
         //    cls->name.c_str());
     } else {
         // when importing internal members, add context access entries for the child classes
         if (!member_info_list) {
             //printd(5, "QoreMemberInfo::QoreMemberInfo() adding context access for class %p '%s'\n",
-            //    old.cls_vec.back(), old.cls_vec.back()->name.c_str());
+            //    old.getLastClass(), old.getLastClass()->name.c_str());
             // add context to last class
-            addContextAccess(old, old.cls_vec.back());
+            addContextAccess(old, old.getLastClass());
         } else {
             //printd(5, "QoreMemberInfo::QoreMemberInfo() copy member_info_list: %p old.access: '%s'\n",
             //    member_info_list, privpub(old.access));
@@ -9715,7 +9869,15 @@ void QoreMemberInfo::addContextAccess(const QoreMemberInfo& mi, const qore_class
 #ifdef DEBUG
     bool inserted = false;
 #endif
-    for (auto& i : mi.cls_vec) {
+    // the classes where the member is accessible; the order does not matter, as each is mapped to qc
+    std::vector<const qore_class_private*> classes;
+    if (mi.decl_cls) {
+        classes.push_back(mi.decl_cls);
+    }
+    for (const QoreMemberClassNode* node = mi.cls_list.get(); node; node = node->next.get()) {
+        classes.push_back(node->cls);
+    }
+    for (const qore_class_private* i : classes) {
         // the class can be in our cls_context_map already with a class that's inherited multiple times in the hierarchy
         cls_context_map_t::iterator ci = cls_context_map->lower_bound(i);
         if (ci == cls_context_map->end() || ci->first != i) {
@@ -10126,7 +10288,23 @@ int QoreMemberMap::parseInit(LocalVar& selfid) {
 std::string QoreMemberMap::dbgCheckIndex() const {
     const MemberIndex* idx = index.load(std::memory_order_acquire);
     if (!frozen) {
-        return idx ? "an unfrozen map has an index" : "";
+        // the index of a parse (issue #6106; see afterChange())
+        if (!idx) {
+            return "";
+        }
+        if (member_list.size() < IndexThreshold) {
+            return "an unfrozen map with " + std::to_string(member_list.size()) + " members has an index";
+        }
+        if (idx->size() != member_list.size()) {
+            return "the parse index has " + std::to_string(idx->size()) + " entries for "
+                + std::to_string(member_list.size()) + " members";
+        }
+        for (auto& i : member_list) {
+            if (find(i.first) != i.second) {
+                return std::string("member '") + i.first + "' is not found as it is in the list";
+            }
+        }
+        return "";
     }
     if (member_list.size() >= IndexThreshold && !idx) {
         return "a frozen map with " + std::to_string(member_list.size()) + " members has no index";
@@ -10160,6 +10338,7 @@ std::string QoreMemberMap::dbgCheckIndex() const {
 #endif
 
 QoreMemberInfo* QoreMemberMap::findIndexed(const MemberIndex& idx, const char* name) {
+    QORE_CLASS_HIERARCHY_STEP();
     MemberIndex::const_iterator i = idx.find(std::string_view(name));
     return i == idx.end() ? nullptr : i->second;
 }
@@ -10175,7 +10354,7 @@ void QoreMemberMap::moveAllTo(QoreClass* qc, ClassAccess access) {
         qore_class_private::parseAddMember(*qc, i.first, access, i.second);
         i.second = nullptr;
     }
-    member_list.clear();
+    clearList();
 }
 
 void QoreVarMap::parseCommitRuntimeInit(ExceptionSink* xsink) {
