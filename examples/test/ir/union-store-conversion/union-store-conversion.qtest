@@ -1,0 +1,187 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - JIT and AOT code generation of an assignment to a local of a union type
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%exec-class UnionStoreConversionTest
+
+#! Tests that a value stored in a local of a union type is converted to the first member that accepts it in every mode
+/** The IR interpreter stored an int in a top-level local of the type <tt>union<float, int></tt> (and in a local in a
+    try block) as it was, because the union accepts an int, where the AST interpreter, JIT code and every mode in a
+    function convert the value to the first member that accepts it (the float 1.0) (qore#6282).
+
+    The test generates a program that stores an int, a float and a number, given at runtime, in locals of unions of
+    float, number, int and string members in different orders, at the top level, in a try block at the top level, in a
+    function, and in a try block of a function, and prints the value and its full type.  The AST interpreter's output is
+    checked against the conversions of the issue, and every other execution mode, the default execution mode and the
+    qcc-compiled executables (-O0 and -O3) must give the same output.
+*/
+class UnionStoreConversionTest inherits QUnit::Test {
+    public {
+        #! the union types
+        const Types = (
+            "union<float, int>", "union<int, float>", "union<number, int>", "union<int, number>",
+            "union<float, number>", "union<number, float>", "*union<float, int>", "union<int, string>",
+        );
+
+        #! the values (as Qore source), given at runtime
+        const Values = ("1", "1.5", "2n");
+
+        #! the member type of a union that accepts each value as it is
+        const ValueTypes = {"1": "int", "1.5": "float", "2n": "number"};
+
+        #! the locations of the local
+        const Locations = ("top", "top try", "sub", "sub try");
+
+        #! the declarations of the generated program
+        const Prelude = "%modern\n%disable-all-warnings\n"
+            "auto sub id(auto v) { return v; }\n"
+            "sub show(string label, auto v) { printf(\"%s: %y %s\\n\", label, v, v.fullType()); }\n"
+            "sub fail(string label, hash<ExceptionInfo> ex) { printf(\"%s: %s\\n\", label, ex.err); }\n";
+
+        #! the results of the AST interpreter that the issue names: an int is converted to the first member that accepts it
+        const Expected = (
+            "top union<float, int> 1: 1.0 float",
+            "top try union<float, int> 1: 1.0 float",
+            "sub union<float, int> 1: 1.0 float",
+            "sub try union<float, int> 1: 1.0 float",
+            "top union<number, int> 1: 1 number",
+            "top try union<number, int> 1: 1 number",
+            "top union<int, float> 1: 1 integer",
+            "top try union<int, float> 1: 1 integer",
+        );
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+    }
+
+    constructor() : QUnit::Test("UnionStoreConversion", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+
+        addTestCase("every mode converts the value as the AST interpreter does", \testMatrix());
+        addTestCase("the example of the issue", \testIssue());
+
+        set_return_value(main());
+    }
+
+    testMatrix() {
+        TmpDir tmp("qore-union-store-conversion-");
+        string file = tmp.path + DirSep + "union-store.q";
+        int rows = writeProgram(file);
+
+        list<string> expected = run(sprintf("--exec-mode=ast %s", file));
+        assertEq(rows, (select expected, $1 =~ /: /).size(), sprintf("every row gave a result (the first lines of the "
+            "output: %y)", expected[0..4]));
+        foreach string line in (Expected) {
+            assertEq(1, (select expected, $1 == line).size(), "the AST interpreter prints: " + line);
+        }
+
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            if (mode == "ast") {
+                continue;
+            }
+            compare(mode, expected, run(sprintf("--exec-mode=%s %s", mode, file)));
+        }
+        # the default execution mode
+        compare("default", expected, ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s %s",
+            libqore_dir, libqore_dir, qore_bin, file)).split("\n"));
+
+        foreach string opt in (("-O0", "-O3")) {
+            string exe = tmp.path + DirSep + "union-store" + opt;
+            string out = backquote(sprintf("QORE_LIBDIR=%s %s %s -o %s %s 2>&1", libqore_dir, qcc_bin, opt, exe, file));
+            assertTrue(is_file(exe), "compiled the executable: " + out);
+            compare("executable " + opt, expected, ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s "
+                "DYLD_LIBRARY_PATH=%s %s", libqore_dir, libqore_dir, exe)).split("\n"));
+        }
+    }
+
+    #! the example of the issue
+    testIssue() {
+        TmpDir tmp("qore-union-store-issue-");
+        string file = tmp.path + DirSep + "issue.q";
+        File f();
+        f.open2(file, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(ReadOnlyFile::readTextFile(get_script_dir() + DirSep + "union-store-conversion.q"));
+        f.close();
+        string expected = "top: 1.0 float\nsub: 1.0 float\n";
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            assertEq(expected, run(sprintf("--exec-mode=%s %s", mode, file)).join("\n") + "\n", mode);
+        }
+    }
+
+    private list<string> run(string args) {
+        return ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s %s", libqore_dir,
+            libqore_dir, qore_bin, args)).split("\n");
+    }
+
+    #! compares the lines of a mode with the AST lines, reporting the first differences
+    private compare(string mode, list<string> expected, list<string> actual) {
+        list<string> diffs = ();
+        int count = 0;
+        int n = max(expected.size(), actual.size());
+        for (int i = 0; i < n; ++i) {
+            if (expected[i] !== actual[i]) {
+                ++count;
+                if (diffs.size() < 20) {
+                    diffs += sprintf("ast: %y\n%s: %y", expected[i], mode, actual[i]);
+                }
+            }
+        }
+        assertEq((), diffs, sprintf("%s: %d differences:\n%s", mode, count, diffs.join("\n")));
+    }
+
+    #! writes the program and returns the number of rows it prints
+    private int writeProgram(string file) {
+        string src = Prelude;
+        list<string> calls = ();
+        int rows = 0;
+        int n = 0;
+        foreach string loc in (Locations) {
+            list<string> body = ();
+            foreach string type in (Types) {
+                foreach string value in (Values) {
+                    # a store that no try block guards is only given a value whose type is a member of the union:
+                    # the other values raise an exception that would end the program
+                    if (loc !~ /try$/ && type.find(ValueTypes{value}) < 0) {
+                        continue;
+                    }
+                    ++n;
+                    string label = sprintf("%s %s %s", loc, type, value);
+                    string stmt = sprintf("auto a%d = id(%s); %s u%d = a%d; show(%y, u%d);", n, value, type, n, n,
+                        label, n);
+                    if (loc =~ /try$/) {
+                        stmt = sprintf("try { %s } catch (hash<ExceptionInfo> ex) { fail(%y, ex); }", stmt, label);
+                    }
+                    body += "    " + stmt;
+                    ++rows;
+                }
+            }
+            if (loc =~ /^top/) {
+                # the statements are at the top level: a plain block keeps the locals of a row apart
+                src += (map "{" + trim($1) + "}", body).join("\n") + "\n";
+            } else {
+                src += sprintf("sub f%d() {\n%s\n}\n", calls.size(), body.join("\n"));
+                calls += sprintf("f%d();", calls.size());
+            }
+        }
+        src += calls.join("\n") + "\n";
+        File f();
+        f.open2(file, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(src);
+        return rows;
+    }
+}

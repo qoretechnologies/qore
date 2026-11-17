@@ -2531,7 +2531,9 @@ static QoreValue coerceIRLocalValue(LocalVar* var, const QoreValue& value, Excep
     (LocalVarValue::resolveLValueTypeInfo()), as the AST interpreter does (qore#5885).  An enum type accepts only its
     members, which are enum values, never a plain value of its base type, which parseAcceptsReturns() accepts
     (qore#6197); so does a union with an enum member, whose other members can accept the value only if it is not
-    the base type of the enum (qore#6259).
+    the base type of the enum (qore#6259).  A union converts the value to its first member that accepts it (an int
+    stored in a union<float, int> is the float; the member that accepts the value's type is not necessarily the first),
+    which only acceptAssignment() does, as for a local in IR slots and in the AST interpreter (qore#6282).
 */
 static QORE_INTERN_ALWAYS_INLINE bool qore_ir_local_stores_simple_value(const QoreTypeInfo* ti, qore_type_t vt) {
     // the most common case, which needs no look at the type
@@ -2539,8 +2541,8 @@ static QORE_INTERN_ALWAYS_INLINE bool qore_ir_local_stores_simple_value(const Qo
             || (vt == NT_BOOLEAN && ti == boolTypeInfo)) {
         return true;
     }
-    return !qore_type_contains_type_parameter(ti) && QoreTypeInfo::parseAcceptsReturns(ti, vt)
-        && !QoreTypeInfo::returnsEnum(ti);
+    return !qore_type_contains_type_parameter(ti) && !QoreTypeInfo::getUnionType(ti)
+        && QoreTypeInfo::parseAcceptsReturns(ti, vt) && !QoreTypeInfo::returnsEnum(ti);
 }
 
 //! Returns the line given, which the compiler cannot evaluate a test of before the code that calls this function
@@ -15572,9 +15574,12 @@ load_local_done:
                         // through the full path to preserve enum identity and type checking
                         const QoreTypeInfo* target_ti = local_inst->local
                             ? local_inst->local->getTypeInfo() : nullptr;
+                        // a type that the value is not stored in as it is (a mismatch, a type that names type
+                        // parameters, an enum, or a union, which converts the value to its first member that accepts it:
+                        // an int stored in a union<float, int> is the float; qore#6282) takes the full path
                         if (!qore_ir_local_stores_simple_value(target_ti, val.getType())) {
-                            // Type mismatch: invalidate caches and use full
-                            // type-checking path (will raise RUNTIME-TYPE-ERROR)
+                            // Type mismatch, or a value that a union converts: invalidate caches and use the full
+                            // type-checking path (raises RUNTIME-TYPE-ERROR or converts the value)
                             locals_slot_cache.release(local_inst->slot_id, xsink);
                             locals_slot_cache.set(local_inst->slot_id, QoreValue());
                             if (local_inst->slot_id < locals_lvar_cache.size()) {
