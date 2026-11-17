@@ -275,10 +275,8 @@ class ExecModeMarkerTest(unittest.TestCase):
         #   set their own --exec-mode, and in qcc
         # - deleted-program-own-generic-cycle (#6419): its checks run in child processes that set their own
         #   --exec-mode and in qcc executables
-        # - ir-guard-profile-types (#6421): its checks run in child processes that set their own --exec-mode
         self.assertEqual(sorted(["examples/test/ir/AOTConstantImportStale.qtest",
                                  "examples/test/ir/JITFinalizeCancellation.qtest",
-                                 "examples/test/ir/ir-guard-profile-types/ir-guard-profile-types.qtest",
                                  "examples/test/ir/AOTInitParseOptions.qtest",
                                  "examples/test/ir/AOTInstanceOfTypePath.qtest",
                                  "examples/test/ir/AOTDumpInfoPendingConstants.qtest",
