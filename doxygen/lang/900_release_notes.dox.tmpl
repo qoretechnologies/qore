@@ -714,6 +714,10 @@
     - the <tt>const char*</tt> and <tt>struct tm*</tt> constructors of \c DateTime (and, as for
       \c DateTimeNode(bool), of \c DateTimeNode) are \c explicit, so a string or a \c struct \c tm pointer is no
       longer converted implicitly to a date; construct it explicitly (<tt>DateTime(str)</tt>)
+    - a module can add a member to a class with \c QoreClass::addMember() or
+      \c QoreClass::addBuiltinMemberWithAccessors() only until code in other threads can reach the class; a later
+      addition is refused with \c CLASS-MEMBER-ADD-ERROR by the new overloads with an \c ExceptionSink, while the
+      deprecated forms without one report it on standard error (feature macro \c _QORE_HAS_CLASS_MEMBER_ADD_XSINK)
     @endparblock
 
     @par qget Command-Line Changes
