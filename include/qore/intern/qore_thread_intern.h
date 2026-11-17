@@ -1160,7 +1160,9 @@ DLLLOCAL bool runtime_module_call_override_in_effect(ThreadData* td, const QoreP
 
 //! The run-time parse options of a thread and the override that they were computed with (ThreadData)
 /** Declared here, so that RuntimeParseOptionsOverrideHelper restores it inline in every build: it runs on every call
-    of a user variant (qore#6446)
+    of a user variant (qore#6446).  The members other than the parse options have no initializers, so that the copy
+    that the helper saves is not initialized on every call: a value-initialized struct (\c QoreRuntimePoState()) has
+    them zero
 */
 struct QoreRuntimePoState {
     //! the run-time parse options of the thread, with the override applied
@@ -1176,13 +1178,13 @@ struct QoreRuntimePoState {
     */
     QoreParseOptions caller_restrictions;
     //! the Program of the module whose code runs with caller_restrictions, or nullptr
-    const QoreProgram* module_pgm = nullptr;
+    const QoreProgram* module_pgm;
     //! the ID of the application Program that the code of module_pgm runs for
-    qore_program_id_t app_pgm_id = 0;
+    qore_program_id_t app_pgm_id;
     //! true while module code runs for a sandboxed caller; see QoreCallParseOptionsOverride::sandboxed
-    bool sandboxed = false;
+    bool sandboxed;
     //! the module Program whose code the override was set for; see QoreCallParseOptionsOverride::override_pgm
-    const QoreProgram* override_pgm = nullptr;
+    const QoreProgram* override_pgm;
 };
 
 class RuntimeParseOptionsOverrideHelper {
@@ -1229,7 +1231,8 @@ public:
 
 private:
     //! true if the override has been set; the state saved below is valid only then (it is written by set() and read
-    //! by restore() only), so it takes no initialization: the helper is created on every call of a user variant
+    //! by restore() only), so it takes no initialization beyond that of its parse options: the helper is created on
+    //! every call of a user variant
     bool active = false;
     //! the state of the thread (ThreadData::runtime_po_state)
     QoreRuntimePoState* state;
