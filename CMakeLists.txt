@@ -3086,6 +3086,10 @@ add_executable(qore-xxhash-compat-test EXCLUDE_FROM_ALL
     examples/test/hash/xxhash_compat.cpp lib/xxhash.cpp)
 target_include_directories(qore-xxhash-compat-test PRIVATE ${CMAKE_SOURCE_DIR}/include)
 
+# Sets the checksum of the AOT metadata of a module again after a test patched it (qore#6451).
+add_executable(qore-aot-reseal examples/test/ir/aot_reseal.cpp lib/xxhash.cpp)
+target_include_directories(qore-aot-reseal PRIVATE ${CMAKE_SOURCE_DIR}/include)
+
 add_executable(qore-ir-plugin-registry-smoke EXCLUDE_FROM_ALL
     examples/test/ir/plugin_registry_smoke.cpp
     ${QORE_IR_PHASE0_SMOKE_RUNTIME_SRC})

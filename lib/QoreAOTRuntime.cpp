@@ -3166,6 +3166,8 @@ struct QoreAOTDebugMetadata {
             metadata.insert(metadata.end(), section_data, section_data + sec->size);
         }
         assert(metadata.size() == compact_size);
+        // the copy has the header of the metadata, so it has a checksum of its own (qore#6451)
+        qore_aot_seal_metadata(metadata);
 
         auto retained_reader = std::make_unique<QoreAOTBinaryReader>();
         std::string open_error;
