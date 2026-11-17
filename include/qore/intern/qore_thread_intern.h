@@ -2570,6 +2570,23 @@ private:
 */
 DLLLOCAL bool thread_entry_pending(const QoreProgram* pgm);
 
+//! A thread that runs Qore code since an epoch of type retirement (see qore_type_retire_epoch)
+struct QoreTypeRetirementThread {
+    //! the thread's TID
+    int tid;
+    //! the epoch that the thread published when it entered Qore code
+    uint64_t epoch;
+};
+
+//! Scans the threads for the type retirement epochs that they published (see qore_type_retire_epoch)
+/** @param below if not 0, \a threads receives each thread whose epoch is not 0 and is less than this value: the
+    threads that an item retired at this epoch waits for
+    @param threads if not null, receives the threads found, in the order of their TIDs
+
+    @return the lowest epoch of the threads that run Qore code, or 0 if none does
+*/
+DLLLOCAL uint64_t qore_type_retirement_scan(uint64_t below, std::vector<QoreTypeRetirementThread>* threads);
+
 //! A thread's entry into a Program, counted with its thread count, which is left with
 //! qore_program_private::decThreadCount(*pgm, tid, xsink)
 struct QoreReferenceProgramEntry {

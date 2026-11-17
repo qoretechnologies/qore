@@ -739,8 +739,13 @@ public:
     // current generic receiver type for static generic method bodies
     const QoreTypeInfo* current_receiver_type_info = nullptr;
 
-    // current program context
+    // current program context; set with set_thread_current_pgm()
     QoreProgram* current_pgm = nullptr;
+    //! the type retirement epoch at which the thread entered Qore code, or 0 while it has no Program context
+    /** Written by the thread when its Program context is set from none or cleared (set_thread_current_pgm()), read by
+        qore_type_retirement_scan() (see qore_type_retire_epoch; issue #6419)
+    */
+    std::atomic<uint64_t> type_epoch{0};
 
     // issue #3024: program context for calls prior to a call
     QoreProgram* call_program_context = nullptr;
@@ -995,6 +1000,10 @@ public:
             try_reexport(false),
             finalizing(false),
             tlv_clearing(false) {
+        if (p) {
+            // the thread runs the Program's code from its start
+            type_epoch.store(qore_type_retire_epoch.load(std::memory_order_seq_cst), std::memory_order_seq_cst);
+        }
 #ifdef QORE_MANAGE_STACK
         if (n_flags & QTF_NO_STACK_GUARD) {
             // No stack guard for lightweight threads (e.g. dedicated async I/O threads)
@@ -1562,6 +1571,36 @@ public:
 };
 
 static QoreThreadLocalStorage<ThreadData> thread_data;
+
+//! Sets the Program context of the thread, publishing its type retirement epoch when it enters or leaves Qore code
+/** The epoch is published when the context is set from none and cleared when it is cleared (see
+    qore_type_retire_epoch; issue #6419).  The exchange is sequentially consistent: the types that the thread reads
+    in its code are read after the epoch is published, and the epoch is cleared after the last of them was read.
+*/
+static inline void set_thread_current_pgm(ThreadData* td, QoreProgram* pgm) {
+    if (!td->current_pgm != !pgm) {
+        td->type_epoch.exchange(pgm ? qore_type_retire_epoch.load(std::memory_order_seq_cst) : 0,
+            std::memory_order_seq_cst);
+    }
+    td->current_pgm = pgm;
+}
+
+uint64_t qore_type_retirement_scan(uint64_t below, std::vector<QoreTypeRetirementThread>* threads) {
+    uint64_t min_epoch = 0;
+    thread_list.anyThreadData([&](ThreadData* td) -> bool {
+        uint64_t e = td->type_epoch.load(std::memory_order_seq_cst);
+        if (e) {
+            if (!min_epoch || e < min_epoch) {
+                min_epoch = e;
+            }
+            if (threads && below && e < below) {
+                threads->push_back(QoreTypeRetirementThread{td->tid, e});
+            }
+        }
+        return false;
+    });
+    return min_epoch;
+}
 
 void ThreadEntry::allocate(tid_node* tn, int stat) {
     assert(status == QTS_AVAIL);
@@ -4202,7 +4241,7 @@ QoreProgramContextHelper::QoreProgramContextHelper(QoreProgram* pgm) {
     }
     ThreadData* td  = thread_data.get();
     old_pgm = td->current_pgm;
-    td->current_pgm = pgm;
+    set_thread_current_pgm(td, pgm);
     sync_runtime_config_program(td);
 }
 
@@ -4211,7 +4250,7 @@ QoreProgramContextHelper::~QoreProgramContextHelper() {
         return;
     }
     ThreadData* td  = thread_data.get();
-    td->current_pgm = old_pgm;
+    set_thread_current_pgm(td, old_pgm);
     sync_runtime_config_program(td);
 }
 
@@ -5007,7 +5046,7 @@ void ProgramThreadCountContextHelper::restoreContext() {
     // the call budgets started when the Program was entered end with the call
     td->sandbox_budgets.leave(td->tid, this);
     restoreDeferral();
-    td->current_pgm = old_pgm;
+    set_thread_current_pgm(td, old_pgm);
     td->tlpd = old_tlpd;
     td->current_pgm_ctx = old_ctx;
     sync_runtime_config_program(td);
@@ -5179,7 +5218,7 @@ void ProgramThreadCountContextHelper::setOtherProgram(ThreadData* td, ExceptionS
     // set up thread stacks; an exception (std::bad_alloc) restores the thread and releases the thread count before it
     // propagates from the constructor, whose destructor does not run (issue #6198)
     restore = true;
-    td->current_pgm = pgm;
+    set_thread_current_pgm(td, pgm);
     bool first_entry = false;
     try {
 #ifdef DEBUG
@@ -5209,7 +5248,7 @@ void ProgramThreadCountContextHelper::setOtherProgram(ThreadData* td, ExceptionS
             td->tlpd->thread_init_pending = true;
         }
         restore = false;
-        td->current_pgm = old_pgm;
+        set_thread_current_pgm(td, old_pgm);
         td->tlpd = old_tlpd;
         releaseThreadCount(td, pgm);
         module_uncounted = false;
@@ -6503,9 +6542,9 @@ ProgramRuntimeParseCommitContextHelper::ProgramRuntimeParseCommitContextHelper(E
         restore = true;
         old_pgm = td->current_pgm;
         old_tlpd = td->tlpd;
-        td->current_pgm = pgm;
+        set_thread_current_pgm(td, pgm);
         auto undo = [this, td, pgm]() {
-            td->current_pgm = old_pgm;
+            set_thread_current_pgm(td, old_pgm);
             td->tlpd = old_tlpd;
             sync_runtime_config_program(td);
             qore_program_private::unlockParsing(*pgm);
@@ -6543,7 +6582,7 @@ ProgramRuntimeParseCommitContextHelper::~ProgramRuntimeParseCommitContextHelper(
         "restoring old pgm: %p old tlpd: %p\n", td->current_pgm, old_pgm, old_tlpd);
     // the exit handler runs while the thread is still in the Program
     entry_frame.exit(xsink);
-    td->current_pgm = old_pgm;
+    set_thread_current_pgm(td, old_pgm);
     td->tlpd        = old_tlpd;
     sync_runtime_config_program(td);
 
@@ -6564,7 +6603,7 @@ ProgramRuntimeParseContextHelper::ProgramRuntimeParseContextHelper(ExceptionSink
 
     ThreadData* td = thread_data.get();
     old_pgm = td->current_pgm;
-    td->current_pgm = pgm;
+    set_thread_current_pgm(td, pgm);
     sync_runtime_config_program(td);
 }
 
@@ -6591,7 +6630,7 @@ ProgramRuntimeParseContextHelper::ProgramRuntimeParseContextHelper(ExceptionSink
 
     ThreadData* td = thread_data.get();
     old_pgm = td->current_pgm;
-    td->current_pgm = pgm;
+    set_thread_current_pgm(td, pgm);
     sync_runtime_config_program(td);
 }
 
@@ -6601,7 +6640,7 @@ ProgramRuntimeParseContextHelper::~ProgramRuntimeParseContextHelper() {
 
     ThreadData* td = thread_data.get();
     QoreProgram* pgm = td->current_pgm;
-    td->current_pgm = old_pgm;
+    set_thread_current_pgm(td, old_pgm);
     sync_runtime_config_program(td);
     // last: the Program is cleared and dereferenced here if code run while it was locked deleted it
     qore_program_private::unlockParsing(*pgm);
@@ -6671,7 +6710,7 @@ ProgramRuntimeParseAccessHelper::ProgramRuntimeParseAccessHelper(ExceptionSink* 
 
         restore = true;
         old_pgm = td->current_pgm;
-        td->current_pgm = pgm;
+        set_thread_current_pgm(td, pgm);
         sync_runtime_config_program(td);
     }
 }
@@ -6682,7 +6721,7 @@ ProgramRuntimeParseAccessHelper::~ProgramRuntimeParseAccessHelper() {
 
     ThreadData* td = thread_data.get();
     QoreProgram* pgm = td->current_pgm;
-    td->current_pgm = old_pgm;
+    set_thread_current_pgm(td, old_pgm);
     sync_runtime_config_program(td);
     qore_program_private::decThreadCount(*pgm, td->tid, xsink);
 }

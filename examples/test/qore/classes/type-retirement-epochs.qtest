@@ -1,0 +1,93 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-platform: macos - the epochs that threads publish when they enter and leave Qore code
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class TypeRetirementEpochsTest
+
+#! The bookkeeping of retired declarations and derived types: their epochs and the threads they wait for
+/** A declaration of a deleted Program that a derived type names is retired with the derived types built on it, and
+    each retirement records the epoch of type retirement after incrementing it.  A thread publishes the epoch when it
+    enters Qore code and clears it when it leaves; an item can be freed once no thread runs Qore code since an epoch
+    before it (issue #6419, design/derived-type-retirement.md; nothing is freed before library cleanup yet).  Debug
+    builds report the bookkeeping with dbg_type_retirement_info() and the threads that items wait for with
+    dbg_type_retirement_blockers().
+*/
+class TypeRetirementEpochsTest inherits QUnit::Test {
+    public {
+        const Opts = PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS | PO_STRONG_ENCAPSULATION;
+    }
+
+    constructor() : QUnit::Test("TypeRetirementEpochsTest", "1.0", \ARGV) {
+        addTestCase("retirement epochs and the threads they wait for", \retirementEpochs());
+        set_return_value(main());
+    }
+
+    retirementEpochs() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the debug functions require a debug build");
+        }
+        hash<auto> before = info();
+
+        # a thread that runs Qore code since before the retirement: it waits on a queue until it is released
+        Queue started();
+        Queue release();
+        Counter done();
+        # the threads are released and waited for also when an assertion fails
+        on_exit {
+            for (int i = 0, int n = done.getCount(); i < n; ++i) {
+                release.push(1);
+            }
+            done.waitForZero();
+        }
+        done.inc();
+        int old_tid = background waitThread(started, release, done);
+        started.get();
+
+        # a Program whose class a derived type names: the class is retired with the derived type when the Program is
+        # deleted
+        {
+            Program p(Opts);
+            p.parse("class Foo {} sub f() { list<Foo> l = (); }", "retired");
+            delete p;
+        }
+        hash<auto> after = info();
+        assertGt(before."pending declarations", after."pending declarations", "the class is retired");
+        assertGt(before."pending derived types", after."pending derived types", "the derived types are retired");
+        assertGt(before.epoch, after.epoch, "the retirement increments the epoch");
+        assertEq(after.epoch, after."newest pending epoch", "the newest item has the current epoch");
+        # this thread runs Qore code since it started, before the retirement
+        assertGt(0, after."min active epoch");
+        assertGt(after."min active epoch", after."newest pending epoch");
+        assertEq(before."freeable declarations", after."freeable declarations", "nothing retired now is freeable");
+
+        # a thread that enters Qore code after the retirement does not hold it back
+        Queue started_after();
+        done.inc();
+        int new_tid = background waitThread(started_after, release, done);
+        started_after.get();
+
+        hash<auto> blockers = map {$1.tid.toString(): $1.epoch}, call_function("dbg_type_retirement_blockers");
+        assertTrue(exists blockers{gettid()}, "the main thread is a blocker: " + blockers.toString());
+        assertTrue(exists blockers{old_tid}, "the thread started before the retirement is a blocker: "
+            + blockers.toString());
+        assertFalse(exists blockers{new_tid}, "the thread started after the retirement is not a blocker: "
+            + blockers.toString());
+        assertGt(blockers{old_tid}, after."newest pending epoch");
+    }
+
+    static waitThread(Queue started, Queue release, Counter done) {
+        on_exit done.dec();
+        started.push(1);
+        release.get();
+    }
+
+    static hash<auto> info() {
+        return call_function("dbg_type_retirement_info");
+    }
+}
