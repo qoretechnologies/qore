@@ -1,0 +1,176 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - HTTP/1.1, HTTP/2 (TLS) and HTTP/3 (QUIC) client connection stream reservations across threads
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Mime
+%requires HttpServerUtil
+%requires HttpServer
+%requires HttpClientIo
+%requires ../../TestCertificates.qm
+
+%exec-class HttpClientReserveRaceTest
+
+#! answers "/block" only when its gate is opened, so that the request's stream stays active
+class GateHandler inherits AbstractHttpRequestHandler {
+    public {
+        #! opened (decremented) by the test
+        Counter gate(1);
+        #! decremented when a "/block" request reached the handler
+        Counter blocked(1);
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        if (hdr.path == "block") {
+            blocked.dec();
+            gate.waitForZero();
+        }
+        return makeResponse(200, "ok", {"Content-Type": MimeTypeText});
+    }
+}
+
+#! A stream reservation of a Qore-level HTTP client connection sees a request that is being submitted
+/** The active streams of the connection's operation were read before the reservation lock was taken: a request that
+    was submitted in between (its active stream counted and its reservation released) was in neither count, and a
+    second request reserved the only stream of an HTTP/1.1 connection, whose request then failed with
+    HTTP1-CAPACITY-ERROR "connection at capacity: 1/1 streams".  The reservation is held before its lock with the
+    "reserve-pending" hold point of debug builds while the other request is submitted.
+*/
+class HttpClientReserveRaceTest inherits QUnit::Test {
+    constructor() : Test("HttpClient connection reservation race test", "1.0") {
+        addTestCase("HTTP/1.1: a reservation sees a request submitted before it takes its lock", \h1Test());
+        addTestCase("HTTP/2: a reservation sees a request submitted before it takes its lock", \h2Test());
+        addTestCase("HTTP/3: a reservation sees a request submitted before it takes its lock", \h3Test());
+        set_return_value(main());
+    }
+
+    h1Test() {
+        reserveRace("h1", string sub (HttpServer server) {
+            return sprintf("http://127.0.0.1:%d", server.addListener(<HttpListenerOptionInfo>{
+                "node": "127.0.0.1", "service": 0}).port);
+        });
+    }
+
+    h2Test() {
+        reserveRace("h2", string sub (HttpServer server) {
+            return sprintf("https://127.0.0.1:%d", server.addListener(<HttpListenerOptionInfo>{
+                "node": "127.0.0.1",
+                "service": 0,
+                "cert": new SSLCertificate(TestCertificates::CertPem),
+                "key": new SSLPrivateKey(TestCertificates::KeyPem),
+                "http_version": "2.0",
+                "enable_h3": False,
+            }).port);
+        });
+    }
+
+    h3Test() {
+        reserveRace("h3", string sub (HttpServer server) {
+            int port;
+            try {
+                port = server.addQuicListener(<HttpListenerOptionInfo>{
+                    "node": "127.0.0.1",
+                    "cert": new SSLCertificate(TestCertificates::CertPem),
+                    "key": new SSLPrivateKey(TestCertificates::KeyPem),
+                }).port;
+            } catch (hash<ExceptionInfo> ex) {
+                testSkip(sprintf("QUIC listener not available: %s: %s", ex.err, ex.desc));
+            }
+            return sprintf("https://127.0.0.1:%d", port);
+        });
+    }
+
+    #! the race for a connection of the given protocol, which has one stream
+    private reserveRace(string protocol, code<string(HttpServer)> get_url) {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("needs a debug build of the library (dbg_http_hold_at())");
+        }
+        GateHandler handler();
+        HttpServer server(<HttpServerOptionInfo>{});
+        on_exit server.stop();
+        # the handler's gate is opened whatever happens, so that the server can stop
+        bool gate_open;
+        on_exit if (!gate_open) { handler.gate.dec(); }
+        server.setDefaultHandler("gate", handler);
+        string url = get_url(server);
+        server.waitForAsyncIo();
+
+        HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{
+            "protocol": protocol,
+            "accept_all_certs": True,
+            "max_streams_per_connection": 1,
+        });
+        on_exit mgr.closeAll();
+
+        # an idle connection of the pool
+        HttpClientStreamHandle s1 = mgr.acquireStream(url);
+        assertEq(200, s1.request("GET", "/fast").status_code);
+        HttpClientConnection conn = s1.getConnection();
+        HttpClientPollOperation op = conn.getPollOperation();
+        assertEq(1, conn.getMaxConcurrentStreams(), "the connection has one stream");
+        assertEq(0, conn.getActiveStreamCount(), "the connection is idle");
+
+        # the advisory check reserves nothing
+        assertTrue(conn.canAcceptStream(), "the idle connection can accept a stream");
+        assertEq(0, conn.getPendingStreamCount(), "canAcceptStream() reserves no stream");
+
+        # the request below reserves the connection's only stream
+        assertTrue(conn.tryReserveStream(), "the first request reserves the stream");
+
+        # another reservation is held before it takes the reservation lock
+        Counter reached(1);
+        Counter release(1);
+        bool released;
+        on_exit if (!released) { release.dec(); }
+        call_function("dbg_http_hold_at", "reserve-pending", reached, release);
+        Counter done(1);
+        bool reserved;
+        *hash<ExceptionInfo> reserve_ex;
+        # the C++ reservation is called directly: tryReserveStream() holds the connection's lock, which submitRequest()
+        # needs, so the hold point cannot be reached inside it while the other request is submitted
+        background sub () {
+            on_exit done.dec();
+            try {
+                reserved = conn.tryReservePendingStream(op, conn.getMaxConcurrentStreams());
+            } catch (hash<ExceptionInfo> ex) {
+                # an error raised before the hold point: the test thread is not left waiting for it
+                reserve_ex = ex;
+                if (reached.getCount()) {
+                    reached.dec();
+                }
+            }
+        }();
+        reached.waitForZero();
+        if (reserve_ex) {
+            done.waitForZero();
+            throw reserve_ex.err, reserve_ex.desc;
+        }
+
+        # the first request is submitted: its stream is counted as active and its reservation is released
+        hash<auto> submitted = conn.submitRequest("GET", "/block");
+        handler.blocked.waitForZero();
+        assertEq(0, conn.getPendingStreamCount(), "the submitted request released its reservation");
+        assertEq(1, conn.getActiveStreamCount(), "the submitted request's stream is active");
+
+        # the held reservation goes on: it must see the submitted request's stream
+        released = True;
+        release.dec();
+        done.waitForZero();
+        if (reserved) {
+            conn.releaseStreamReservation();
+        }
+        assertFalse(reserved, "the only stream of the connection is not reserved twice");
+
+        # the request is answered; the stream is free again
+        gate_open = True;
+        handler.gate.dec();
+        assertEq(200, submitted.future.get().status_code, "the submitted request is answered");
+        assertTrue(conn.tryReservePendingStream(op, 1), "the released stream can be reserved");
+        conn.releaseStreamReservation();
+    }
+}

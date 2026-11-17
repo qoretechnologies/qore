@@ -63,7 +63,7 @@ public class OpenAiFileUploadDataProvider inherits OpenAiDataProviderCommon {
         @return the response to the request
     */
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
-        string mpboundary = replace(make_base64_string(string(now_us())), "=", "");
+        string mpboundary = MultiPartMessage::getBoundary();
         string ct = sprintf("%s; boundary=%s", MimeTypeMultipartFormData, mpboundary);
         string msg = sprintf("--%s\r\nContent-Disposition: form-data; name=\"purpose\"\r\n\r\n%s\r\n", mpboundary,
             req.purpose);

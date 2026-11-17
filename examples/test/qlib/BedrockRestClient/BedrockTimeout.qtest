@@ -1,0 +1,130 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Logger
+%requires Mime
+%requires HttpServerUtil
+%requires HttpServer
+%requires QoreLlmTypes
+%requires QoreLlmUtils
+%requires AwsRestClient
+%requires BedrockRestClient
+
+%requires json
+
+%exec-class BedrockTimeoutTest
+
+#! answers Converse requests after a delay with a canned response; no request reaches AWS
+class DelayedConverseHandler inherits AbstractHttpRequestHandler {
+    public {
+        #! the delay of each response
+        int delay_ms = 1000;
+        #! the number of Converse requests received
+        int requests = 0;
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        if (cx.raw_path !~ /\/converse$/) {
+            return makeResponse(404, "unknown path: " + cx.raw_path);
+        }
+        ++requests;
+        # the response is late on purpose: the client's request timeout must end the request first
+        usleep(delay_ms * 1000);
+        return makeResponse({"Content-Type": MimeTypeJson}, 200, make_json({
+            "output": {"message": {"role": "assistant", "content": ({"text": "late answer"},)}},
+            "stopReason": "end_turn",
+            "usage": {"inputTokens": 1, "outputTokens": 1, "totalTokens": 2},
+        }));
+    }
+}
+
+#! Regression test for issue #6348: the configured and per-call request timeouts of BedrockLlmProvider apply
+/** BedrockLlmProvider passed its configured timeout under a name that RestClientIo does not read, so the connection
+    manager's default (60 s) applied, and it did not pass the per-call timeout to the Converse request.  A local
+    HttpServer answers after a delay of 1 s; a timeout of 300 ms (configured or per call) must end the request with a
+    timeout, and a timeout longer than the delay must not.  The failure type is checked, not the elapsed time.
+*/
+class BedrockTimeoutTest inherits QUnit::Test {
+    private {
+        HttpServer http;
+        int port;
+        DelayedConverseHandler handler();
+    }
+
+    constructor() : QUnit::Test("BedrockLlmProvider request timeouts", "1.0") {
+        addTestCase("a configured timeout longer than the response time", \configuredLongTest());
+        addTestCase("a configured timeout shorter than the response time", \configuredShortTest());
+        addTestCase("a per-call timeout shorter than the response time", \perCallShortTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        http = new HttpServer(<HttpServerOptionInfo>{"logger": new Logger("test", LoggerLevel::getLevelError())});
+        http.setDefaultHandler("bedrock", handler);
+        port = http.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
+    }
+
+    globalTearDown() {
+        delete http;
+    }
+
+    configuredLongTest() {
+        BedrockRestClient::BedrockLlmProvider p = newProvider(30000);
+        hash<QoreLlmUtils::ChatResponse> r = p.chat((<QoreLlmUtils::ChatMessage>{"role": "user", "content": "x"},));
+        assertEq("late answer", r.content);
+    }
+
+    configuredShortTest() {
+        BedrockRestClient::BedrockLlmProvider p = newProvider(300);
+        checkTimeout(sub () {
+            p.chat((<QoreLlmUtils::ChatMessage>{"role": "user", "content": "x"},));
+        });
+    }
+
+    perCallShortTest() {
+        BedrockRestClient::BedrockLlmProvider p = newProvider(30000);
+        checkTimeout(sub () {
+            p.chat((<QoreLlmUtils::ChatMessage>{"role": "user", "content": "x"},), NOTHING,
+                <QoreLlmUtils::LlmRequestOptions>{"timeout_ms": 300});
+        });
+    }
+
+    #! checks that the call fails with a request timeout (the provider's LLM-ERROR, caused by HTTPCLIENT-TIMEOUT)
+    private checkTimeout(code call) {
+        *hash<ExceptionInfo> err;
+        try {
+            call();
+        } catch (hash<ExceptionInfo> ex) {
+            err = ex;
+        }
+        if (!err) {
+            fail("the request did not time out");
+        }
+        assertEq("LLM-ERROR", err.err, get_exception_string(err));
+        # the provider's LLM-ERROR carries the exception of the request as its argument
+        *string cause_err = err.arg.err;
+        assertEq("HTTPCLIENT-TIMEOUT", cause_err, get_exception_string(err));
+    }
+
+    private BedrockRestClient::BedrockLlmProvider newProvider(int timeout_ms) {
+        return new BedrockRestClient::BedrockLlmProvider(<QoreLlmUtils::LlmBackendConfig>{
+            "model": "anthropic.claude-3-5-sonnet-20240620-v1:0",
+            "url": "http://localhost:" + port,
+            "timeout_ms": timeout_ms,
+            "max_retries": 0,
+            "provider_options": {
+                "aws_region": "us-east-1",
+                "aws_keyid": "AKIA-TEST",
+                "aws_secret": "test-secret",
+                "aws_imds_disabled": True,
+            },
+        });
+    }
+}

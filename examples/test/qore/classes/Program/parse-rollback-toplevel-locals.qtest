@@ -1,0 +1,88 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class ParseRollbackTopLevelLocalsTest
+
+#! A failed parse rolls back the local variables that it declared in the top-level block (issue #678)
+/** The top-level local variables of a parse that failed are not the Program's: a later parse can declare them again,
+    and a Program whose first parse failed can declare top-level local variables in its next parse.
+*/
+public class ParseRollbackTopLevelLocalsTest inherits QUnit::Test {
+    constructor() : QUnit::Test("ParseRollbackTopLevelLocalsTest", "1.0", \ARGV) {
+        addTestCase("failed first parse", \firstParseTest());
+        addTestCase("failed first parse with PO_ALLOW_REPARSE", \firstParseReparseTest());
+        addTestCase("failed reparse", \reparseTest());
+        addTestCase("parsePending() rolled back", \pendingRollbackTest());
+        addTestCase("inherited top-level locals", \inheritedTest());
+        set_return_value(main());
+    }
+
+    #! the example of the issue: a Program whose first parse failed parses top-level local variables in the next one
+    firstParseTest() {
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        assertThrows("PARSE-EXCEPTION", \p.parse(), ("any a = a;", "first"));
+        p.parse("our int r; int a = 1; r = a + 1;", "second");
+        p.run();
+        assertEq(2, p.getGlobalVariable("r"));
+    }
+
+    firstParseReparseTest() {
+        Program p(PO_NEW_STYLE | PO_ALLOW_REPARSE | PO_NO_CHILD_PO_RESTRICTIONS);
+        assertThrows("PARSE-EXCEPTION", \p.parse(), ("any a = a;", "first"));
+        p.parse("our int r; int a = 1; r = a + 1;", "second");
+        p.run();
+        assertEq(2, p.getGlobalVariable("r"));
+    }
+
+    #! a failed reparse does not keep the variables that it declared; the committed ones stay
+    reparseTest() {
+        Program p(PO_NEW_STYLE | PO_ALLOW_REPARSE | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.parse("our int r; int b = 10; r = b;", "first");
+        p.run();
+        assertEq(10, p.getGlobalVariable("r"));
+        assertThrows("PARSE-EXCEPTION", \p.parse(), ("int a = 2; int c = d;", "failed"));
+        # the variable of the failed parse can be declared again, and the committed one is still declared
+        p.parse("int a = 3; r = a + b;", "third");
+        p.run();
+        assertEq(13, p.getGlobalVariable("r"));
+        assertThrows("PARSE-ERROR", "already declared", \p.parse(), ("int b = 4;", "fourth"));
+    }
+
+    #! code that Program::parsePending() added and Program::parseRollback() removes (a regression guard: the pending
+    #! code declares its variables only when it is committed)
+    pendingRollbackTest() {
+        Program p(PO_NEW_STYLE | PO_ALLOW_REPARSE | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.parse("our int r; int b = 10; r = b;", "first");
+        p.parsePending("int a = 2; r = a;", "pending");
+        p.parseRollback();
+        p.parse("int a = 5; r = a + b;", "second");
+        p.run();
+        assertEq(15, p.getGlobalVariable("r"));
+    }
+
+    #! a child Program inherits the top-level local variables of its parent, which a rollback keeps
+    inheritedTest() {
+        # the parent is a Program of its own, whose top-level block declares a local variable
+        Program parent(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        parent.parse("our int r; our string err; int a1 = 5;
+Program c(PO_NEW_STYLE | PO_ALLOW_REPARSE | PO_NO_CHILD_PO_RESTRICTIONS);
+try {
+    c.parse(\"int x = 1; any y = y;\", \"failed\");
+} catch (hash<ExceptionInfo> ex) {
+    err = ex.err;
+}
+c.parse(\"our int r; int x = 2; r = x;\", \"child\");
+c.run();
+r = c.getGlobalVariable(\"r\");
+", "parent");
+        parent.run();
+        assertEq("PARSE-EXCEPTION", parent.getGlobalVariable("err"));
+        assertEq(2, parent.getGlobalVariable("r"));
+    }
+}

@@ -188,6 +188,42 @@ Status st = cast<enum<Status>>(v);  # RUNTIME-CAST-ERROR: cannot cast from type 
 *Status st2 = cast<*enum<Status>>(s2);  # OK: st2 is Status::Active
     @endcode
 
+    @section enum_lvalue_modification Modifying Enum Lvalues
+    An lvalue declared with an enum type (a variable, a parameter, an object or hashdecl member, or the element of a
+    list or hash whose element type is an enum) holds only the members of its enum.  An operator that changes such an
+    lvalue in place computes a plain value of the enum's base type, which the enum type refuses as it refuses its
+    assignment: the operator raises a \c RUNTIME-TYPE-ERROR exception and leaves the lvalue unchanged, also if the
+    result is the value of a member.  This applies to the compound assignment operators (@ref plus_equals_operator
+    "+=" and the others), @ref pre_increment_operator "++" and @ref pre_decrement_operator "--",
+    @ref splice "splice", @ref extract "extract", @ref trim "trim", @ref chomp "chomp", the @ref remove "remove" and
+    @ref delete "delete" of a list or a range of characters of a string (of a single character, which they only
+    read, they raise no error), the @ref regex_subst_operator "regular expression substitution"
+    operator and the @ref transliteration_operator "transliteration" operator; @ref trim "trim" and @ref chomp "chomp"
+    of a list or hash whose elements have a string enum type raise the error before changing any element.  An enum
+    lvalue with no value is left without one.
+
+    An lvalue with no type (or of type \c auto) that holds an enum value is changed as an lvalue holding the base
+    value is: it then holds a plain value of the base type.  The value of the enum member itself never changes.
+
+    @par Example
+    @code{.py}
+enum Suffix : string {
+    Long = "long",
+}
+
+Suffix s = Suffix::Long;
+try {
+    s += "er";
+} catch (hash<ExceptionInfo> ex) {
+    # RUNTIME-TYPE-ERROR: <+= operator> expects type 'enum<Suffix>', but got type 'string' instead
+    printf("%s: %s\n", ex.err, ex.desc);
+}
+# s is still Suffix::Long
+
+auto a = Suffix::Long;
+a += "er";  # a is the plain string "longer"; Suffix::Long is still "long"
+    @endcode
+
     @section enum_namespaces Namespaced Enums
     Enums can be declared within namespaces and accessed using the namespace path.
 

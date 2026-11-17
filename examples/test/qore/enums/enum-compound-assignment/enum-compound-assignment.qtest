@@ -1,0 +1,202 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - JIT and AOT code generation of the exception edges of compound assignments
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires ../../../TestInterpreter.qm
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class EnumCompoundAssignmentTest
+
+#! Tests the compound assignment operators on enum lvalues (qore#6197)
+/** An enum lvalue holds only the members of its enum, so an operator that changes it (+=, -=, *=, /=, %=, |=, &=,
+    ^=, <<=, >>=, ++ and --) raises RUNTIME-TYPE-ERROR and leaves it unchanged, as in the AST interpreter, also when
+    the result is the value of a member; an lvalue with no value is left without one.  The IR interpreter stored the
+    plain int or float in the local variable, and native code raised the error from the instruction of a fused local
+    int addition outside of the try block around it, so the error was not caught; the AST interpreter itself stored
+    the plain value in an object member and in the elements of a hash or a list, and += and -= gave an enum lvalue
+    with no value the enum's default value before they raised the error.
+
+    The worker applies each operator to int, float and number enum lvalues of each kind (a local, a closure-bound
+    local, a global, an object member, a hashdecl member, a hash element and a list element) in a try block, in a
+    function with no try block whose caller catches the error, in a try block in a loop, and in top-level code; and
+    to int, float and number enum lvalues with no value, with and without "*", to string enum lvalues with no value
+    (whose members, a short and a long string, must not change), EI parameters, EI lvalues changed through a
+    reference, thread-local EI variables and EI lvalues with an operand of no type; the same operators on int and
+    softint locals are controls, which must change them.  It is run in each execution mode, on the IR tier, and as a
+    program compiled with qcc at -O0 and -O3; every run must give the results of the AST interpreter.
+*/
+class EnumCompoundAssignmentTest inherits QUnit::Test {
+    public {
+        #! the value of the lvalue of each enum kind after the error, which leaves it unchanged
+        const Unchanged = {
+            "ei": "enum<EI> 7",
+            "ef": "enum<EF> 0.5",
+            "en": "enum<EN> 1.5",
+            # lvalues with no value are left without one
+            "einv": "nothing null",
+            "eionv": "nothing null",
+            "efnv": "nothing null",
+            "efonv": "nothing null",
+            "ennv": "nothing null",
+            "enonv": "nothing null",
+        };
+
+        #! the kinds of string enum lvalues with no value, which only need the same result in every mode: they are
+        #! changed as string lvalues are (qore#6195)
+        const StringEnumKinds = ("essnv", "eslnv");
+
+        #! the values of the members of the string enums, which no operator changes
+        const StringEnumMembers = "\"a\" \"a long string value that is not stored inline\"";
+
+        #! the checks that assign an EI value from a variable of no type, which is assigned as it is
+        const AssignEnum = "none|enum<EI> 8";
+
+        #! the number of checks the worker makes
+        const CheckCount = 745;
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+        #! the results of the AST interpreter, which every other run must give
+        hash<string, string> ast_results;
+    }
+
+    constructor() : QUnit::Test("EnumCompoundAssignmentTest", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        # a qore run from the PATH has no directory in its name; its library and qcc are found next to it
+        if (qore_bin !~ /\//) {
+            foreach string dir in ((ENV.PATH ?? "").split(":")) {
+                if (dir && is_executable(dir + "/" + qore_bin)) {
+                    qore_bin = dir + "/" + qore_bin;
+                    break;
+                }
+            }
+        }
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + DirSep + "qcc") ? libqore_dir + DirSep + "qcc"
+                : dirname(qore_bin) + DirSep + "qcc");
+
+        addTestCase("each execution mode", \testExecModes());
+        addTestCase("IR tier", \testIrTier());
+        addTestCase("compiled program", \testCompiledProgram());
+
+        set_return_value(main());
+    }
+
+    testExecModes() {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            checkWorkerOutput(mode, ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s -b "
+                "--enable-debug --exec-mode=%s %s", libqore_dir, libqore_dir, qore_bin, mode, getWorker())));
+        }
+    }
+
+    #! every function runs on the IR tier, which the tiered run of ExecModes hardly runs
+    testIrTier() {
+        checkWorkerOutput("ir-tier", ExecModeHarness::run_ir_tier(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s "
+            "%s -b --enable-debug --exec-mode=tiered %s", libqore_dir, libqore_dir, qore_bin, getWorker())));
+    }
+
+    testCompiledProgram() {
+        if (!is_file(qcc_bin)) {
+            testSkip(sprintf("no qcc binary at %y", qcc_bin));
+        }
+        TmpDir tmp("qore-enum-compound-assignment-");
+        foreach int level in (0, 3) {
+            string exe = sprintf("%s%senum-compound-assignment-O%d", tmp.path, DirSep, level);
+            string compile_out = backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s -O%d --strip-source "
+                "-o %s %s 2>&1", libqore_dir, libqore_dir, qcc_bin, level, exe, getWorker()));
+            assertTrue(is_file(exe), sprintf("compiled program -O%d: %s", level, compile_out));
+            checkWorkerOutput(sprintf("aot -O%d", level), ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s "
+                "DYLD_LIBRARY_PATH=%s %s", libqore_dir, libqore_dir, exe)));
+        }
+    }
+
+    private string getWorker() {
+        return get_script_dir() + DirSep + "enum-compound-assignment-worker.qr";
+    }
+
+    #! returns the results of the AST interpreter, which are checked against the expected semantics
+    private hash<string, string> getAstResults() {
+        if (!ast_results) {
+            hash<string, string> results = parseWorkerOutput("ast", ExecModeHarness::run(sprintf(
+                "LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s -b --enable-debug --exec-mode=ast %s", libqore_dir,
+                libqore_dir, qore_bin, getWorker())));
+            assertEq(CheckCount, results.size(), "ast: checks run");
+            foreach hash<auto> i in (results.pairIterator()) {
+                checkAstResult(i.key, i.value);
+            }
+            ast_results = results;
+        }
+        return ast_results;
+    }
+
+    #! checks a result of the AST interpreter: every operator on an enum lvalue raises the error and leaves it
+    #! unchanged, and every operator on an int or softint local changes it
+    private checkAstResult(string name, string result) {
+        string kind = (name =~ x/^([a-z]+)-/)[0];
+        if (name == "es-members") {
+            assertEq(StringEnumMembers, result, "ast: " + name);
+            return;
+        }
+        if (inlist(kind, StringEnumKinds)) {
+            return;
+        }
+        if (kind == "int" || kind == "softint") {
+            assertRegex("^none\\|integer -?[0-9]+$", result, "ast: " + name);
+            return;
+        }
+        if (name =~ /-assign-enum$/) {
+            assertEq(AssignEnum, result, "ast: " + name);
+            return;
+        }
+        *string unchanged = Unchanged{kind};
+        assertTrue(exists unchanged, "ast: kind of " + name);
+        assertRegex("^RUNTIME-TYPE-ERROR\\|<.+> expects type '\\*?enum<E[IFN]>', but got type '[a-z]+' instead",
+            result, "ast: " + name);
+        # the error raised in a function with no try block leaves a local in it, which is not read
+        if (name =~ /-(local|closure)-out-/) {
+            assertEq(-1, result.find(unchanged), "ast: " + name);
+            return;
+        }
+        string tail = name =~ /-loop-/ ? sprintf("|%s (caught 50)", unchanged) : "|" + unchanged;
+        assertEq(tail, result.substr(-tail.size()), "ast: " + name);
+    }
+
+    #! parses the "name=result" lines printed by the worker; any other output fails
+    private hash<string, string> parseWorkerOutput(string label, string out) {
+        hash<string, string> results = {};
+        foreach string line in (out.split("\n")) {
+            *list<*string> parts = (line =~ x/^([-a-z]+)=(.*)$/);
+            if (!parts) {
+                if (line.val()) {
+                    fail(sprintf("%s: unexpected worker output: %y", label, out));
+                }
+                continue;
+            }
+            assertFalse(results.hasKey(parts[0]), sprintf("%s: %s printed once", label, parts[0]));
+            results{parts[0]} = parts[1];
+        }
+        return results;
+    }
+
+    #! checks the results of a run against those of the AST interpreter
+    private checkWorkerOutput(string label, string out) {
+        hash<string, string> expected = getAstResults();
+        hash<string, string> results = parseWorkerOutput(label, out);
+        assertEq(sort(keys expected), sort(keys results), label + ": checks run");
+        foreach hash<auto> i in (expected.pairIterator()) {
+            assertEq(i.value, results{i.key}, sprintf("%s: %s", label, i.key));
+        }
+    }
+}

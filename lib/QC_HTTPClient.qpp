@@ -1462,6 +1462,9 @@ nothing HTTPClient::disconnect() {
     - \c request-headers: a hash of headers sent in the request
     - [\c response-body]: a binary object of any response body
 
+    @note I/O errors, such as a refused connect or a connection that the server closes, are reported by the returned
+    operation and are not thrown by this method
+
     @since %Qore 1.12
 
     @throw HTTP-CLIENT-METHOD-ERROR the method contains a NUL or another control character than horizontal tab (since %Qore 3.0)
@@ -1514,6 +1517,9 @@ AbstractPollOperation<auto> HTTPClient::startPollSendRecv(string method, *string
         - \c status_message: the HTTP status message of the response
     - \c request-headers: a hash of headers sent in the request
     - [\c response-body]: a binary object of any response body
+
+    @note I/O errors, such as a refused connect or a connection that the server closes, are reported by the returned
+    operation and are not thrown by this method
 
     @since %Qore 1.12
 

@@ -1,0 +1,94 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%enable-all-warnings
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires DataProvider
+
+%exec-class ColumnarProcessorSchemasTest
+
+#! The processors that rebuild a ColumnarResult keep the schema of each column they pass through and give the
+#! columns they add or change the schema of their values (qore#6219)
+class ColumnarProcessorSchemasTest inherits QUnit::Test {
+    private {
+        ColumnarResult input;
+    }
+
+    constructor() : QUnit::Test("ColumnarProcessorSchemas", "1.0", \ARGV) {
+        input = ColumnarResult::fromColumnHash({
+            "t": (2026-01-01T00:00:00Z, NOTHING),
+            "u": (1s, 2s),
+            "n": (1.25n, NOTHING),
+            "s": ("ax", "bx"),
+            "l": ((1, 2), NOTHING),
+            "i": (1, 2),
+        }, {
+            "t": {"native_type": "timestamp", "nullable": True},
+            "u": {"native_type": "interval"},
+            "n": {"native_type": "numeric(10,2)", "nullable": True},
+            "s": {"native_type": "varchar(10)"},
+            "l": {"schema": {"kind": "list", "children": ({"name": "item", "kind": "int"},)}},
+        });
+
+        addTestCase("set fields", \setFields());
+        addTestCase("remove fields", \removeFields());
+        addTestCase("search and replace", \searchReplace());
+        addTestCase("select fields", \selectFields());
+        set_return_value(main());
+    }
+
+    private setFields() {
+        QoreSetFieldsProcessor proc({"fields": {"src": "x", "i": 5}});
+        ColumnarResult out = proc.processRecordsShape(input, DataProviderShape::BufferColumns);
+        checkPassedThrough(out, ("t", "u", "n", "s", "l"));
+        hash<string, hash<auto>> schemas = getSchemas(out);
+        assertEq("string", schemas.src.kind);
+        assertEq("int", schemas.i.kind);
+        assertEq((5, 5), out.getColumn("i").toList());
+    }
+
+    private removeFields() {
+        QoreRemoveFieldsProcessor proc({"fields": "i,s"});
+        ColumnarResult out = proc.processRecordsShape(input, DataProviderShape::BufferColumns);
+        assertEq(("t", "u", "n", "l"), out.columnNames());
+        checkPassedThrough(out, ("t", "u", "n", "l"));
+    }
+
+    private searchReplace() {
+        QoreSearchReplaceProcessor proc({"field": "s", "search": "x", "replace": "y"});
+        ColumnarResult out = proc.processRecordsShape(input, DataProviderShape::BufferColumns);
+        checkPassedThrough(out, ("t", "u", "n", "l", "i"));
+        hash<string, hash<auto>> schemas = getSchemas(out);
+        assertEq(getSchemas(input).s, schemas.s);
+        assertEq(("ay", "by"), out.getColumn("s").toList());
+    }
+
+    private selectFields() {
+        QoreSelectFieldsProcessor proc({"fields": "ts=t,u,amount=n,l,missing"});
+        ColumnarResult out = proc.processRecordsShape(input, DataProviderShape::BufferColumns);
+        assertEq(("ts", "u", "amount", "l", "missing"), out.columnNames());
+        hash<string, hash<auto>> in_schemas = getSchemas(input);
+        hash<string, hash<auto>> schemas = getSchemas(out);
+        assertEq(in_schemas.t - "name", schemas.ts - "name");
+        assertEq(in_schemas.n - "name", schemas.amount - "name");
+        checkPassedThrough(out, ("u", "l"));
+        assertEq(input.toRows()[0].t, out.toRows()[0].ts);
+    }
+
+    private checkPassedThrough(ColumnarResult out, list<string> names) {
+        hash<string, hash<auto>> in_schemas = getSchemas(input);
+        hash<string, hash<auto>> schemas = getSchemas(out);
+        list<hash<auto>> in_rows = input.toRows();
+        list<hash<auto>> rows = out.toRows();
+        foreach string name in (names) {
+            assertEq(in_schemas{name}, schemas{name}, name + " schema");
+            assertEq((map $1{name}, in_rows), (map $1{name}, rows), name + " values");
+        }
+    }
+
+    private static hash<string, hash<auto>> getSchemas(ColumnarResult r) {
+        return map {$1.name: $1}, r.schemaV2();
+    }
+}

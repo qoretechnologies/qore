@@ -772,6 +772,8 @@ public:
         Commit,
         //! in the installing phase, before the result is published to the variants
         Install,
+        //! the number of hold points: not a hold point; it stays last (the sizes of the tables indexed by a hold point)
+        Count,
     };
 
     //! Returns the process-wide JIT
@@ -824,45 +826,65 @@ public:
         point valid until the owning functions have been destroyed.
 
         A compile in progress is awaited only while it reads Program data (see waitForBgCompileQueue(QoreProgram*));
-        one in the LLVM phase is detached, and its thread is not joined, so that the process can exit while LLVM runs
-        without bound.  As exit() would destroy LLVM's static objects under that thread, the process then ends with
-        \c _exit() if the thread still runs at the end (exitQuickly(), called by qore_fork_child_quick_exit()), or the
-        \c atexit() handler of the library waits for it (joinAbandonedCompileThread()).
+        one in the LLVM phase is detached, and its thread is not joined here.  A detached compile skips the optional
+        passes of the LLVM pipeline and ends before its code generation (or after the code generation in progress), so
+        that shutdown(), which qore_cleanup() calls at its end, waits for its thread only briefly (issue #6296).  A
+        process that ends without qore_cleanup() ends with \c _exit() if the thread still runs at the end
+        (exitQuickly(), called by qore_fork_child_quick_exit()), or the \c atexit() handler of the library waits for it
+        (joinAbandonedCompileThread()), as \c exit() would destroy LLVM's static objects under it.
     */
     void stopBackgroundCompiler();
 
     //! Returns true if the process must end without running exit-time handlers; called at the end of the process
-    /** True if stopBackgroundCompiler() left a compile running in LLVM and it still runs: \c exit() would destroy
+    /** True if stopBackgroundCompiler() left a compile running in LLVM and it still runs, which happens only in a
+        process that ends without qore_cleanup() (which waits for the compile: finishDetachedCompile()): \c exit() would destroy
         LLVM's static objects under it, so the process ends with \c _exit() (see qore_fork_child_quick_exit()).  If the
         compile thread has finished, it is joined, and the process can exit normally.
     */
     static bool exitQuickly();
 
     //! Waits for a compile thread that stopBackgroundCompiler() left running, if any, to end
-    /** Called by the \c atexit() handler of the library for a process that exits without
-        qore_fork_child_quick_exit(): it waits for LLVM, so that the static objects of LLVM destroyed after the handler
-        are not destroyed under the compile.  Function-local statics that LLVM creates during its first compile are
-        destroyed before the handler, so a process should end with qore_fork_child_quick_exit() instead.
+    /** Called by shutdown(), and by the \c atexit() handler of the library for a process that exits without
+        qore_cleanup() or qore_fork_child_quick_exit(): it waits for LLVM, so that the static objects of LLVM destroyed
+        after the handler are not destroyed under the compile.  Function-local statics that LLVM creates during its
+        first compile are destroyed before the handler, so a process should call qore_cleanup() before it exits.
     */
     void joinAbandonedCompileThread();
 
+#ifdef DEBUG
+    //! The exit status of a process that joinAbandonedCompileThread() ends because a test hook holds the compile
+    static constexpr int QORE_JIT_DBG_HELD_AT_EXIT_STATUS = 86;
+
+    //! Test hook: ends the process if the abandoned compile is held at a debug hold point that nothing releases
+    /** joinAbandonedCompileThread() would then wait forever: the process writes the reason to \c stderr, flushes the
+        standard I/O streams and ends with \c _exit() and QORE_JIT_DBG_HELD_AT_EXIT_STATUS.  A process ends this way
+        when it calls \c exit() without qore_cleanup() while a test holds a compile in LLVM (qore_cleanup() lets a held
+        compile go: see dbgReleaseBgCompileHolds()), so that a test of that path fails at once instead of hanging.
+    */
+    void dbgExitIfAbandonedCompileHeld() noexcept;
+#endif
+
+    //! Waits for a detached compile that stopBackgroundCompiler() left running, if any (issue #6296)
+    /** The compile skips what it can of LLVM (see stopBackgroundCompiler()), so the wait is short.  A compile held at a
+        debug hold point is let go first.  Called by shutdown() before it releases the engine, and by qore_cleanup()
+        when it leaves the library to a foreign thread, which keeps the engine, so that no compile is in LLVM when
+        qore_cleanup() returns.
+
+        @return true if a detached compile was waited for
+    */
+    bool finishDetachedCompile();
+
     //! Releases the LLVM execution engine, its code and the caches (see shutdown())
     void releaseEngine();
-
-    //! Releases the engine if shutdown() left it to a compile thread that has been joined since (see exitQuickly())
-    void releaseDeferredEngine();
-
-    //! Calls releaseDeferredEngine(); an error leaves the engine to the operating system
-    void releaseDeferredEngineNoThrow() noexcept;
 
     //! Stop compilation and release the LLVM execution engine.
     /** Every UserVariantBase that can call a published native entry point must already be destroyed
         before this function is called.
 
-        The engine is not released here if stopBackgroundCompiler() left a detached compile running: it cannot be
-        destroyed under an active compile.  It is released when the process ends with qore_fork_child_quick_exit() and
-        the thread has ended (exitQuickly()), which deregisters the EH frames of the compiled code before \c exit()
-        (qore#5842); if the thread still runs then, the process ends with \c _exit().
+        A detached compile that stopBackgroundCompiler() left running is waited for here, briefly, as it skips what it
+        can of LLVM (see stopBackgroundCompiler()), before the engine is released: so no compile is in LLVM when
+        qore_cleanup() returns, and an embedding program can return from \c main() afterwards (issue #6296).  Releasing
+        the engine deregisters the EH frames of the compiled code before \c exit() (qore#5842).
     */
     void shutdown();
     void setDeoptPolicy(DeoptPolicy policy);
@@ -1037,20 +1059,9 @@ public:
     */
     int dbgContinueBgCompile(int64_t timeout_ms);
 
-    //! Where a held compile that stopBackgroundCompiler() abandons ends, for a test (qore#5842)
-    enum class DbgFinishAbandoned {
-        //! it stays held, and the process ends with _exit()
-        None,
-        //! it is let go when it is abandoned, and shutdown() waits for its thread: the engine is released there
-        Shutdown,
-        //! it is let go at the end of the process (exitQuickly()), which waits for its thread: the engine is released
-        //! there
-        Exit,
-    };
-
-    //! Test hook: a held compile that stopBackgroundCompiler() abandons ends before the process does, as an abandoned
-    //! compile can, at the given point (qore#5842)
-    void dbgFinishAbandonedCompile(DbgFinishAbandoned where);
+    //! Lets a compile held at a debug hold point go and disarms the hold points; called by shutdown() before it waits
+    //! for the compile thread, as stopping the compiler is a point where a compile ends (issue #6296)
+    void dbgReleaseBgCompileHolds();
 
     //! For tests: waits until a Program teardown waits for the in-progress background compile
     /** Only a teardown that has to wait counts: one that finds the compile in the LLVM phase detaches it and does
@@ -1320,15 +1331,12 @@ private:
     std::vector<const QoreProgram*> bg_detach_releases;
 
     //! true once stopBackgroundCompiler() left the compile thread running a detached compile in the LLVM phase
-    /** The thread is not joined then: it ends when LLVM returns, without touching the JIT again.  shutdown() leaves
-        the LLVM execution engine to the operating system, as it cannot be destroyed under an active compile, and the
-        process ends with \c _exit() if the thread still runs at the end (see exitQuickly()).
+    /** The thread is not joined then: it ends when LLVM returns, without touching the JIT again.  shutdown() waits
+        for it before it releases the LLVM execution engine, which cannot be destroyed under an active compile; a
+        process that ends without qore_cleanup() ends with \c _exit() if the thread still runs at the end (see
+        exitQuickly()).
     */
     std::atomic<bool> bg_thread_abandoned{false};
-    //! shutdown() did not release the engine, as a compile ran in it (bg_thread_abandoned); it is released by
-    //! releaseDeferredEngine(), which exitQuickly() calls after it has joined the finished compile thread; the join of
-    //! the atexit() handler (joinAbandonedCompileThread()) does not release it
-    std::atomic<bool> shutdown_deferred{false};
 
     //! true once the compile thread has left its loop: it touches nothing of the JIT or LLVM any more
     std::atomic<bool> bg_thread_done{false};
@@ -1389,11 +1397,8 @@ private:
     unsigned dbg_bg_hold_exits = 0;
     //! the number of Program teardowns that waited for the in-progress compile; protected by bg_queue_mutex
     unsigned dbg_bg_teardown_waits = 0;
-    //! where a held compile that stopBackgroundCompiler() abandons ends (see dbgFinishAbandonedCompile()); protected
-    //! by bg_queue_mutex
-    DbgFinishAbandoned dbg_finish_abandoned = DbgFinishAbandoned::None;
     //! for each hold point, the function whose compile stops there, all if empty; protected by bg_queue_mutex
-    std::string dbg_bg_hold_func[static_cast<int>(BgCompileHoldPoint::Install) + 1];
+    std::string dbg_bg_hold_func[static_cast<int>(BgCompileHoldPoint::Count)];
     //! the name of the in-progress compile's root function up to the "@"; protected by bg_queue_mutex
     std::string dbg_bg_in_progress_func;
 

@@ -1,0 +1,21 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ./CMakeBuildHelpersTestBase.qm
+
+%include CMakeBuildHelpersPreload.qc
+
+%exec-class CMakeBuildHelpersPreloadPart1
+
+#! runs part 1 of 3 of the cases of CMakeBuildHelpersPreloadBase
+class CMakeBuildHelpersPreloadPart1 inherits CMakeBuildHelpersPreloadBase {
+    constructor() : CMakeBuildHelpersPreloadBase("CMakeBuildHelpersPreloadPart1", 1) {
+    }
+}

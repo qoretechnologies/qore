@@ -1030,6 +1030,63 @@ QoreHashNode* qore_object_private::getRuntimeMemberHash(ExceptionSink* xsink) co
     return h;
 }
 
+//! scans the objects in a recursive set that a removed value holds, directly or in its lists and hashes (#6335)
+void qore_scan_removed_value_objects(QoreValue v, RObject* root, ExceptionSink* xsink) {
+    if (!needs_scan(v)) {
+        return;
+    }
+    // an object removed or replaced directly, the common case, needs no walk and allocates nothing
+    if (v.getType() == NT_OBJECT) {
+        qore_object_private* o = const_cast<qore_object_private*>(qore_object_private::get(*v.get<const QoreObject>()));
+        if (qore_removed_object_needs_scan(o, root)) {
+            RSetHelper rsh(*o, xsink);
+        }
+        return;
+    }
+    std::vector<const AbstractQoreNode*> todo;
+    std::unordered_set<const AbstractQoreNode*> visited;
+    auto add = [&todo, &visited] (QoreValue val) {
+        if (!needs_scan(val)) {
+            return;
+        }
+        const AbstractQoreNode* n = val.getInternalNode();
+        if (n && visited.insert(n).second) {
+            todo.push_back(n);
+        }
+    };
+    add(v);
+    while (!todo.empty()) {
+        const AbstractQoreNode* n = todo.back();
+        todo.pop_back();
+        switch (n->getType()) {
+            case NT_OBJECT: {
+                qore_object_private* o = const_cast<qore_object_private*>(
+                    qore_object_private::get(*static_cast<const QoreObject*>(n)));
+                if (qore_removed_object_needs_scan(o, root)) {
+                    RSetHelper rsh(*o, xsink);
+                }
+                break;
+            }
+            case NT_LIST: {
+                ConstListIterator li(static_cast<const QoreListNode*>(n));
+                while (li.next()) {
+                    add(li.getValue());
+                }
+                break;
+            }
+            case NT_HASH: {
+                ConstHashIterator hi(static_cast<const QoreHashNode*>(n));
+                while (hi.next()) {
+                    add(hi.get());
+                }
+                break;
+            }
+            default:
+                break;
+        }
+    }
+}
+
 QoreValue qore_object_private::takeMember(ExceptionSink* xsink, const char* key, bool check_access,
         bool for_delete, bool* exists) {
     const qore_class_private* cls = qore_class_private::get(*theclass);
@@ -1062,20 +1119,41 @@ QoreValue qore_object_private::takeMember(ExceptionSink* xsink, const char* key,
         return value;
     }
 
-    QoreAutoVarRWWriteLocker al(rml);
+    QoreValue rv;
+    // the removed edge can be counted in a recursive set only if this object is in one (#6335)
+    bool in_set;
+    {
+        QoreAutoVarRWWriteLocker al(rml);
 
-    if (status == OS_DELETED) {
-        makeAccessDeletedObjectException(xsink, key, theclass->getName());
-        return QoreValue();
-    }
+        if (status == OS_DELETED) {
+            makeAccessDeletedObjectException(xsink, key, theclass->getName());
+            return QoreValue();
+        }
 
-    QoreHashNode* odata = member_class_ctx ? getCreateInternalData(member_class_ctx) : data;
+        QoreHashNode* odata = member_class_ctx ? getCreateInternalData(member_class_ctx) : data;
 
-    QoreValue rv = exists ? odata->priv->swapKeyValueIfExists(key, QoreValue(), this, *exists)
-        : odata->priv->swapKeyValue(key, QoreValue(), this);
-    if (needs_scan(rv)) {
+        rv = exists ? odata->priv->swapKeyValueIfExists(key, QoreValue(), this, *exists)
+            : odata->priv->swapKeyValue(key, QoreValue(), this);
+        if (!needs_scan(rv)) {
+            return rv;
+        }
         // the removal can take a reference out of this object's recursive set
         clearRSetClosed();
+        in_set = rset.load(std::memory_order_acquire) != nullptr;
+    }
+    // The recursive sets are repaired now, as LValueHelper does after a write, and before the caller releases the
+    // removed value: the set still counts the removed edge until a scan has followed this object's edges again, and a
+    // release of the removed value before that compares what is left of the references with the stale counts, finds
+    // them equal, and collects objects that are still referenced (#6329: a removal of a member of self, with the
+    // "remove" operator in a method, broke a cycle whose other object was then collected while referenced)
+    {
+        RSetHelper rsh(*this, xsink);
+    }
+    // the objects that the removed value holds and that are in a recursive set are scanned too: the scan of this
+    // object does not reach them when the removed edge was its only path to them, and their sets would keep counting
+    // the removed edge, so that a cycle that they are part of is never collected (#6335)
+    if (in_set) {
+        qore_scan_removed_value_objects(rv, this, xsink);
     }
     return rv;
 }
@@ -1489,10 +1567,10 @@ QoreValue qore_object_private::getReferencedMemberNoMethod(const char* mem, Exce
         return cls->evalMemberAccessorGet(obj, mem, *ami, xsink);
     }
     const qore_class_private* class_ctx = runtime_get_class();
-    const qore_class_private* member_class_ctx = qore_class_private::get(*theclass)->runtimeGetMemberContext(mem,
-        class_ctx);
+    const qore_class_private* member_class_ctx = cls->runtimeGetMemberContext(mem, class_ctx);
 
-    return getReferencedMemberNoMethodResolved(mem, member_class_ctx, xsink);
+    // the accessor members were checked above (#6272)
+    return getReferencedMemberNoMethodResolvedNoAccessor(mem, member_class_ctx, xsink);
 }
 
 QoreValue qore_object_private::getReferencedMemberNoMethodResolved(
@@ -1502,7 +1580,12 @@ QoreValue qore_object_private::getReferencedMemberNoMethodResolved(
     if (const QoreMemberInfo* ami = cls->findAccessorMember(mem)) {
         return cls->evalMemberAccessorGet(obj, mem, *ami, xsink);
     }
+    return getReferencedMemberNoMethodResolvedNoAccessor(mem, member_class_ctx, xsink);
+}
 
+QoreValue qore_object_private::getReferencedMemberNoMethodResolvedNoAccessor(
+        const char* mem, const qore_class_private* member_class_ctx,
+        ExceptionSink* xsink) const {
     QoreSafeVarRWReadLocker sl(rml);
 
     if (status == OS_DELETED) {

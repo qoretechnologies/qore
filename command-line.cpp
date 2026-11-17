@@ -1947,8 +1947,9 @@ int qore_main_intern(int argc, char* argv[], int other_po) {
             }
          } else {
             // Use the program's parse options (includes %modern, %new-style, etc.)
-            // merged with command-line options, not just command-line options alone
-            QoreParseOptions aot_po = qpgm->getParseOptions() | cmd_po;
+            // merged with command-line options, not just command-line options alone; the compatibility options that the
+            // code's %modern reset are not added back (issue #6382)
+            QoreParseOptions aot_po = qore_aot_merge_parse_options(qpgm->getParseOptions(), cmd_po);
             if (!QoreAOT::compile(*qpgm, source_text.c_str(), (int)source_text.size(),
                      source_label.c_str(), output_path, aot_po, error,
                      aot_opt_level, aot_target, aot_static, aot_include_source)) {

@@ -1,0 +1,142 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - non-blocking socket and TLS reads that end at a pattern split across sends
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires ../../../TestCertificates.qm
+
+%exec-class RecvUntilBytesOverlapTest
+
+#! A read until a pattern ends at the first occurrence of the pattern, also when the pattern's start occurs again in
+#! it (#6325)
+/** On a mismatch after a partial match, the read reset the match to 0 without comparing the byte again, so that
+    \c "\r\n.\r\n" was missed in \c "\r\n\r\n.\r\n": the read went on past the pattern, until the peer closed the
+    connection.  Each case sends data that holds the pattern once, with more data after it, split into two sends at
+    every offset, and checks that the read returns the data up to the end of the pattern; over plain sockets and TLS,
+    with a poll operation of the socket and with a step of a PollPipeline.
+*/
+class RecvUntilBytesOverlapTest inherits QUnit::Test {
+    public {
+        #! upper bound on any blocking operation; reaching it fails the test
+        const Timeout = 30s;
+
+        #! pattern, data up to and including the first occurrence of the pattern
+        const Cases = (
+            ("\r\n.\r\n", "+OK\r\n\r\n.\r\n"),
+            ("\r\n\r\n", "x\r\n\r\r\n\r\n"),
+            ("aab", "aaab"),
+            ("abab", "abaabab"),
+            ("aaaa", "aaabaaaa"),
+            ("abcabd", "abcabcabd"),
+            # a pattern without a repeated start, and one of one byte
+            ("\r\n", "abc\r\n"),
+            ("\n", "abc\n"),
+        );
+
+        #! sent after the pattern; holds no occurrence of any pattern
+        const Trailer = "ZZ";
+    }
+
+    constructor() : QUnit::Test("RecvUntilBytesOverlapTest", "1.0") {
+        addTestCase("a poll operation of a socket", sub () { runCases(False, False); });
+        addTestCase("a PollPipeline step", sub () { runCases(True, False); });
+        addTestCase("a poll operation of a TLS socket", sub () { runCases(False, True); });
+        addTestCase("a PollPipeline step over TLS", sub () { runCases(True, True); });
+        set_return_value(main());
+    }
+
+    private runCases(bool pipeline, bool tls) {
+        foreach list<string> c in (Cases) {
+            string pattern = c[0];
+            string expected = c[1];
+            string data = expected + Trailer;
+            for (int split = 0; split <= data.size(); ++split) {
+                string label = sprintf("pattern %y, data %y split at %d", pattern, data, split);
+                auto rv;
+                try {
+                    rv = readUntil(pattern, data.substr(0, split), data.substr(split), pipeline, tls);
+                } catch (hash<ExceptionInfo> ex) {
+                    rv = sprintf("%s: %s", ex.err, ex.desc);
+                }
+                assertEq(expected, rv, label);
+            }
+        }
+    }
+
+    #! a peer sends \a first and \a second in two sends, and closes the connection; returns what the read returned
+    private string readUntil(string pattern, string first, string second, bool pipeline, bool tls) {
+        Socket listener();
+        if (tls) {
+            listener.setCertificate(TestCertificates::CertPem);
+            listener.setPrivateKey(TestCertificates::KeyPem);
+        }
+        listener.bind("localhost:0", True);
+        listener.listen();
+        on_exit listener.close();
+        int port = listener.getPort();
+
+        Counter done(1);
+        background sub () {
+            on_exit done.dec();
+            try {
+                Socket conn = listener.accept(Timeout);
+                if (tls) {
+                    conn.upgradeServerToSSL(Timeout);
+                }
+                conn.setNoDelay(True);
+                if (first) {
+                    conn.send(first, Timeout);
+                    # the second part is sent in a separate segment, as a separate read
+                    usleep(2ms);
+                }
+                if (second) {
+                    conn.send(second, Timeout);
+                }
+                # the reader has read the pattern, or has missed it and reads until the connection is closed
+                usleep(50ms);
+                conn.close();
+            } catch (hash<ExceptionInfo> ex) {
+                # the client reports the result
+            }
+        }();
+        on_exit done.waitForZero(Timeout);
+
+        Socket client();
+        if (tls) {
+            client.connectSSL(sprintf("localhost:%d", port), Timeout);
+        } else {
+            client.connect(sprintf("localhost:%d", port), Timeout);
+        }
+        on_exit client.close();
+
+        AbstractPollOperation op;
+        if (pipeline) {
+            PollPipeline p(client);
+            p.addRecvUntilBytes(pattern, True);
+            op = p;
+        } else {
+            op = client.startPollRecvUntilBytesString(pattern);
+        }
+        drive(op);
+        return op.getOutput();
+    }
+
+    #! drives a poll operation to its goal
+    private drive(AbstractPollOperation op) {
+        date deadline = now_us() + Timeout;
+        while (!op.goalReached()) {
+            if (now_us() > deadline) {
+                throw "POLL-TIMEOUT", sprintf("poll operation timed out in state %y", op.getState());
+            }
+            *hash<SocketPollInfo> pi = op.continuePoll();
+            if (!pi) {
+                continue;
+            }
+            Socket::poll((pi,), 5s);
+        }
+    }
+}
