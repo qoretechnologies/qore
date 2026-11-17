@@ -4681,8 +4681,8 @@ ChildAttachHelper::~ChildAttachHelper() {
     loaded by \c %%requires, which has no warning sink separate from its exception sink (raising the warning
     there would make it a parse error), the warning is a parse warning of the code with the directive.
 
-    A skipped child (\c MODULE-CHILD-SKIPPED) reflects a deliberate restriction in the container Program and is
-    only reported when warnings are enabled.
+    A skipped child (\c MODULE-CHILD-SKIPPED) reflects a deliberate restriction (the child is blacklisted, or the
+    container Program cannot load modules) and is only reported when warnings are enabled.
 */
 static void qore_report_child_module_not_attached(ExceptionSink& xsink, ExceptionSink& wsink,
         int warning_mask, const char* mod_name, const ChildModuleInfo& c) {
@@ -4783,6 +4783,21 @@ int QoreModuleManager::attachChildModules(QoreAbstractModule& mi, ExceptionSink&
         // diagnostic.  The recorded failure stays visible in the module hash
         if (c.status == CMS_ATTACHED || c.status == CMS_ABSENT || c.status == CMS_FAILED) {
             continue;
+        }
+
+        // a blacklisted child is excluded on purpose, whether or not it is installed: it is skipped, not loaded,
+        // and as a module cannot be removed from the blacklist, the skip is final and reported once
+        {
+            bl_map_t::const_iterator bi = mod_blacklist.find(c.name);
+            if (bi != mod_blacklist.end()) {
+                QoreStringMaker reason("module '%s' was blacklisted %s", c.name.c_str(), bi->second.c_str());
+                if (c.status != CMS_SKIPPED || c.desc != reason.c_str()) {
+                    c.status = CMS_SKIPPED;
+                    c.desc = reason.c_str();
+                    qore_report_child_module_not_attached(xsink, wsink, warning_mask, mi.getName(), c);
+                }
+                continue;
+            }
         }
 
         if (no_modules) {

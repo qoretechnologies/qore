@@ -47,6 +47,8 @@ class SeparatedModuleBlacklistTest inherits QUnit::Test {
         addTestCase("a separated module that is not blacklisted", \testNotBlacklisted());
         addTestCase("a flat module", \testFlatModule());
         addTestCase("a loaded separated module", \testLoadedModule());
+        addTestCase("a blacklisted child module", \testChildModule());
+        addTestCase("a blacklisted child module without warnings", \testChildModuleQuiet());
         set_return_value(main());
     }
 
@@ -312,6 +314,83 @@ public namespace %s {
             Program p = getProgram();
             p.parse("%requires FlatBl\n", "flat-by-name");
         });
+    }
+
+    #! Writes a flat module that declares \a child with %try-child-module
+    private string writeParent(string name, string child) {
+        string path = dir + DirSep + name + ".qm";
+        write(path, sprintf("%%modern
+%%try-child-module %s
+
+module %s {
+    version = \"1.0\";
+    desc = \"separated module blacklist test fixture\";
+    author = \"Qore Technologies, s.r.o.\";
+    url = \"https://qore.org\";
+    license = \"MIT\";
+}
+
+public namespace %s {
+    public int sub value() {
+        return 2;
+    }
+}
+", child, name, name));
+        return path;
+    }
+
+    #! a blacklisted child module is skipped on purpose, whether or not it is installed; it did not fail to load
+    testChildModule() {
+        # not installed
+        blacklist("SepBlChildAbsent");
+        writeParent("SepBlParentAbsent", "SepBlChildAbsent");
+        # installed, as a separated module
+        writeSeparated("SepBlChildPresent", 13);
+        blacklist("SepBlChildPresent");
+        writeParent("SepBlParentPresent", "SepBlChildPresent");
+
+        foreach hash<auto> i in ({"parent": "SepBlParentAbsent", "child": "SepBlChildAbsent"},
+                {"parent": "SepBlParentPresent", "child": "SepBlChildPresent"}) {
+            Program p = getProgram();
+            *hash<ExceptionInfo> w = p.parse(sprintf("%%requires %s\nint sub get() { return %s::value(); }\n",
+                i.parent, i.parent), "child-" + i.parent, WARN_ALL);
+            # the parent is loaded and usable
+            assertEq(2, p.callFunction("get"), i.parent);
+            # the only warning says that the child was skipped because it is blacklisted
+            assertEq("MODULE-CHILD-SKIPPED", w.err, i.parent);
+            assertEq(i.child, w.arg, i.parent);
+            assertEq(sprintf("module '%s': child module '%s' declared with %%try-child-module was not attached: "
+                "module '%s' was blacklisted %s", i.parent, i.child, i.child, Reason), w.desc, i.parent);
+            assertEq(NOTHING, w.next, i.parent);
+
+            hash<auto> ci = get_module_hash(){i.parent}."child-modules"{i.child};
+            assertEq("skipped", ci.status, i.parent);
+            assertEq(sprintf("module '%s' was blacklisted %s", i.child, Reason), ci.desc, i.parent);
+            assertEq(NOTHING, ci.err, i.parent);
+            assertEq(False, get_module_hash().hasKey(i.child), i.parent);
+
+            # the skip is final: a later load of the parent reports nothing more
+            Program p2 = getProgram();
+            assertEq(NOTHING, p2.parse("%requires " + i.parent + "\n", "child-again-" + i.parent, WARN_ALL),
+                i.parent);
+        }
+    }
+
+    #! with warnings disabled, a blacklisted child module is not reported at all, unlike a child that failed to load
+    testChildModuleQuiet() {
+        writeParent("SepBlParentQuiet", "SepBlChildQuiet");
+        string script = dir + DirSep + "child-quiet.q";
+        write(script, sprintf("%%modern
+qore_add_module_to_blacklist(\"SepBlChildQuiet\", %y);
+Program p(PO_NEW_STYLE);
+p.parse(\"%%prepend-module-path %s\\n%%requires SepBlParentQuiet\\n\", \"quiet\");
+printf(\"status: %%s\\n\", get_module_hash().SepBlParentQuiet.\"child-modules\".SepBlChildQuiet.status);
+", Reason, dir));
+        string qore = TestInterpreter::qore_interpreter();
+        int rc;
+        string out = backquote(sprintf("%s %s 2>&1", qore, script), \rc);
+        assertEq(0, rc, out);
+        assertEq("status: skipped\n", out);
     }
 
     #! a module that is already loaded cannot be blacklisted
