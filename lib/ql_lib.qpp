@@ -2166,6 +2166,13 @@ string get_global_http2_mode() {
 
     @throw BLACKLIST-ERROR the module name contains a NUL character; see @ref path_nul_characters
 
+    A blacklisted module is refused in every form and however it is loaded: as a binary module, an AOT module, a
+    source module or a @ref separated_modules "separated module" (by name, by the path of its file or directory, with
+    @ref requires "%requires", through another module that requires it, or with load_module()); the load raises a
+    \c LOAD-MODULE-ERROR exception with \a message.  An AOT module that is refused is not replaced by its source.  A
+    blacklisted @ref user_module_children "child module" is not attached, and is reported as skipped.  A module that
+    is already loaded cannot be blacklisted.
+
     @since %Qore 2.1
 */
 int qore_add_module_to_blacklist(string name, string message = "by an API call") [flags=NAMED_ARGS;dom=PROCESS] {
@@ -2188,6 +2195,8 @@ int qore_add_module_to_blacklist(string name, string message = "by an API call")
     @throw BLACKLIST-ERROR the module name contains a NUL character; see @ref path_nul_characters
 
     If the given module is already in the blacklist, then no error is raised
+
+    See qore_add_module_to_blacklist() for what the blacklist refuses
 
     @since %Qore 2.1
 */
