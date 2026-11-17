@@ -3458,14 +3458,14 @@ private:
       assert(pgm_set.empty());
       assert(tld_map.empty());
 #ifdef DEBUG
-      dbgLiveCountChanged(-1);
+      dbgUnregister(dbg_id);
 #endif
    }
 
 public:
    DLLLOCAL ThreadProgramData(ThreadData* n_td) : td(n_td) {
 #ifdef DEBUG
-      dbgLiveCountChanged(1);
+      dbg_id = dbgRegister();
 #endif
    }
 
@@ -3563,15 +3563,26 @@ public:
    typedef void (*dbg_after_unlist_t)(int tid, QoreProgram* pgm);
    DLLLOCAL static std::atomic<dbg_after_unlist_t> dbg_after_unlist;
 
-   //! debug-only: returns the number of objects of this class that exist
-   DLLLOCAL static int64 dbgLiveCount();
+   //! debug-only: returns the ID of this object, unique in the process (also over objects that were destroyed)
+   DLLLOCAL int64 dbgGetId() const {
+      return dbg_id;
+   }
 
-   //! debug-only: waits until no more than \a count objects of this class exist; returns false on timeout
-   DLLLOCAL static bool dbgWaitLiveCount(int64 count, int64 timeout_ms);
+   //! debug-only: waits until the object with the given ID has been destroyed; returns false on timeout
+   /** A test follows the data of the threads it started without counting the objects of the other threads of the
+       process
+   */
+   DLLLOCAL static bool dbgWaitReleased(int64 id, int64 timeout_ms);
 
 private:
-   //! debug-only: counts the objects of this class
-   DLLLOCAL static void dbgLiveCountChanged(int64 delta);
+   //! debug-only: the ID of this object; see dbgGetId()
+   int64 dbg_id;
+
+   //! debug-only: registers a new object as live and returns its ID
+   DLLLOCAL static int64 dbgRegister();
+
+   //! debug-only: registers the object with the given ID as destroyed
+   DLLLOCAL static void dbgUnregister(int64 id);
 #endif
 };
 

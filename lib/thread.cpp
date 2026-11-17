@@ -2059,11 +2059,13 @@ void ThreadProgramData::del(ExceptionSink* xsink) {
 std::atomic<ThreadProgramData::dbg_after_unlist_t> ThreadProgramData::dbg_after_unlist{nullptr};
 
 namespace {
-//! the number of ThreadProgramData objects; see ThreadProgramData::dbgLiveCount()
+//! the IDs of the ThreadProgramData objects that exist; see ThreadProgramData::dbgWaitReleased()
 struct ThreadProgramDataLiveCount {
     std::mutex m;
     std::condition_variable cond;
-    int64 count = 0;
+    //! the ID of the last object created
+    int64 last_id = 0;
+    std::set<int64> live;
     //! a leaf lock, taken whenever thread data is created or destroyed, also in the child of fork()
     QoreForkStdMutex fork_handler{m, QFLR_LEAF, "tpd_live_count", QFLM_ACQUIRE, {&cond}};
 };
@@ -2079,24 +2081,27 @@ ThreadProgramDataLiveCount& tpd_live_count() {
 [[maybe_unused]] ThreadProgramDataLiveCount& tpd_live_count_init = tpd_live_count();
 }
 
-void ThreadProgramData::dbgLiveCountChanged(int64 delta) {
+int64 ThreadProgramData::dbgRegister() {
     ThreadProgramDataLiveCount& c = tpd_live_count();
     std::lock_guard<std::mutex> l(c.m);
-    c.count += delta;
-    assert(c.count >= 0);
+    int64 id = ++c.last_id;
+    c.live.insert(id);
+    return id;
+}
+
+void ThreadProgramData::dbgUnregister(int64 id) {
+    ThreadProgramDataLiveCount& c = tpd_live_count();
+    std::lock_guard<std::mutex> l(c.m);
+    size_t n = c.live.erase(id);
+    assert(n == 1);
+    (void)n;
     c.cond.notify_all();
 }
 
-int64 ThreadProgramData::dbgLiveCount() {
-    ThreadProgramDataLiveCount& c = tpd_live_count();
-    std::lock_guard<std::mutex> l(c.m);
-    return c.count;
-}
-
-bool ThreadProgramData::dbgWaitLiveCount(int64 count, int64 timeout_ms) {
+bool ThreadProgramData::dbgWaitReleased(int64 id, int64 timeout_ms) {
     ThreadProgramDataLiveCount& c = tpd_live_count();
     std::unique_lock<std::mutex> l(c.m);
-    return c.cond.wait_for(l, std::chrono::milliseconds(timeout_ms), [&c, count]() { return c.count <= count; });
+    return c.cond.wait_for(l, std::chrono::milliseconds(timeout_ms), [&c, id]() { return !c.live.count(id); });
 }
 #endif
 
