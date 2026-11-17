@@ -1261,6 +1261,10 @@ private:
 //! value only if the frame has read one through a reference (QORE_IR_GIVES_CALL_REFERENCE_READS, issue #6441); the call
 //! then looks for the arguments to give (hasConsumedCallArgs())
 static inline bool qore_ir_call_may_give(uint8_t gives, const IRCleanupSlots& cleanup) {
+    // most calls give nothing: one test, as before the bits were told apart
+    if (__builtin_expect(!gives, 1)) {
+        return false;
+    }
     if (gives & QORE_IR_GIVES_CALL_ARGS) {
         return !cleanup.empty();
     }
@@ -2778,8 +2782,11 @@ static void markIRValueUse(std::vector<uint8_t>& uses, QoreIRValue value) {
     the AST interpreter does (c.m(r) in foreach auto r in ((\o,)); issue #6441)
 */
 static bool qore_ir_element_local_may_read_reference(const QoreIRFunction& func, const LocalVar* local) {
-    return func.element_store_locals.count(reinterpret_cast<const void*>(local))
-        && qore_ir_local_may_hold_reference(local);
+    // a variable that no element and no store that can be a reference is assigned to (a loop over a list of ints)
+    // is not one
+    const void* key = reinterpret_cast<const void*>(local);
+    return func.element_store_locals.count(key)
+        && (func.reference_element_locals.count(key) || func.reference_store_locals.count(key));
 }
 
 static bool qore_ir_reads_variable_for_call_arg(QoreIROpcode op) {

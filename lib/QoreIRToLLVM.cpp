@@ -7886,7 +7886,11 @@ llvm::Value* QoreIRToLLVM::loadLocalCacheValue(const void* key, const LocalCache
     b.CreateCondBr(needs_read, node_bb, done_bb, llvm::MDBuilder(ctx).createBranchWeights(1, 1000));
     b.SetInsertPoint(node_bb);
     llvm::Value* read;
-    if (qore_ir_local_may_hold_reference(static_cast<const LocalVar*>(key))) {
+    // a variable that no element and no store that can be a reference is assigned to (a loop over a list of ints)
+    // never holds one
+    if (qore_ir_local_may_hold_reference(static_cast<const LocalVar*>(key))
+            && (!current_ir_func || current_ir_func->reference_element_locals.count(key)
+                || current_ir_func->reference_store_locals.count(key))) {
         // an untyped variable can hold a reference, given by an element, which reads as the referenced lvalue: the
         // value read is owned, and held in the slots of the read site as emitReferenceLocalRead() holds it, released
         // at the following reads, at the end of the statement and at the exit of the function, or given to a call
@@ -8292,13 +8296,23 @@ bool QoreIRToLLVM::releaseConsumedCallArgs(const QoreIRInstruction* inst, llvm::
             builder->CreateCondBr(held, release_bb, released_bb, llvm::MDBuilder(ctx).createBranchWeights(1, 1000));
             builder->SetInsertPoint(release_bb);
             builder->CreateCall(release_fn, {ref_read_it->second, boxed, xsink_arg});
+            // the destructor of the value can raise: a call that is not an invoke checks it here, on the path of
+            // the release only (the caller checks only for the releases that it is told of); an invoke lowerer
+            // checks before its terminator
+            if (!use_pending) {
+                emitExceptionCheck(module, release_func, inst);
+            }
             builder->CreateBr(released_bb);
             builder->SetInsertPoint(released_bb);
             // a read that a later write to the local can release before its last use took a reference of its own
             // as well (overwritten_local_reads), in a cleanup slot of the value
             if (invoke_alloca_map.find(id) != invoke_alloca_map.end()) {
                 releaseCleanupForValueId(id, module);
+                released = true;
+            } else if (use_pending) {
+                released = true;
             }
+            continue;
         } else {
             releaseCleanupForValueId(id, module);
         }

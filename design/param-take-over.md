@@ -235,13 +235,18 @@ released it, so the object was leaked: the read now holds the value in the slots
 (`qore_rt_read_element_local_held()`), released and given to calls as the slots of `emitReferenceLocalRead()` are.
 The helper also sets a flag of the frame (`element_read_held_flag`), and the end of a statement releases these slots
 behind one test of the flag, so that a frame that never reads a reference through such a variable pays one load and
-one branch per statement.  The
+one branch per statement.  Only a variable that an element or a store that can be a reference is assigned to
+(`QoreIRFunction::reference_element_locals`, `reference_store_locals`) has these slots: the variable of a loop over a
+list of ints reads its cache as before.  The
 IR interpreter gives such a read to every call (`qore_ir_element_local_may_read_reference()` in
 `buildValueUseCounts()` and in the test of `QORE_IR_GIVES_CALL_TEMPS`): the variable does not hold the value read, so
 a method that writes the referenced variable and its parameter destroys the object at the write, as in the AST
-interpreter.  Whether the call gives an argument is decided when it is made (`hasConsumedCallArgs()`, which tests
-first that the value holds a reference), so a read of an int or of a borrowed value makes the call that gives
-nothing.  A typed variable is never assigned a reference.
+interpreter.  Whether the call gives an argument is decided when it is made: such a call has
+`QORE_IR_GIVES_CALL_REFERENCE_READS` rather than `QORE_IR_GIVES_CALL_ARGS`, and looks for an argument to give
+(`hasConsumedCallArgs()`) only in a frame that has read a value through a reference
+(`IRCleanupSlots::hasReferenceRead()`, `qore_ir_call_may_give()`).  Native code makes a call that may give such a read in both forms and makes the call that
+gives nothing when no slot holds its value (`emitGivenOrPlainCall()`, also for method calls), and releases a slot after
+the call only if it holds the value, tested inline.  A typed variable is never assigned a reference.
 
 The value of a cast is not one of them: the AST interpreter holds a temporary operand of a cast until the statement
 ends (issue #5712), and so do the other modes.

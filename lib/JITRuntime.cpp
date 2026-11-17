@@ -2896,6 +2896,18 @@ extern "C" DLLEXPORT uint64_t qore_rt_read_element_local(uint64_t val, Exception
     return type == NT_REFERENCE ? qore_rt_deref_if_reference(val, xsink) : val;
 }
 
+//! The read through a reference of qore_rt_read_element_local_held(), out of its fast path for any other value
+static __attribute__((noinline)) uint64_t qore_rt_read_element_local_held_reference(uint64_t val, uint64_t* current,
+        uint64_t* previous, uint8_t* held, ExceptionSink* xsink) {
+    uint64_t rv = qore_rt_deref_if_reference(val, xsink);
+    uint64_t old_previous = *previous;
+    *previous = *current;
+    *current = rv;
+    *held = 1;
+    qore_rt_decref(old_previous, xsink);
+    return rv;
+}
+
 //! As qore_rt_read_element_local(), for an untyped variable: the value read through a reference is held by the read
 /** The value that a reference held by the variable reads as is owned by the read: it is stored in \a current, whose
     value moves to \a previous, and the value that \a previous held is released, as for a read through a reference by
@@ -2915,13 +2927,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_read_element_local_held(uint64_t val, uint
     if (type != NT_REFERENCE) {
         return qore_rt_is_weak_reference_type(type) ? toBits(qore_rt_get_weak_reference_target(v)) : val;
     }
-    uint64_t rv = qore_rt_deref_if_reference(val, xsink);
-    uint64_t old_previous = *previous;
-    *previous = *current;
-    *current = rv;
-    *held = 1;
-    qore_rt_decref(old_previous, xsink);
-    return rv;
+    return qore_rt_read_element_local_held_reference(val, current, previous, held, xsink);
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_deref_if_reference(uint64_t val, ExceptionSink* xsink) {

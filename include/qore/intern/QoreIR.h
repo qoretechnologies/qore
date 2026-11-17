@@ -4662,6 +4662,11 @@ public:
     */
     std::unordered_set<const void*> reference_store_locals;
 
+    //! The variables of foreach loops (AssignmentMode::Element) that an element that can be a reference can be
+    //! assigned to (see computeReferenceStoreLocals()): only their reads can read through a reference that they hold,
+    //! which the engines hold and give to calls (issue #6441); the variable of a loop over a list of ints is not one
+    std::unordered_set<const void*> reference_element_locals;
+
     //! The values known never to be a reference, indexed by value id (1 if known; see computeReferenceStoreLocals())
     /** A value not marked here can be a reference (or is not known, as the value of a parameter); the engines use it
         to skip checking a value stored to a local that can hold a reference
