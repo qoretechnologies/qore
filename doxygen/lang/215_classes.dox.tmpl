@@ -370,6 +370,9 @@ softstring MyNamespace::MyClass::myMethod(softint i) {
     namespace (<tt>int NS::I::C::m() { return 1; }</tt> in \c NS) is also accepted when it does not name a class
     relative to the namespace.  A class path that names no class this way is a parse error (before %Qore 3.0, release
     builds ignored the first part of such a path and could add the method to a class of the enclosing namespace).
+    Like any out-of-line method definition, one in a namespace block is refused under
+    @ref strong-encapsulation "%strong-encapsulation", which @ref modern "%modern" sets, so it is code for the AST
+    interpreter only.
 
     @note Because method definitions are allowed out-of-line, this means that builtin classes may be extended with new user methods, however user constructor, destructor, and copy methods cannot be added to builtin classes; to customize the behavior of these methods for builtin classes, subclass the class instead.\n\n
     When parse option @ref allow-bare-refs "%allow-bare-refs" or @ref new-style "%new-style" is enabled, no \c "$" or \c "$." prefixes can be used with variable or method or member names.
@@ -717,6 +720,15 @@ D::p = new Program(PO_NEW_STYLE);
     @ref threading_and_variables), and to global variables, but not to the local variables of a function, method or
     closure, so naming one is a parse error.  A static class variable's initializer is evaluated when the class is
     initialized, which can be before the top-level code has assigned the variable.
+
+    An untyped member that more than one class of the hierarchy declares (possible only without
+    @ref require-types "%require-types": a class that declares a member of a base class again, or two base classes
+    that declare the same member; a typed declaration of such a member is a parse error) is one member of the object.
+    Its initialization expressions run in the order of initialization, base classes first and in the order of the
+    inheritance list, each once: the last one gives the value, it can read the value that the one before it gave (ex:
+    <tt>class B inherits A { public { $.a = $.a + 1; } }</tt>), and the value that it replaces is released (an object
+    that nothing else references is destroyed).  A declaration without an initialization expression leaves the value
+    as it is.
 
     @note The automatic <tt>argv</tt> local variable is instantiated as usual in all class methods where there are more arguments than variables declared in the method declaration.\n\n
 

@@ -688,6 +688,24 @@ private:
         first table; its size is set by finalizeCleanupFrame().
     */
     llvm::AllocaInst* cleanup_frame = nullptr;
+    //! the buffer of the arrays that the code of one IR instruction passes to the runtime (the operands of a call or
+    //! of the construction of a container): one entry-block alloca of the function, whose slots every instruction
+    //! uses again, so that the frame holds the arrays of one instruction instead of those of all of them (qore#6415);
+    //! made with the first array and given its size when the function is finalized (sizeCallArrayBuffer())
+    llvm::AllocaInst* call_array_buffer = nullptr;
+    //! the slots of call_array_buffer in use by the instructions being lowered (CallArrayScope)
+    unsigned call_array_top = 0;
+    //! the most slots of call_array_buffer in use at once
+    unsigned call_array_max = 0;
+
+    //! returns the address of \a slots 8-byte slots of the call array buffer for the IR instruction being lowered
+    /** the slots stay the instruction's until its lowering ends (lowerInstruction()); the address is computed in the
+        entry block, so that it is available in every block of the instruction's code
+    */
+    DLLLOCAL llvm::Value* allocCallArray(llvm::Function* llvm_func, unsigned slots);
+
+    //! gives the call array buffer the size of the most slots in use at once
+    DLLLOCAL void sizeCallArrayBuffer();
 
     //! Returns the cleanup frame of the function, making it if it has none
     llvm::AllocaInst* getCleanupFrame(llvm::Function* llvm_func);
@@ -1193,6 +1211,17 @@ private:
     //! Returns true if the call \a inst gives the callee the cleanup slot of an argument (buildArgCleanupArray()):
     //! such a call does not call the fast entry of a callee whose parameter takes its argument over (issue #5958)
     bool callGivesArgs(const QoreIRInstruction* inst) const;
+    //! Returns the slot of the reference that the read of argument \a value_id through a reference took, if the call
+    //! \a inst gives it to the callee (buildArgCleanupArray()), or nullptr
+    /** The value read through a reference by a local with a reference flag is kept in the slot of its read site
+        (reference_read_slots), which holds it only if the local held a reference when the value was read; the call
+        gives the slot when it holds the value, as it gives the cleanup slot of a temporary, so that a parameter that
+        the callee writes holds the only reference that the read took, as in the AST interpreter, whose argument list
+        holds the value read and moves it into the parameter (issue #6262).  The conditions are those of its release
+        when the call returns (releaseConsumedCallArgs()); a call of a function or a static method none of whose
+        parameters takes its argument over does not give it (qore_ir_call_takes_no_arg_over())
+    */
+    llvm::AllocaInst* givenReferenceReadSlot(const QoreIRInstruction* inst, uint32_t value_id) const;
 
     //! Emits the read of a local with a reference flag: the cached value, or the referenced value if it is a reference
     /** The referenced value is read only when the flag is set (qore_rt_read_reference_local()); it is owned and kept,

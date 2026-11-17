@@ -62,6 +62,17 @@
 #define OTF_USER    CT_USER
 #define OTF_BUILTIN CT_BUILTIN
 
+#ifdef DEBUG
+//! the parent class edges that the checks of the generic parent instantiations of classes have visited (qore#6423)
+/** Read by the dbg_generic_parent_check_steps() debug hook, so that a test can require a bound on the steps of the
+    checks independent of the timing
+*/
+DLLLOCAL extern std::atomic<int64> qore_generic_parent_check_steps;
+#define QORE_GENERIC_PARENT_CHECK_STEP() qore_generic_parent_check_steps.fetch_add(1, std::memory_order_relaxed)
+#else
+#define QORE_GENERIC_PARENT_CHECK_STEP()
+#endif
+
 // cannot use vector_map here for performance reasons with method lookups
 #ifdef HAVE_QORE_HASH_MAP
 #include <qore/hash_map_include.h>
@@ -1485,6 +1496,9 @@ public:
     // issue #2970: marks the member to be accessed with the classes in the argument when
     // accessing the object's data
     DLLLOCAL void addContextAccess(const QoreMemberInfo& mi, const qore_class_private* qc);
+
+    // issue #6393: copies the context entries of the given member, which shares the storage of this member
+    DLLLOCAL void addContextMap(const QoreMemberInfo& mi);
 
     DLLLOCAL void addContextAccessForClass(const qore_class_private* class_ctx,
             const qore_class_private* member_class_ctx);

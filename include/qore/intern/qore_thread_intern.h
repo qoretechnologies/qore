@@ -234,12 +234,6 @@ public:
         return nullptr;
     }
 
-protected:
-    //! the restrictions that the module's \c domains key removed from its Program (see setDomains())
-    int64 dom_removed = QDOM_DEFAULT;
-
-public:
-
     //! Records a child module declared with %try-child-module in this module
     /** @param loc the location of the directive
         @param spec the module specification (feature name with an optional version constraint)
@@ -925,6 +919,14 @@ enum qore_dbg_program_entry_site_e : int {
 //! Makes the next step of an entry into another Program at \a site throw std::bad_alloc; several sites can be armed,
 //! each fails once; -1 disarms all of them
 DLLLOCAL void qore_dbg_fail_next_program_entry(int site);
+//! Holds the next background thread that releases its TID for up to \a ms milliseconds before it leaves
+//! thread_counter, or until the static objects are destroyed (issue #6405)
+DLLLOCAL void qore_dbg_hold_next_thread_finish(int ms);
+//! Holds the next background thread that ends for up to \a ms milliseconds in a thread-local destructor, after it
+//! has returned from its thread function, or until the static objects are destroyed (issue #6412)
+DLLLOCAL void qore_dbg_hold_next_thread_tls_exit(int ms);
+//! Waits until a finishing background thread is held; returns false on timeout
+DLLLOCAL bool qore_dbg_wait_thread_finish_held(int timeout_ms);
 
 //! Returns true, and disarms the site, if the next step at \a site is armed to fail
 DLLLOCAL bool qore_dbg_program_entry_fails(int site);
@@ -1158,6 +1160,35 @@ DLLLOCAL bool runtime_module_call_override_in_effect(const QoreProgram* module_p
 //! runtime_module_call_override_in_effect() for the data of the current thread, \a td
 DLLLOCAL bool runtime_module_call_override_in_effect(ThreadData* td, const QoreProgram* module_pgm);
 
+//! The run-time parse options of a thread and the override that they were computed with (ThreadData)
+/** Declared here, so that RuntimeParseOptionsOverrideHelper restores it inline in every build: it runs on every call
+    of a user variant (qore#6446).  The members other than the parse options have no initializers, so that the copy
+    that the helper saves is not initialized on every call: a value-initialized struct (\c QoreRuntimePoState()) has
+    them zero
+*/
+struct QoreRuntimePoState {
+    //! the run-time parse options of the thread, with the override applied
+    QoreParseOptions po;
+    QoreParseOptions override_mask;
+    QoreParseOptions override_value;
+    //! the options of override_mask whose value is that of the override, not also that of the code
+    /** see QoreCallParseOptionsOverride::replace
+    */
+    QoreParseOptions override_replace;
+    //! the restrictions that the code of module_pgm inherits from its caller
+    /** see runtime_get_own_program_state_parse_options()
+    */
+    QoreParseOptions caller_restrictions;
+    //! the Program of the module whose code runs with caller_restrictions, or nullptr
+    const QoreProgram* module_pgm;
+    //! the ID of the application Program that the code of module_pgm runs for
+    qore_program_id_t app_pgm_id;
+    //! true while module code runs for a sandboxed caller; see QoreCallParseOptionsOverride::sandboxed
+    bool sandboxed;
+    //! the module Program whose code the override was set for; see QoreCallParseOptionsOverride::override_pgm
+    const QoreProgram* override_pgm;
+};
+
 class RuntimeParseOptionsOverrideHelper {
 public:
     //! sets no override; see set()
@@ -1202,20 +1233,19 @@ public:
 
 private:
     //! true if the override has been set; the state saved below is valid only then (it is written by set() and read
-    //! by restore() only), so it takes no initialization: the helper is created on every call of a user variant
+    //! by restore() only), so it takes no initialization beyond that of its parse options: the helper is created on
+    //! every call of a user variant
     bool active = false;
-    bool old_sandboxed;
-    ThreadData* td;
-    QoreParseOptions old_mask;
-    QoreParseOptions old_value;
-    QoreParseOptions old_replace;
-    QoreParseOptions old_po;
-    QoreParseOptions old_caller_restrictions;
-    const QoreProgram* old_module_pgm;
-    qore_program_id_t old_app_pgm_id;
-    const QoreProgram* old_override_pgm;
+    //! the state of the thread (ThreadData::runtime_po_state)
+    QoreRuntimePoState* state;
+    //! the state that set() replaced
+    QoreRuntimePoState old;
 
-    DLLLOCAL void restore();
+    //! restores the state that set() replaced; inline, as it runs on every call of a user variant (qore#6446)
+    DLLLOCAL QORE_INTERN_ALWAYS_INLINE void restore() {
+        assert(active);
+        *state = old;
+    }
 };
 
 //! The run-time parse options in effect on a thread: its options and the override that they were computed with
@@ -2771,6 +2801,10 @@ protected:
 // raises STACK-LIMIT-EXCEEDED and returns -1 if the stack of the thread is exhausted; see thread.cpp
 DLLLOCAL int check_stack(ExceptionSink* xsink);
 
+// raises STACK-LIMIT-EXCEEDED and returns -1 if the stack of the thread cannot take \a reserve more bytes before its
+// stack check would fail (the frame of a compiled function, qore#6414); see thread.cpp
+DLLLOCAL int check_stack_reserve(ExceptionSink* xsink, size_t reserve);
+
 //! Keeps the Program of a reference from being deleted while the reference's lvalue is used
 /** A reference can outlive the Program whose lvalue it refers to: a function of the Program can return one, and the
     Program's variables and code are freed with the Program, while the reference keeps their addresses (its lvalue
@@ -3486,6 +3520,15 @@ public:
          i = i ? i - 1 : ModuleProgramDataCacheSize - 1;
       }
       return nullptr;
+   }
+
+   //! forgets the cached local data of the thread in the given Program, which is deleted; called in the thread itself
+   DLLLOCAL void forgetModuleProgramData(const QoreProgram* pgm) {
+      for (ModuleProgramDataCacheEntry& e : module_pgm_cache) {
+         if (e.pgm == pgm) {
+            e = ModuleProgramDataCacheEntry();
+         }
+      }
    }
 
    //! caches the thread's local data of a Program with module lifetime; see findModuleProgramData()

@@ -88,6 +88,8 @@
 #cmakedefine HAVE_MKFIFO
 #cmakedefine HAVE_MKFIFO
 #cmakedefine HAVE_NANOSLEEP
+#cmakedefine HAVE_TCP_INFO_TCPI_SND_WND
+#cmakedefine HAVE_TCP_CONNECTION_INFO_TCPI_SND_WND
 #cmakedefine HAVE_POLL
 #cmakedefine HAVE_PPOLL
 #cmakedefine HAVE_POSIX_SPAWN

@@ -2928,7 +2928,11 @@ static bool buildValueUseCounts(const QoreIRFunction& func,
             if (inst->result.isValid() && inst->result.id < def_block.size()) {
                 def_block[inst->result.id] = block.get();
                 def_scope[inst->result.id] = inst->temp_scope_id;
-                def_by_call[inst->result.id] = arg_start >= 0 || qore_ir_is_sequence_temp(inst);
+                // a RefSelf gives the value a reference of the frame's own: the value of a fold or of a functional
+                // operator over a single value, whose source has been released (see lowerWithSourceRelease()), which
+                // a call takes over as a call's value (f(foldl $1 + $2, l); issue #6262)
+                def_by_call[inst->result.id] = arg_start >= 0 || qore_ir_is_sequence_temp(inst)
+                    || inst->opcode == QoreIROpcode::RefSelf;
                 def_by_variable_read[inst->result.id] = qore_ir_reads_variable_for_call_arg(inst->opcode);
                 def_inst[inst->result.id] = inst;
                 def_pos[inst->result.id] = static_cast<uint32_t>(inst_pos);
@@ -2963,7 +2967,11 @@ static bool buildValueUseCounts(const QoreIRFunction& func,
                         return;
                     }
                     if (phi_inst) {
-                        ++phi_uses[operand.id];
+                        // a Phi that is its own incoming value on a loop's back edge (the accumulator of foldl $1, l)
+                        // does not use it otherwise: the Phi after the loop can take its value over (issue #6262)
+                        if (operand.id != inst->result.id) {
+                            ++phi_uses[operand.id];
+                        }
                     } else if (def_block[operand.id] != block.get()) {
                         used_elsewhere[operand.id] = 1;
                     }
@@ -2979,6 +2987,13 @@ static bool buildValueUseCounts(const QoreIRFunction& func,
             def_by_call[phi->result.id] = 1;
         }
     }
+    // a new list or hash that the frame owns: a literal, or the result container of map and hash map, which a Phi
+    // takes over as a call's value (the source of a fold, c ? (mk(), mk()) : (); the value of map; issue #6262)
+    auto is_new_container = [](QoreIROpcode op) -> bool {
+        return op == QoreIROpcode::CreateEmptyList || op == QoreIROpcode::CreateSizedList
+            || op == QoreIROpcode::MakeList || op == QoreIROpcode::MakeHash
+            || op == QoreIROpcode::MakeHashConstKeys;
+    };
     for (const QoreIRPhiInstruction* phi : phis) {
         for (const auto& inc : phi->incoming) {
             // the element that an iterator gives owns its slot too (see IteratorNext): the first element of a fold
@@ -2992,7 +3007,8 @@ static bool buildValueUseCounts(const QoreIRFunction& func,
                     && (def_by_call[inc.value.id] || (def_inst[inc.value.id]
                         && (def_inst[inc.value.id]->opcode == QoreIROpcode::IteratorNext
                             || def_inst[inc.value.id]->opcode == QoreIROpcode::AddAny
-                            || def_inst[inc.value.id]->opcode == QoreIROpcode::SubAny)))
+                            || def_inst[inc.value.id]->opcode == QoreIROpcode::SubAny
+                            || is_new_container(def_inst[inc.value.id]->opcode))))
                     && phi_uses[inc.value.id] == 1 && !used_elsewhere[inc.value.id]) {
                 phi_takes_incoming[inc.value.id] = 1;
             }
@@ -3017,8 +3033,9 @@ static bool buildValueUseCounts(const QoreIRFunction& func,
                             || !used_elsewhere[id] || !def_inst[id] || !def_block[id]) {
                         continue;
                     }
+                    // the result container of map and hash map: a new list or hash (issue #6262)
                     if (!def_by_call[id] && def_inst[id]->opcode != QoreIROpcode::IteratorNext
-                            && def_inst[id]->opcode != QoreIROpcode::CreateEmptyList) {
+                            && !is_new_container(def_inst[id]->opcode)) {
                         continue;
                     }
                     candidates[id] = block.get();
@@ -23479,7 +23496,7 @@ static QoreValue evalDivideEquals(const QoreValue& lvalue, const QoreValue& righ
     }
 
     if (right.getType() == NT_NUMBER || v.getType() == NT_NUMBER) {
-        if (right.getAsFloat() == 0.0) {
+        if (qore_number_divisor_is_zero(right)) {
             xsink->raiseException("DIVISION-BY-ZERO",
                 "division by zero in arbitrary-precision numeric expression");
             return QoreValue();

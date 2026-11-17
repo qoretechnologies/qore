@@ -121,9 +121,6 @@ DLLLOCAL QoreValue copy_value_and_resolve_lvar_refs_not_lvalue(const QoreValue& 
 */
 DLLLOCAL QoreValue copy_value_and_resolve_lvar_refs_bound_implicit(const QoreValue& n, ExceptionSink* xsink);
 
-// type of logical operator function
-typedef bool (*op_log_func_t)(const QoreValue& l, const QoreValue& r, ExceptionSink* xsink);
-
 //! The element scope flags of a functional operator (qore#6288)
 /** A bit for each operand, by index, that the operator evaluates for each element as a statement of its own (see
     qore_expr_may_create_observable_temp()), and ValueUsed; decided by qore_parse_decide_element_scopes() when the operator is

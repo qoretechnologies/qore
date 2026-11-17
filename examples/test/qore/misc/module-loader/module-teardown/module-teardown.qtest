@@ -222,15 +222,8 @@ class ModuleTeardownTest inherits QUnit::Test {
 
     #! Returns the execution mode given on the command line, if any
     private static *string getExecMode() {
-        for (int i = 0; i < QORE_ARGV.size(); ++i) {
-            *string mode = (QORE_ARGV[i] =~ x/^--exec-mode=(.+)$/)[0];
-            if (mode) {
-                return mode;
-            }
-            if (QORE_ARGV[i] == "--exec-mode" && i + 1 < QORE_ARGV.size()) {
-                return QORE_ARGV[i + 1];
-            }
-        }
+        # only the interpreter's options: the test's own arguments follow the script (issue #6250)
+        return TestInterpreter::exec_mode(get_script_path());
     }
 
     private static string shellQuote(string value) {

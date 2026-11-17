@@ -33,6 +33,7 @@
 #include "qore/intern/AssertStatement.h"
 #include "qore/intern/QoreJITIncludes.h"
 #include "qore/intern/QoreHandlerRun.h"
+#include "qore/intern/QorePseudoMethods.h"
 #include "qore/intern/JITRuntime.h"
 #include "qore/intern/QoreIRPointerSlot.h"
 #include "qore/intern/QoreJITException.h"
@@ -142,6 +143,7 @@
 #ifndef QORE_JIT_RUNTIME_GIVEN_ARGS_UNIT
 static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_check_stack", reinterpret_cast<void*>(&qore_rt_check_stack) },
+    { "qore_rt_check_stack_reserve", reinterpret_cast<void*>(&qore_rt_check_stack_reserve) },
     { "qore_rt_discard_on_block_exit", reinterpret_cast<void*>(&qore_rt_discard_on_block_exit) },
     { "qore_rt_add_any", reinterpret_cast<void*>(&qore_rt_add_any) },
     { "qore_rt_sub_any", reinterpret_cast<void*>(&qore_rt_sub_any) },
@@ -767,6 +769,15 @@ extern "C" DLLEXPORT int qore_rt_check_stack(ExceptionSink* xsink) {
     return 0;
 #endif
 }
+
+extern "C" DLLEXPORT int qore_rt_check_stack_reserve(ExceptionSink* xsink, int64_t reserve) {
+#ifdef QORE_MANAGE_STACK
+    assert(reserve > 0);
+    return check_stack_reserve(xsink, static_cast<size_t>(reserve));
+#else
+    return 0;
+#endif
+}
 #endif // QORE_JIT_RUNTIME_GIVEN_ARGS_UNIT
 
 // --- Forward declarations for Phase 5 fast-call builtins ---
@@ -1123,13 +1134,22 @@ static int clearConsumedArgCleanups(uint64_t** arg_cleanups, int nargs,
     if (!arg_cleanups) {
         return 0;
     }
+    // the last slot that holds a value: a call whose given slots hold nothing (the slot of a read through a reference
+    // when the local held no reference, issue #6262) releases nothing and constructs no exception sink
+    int last = nargs - 1;
+    while (last >= 0 && (!arg_cleanups[last] || !*arg_cleanups[last])) {
+        --last;
+    }
+    if (last < 0) {
+        return 0;
+    }
     // Argument cleanups must run even if the callee already raised an
     // exception.  Preserve the original exception and suppress any cleanup
     // exception in that case; otherwise report cleanup failures normally.
     bool had_exception = xsink && *xsink;
     ExceptionSink cleanup_sink;
     ExceptionSink* cleanup_xsink = had_exception ? &cleanup_sink : xsink;
-    for (int i = nargs - 1; i >= 0; --i) {
+    for (int i = last; i >= 0; --i) {
         uint64_t* slot = arg_cleanups[i];
         if (!slot) {
             continue;
@@ -4939,9 +4959,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_create_object_method_ref_aot(uint64_t obje
     QoreValue obj_val = fromBits(object_bits);
     QoreObject* obj = obj_val.getType() == NT_OBJECT ? obj_val.get<QoreObject>() : nullptr;
     if (!obj) {
-        xsink->raiseException("OBJECT-METHOD-REFERENCE-ERROR",
-            "expression does not evaluate to an object; got type '%s' instead", obj_val.getTypeName());
-        return toBits(QoreValue());
+        // issue #995: a reference to a pseudo-method of the value, as in ParseObjectMethodReferenceNode::makeReference()
+        return toBits(qore_make_pseudo_method_reference(&loc_builtin, obj_val, method_name, xsink));
     }
 
     // a static method of the receiver's declared class: the reference is bound to it, whatever the class of the
@@ -4976,6 +4995,12 @@ extern "C" DLLEXPORT uint64_t qore_rt_create_object_method_ref_aot(uint64_t obje
     if (!method) {
         method = obj_class->findStaticMethod(method_name, access);
         if (!method) {
+            // issue #995: a pseudo-method of objects or a member, looked up by name when called, as in
+            // ParseObjectMethodReferenceNode::makeReferenceForClass()
+            if (qore_object_has_pseudo_or_member_method(qore_class_private::get(*obj_class), method_name,
+                    runtime_get_class())) {
+                return toBits(QoreValue(new RunTimeObjectMethodReferenceNode(&loc_builtin, obj, method_name, true)));
+            }
             xsink->raiseException("OBJECT-METHOD-REFERENCE-ERROR",
                 "cannot resolve reference to %s::%s(): unknown method", obj->getClassName(), method_name);
             return toBits(QoreValue());
@@ -12842,7 +12867,8 @@ static void execJITWithDeopt(const UserVariantBase* uvb, const std::string& call
         ? uvb->getBodyLocals()  // AOT: use all_body_locals via getBodyLocals()
         : (has_ir ? uvb->getASTVisibleBodyLocals()  // IR: use filtered list
                   : empty_body_locals);            // AST-only: nothing to pre-inst here
-    QoreParseOptions po = uvb->getParseOptions(runtime_pgm->getParseOptions());
+    // the Program's own options: a call takes them at run time, not the scoped options of a parse (#6207)
+    QoreParseOptions po = uvb->getParseOptions(qore_program_private::getParseOptions(*runtime_pgm));
     if (!skip_body_locals) {
         for (LocalVar* lv : body_locals) {
             // Closure-use vars must not be pre-instantiated here: doing so creates
@@ -13028,6 +13054,10 @@ public:
     DLLLOCAL QORE_ALWAYS_INLINE QoreRtUserCallOverrideHelper(QoreProgram* exec_pgm, const UserVariantBase* uvb,
             QoreProgram* caller_pgm) {
         qore_set_user_call_runtime_po_override(helper, exec_pgm, uvb, nullptr, caller_pgm);
+    }
+
+    //! restores the override of the caller (the helper's restore() is inline): inline in every fast call
+    DLLLOCAL QORE_ALWAYS_INLINE ~QoreRtUserCallOverrideHelper() {
     }
 
 private:
@@ -14289,8 +14319,59 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_fast_with_target_consume_args(uint64_
 }
 #endif // QORE_JIT_RUNTIME_GIVEN_ARGS_UNIT
 
+//! makes a self-recursive call of a function whose native code was removed while the recursion runs
+/** UserVariantBase::attemptJITRecompilation() removes the installed native code of a function while it recompiles
+    it, so a native frame of the function that is already running can make a recursive call meanwhile.  The call is
+    made as an AST call of the function makes it: CodeEvaluationHelper binds the parameters, which take the arguments
+    over, and passes only the arguments that the signature does not declare as the implicit argument list; the body
+    then runs on the function's current tier.  The variant's body alone (UserVariantBase::evalTiered()) expects the
+    parameters to have been bound (qore#6317).
+
+    Outside of qore_rt_call_self_recursive_t(), whose frame and code are on the path of every native self-recursive
+    call.
+
+    @param arg_cleanups see qore_rt_call_fast_t()
+*/
+template <bool CONSUME>
+static QORE_INTERN_NOINLINE uint64_t qore_rt_call_self_recursive_fallback(const AbstractQoreFunctionVariant* variant,
+        const UserVariantBase* uvb, uint64_t* args, uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink) {
+    ReferenceHolder<QoreListNode> arg_list(nargs > 0 ? new QoreListNode(autoTypeInfo) : nullptr, xsink);
+    if (nargs > 0) {
+        qore_list_private* priv = qore_list_private::get(**arg_list);
+        priv->reserve(nargs);
+        for (int i = 0; i < nargs; ++i) {
+            QoreValue val = fromBits(args[i]);
+            if (val.needsRef()) {
+                val.refSelf();
+            }
+            priv->pushIntern(val);
+        }
+    }
+    if constexpr (CONSUME) {
+        // the argument list holds the last references of the arguments that the caller gave to the call, which the
+        // parameters take over, so they are released in the callee's frame
+        if (clearConsumedArgCleanups(arg_cleanups, nargs, xsink) < 0) {
+            return toBits(QoreValue());
+        }
+    }
+    // a self-recursive call is a call of a function (CallDirect), whose variant knows the function since it was parsed
+    const QoreFunction* func = uvb->getSourceFunction();
+    if (!func) {
+        xsink->raiseException("JIT-ERROR", "the native code of %s() was removed during a recursive call of it, "
+            "and its function is unknown", uvb->getCallName().c_str());
+        return toBits(QoreValue());
+    }
+    RuntimeConfig& rc = rc_get_current_ref();
+    QoreProgram* call_pgm = rc.getProgram();
+    if (!call_pgm) {
+        call_pgm = getProgram();
+    }
+    return toBits(func->evalFunctionTmpArgs(variant, *arg_list, call_pgm, rc, xsink));
+}
+
 //! Self-recursive call helper: sets up params, argv, body locals, and deopt handling
-/** Falls back to evalTiered slow path if JIT function was invalidated by recompilation.
+/** Falls back to a call made as an AST call makes it if the native code of the function was removed while it is
+    recompiled (see qore_rt_call_self_recursive_fallback()).
 
     @param arg_cleanups see qore_rt_call_fast_t()
 */
@@ -14315,35 +14396,7 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_call_self_recursive_t(const Ab
 
     // Fall back to slow path if JIT function was invalidated by recompilation
     if (!uvb->hasCachedFunction()) {
-        // Build QoreListNode from NaN-boxed args and call through evalTiered
-        ReferenceHolder<QoreListNode> arg_list(nargs > 0 ? new QoreListNode(autoTypeInfo) : nullptr, xsink);
-        if (nargs > 0) {
-            qore_list_private* priv = qore_list_private::get(**arg_list);
-            priv->reserve(nargs);
-            for (int i = 0; i < nargs; ++i) {
-                QoreValue val = fromBits(args[i]);
-                if (val.needsRef()) {
-                    val.refSelf();
-                }
-                priv->pushIntern(val);
-            }
-        }
-        if constexpr (CONSUME) {
-            // the argument list holds references of its own
-            if (clearConsumedArgCleanups(arg_cleanups, nargs, xsink) < 0) {
-                return toBits(QoreValue());
-            }
-        }
-        // evalTiered() pushes no call stack frame (an AST call's CodeEvaluationHelper does), so the frame of the call
-        // is pushed here
-        QoreNativeCallStackLocation frame(get_thread_data_for_native_calls(), uvb->getCallName(),
-            uvb->getStatementBlock());
-        QoreValue result = uvb->callTieredPublic(uvb->getCallName().c_str(), arg_list, nullptr, xsink);
-        if constexpr (CONSUME) {
-            // an argument list that the call did not take over is released in the frame of the call
-            arg_list = nullptr;
-        }
-        return toBits(result);
+        return qore_rt_call_self_recursive_fallback<CONSUME>(variant, uvb, args, arg_cleanups, nargs, xsink);
     }
 
     const UserSignature* sig = uvb->getUserSignature();
@@ -16965,7 +17018,7 @@ QoreValue qore_rt_apply_lvalue_compound(LValueHelper& lvh,
                         }
                         break;
                     case LVCompoundOp::DivAssign:
-                        if (rhs.getAsFloat() == 0.0) {
+                        if (qore_number_divisor_is_zero(rhs)) {
                             xsink->raiseException("DIVISION-BY-ZERO",
                                 "division by zero in arbitrary-precision numeric expression");
                         } else {
@@ -19757,7 +19810,8 @@ static uint64_t qore_rt_call_self_recursive_aot_impl(AotFunctionPtr self_fn,
     // marks every body local IR-only.
     bool skip_body_locals = false;
     const std::vector<LocalVar*>& body_locals = uvb->getBodyLocals();
-    QoreParseOptions po = uvb->getParseOptions(uvb->pgm->getParseOptions());
+    // the Program's own options: a call takes them at run time, not the scoped options of a parse (#6207)
+    QoreParseOptions po = uvb->getParseOptions(qore_program_private::getParseOptions(*uvb->pgm));
     if (!skip_body_locals) {
         for (LocalVar* lv : body_locals) {
             if (lv->closureUse()) {

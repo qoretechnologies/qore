@@ -1900,6 +1900,40 @@ public:
         return source_qf;
     }
 
+    //! Recompiles the variant as UserVariantBase::attemptJITRecompilation() does after its profiled guards have
+    //! deoptimized, without the deoptimizations
+    /** The function is compiled alone, not in a batch, so its recursive calls are made with the native self-recursive
+        call helper.  For tests only (dbg_jit_recompile_native_code(), qore#6317).
+
+        @return true if native code is installed after the recompilation
+    */
+    DLLLOCAL bool dbgRecompileNativeCode() const {
+        if (!cached_ir.load(std::memory_order_acquire)) {
+            return false;
+        }
+        int expected = jit_recompile_state.load(std::memory_order_acquire);
+        if (expected == 1 || !jit_recompile_state.compare_exchange_strong(expected, 1)) {
+            return false;
+        }
+        attemptJITRecompilation();
+        return hasCachedFunction();
+    }
+
+    //! Removes the installed native code of the variant without recompiling it
+    /** As UserVariantBase::attemptJITRecompilation() removes it while it recompiles the variant; the variant runs on
+        the IR tier until it is compiled again.  For tests only (dbg_jit_drop_native_code(), qore#6317).
+
+        @return true if native code was installed
+    */
+    DLLLOCAL bool dbgDropNativeCode() const {
+        bool had = hasCachedFunction();
+        cached_jit_fn.store(nullptr, std::memory_order_release);
+        if (current_tier.load(std::memory_order_acquire) == TIER_JIT) {
+            current_tier.store(TIER_IR, std::memory_order_release);
+        }
+        return had;
+    }
+
     DLLLOCAL UserSignature* getUserSignature() const {
         return const_cast<UserSignature*>(&signature);
     }

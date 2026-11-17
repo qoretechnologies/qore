@@ -547,8 +547,8 @@ a microsecond) on top.
 
 ## Measured (phase 2a: the first request of a plain TCP connection)
 
-`HttpServerFastRoutesPerf.qtest` (a performance test, which the test-perf CI job runs), Release build, a Qore client that opens a connection, sends one request and closes it
-(best of 5 rounds of 300), the handler path against a fast route for the same response:
+The former `HttpServerFastRoutesPerf.qtest` benchmark, Release build, a Qore client that opens a connection, sends one
+request and closes it (best of 5 rounds of 300), the handler path against a fast route for the same response:
 
 |!Path|!Time per connection and request
 |handler (normal path)|about 2.2 ms
@@ -556,7 +556,18 @@ a microsecond) on top.
 
 The remaining half millisecond is the accept, its completion callback in Qore (connection registration, context) and
 the start of the next operation; that is what phase 2b (C++-owned connections) would address, and what a measurement of
-phase 2a' (TLS) has to be compared with.  The benchmark guards the ratio (at most 0.7) rather than the times.
+phase 2a' (TLS) has to be compared with.
+
+The benchmark guarded the ratio of the two times (at most 0.25 on a keep-alive connection, 0.7 for a connection per
+request), which the load of the host changed: a fast route's time varied six-fold between runs of the same build
+(qore#6425).  `examples/test/qlib/HttpServer/HttpServerFastRoutesHandOffs.qtest` replaces it and checks the property
+that the gain comes from instead of the time: it counts, for the same requests on each path, the handler's calls, the
+route's answers and (with a debug build of the library) the completions that the async I/O controller hands off to a
+callback worker (`dbg_async_io_on_complete_dispatched()`).  A request that a fast route answers on a keep-alive
+connection is handed off 0 times, and a connection of its own with such a request twice (its accept and its end);
+the handler's requests are handed off at least once, and at least three times on a connection of their own.  Each
+counted hand-off comes before the response, or before the server closes the connection, which the client waits for,
+so the counts are the same however loaded or slow the host is.
 
 ## Performance plan
 

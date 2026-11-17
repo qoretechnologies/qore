@@ -1,0 +1,314 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - WebSocket, HTTP/3 (QUIC) and HTTP ping poll operation state recorded and read on other threads
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../TestCertificates.qm
+
+%exec-class PollOperationErrorInfoRaceTest
+
+#! an inner poll operation that ends at once without reaching its goal
+class EndedPollOperation inherits AbstractPollOperation<auto> {
+    string getGoal() {
+        return "ended";
+    }
+
+    string getState() {
+        return "ended";
+    }
+
+    bool goalReached() {
+        return False;
+    }
+
+    *hash<SocketPollInfo> continuePoll() {
+    }
+
+    abort() {
+    }
+}
+
+#! an inner poll operation that reaches its goal at once with an HTTP response
+class ReachedPollOperation inherits AbstractPollOperation<auto> {
+    string getGoal() {
+        return "reached";
+    }
+
+    string getState() {
+        return "reached";
+    }
+
+    bool goalReached() {
+        return True;
+    }
+
+    *hash<SocketPollInfo> continuePoll() {
+    }
+
+    *hash<auto> getOutput() {
+        return {"code": 200, "body": "ok"};
+    }
+
+    abort() {
+    }
+}
+
+#! The error of a WebSocket server or client, HTTP/3 server or HTTP client ping poll operation is read under the lock
+#! that its writer holds (issue #6428)
+/** The error was read without a lock, while the thread that drives the operation created the hash, stored it and then
+    filled its keys: a thread that read the error then got no error or a hash without all of its keys.  The recording
+    thread is held in its critical section with the "error-record" hold point of debug builds; the read releases it
+    when it finds the lock taken ("error-read"), and must wait for the error to be recorded completely; a read
+    without the lock reads the error while the recording thread is still held.
+
+    The output of an HTTP client ping poll operation and the close reason of a WebSocket server poll operation are
+    checked the same way, with the "value-record" and "value-read" hold points.  The flags that the operations keep
+    as atomics (goalReached(), isClosed()) have no such check: an atomic has no window in which a hold point can show
+    a read of a half-written value.
+*/
+class PollOperationErrorInfoRaceTest inherits QUnit::Test {
+    private {
+        #! the longest wait for a thread to reach a hold point: a hang guard only
+        const HoldWait = 60s;
+
+        #! the size of a WebSocket frame whose send cannot complete at once: larger than the socket buffers
+        const SendSize = 64 * 1024 * 1024;
+
+        #! the most poll cycles that the driving thread runs to process data that has arrived already
+        const MaxCycles = 50;
+    }
+
+    constructor() : Test("Poll operation error read race test", "1.0") {
+        addTestCase("WebSocket server: an error recorded by the driving thread is read complete", \wsServerTest());
+        addTestCase("WebSocket client: an error recorded by the driving thread is read complete", \wsClientTest());
+        addTestCase("HTTP client ping: an error recorded by the driving thread is read complete", \pingTest());
+        addTestCase("HTTP/3 server: an error recorded by a shutting-down thread is read complete", \h3ServerTest());
+        addTestCase("HTTP client ping: the output stored by the driving thread is read complete", \pingOutputTest());
+        addTestCase("WebSocket server: the close reason stored by the driving thread is read complete",
+            \wsServerCloseReasonTest());
+        addTestCase("WebSocket server: a close reason with a NUL character is kept whole",
+            \wsServerCloseReasonNulTest());
+        set_return_value(main());
+    }
+
+    wsServerTest() {
+        checkDebug();
+        hash<auto> pair = createSocketPair();
+        on_exit pair.client.close();
+        on_exit pair.server.close();
+        sendFailure(new HttpWebSocketPollOperationBase(pair.server), pair.client);
+    }
+
+    wsClientTest() {
+        checkDebug();
+        hash<auto> pair = createSocketPair();
+        on_exit pair.client.close();
+        on_exit pair.server.close();
+        sendFailure(new WebSocketClientPollOperationBase(pair.client), pair.server);
+    }
+
+    pingTest() {
+        checkDebug();
+        DelegatingPollOperation inner(new EndedPollOperation());
+        HttpClientPingPollOperationBase op(inner, 200, 299, "PING-RACE-ERROR");
+        *hash<auto> info = recordAndRead(op, sub () { op.continuePoll(); });
+        assertEq("PING-RACE-ERROR", info.err);
+        assertEq("inner poll operation completed without reaching its goal", info.desc);
+    }
+
+    h3ServerTest() {
+        checkDebug();
+        Socket udp();
+        on_exit udp.close();
+        try {
+            udp.bindINET("127.0.0.1", 0, False, AF_INET, SOCK_DGRAM);
+            udp.setCertificate(new SSLCertificate(TestCertificates::CertPem));
+            udp.setPrivateKey(new SSLPrivateKey(TestCertificates::KeyPem));
+        } catch (hash<ExceptionInfo> ex) {
+            testSkip(sprintf("QUIC socket not available: %s: %s", ex.err, ex.desc));
+        }
+        Http3ServerPollOperation op(udp);
+        on_exit op.abort();
+        # the GOAWAY notice of a session that does not exist cannot be sent
+        *hash<auto> info = recordAndRead(op, sub () { op.shutdown(1); });
+        assertEq("HTTP3-SHUTDOWN-ERROR", info.err);
+    }
+
+    pingOutputTest() {
+        checkDebug();
+        DelegatingPollOperation inner(new ReachedPollOperation());
+        HttpClientPingPollOperationBase op(inner, 200, 299, "PING-RACE-ERROR");
+        hash<auto> r = holdAndRead(op, "value", sub () { op.continuePoll(); },
+            auto sub () { return op.getOutput(); });
+        assertEq(0, r.held, "the read waited for the thread that stores the output");
+        assertEq(200, r.value.code, "the output is read once it is stored");
+        assertEq("ok", r.value.body);
+        assertTrue(op.goalReached(), "the response was validated");
+        assertFalse(op.isClosed(), "the operation was not closed");
+        assertEq("complete", op.getState());
+        assertFalse(op.hasError(), "the operation has no error");
+    }
+
+    wsServerCloseReasonTest() {
+        checkDebug();
+        string reason = closeReason(binary("bye"));
+        assertEq("bye", reason);
+    }
+
+    wsServerCloseReasonNulTest() {
+        checkDebug();
+        # a close reason with a NUL character is kept whole
+        binary expected = parse_hex_string("610062");
+        string reason = closeReason(expected);
+        assertEq(3, reason.size(), "the close reason is not cut at the NUL character");
+        assertEq(expected, binary(reason));
+    }
+
+    #! returns the close reason of a client close frame with the given reason, read as the server stores it
+    /** The reason is also checked with getCloseReason() and getOutput() once the close handshake is complete
+    */
+    private string closeReason(binary reason) {
+        hash<auto> pair = createSocketPair();
+        on_exit pair.client.close();
+        on_exit pair.server.close();
+        HttpWebSocketPollOperationBase op(pair.server);
+        # the client's close frame (masked with a zero key): code 1000 and the reason
+        binary payload = parse_hex_string("03e8") + reason;
+        binary frame = parse_hex_string(sprintf("88%02x00000000", 0x80 | payload.size())) + payload;
+        pair.client.send(frame);
+        # the driving thread stores the reason of the client's close frame as it processes the frame
+        hash<auto> r = holdAndRead(op, "value", sub () {
+            for (int i = 0; i < MaxCycles && op.getState() == "connected"; ++i) {
+                op.continuePoll();
+            }
+        }, auto sub () { return op.getCloseReason(); });
+        assertEq(0, r.held, "the read waited for the thread that stores the close reason");
+        assertEq(binary(reason), binary(r.value), "the close reason is read once it is stored");
+        assertEq(1000, op.getCloseCode());
+        # the server answers with its close frame, as a handler does, which ends the close handshake
+        op.sendClose(1000);
+        bool ended;
+        for (int i = 0; i < MaxCycles; ++i) {
+            if (!op.continuePoll()) {
+                ended = True;
+                break;
+            }
+        }
+        assertTrue(ended, "the close handshake ended");
+        assertTrue(op.isClosed(), "the operation is closed");
+        assertEq(binary(reason), binary(op.getCloseReason()), "the close reason is kept at the end of the handshake");
+        assertEq(binary(reason), binary(op.getOutput().close_reason), "the output has the close reason");
+        return r.value;
+    }
+
+    #! a WebSocket operation's send that is in progress fails, as the peer resets the connection
+    private sendFailure(object op, Socket peer) {
+        # a frame larger than the socket buffers: its send is left in progress
+        op.sendBinary(binary(strmul("x", SendSize)));
+        *hash<SocketPollInfo> poll_info = op.continuePoll();
+        assertTrue((poll_info.events & SOCK_POLLOUT) != 0, "the send is in progress");
+        call_function("dbg_reset_socket", peer);
+        # the next poll cycle continues the send, which fails; continuePoll() raises the error that it records
+        *hash<auto> info = recordAndRead(op, sub () { op.continuePoll(); }, "SOCKET-SEND-ERROR");
+        assertEq("SOCKET-SEND-ERROR", info.err);
+    }
+
+    #! records an error in another thread, which is held while it records it, and reads the error
+    /** @param op the operation
+        @param record records the error in the other thread
+        @param expected_ex the exception that \a record raises with the error, if any
+
+        @return the error read
+    */
+    private *hash<auto> recordAndRead(object op, code record, *string expected_ex) {
+        hash<auto> r = holdAndRead(op, "error", record, auto sub () { return op.getError(); }, expected_ex);
+        *hash<auto> info = r.value;
+        assertEq(0, r.held, "the read waited for the thread that records the error");
+        assertEq(Type::Hash, info.type(), "the error is read once it is recorded");
+        assertEq(Type::String, info.desc.type(), "the error description is set");
+        assertTrue(op.hasError(), "the operation has an error");
+        assertEq(info, op.getError(), "the error read is complete");
+        return info;
+    }
+
+    #! stores a value in another thread, which is held while it stores it, and reads the value
+    /** @param op the operation, for which the hold points are armed
+        @param kind \c "error" or \c "value": the hold points used are \c "<kind>-record" and \c "<kind>-read"
+        @param record stores the value in the other thread
+        @param read reads the value
+        @param expected_ex the exception that \a record raises, if any
+
+        @return a hash with \c value: the value read, and \c held: 1 if the recording thread was still held after
+        the read (it did not wait for it), 0 if not
+    */
+    private hash<auto> holdAndRead(object op, string kind, code record, code read, *string expected_ex) {
+        Counter reached(1);
+        Counter release(1);
+        Counter done(1);
+        bool started;
+        # waited for after the held thread is released (on_exit code runs in reverse order)
+        on_exit if (started) { done.waitForZero(); }
+        on_exit if (release.getCount()) { release.dec(); }
+        on_exit call_function("dbg_http_hold_clear");
+        # armed for this operation only: other operations of the process can reach the point
+        call_function("dbg_http_hold_at", kind + "-record", reached, release, op);
+        *hash<ExceptionInfo> record_ex;
+        background sub () {
+            on_exit done.dec();
+            try {
+                record();
+            } catch (hash<ExceptionInfo> ex) {
+                record_ex = ex;
+            }
+            # a thread that did not reach the hold point does not leave the test thread waiting for it
+            if (reached.getCount()) {
+                reached.dec();
+            }
+        }();
+        started = True;
+        if (reached.waitForZero(HoldWait)) {
+            throw "TEST-ERROR", sprintf("no thread reached the %y hold point", kind + "-record");
+        }
+        # a read that finds the lock taken releases the recording thread, as it then waits for it
+        call_function("dbg_http_hold_at", kind + "-read", release, new Counter(0), op);
+        auto value = read();
+        int held = release.getCount();
+        # a read that did not wait for the lock leaves the recording thread held
+        if (held) {
+            release.dec();
+        }
+        done.waitForZero();
+        if (expected_ex) {
+            assertEq(expected_ex, record_ex.err, "the recording thread raised the error");
+        } else if (record_ex) {
+            throw record_ex.err, record_ex.desc;
+        }
+        return {"value": value, "held": held};
+    }
+
+    #! returns a connected socket pair on the loopback interface
+    private hash<auto> createSocketPair() {
+        Socket listener();
+        listener.bind("127.0.0.1:0");
+        listener.listen();
+        on_exit listener.close();
+        Socket client();
+        client.connect("127.0.0.1:" + listener.getSocketInfo().port);
+        Socket server = listener.accept(HoldWait);
+        return {
+            "server": server,
+            "client": client,
+        };
+    }
+
+    private checkDebug() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("needs a debug build of the library (dbg_http_hold_at())");
+        }
+    }
+}

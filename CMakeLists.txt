@@ -1560,6 +1560,14 @@ HAVE_USELOCALE)
 include(CheckIncludeFiles)
 check_include_files("sys/types.h;sys/socket.h;net/if_dl.h" HAVE_NET_IF_DL_H)
 
+# the debug hook dbg_reset_socket() reads the receive window that the peer of a TCP socket last advertised: the
+# tcpi_snd_wnd member of struct tcp_info (Linux) or of struct tcp_connection_info (macOS)
+include(CheckStructHasMember)
+check_struct_has_member("struct tcp_info" tcpi_snd_wnd "sys/types.h;sys/socket.h;netinet/in.h;netinet/tcp.h"
+    HAVE_TCP_INFO_TCPI_SND_WND LANGUAGE CXX)
+check_struct_has_member("struct tcp_connection_info" tcpi_snd_wnd
+    "sys/types.h;sys/socket.h;netinet/in.h;netinet/tcp.h" HAVE_TCP_CONNECTION_INFO_TCPI_SND_WND LANGUAGE CXX)
+
 qore_search_libs(LIBQORE_LIBS setsockopt socket)
 qore_search_libs(LIBQORE_LIBS gethostbyname nsl)
 qore_search_libs(LIBQORE_LIBS clock_gettime rt)
@@ -1868,6 +1876,7 @@ set(LIBQORE_CPP_SRC
     lib/QoreIRAnalysis.cpp
     lib/QoreIRLowering.cpp
     lib/QoreIRToLLVM.cpp
+    lib/QoreIRFrameCheck.cpp
     lib/QoreIRVerifier.cpp
     lib/QoreIRTakeOver.cpp
     lib/QoreAOT.cpp
@@ -2513,6 +2522,7 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreParseContext.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreIRLowering.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreIRToLLVM.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreIRFrameCheck.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreIRVerifier.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreAOT.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreAOTBatchMemory.cpp\"
@@ -3210,6 +3220,7 @@ set(_qcc_format_sources
     ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreIRExprRegistry.h
     ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreIRLowering.h
     ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreIRToLLVM.h
+    ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreIRFrameCheck.h
     ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreIRVerifier.h
     ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreOpcodeRegistry.h
     # the layout of the data that generated code reads by index (QoreNativeEntrySlots) and the runtime helpers it calls
@@ -3238,6 +3249,7 @@ set(_qcc_format_sources
     ${CMAKE_SOURCE_DIR}/lib/QoreIRExprRegistry.cpp
     ${CMAKE_SOURCE_DIR}/lib/QoreIRLowering.cpp
     ${CMAKE_SOURCE_DIR}/lib/QoreIRToLLVM.cpp
+    ${CMAKE_SOURCE_DIR}/lib/QoreIRFrameCheck.cpp
     ${CMAKE_SOURCE_DIR}/lib/QoreIRVerifier.cpp
     # the analysis of the parameters that take their arguments over, compiled from QoreIRVerifier.cpp
     ${CMAKE_SOURCE_DIR}/lib/QoreIRTakeOver.cpp

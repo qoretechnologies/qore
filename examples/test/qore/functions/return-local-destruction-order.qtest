@@ -1,0 +1,88 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - JIT and AOT code generation of the release of a function's locals at its return
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../TestInterpreter.qm
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%exec-class ReturnLocalDestructionOrderTest
+
+#! The locals of a function are destroyed in reverse declaration order when a return statement leaves it (qore#6309)
+/** A local that the expression of the return statement reads (the object of a method call, a member, a container
+    holding the object, a catch variable) was destroyed after the function's other locals in the IR interpreter, in the
+    IR tier of tiered and JIT execution, and in some code compiled from the IR (a qcc -O0 executable): the value read
+    was a temporary of the statement that the Return released, after the locals.  The AST interpreter releases the
+    temporaries of the statement before the locals are destroyed.
+
+    The program is in \c return-local-destruction-order/; every run must print the output of the AST.  Each function
+    is called twice, so that the JIT and tiered runs, which compile synchronously, run its native code the second time.
+*/
+class ReturnLocalDestructionOrderTest inherits QUnit::Test {
+    private {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string dir = get_script_dir() + "/return-local-destruction-order";
+
+        const Modes = ("ast", "ir", "jit", "tiered");
+        const Program = "return-locals";
+    }
+
+    constructor() : QUnit::Test("ReturnLocalDestructionOrderTest", "1.0", \ARGV) {
+        addTestCase("IR, JIT and tiered execution destroy the locals as the AST does", \testModes());
+        addTestCase("the IR tier of tiered execution destroys the locals as the AST does", \testIrTier());
+        addTestCase("qcc executables destroy the locals as the AST does", \testCompiled());
+        set_return_value(main());
+    }
+
+    private string expected() {
+        return ReadOnlyFile::readTextFile(dir + "/" + Program + ".expected");
+    }
+
+    testModes() {
+        foreach string mode in (Modes) {
+            hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s -b --enable-debug "
+                "--exec-mode=%s %s", shellQuote(qore_bin), mode, shellQuote(dir + "/" + Program + ".q")));
+            assertEq(0, r.rc, sprintf("%s: exit status (output: %y)", mode, r.out));
+            assertEq(expected(), r.stdout, mode);
+            ExecModeHarness::check_native(r);
+        }
+    }
+
+    testIrTier() {
+        assertEq(expected(), ExecModeHarness::run_ir_tier(sprintf("%s -b --enable-debug --exec-mode=tiered %s",
+            shellQuote(qore_bin), shellQuote(dir + "/" + Program + ".q"))));
+    }
+
+    testCompiled() {
+        string qcc_bin = ENV.QCC_BIN ?? dirname(qore_bin) + "/qcc";
+        if (!is_file(qcc_bin)) {
+            qcc_bin = "qcc";
+        }
+        TmpDir tmp("qore-return-local-destruction-order-");
+        foreach string opt in (("0", "3")) {
+            string exe = sprintf("%s/%s-O%s", tmp.path, Program, opt);
+            int rc;
+            string out = backquote(sprintf("%s -O%s -o %s %s 2>&1", shellQuote(qcc_bin), opt, shellQuote(exe),
+                shellQuote(dir + "/" + Program + ".q")), \rc);
+            if (rc || !is_file(exe)) {
+                testSkip("qcc is not available or cannot compile " + Program + ": " + out);
+            }
+            # -b must be the first argument of a compiled program
+            string result = backquote(sprintf("%s -b 2>&1", shellQuote(exe)), \rc);
+            assertEq(0, rc, sprintf("-O%s: exit status (output: %y)", opt, result));
+            assertEq(expected(), result, "-O" + opt);
+        }
+    }
+
+    private static string shellQuote(string value) {
+        return "'" + replace(value, "'", "'\\''") + "'";
+    }
+}

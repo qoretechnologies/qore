@@ -1,0 +1,13 @@
+list size: parsed
+unknown list pseudo-method: PARSE-TYPE-ERROR: cannot take a call reference to pseudo-method 'noSuchMethod()'; the expression gives list<int>, which has no such method
+unknown string pseudo-method: PARSE-TYPE-ERROR: cannot take a call reference to pseudo-method 'noSuchMethod()'; the expression gives type 'string', which has no such method
+unknown int pseudo-method: PARSE-TYPE-ERROR: cannot take a call reference to pseudo-method 'keys()'; the expression gives type 'int', which has no such method
+method of all values: parsed
+union with the pseudo-method: parsed
+auto value: parsed
+object pseudo-method: parsed
+unknown object method: PARSE-ERROR: no method C::noSuchMethod() is accessible in this context
+pseudo-method of an object value: parsed
+code member of a hash: parsed
+code member of an optional hash: parsed
+code member of an object: parsed

@@ -902,6 +902,9 @@ private:
         QoreIRValue value;
         //! true if the operator's value can be the source's (a source that is not known to be a list)
         bool may_alias = false;
+        //! the list that the stages of a lazy pipeline gave a fold, which the fold iterates as its source (foldr $1,
+        //! (select l, c)), released after the operator before the source (issue #6262)
+        QoreIRValue intermediate;
     };
     //! The sources of the functional operators being lowered, innermost last
     std::vector<FunctionalSourceCapture> functional_source_captures;
@@ -910,6 +913,17 @@ private:
     //! returns true if the source of the functional operator being lowered is released after the operator (a
     //! temporary or a plain read of a local, see FunctionalSourceRelease)
     DLLLOCAL bool functionalSourceReleased() const;
+    //! Releases the value that a functional operator's expression gave once its result container holds it
+    /** The container takes a reference of its own, as the AST interpreter's operator pushes the value, which the
+        container then holds alone; see the definition.  Nothing is emitted for a value of a type that holds no object,
+        or for \a element, the element that the operator's expression reads (<tt>map $1, l</tt>)
+    */
+    DLLLOCAL void releaseStoredOperatorValue(QoreIRValue value, const QoreTypeInfo* ti, QoreIRValue element,
+            const QoreProgramLocation* loc);
+    //! Returns the single value that a functional operator over a single value gives, \a unwrapped, read from its
+    //! result list \a list, with a reference of its own, and releases the list (see the definition)
+    DLLLOCAL QoreIRValue ownUnwrappedOperatorValue(QoreIRValue unwrapped, QoreIRValue list,
+            const QoreProgramLocation* loc);
 
     QoreIRBuilder& builder;
     QoreParseContext* parse_context = nullptr;
@@ -932,6 +946,12 @@ private:
     bool handover_try_active = false;
     //! the value of the return of handover_try_active; invalid for a return without a value
     QoreIRValue handover_try_value;
+    //! the value of the switch statement whose case with an operator is being lowered: the value of the
+    //! QoreSwitchValueOperatorNode in the case's comparison (qore#6252)
+    QoreIRValue switch_case_value;
+    //! the switch expression whose value is switch_case_value: the guaranteed type of the switch value in the case's
+    //! comparison is that of the expression (qore#6252)
+    QoreValue switch_case_expr;
     //! the handler body that lowerHandlerAtExit() lowers inline next: its block gets an exception path of its own for
     //! its locals (see lowerStatementBlock(), #6002)
     const StatementBlock* inline_handler_block = nullptr;
@@ -1044,6 +1064,24 @@ private:
         released before the variable is destroyed when a return statement leaves its block.
     */
     DLLLOCAL bool expressionReadsWeakCapableLocal(const QoreValue& expr) const;
+
+    //! Returns true if evaluating \a expr reads, other than as its own value, a local variable whose value can be or
+    //! hold an object and whose release by the cleanups of a return statement can be observed (see
+    //! localReleaseObservedByReturn())
+    /** The value read is a temporary of the statement, which can keep the variable's object after the variable is
+        released: the AST interpreter releases the temporaries of the statement first, so the object is destroyed when
+        its variable is, in reverse declaration order with the other locals (qore#6309).
+    */
+    DLLLOCAL bool expressionReadsReleasedObjectLocal(const QoreValue& expr) const;
+
+    //! Returns true if the cleanups of a return statement release the local and then release or run something else
+    //! that can see when the local's object is destroyed
+    /** The local is one of a block that the return leaves, or the variable of a catch block that it leaves; what
+        is released after it is a local declared before it in its block that can be or hold an object, or a cleanup of
+        an enclosing block (an object local, a catch variable, a handler, a foreach).  A temporary of the statement
+        that keeps the local's object is observable only then.
+    */
+    DLLLOCAL bool localReleaseObservedByReturn(const LocalVar* lv) const;
 
     //! Emits the block that an exception leaving the body of a value foreach loop goes to before \a outer_target
     /** Releases the element (if valid), the values that map expressions gave from it last (the valid ones, in their

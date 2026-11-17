@@ -294,18 +294,21 @@ public:
     DLLLOCAL void setOpenState(H3State s, const char* site);
 
 
-    //! Can be called from any thread: the error is set by the I/O thread under the stream lock
+    //! Can be called from any thread: reads @ref has_error, which is set when the error is stored under the stream lock
     DLLLOCAL bool hasError() const {
-        AutoLocker al(stream_lock);
-        return error_info != nullptr;
+        return has_error.load(std::memory_order_acquire);
     }
 
-    DLLLOCAL QoreHashNode* getErrorInfo() const {
-        if (error_info) {
-            error_info->ref();
-        }
-        return error_info;
-    }
+    //! Returns the recorded error with a new reference, or nullptr if none was recorded; can be called from any thread
+    /** Read under @c stream_lock, which the writers (setError(), setSubmitError()) hold while they record the error,
+        so the hash is returned complete and safely published to the calling thread
+    */
+    DLLLOCAL QoreHashNode* getErrorInfo() const;
+
+    //! Returns the code and description of the recorded error; returns false if no error was recorded
+    /** Read under @c stream_lock, as getErrorInfo()
+    */
+    DLLLOCAL bool getStoredError(std::string& err, std::string& desc) const;
 
     //! Returns the number of active streams
     /** Read under @c stream_lock: every write happens under that lock, so an
@@ -322,7 +325,9 @@ public:
         return active_stream_count;
     }
 
+    //! Returns the stream limit set with setQuicStreamLimit(); read under @c stream_lock, which the setter holds
     DLLLOCAL int getQuicStreamLimit() const {
+        AutoLocker al(stream_lock);
         return quic_stream_limit;
     }
 
@@ -608,6 +613,9 @@ private:
 
     //! Error info (ref'd or nullptr)
     QoreHashNode* error_info = nullptr;
+    //! Set (release) when @ref error_info is stored, under the lock that protects it; read (acquire) without a lock
+    //! by hasError()
+    std::atomic<bool> has_error{false};
 
     //! Connection C++ priv pointer guarded by @ref stream_lock.
     /** The constructor takes an explicit C++ ref for this pointer so the
