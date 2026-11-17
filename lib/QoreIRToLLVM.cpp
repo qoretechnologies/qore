@@ -34,6 +34,7 @@
 #include "qore/intern/QoreIRAnalysis.h"
 #include "qore/intern/QoreIRToLLVM.h"
 #include "qore/intern/JITRuntime.h"
+#include "qore/intern/QoreException.h"
 
 #include "qore/intern/LocalVar.h"
 #include "qore/intern/QoreAOT.h"
@@ -13768,32 +13769,19 @@ void QoreIRToLLVM::finalizeFunctionUnwindLP(llvm::Module& module) {
 
 // documented in QoreIRToLLVM.h
 llvm::Value* QoreIRToLLVM::emitPendingExceptionTest() {
-    // Inline exception check as direct memory loads instead of function call
-    // ExceptionSink::priv at offset 0 -> qore_es_private*
-    // qore_es_private::head at offset 0 within priv -> QoreException*
-    // qore_es_private::thread_exit at offset 20 within priv -> bool
+    // Inline exception check as direct memory loads instead of a function call:
+    // ExceptionSink::priv at offset 0 -> qore_es_private*, whose pending byte is true while an exception or a thread
+    // exit is pending (qore#6370): one load and one compare
+    static_assert(offsetof(qore_es_private, pending) < sizeof(qore_es_private), "qore_es_private::pending");
 
     // Load priv pointer from xsink at offset 0
     auto* xsink_priv_ptr = builder->CreateLoad(ptr_type, xsink_arg, "xsink_priv_ptr");
 
-    // Load head pointer from priv at offset 0
-    auto* head_ptr = builder->CreateLoad(ptr_type, xsink_priv_ptr, "priv_head");
-
-    // Check if head != nullptr
-    auto* has_exception_head = builder->CreateICmpNE(head_ptr,
-            llvm::ConstantPointerNull::get(llvm::cast<llvm::PointerType>(ptr_type)),
-            "has_exception_head");
-
-    // Also check thread_exit at offset 20 within priv
-    // thread_exit is a bool at offset 20 in qore_es_private
-    auto* thread_exit_ptr = builder->CreateGEP(llvm::Type::getInt8Ty(ctx),
-            xsink_priv_ptr, {llvm::ConstantInt::get(i64_type, 20)}, "thread_exit_ptr");
-    auto* thread_exit_byte = builder->CreateLoad(llvm::Type::getInt8Ty(ctx), thread_exit_ptr, "thread_exit_byte");
-    auto* has_exception_thread_exit = builder->CreateICmpNE(thread_exit_byte,
-            llvm::ConstantInt::get(llvm::Type::getInt8Ty(ctx), 0), "has_thread_exit");
-
-    // Combine: exception exists if (head != nullptr) OR (thread_exit)
-    return builder->CreateOr(has_exception_head, has_exception_thread_exit, "has_exception");
+    auto* pending_ptr = builder->CreateGEP(llvm::Type::getInt8Ty(ctx), xsink_priv_ptr,
+            {llvm::ConstantInt::get(i64_type, offsetof(qore_es_private, pending))}, "pending_ptr");
+    auto* pending_byte = builder->CreateLoad(llvm::Type::getInt8Ty(ctx), pending_ptr, "pending_byte");
+    return builder->CreateICmpNE(pending_byte, llvm::ConstantInt::get(llvm::Type::getInt8Ty(ctx), 0),
+            "has_exception");
 }
 
 void QoreIRToLLVM::emitExceptionCheck(llvm::Module& module, llvm::Function* llvm_func,

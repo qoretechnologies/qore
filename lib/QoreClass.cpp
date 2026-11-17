@@ -2159,7 +2159,7 @@ static const QoreTypeInfo* qore_get_instantiated_object_type_info(const QoreClas
 // The public operator is out of line; these checks run for every object construction.
 static QORE_INTERN_ALWAYS_INLINE bool qore_constructor_has_event(const ExceptionSink* xsink) {
     const qore_es_private* es = qore_es_private::get(*xsink);
-    return es->head || es->thread_exit;
+    return es->isPending();
 }
 
 //! Consumes the construction's object reference on the exceptional path (#6086).

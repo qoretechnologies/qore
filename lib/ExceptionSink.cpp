@@ -92,6 +92,8 @@ void qore_es_private::assimilate(qore_es_private& xs) {
         assert(!xs.head);
         assert(!xs.count);
     }
+    syncPending();
+    xs.syncPending();
 }
 
 void qore_es_private::insert(QoreException *e) {
@@ -102,6 +104,7 @@ void qore_es_private::insert(QoreException *e) {
         tail->next = e;
     }
     tail = e;
+    pending = true;
 
     // increment exception counts
     if (!externally_managed) {
@@ -122,10 +125,11 @@ ExceptionSink::~ExceptionSink() {
 
 void ExceptionSink::raiseThreadExit() {
     priv->thread_exit = true;
+    priv->pending = true;
 }
 
 bool ExceptionSink::isEvent() const {
-    return priv->head || priv->thread_exit;
+    return priv->isPending();
 }
 
 bool ExceptionSink::isThreadExit() const {
@@ -141,7 +145,7 @@ bool ExceptionSink::isException() const {
 // if (xsink) { .. }
 ExceptionSink::operator bool () const {
     assert(this);
-    return priv->head || priv->thread_exit;
+    return priv->isPending();
 }
 
 QoreValue qore_release_value_with_exception_intern(QoreValue rv, ExceptionSink* xsink) {
@@ -167,6 +171,7 @@ void ExceptionSink::setLastLocation(const QoreProgramLocation& loc) {
 QoreException* ExceptionSink::catchException() {
     QoreException* e = priv->head;
     priv->head = priv->tail = nullptr;
+    priv->syncPending();
     if (priv->count) {
         assert(!priv->externally_managed);
         inc_active_exceptions(-priv->count);
@@ -194,6 +199,7 @@ void ExceptionSink::handleExceptions() {
         clear();
     } else {
         priv->thread_exit = false;
+        priv->pending = false;
     }
 }
 
@@ -235,6 +241,7 @@ void ExceptionSink::clear() {
     priv->clearIntern();
     priv->head = priv->tail = nullptr;
     priv->thread_exit = false;
+    priv->pending = false;
     priv->rethrown = false;
 }
 
