@@ -15014,11 +15014,6 @@ bool qore_ir_resolve_batch_function_summaries(
                 if (param < 0) {
                     continue;
                 }
-                // the JIT restricts the return facts after this (qore_ir_restrict_debug_flow_return_facts(), #6201),
-                // which a fact composed here cannot escape: the forwarding function returns a parameter that rejects
-                // no value, whose type is its declared return type, and so are the callees it forwards it through,
-                // so the declared return type of each requires a value and the path of a debugger's return request
-                // in any of them raises the error of a missing return value instead of returning NOTHING
                 callee->second.boxed_return_param = param;
                 callee->second.never_returns_nothing = true;
                 changed = true;

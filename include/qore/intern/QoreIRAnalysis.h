@@ -307,13 +307,6 @@ struct QoreIRFunctionEffectSummary {
     std::vector<const void*> modified_runtime_locals;
     //! True if every return of the code of the function (QoreIRCodeBlocks) has a value that is not NOTHING
     bool never_returns_nothing = false;
-    //! True if the path of a debugger's return request (or of a break or a continue that leaves the function) returns
-    //! without a value, which the code of the function never does if \a never_returns_nothing is set; the path raises
-    //! the error of a missing return value instead where the declared return type requires a value (#6201)
-    /** A caller compiled to native code by the JIT, whose callee takes the path, relies on \a never_returns_nothing
-        only where the callee's declared return type requires a value (qore_ir_restrict_debug_flow_return_facts())
-    */
-    bool debug_flow_returns_nothing = false;
     //! True for parameters whose value is only observed during the call.
     //! A returned value is allowed because return lowering takes an owning ref.
     std::vector<uint8_t> param_noescape;

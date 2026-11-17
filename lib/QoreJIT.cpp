@@ -904,25 +904,6 @@ std::vector<uint8_t> qore_ir_get_fast_entry_param_rejects_nothing(
     return rejects;
 }
 
-// documented in QoreJIT.h
-void qore_ir_restrict_debug_flow_return_facts(const AbstractQoreFunctionVariant* variant,
-        const QoreIRFunctionEffectSummary& summary, BatchCalleeInfo& info) {
-    // a native return kind is only that of a declared type that requires a value
-    if (!summary.debug_flow_returns_nothing || !info.never_returns_nothing
-            || info.return_kind != BatchCalleeReturnKind::Boxed) {
-        return;
-    }
-    const AbstractFunctionSignature* sig = variant
-        ? const_cast<AbstractQoreFunctionVariant*>(variant)->getSignature() : nullptr;
-    const QoreTypeInfo* ti = sig ? sig->getReturnTypeInfo() : nullptr;
-    // the return path raises the error of a missing return value then
-    if (QoreTypeInfo::hasType(ti) && !QoreTypeInfo::parseAcceptsReturns(ti, NT_NOTHING)) {
-        return;
-    }
-    info.never_returns_nothing = false;
-    info.boxed_return_kind = BatchCalleeBoxedReturnKind::Unknown;
-}
-
 BatchCalleeReturnKind qore_ir_get_fast_entry_return_kind(
         const AbstractQoreFunctionVariant* variant, bool never_returns_nothing,
         const QoreIRFunction* ir_func) {
@@ -2233,22 +2214,6 @@ bool QoreJIT::compileFunctionBatchInternal(const QoreIRFunction& root_func, std:
             if (info_it != batch_callee_map.end()) {
                 info_it->second.approach_b_eligible = false;
             }
-        }
-    }
-    // the return facts of a callee are those of its code (QoreIRCodeBlocks); native code takes the paths of a
-    // debugger's requests, and a callee whose return path returns NOTHING breaks them, so the native code of its
-    // callers relies on them only where the declared return type of the callee requires a value, where the path
-    // raises the error of a missing return value as the AST interpreter does (#6201)
-    size_t return_fact_count = 0;
-    for (auto& [variant, info] : batch_callee_map) {
-        if (++return_fact_count % 100 == 0
-                && qore_check_cancel(nullptr, "JIT batch callee return facts")) {
-            error = "cancelled during JIT batch callee return facts";
-            return false;
-        }
-        auto summary = effect_summaries.find(variant);
-        if (summary != effect_summaries.end()) {
-            qore_ir_restrict_debug_flow_return_facts(variant, summary->second, info);
         }
     }
     // a direct call of a callee whose body does not observe the object and class context it runs in does not switch

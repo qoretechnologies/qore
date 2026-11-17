@@ -1779,7 +1779,6 @@ bool qore_ir_compute_function_effect_summaries(
         std::unordered_set<const void*> local_modified_runtime_locals;
         bool local_never_returns_nothing = true;
         bool saw_return = false;
-        bool debug_flow_returns_nothing = false;
         std::vector<const AbstractQoreFunctionVariant*> callees;
         std::vector<uint8_t> param_noescape;
         std::vector<uint8_t> param_may_modify;
@@ -1882,13 +1881,12 @@ bool qore_ir_compute_function_effect_summaries(
                         effect.local_never_returns_nothing = false;
                     }
                 } else if (inst && inst->opcode == QoreIROpcode::ReturnNothing) {
-                    // the return facts are those of the code (QoreIRCodeBlocks): the return of the path of a
-                    // debugger's request is recorded on its own (#6201)
+                    // the return facts are those of the code (QoreIRCodeBlocks): only the debug IR of AOT code has the
+                    // paths of a debugger's requests, which runs in the IR interpreter, and AOT native code has no
+                    // paths (#6201)
                     if (QoreIRCodeBlocks::isCodeBlock(block.get())) {
                         effect.saw_return = true;
                         effect.local_never_returns_nothing = false;
-                    } else {
-                        effect.debug_flow_returns_nothing = true;
                     }
                 }
                 bool has_ref_args = true;
@@ -2131,7 +2129,6 @@ bool qore_ir_compute_function_effect_summaries(
             effect.local_modified_runtime_locals.end());
         summaries[effect.variant].never_returns_nothing =
             effect.saw_return && effect.local_never_returns_nothing;
-        summaries[effect.variant].debug_flow_returns_nothing = effect.debug_flow_returns_nothing;
         summaries[effect.variant].param_noescape = effect.param_noescape;
         summaries[effect.variant].param_may_modify = effect.param_may_modify;
         if (may_invalidate) {

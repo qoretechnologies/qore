@@ -1607,13 +1607,12 @@ void QoreIRToLLVM::declareRuntimeHelpers(llvm::Module& module) {
     module.getOrInsertFunction("qore_rt_deopt",
             llvm::FunctionType::get(void_type, {ptr_type}, false));
 
-    // Debug-step hooks (issue #5352): int64_t qore_rt_dbg_step(const AbstractStatement* statement,
-    // void* statements_block, ExceptionSink* xsink, int64_t flow_mask), which returns the request that a path of the
-    // step event takes (qore#6200, qore#6201)
+    // Debug-step hooks (issue #5352): void qore_rt_dbg_step(const AbstractStatement* statement,
+    // void* statements_block, ExceptionSink* xsink)
     module.getOrInsertFunction("qore_rt_dbg_step",
-            llvm::FunctionType::get(i64_type, {ptr_type, ptr_type, ptr_type, i64_type}, false));
+            llvm::FunctionType::get(void_type, {ptr_type, ptr_type, ptr_type}, false));
     module.getOrInsertFunction("qore_rt_dbg_synthetic_block_step",
-            llvm::FunctionType::get(i64_type, {ptr_type, i64_type, ptr_type, ptr_type, i64_type}, false));
+            llvm::FunctionType::get(void_type, {ptr_type, i64_type, ptr_type, ptr_type}, false));
 
     // Local variable helpers
     module.getOrInsertFunction("qore_rt_instantiate_local",
@@ -4684,7 +4683,7 @@ bool QoreIRToLLVM::releasesReloadStorageForHandlers(const void* key) const {
 
 void QoreIRToLLVM::recordHandlerSite(llvm::CallInst* call, bool reload) {
     if (has_on_block_exit_handlers) {
-        handler_sites.push_back({call, reload, obe_table_mode});
+        handler_sites.push_back({call, reload});
     }
 }
 
@@ -4707,7 +4706,7 @@ void QoreIRToLLVM::finalizeHandlerSites(llvm::Module& module, llvm::Function* ll
     llvm::IRBuilderBase::InsertPointGuard insert_point_guard(*builder);
     for (const HandlerSite& site : sites) {
         builder->SetInsertPoint(site.call);
-        std::vector<const void*> released = site.table ? releaseLocalReloadStorageViaTable(module)
+        std::vector<const void*> released = obe_table_mode ? releaseLocalReloadStorageViaTable(module)
             : releaseLocalReloadStorage(module);
         if (!site.reload || released.empty()) {
             continue;
@@ -4723,7 +4722,7 @@ void QoreIRToLLVM::finalizeHandlerSites(llvm::Module& module, llvm::Function* ll
         } else {
             builder->SetInsertPoint(site.call->getParent());
         }
-        if (site.table) {
+        if (obe_table_mode) {
             // the locals that have an owner are reloaded by one call (qore#6110)
             std::vector<uint32_t> entries;
             for (const void* key : released) {
@@ -5216,8 +5215,7 @@ void QoreIRToLLVM::emitExceptionExitTail(llvm::Module& module) {
     }
 }
 
-void QoreIRToLLVM::emitExitStatementCleanup(llvm::Module& module, bool pending_ssa, bool exception_exit,
-        size_t first_temp) {
+void QoreIRToLLVM::emitExitStatementCleanup(llvm::Module& module, bool pending_ssa, bool exception_exit) {
     // an exit on an exception keeps the values of the returns that it interrupts until after the locals (qore#5941)
     bool hold_returns = false;
     if (exception_exit) {
@@ -5270,19 +5268,11 @@ void QoreIRToLLVM::emitExitStatementCleanup(llvm::Module& module, bool pending_s
         auto helper = module.getOrInsertFunction("qore_rt_decref",
                 llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
         size_t count = 0;
-        for (size_t i = invoke_result_allocas.size(); i > first_temp;) {
-            // a path releases each temporary once (#6201)
-            if (lowering_debug_flow_block) {
-                size_t skip = debugFlowPathSkipTemps(i);
-                if (skip != i) {
-                    i = skip;
-                    continue;
-                }
-            }
+        for (auto it = invoke_result_allocas.rbegin(); it != invoke_result_allocas.rend(); ++it) {
             if (!(++count % 100)) {
                 (void)qore_check_cancel(nullptr, "LLVM function exit temp release");
             }
-            llvm::Value* alloca_ptr = invoke_result_allocas[--i];
+            llvm::Value* alloca_ptr = *it;
             if (persistent_cleanup_allocas.count(alloca_ptr) || (hold_returns && isReturnValueAlloca(alloca_ptr))) {
                 continue;
             }
@@ -5849,8 +5839,6 @@ void QoreIRToLLVM::emitInvokeCleanup(llvm::Module& module) {
 
 void QoreIRToLLVM::emitDiscardTemps(llvm::Module& module, uint32_t scope_id, bool statement_end) {
     TempCleanupMark mark;
-    // true for the release of a scope of the code by a path, which changes no lowering state of the code (#6201)
-    bool code_scope = false;
     if (!temp_cleanup_marks.empty()) {
         // Select the matching mark by scope id rather than blindly popping the
         // stack back.  When short-circuit operators (??, ?:, &&, ||) split a
@@ -5872,21 +5860,14 @@ void QoreIRToLLVM::emitDiscardTemps(llvm::Module& module, uint32_t scope_id, boo
             }
         }
         mark = temp_cleanup_marks[idx];
-        if (lowering_debug_flow_block && (idx < debug_flow_run_marks
-                || (scope_id && temp_cleanup_marks[idx].scope_id != scope_id))) {
-            // a path releases the temporaries of a scope of the code: the scope goes on in the code after the path
-            // (#6201)
-            code_scope = true;
-        } else {
-            // for the blocks of the scope that are lowered after its end (see closed_temp_cleanup_marks)
-            if (mark.scope_id) {
-                closed_temp_cleanup_marks.emplace(mark.scope_id,
-                    std::vector<TempCleanupMark>(temp_cleanup_marks.begin(), temp_cleanup_marks.begin() + idx + 1));
-            }
-            temp_cleanup_marks.erase(temp_cleanup_marks.begin() + idx);
-            // the end of the scope's temporaries (see finalizeOrderedErrorReturnEdges())
-            temp_scope_end.emplace(mark.scope_id, invoke_result_allocas.size());
+        // for the blocks of the scope that are lowered after its end (see closed_temp_cleanup_marks)
+        if (mark.scope_id) {
+            closed_temp_cleanup_marks.emplace(mark.scope_id, std::vector<TempCleanupMark>(temp_cleanup_marks.begin(),
+                temp_cleanup_marks.begin() + idx + 1));
         }
+        temp_cleanup_marks.erase(temp_cleanup_marks.begin() + idx);
+        // the end of the scope's temporaries (see finalizeOrderedErrorReturnEdges())
+        temp_scope_end.emplace(mark.scope_id, invoke_result_allocas.size());
     }
 
     auto helper = module.getOrInsertFunction("qore_rt_decref",
@@ -5895,51 +5876,16 @@ void QoreIRToLLVM::emitDiscardTemps(llvm::Module& module, uint32_t scope_id, boo
     {
         // last registered first
         std::vector<llvm::Value*> release;
-        if (code_scope) {
-            // a path's block releases each temporary of the code's scopes once (#6201)
-            for (size_t i = invoke_result_allocas.size(); i > mark.invoke_alloca_count;) {
-                size_t skip = debugFlowPathSkipTemps(i);
-                if (skip != i) {
-                    i = skip;
-                    continue;
-                }
-                llvm::Value* alloca_ptr = invoke_result_allocas[--i];
-                if (!persistent_cleanup_allocas.count(alloca_ptr)) {
-                    release.push_back(alloca_ptr);
-                }
-            }
-            debug_flow_released.emplace_back(mark.invoke_alloca_count, invoke_result_allocas.size());
-        } else {
-            for (size_t i = invoke_result_allocas.size(); i > mark.invoke_alloca_count; --i) {
-                llvm::Value* alloca_ptr = invoke_result_allocas[i - 1];
-                if (!persistent_cleanup_allocas.count(alloca_ptr)) {
-                    release.push_back(alloca_ptr);
-                }
+        for (size_t i = invoke_result_allocas.size(); i > mark.invoke_alloca_count; --i) {
+            llvm::Value* alloca_ptr = invoke_result_allocas[i - 1];
+            if (!persistent_cleanup_allocas.count(alloca_ptr)) {
+                release.push_back(alloca_ptr);
             }
         }
         emitTempReleaseSequence(module, release, 0, release.size());
     }
 
-    if (code_scope) {
-        // the SSA cleanups of the scope that the path's block has not released yet; the code releases them again at
-        // the end of the scope
-        llvm::BasicBlock* cur = builder->GetInsertBlock();
-        size_t end = std::min(pending_ssa_cleanup.size(), debug_flow_pending_released);
-        for (size_t i = end; i > mark.pending_ssa_count; --i) {
-            const SsaCleanupEntry& e = pending_ssa_cleanup[i - 1];
-            if (e.def_bb == cur || dominates(e.def_bb, cur)) {
-                builder->CreateCall(helper, {e.value, xsink_arg});
-            } else if (llvm::AllocaInst* alloca = promoteSsaEntryToAlloca(e.result_id, module,
-                    builder->GetInsertBlock()->getParent())) {
-                llvm::Value* val = builder->CreateLoad(i64_type, alloca);
-                builder->CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), alloca);
-                builder->CreateCall(helper, {val, xsink_arg});
-            }
-        }
-        if (mark.pending_ssa_count < end) {
-            debug_flow_pending_released = mark.pending_ssa_count;
-        }
-    } else if (pending_ssa_cleanup.size() > mark.pending_ssa_count) {
+    if (pending_ssa_cleanup.size() > mark.pending_ssa_count) {
         llvm::BasicBlock* cur = builder->GetInsertBlock();
         for (size_t i = pending_ssa_cleanup.size(); i > mark.pending_ssa_count; --i) {
             const SsaCleanupEntry& e = pending_ssa_cleanup[i - 1];
@@ -5962,16 +5908,6 @@ void QoreIRToLLVM::emitDiscardTemps(llvm::Module& module, uint32_t scope_id, boo
     if (statement_end) {
         flushLocalReloadStateAtTempBoundary(module);
     }
-}
-
-size_t QoreIRToLLVM::debugFlowPathSkipTemps(size_t i) const {
-    assert(i);
-    for (const auto& r : debug_flow_released) {
-        if (i > r.first && i <= r.second) {
-            return r.first;
-        }
-    }
-    return i;
 }
 
 void QoreIRToLLVM::flushLocalReloadStateAtTempBoundary(llvm::Module& module) {
@@ -13599,33 +13535,6 @@ void QoreIRToLLVM::emitDebugStepHook(llvm::Module& module, llvm::Function* llvm_
     builder->CreateCondBr(attached, fire, cont, llvm::MDBuilder(ctx).createBranchWeights(1, 2000));
 
     builder->SetInsertPoint(fire);
-    // the paths of a break and a continue that the debugger requests at the event (#6201): the hook returns the
-    // request that one of them takes
-    const QoreIRDebugFlowTargets* flow = qore_ir_debug_flow_targets(inst);
-    auto flow_block = [&](QoreIRBasicBlock* target) -> llvm::BasicBlock* {
-        if (!target) {
-            return nullptr;
-        }
-        auto it = block_map.find(target);
-        return it == block_map.end() ? nullptr : it->second;
-    };
-    llvm::BasicBlock* flow_break = flow ? flow_block(flow->break_target) : nullptr;
-    llvm::BasicBlock* flow_continue = flow ? flow_block(flow->continue_target) : nullptr;
-    llvm::BasicBlock* flow_return = flow ? flow_block(flow->return_target) : nullptr;
-    // the bits of QORE_RT_DBG_FLOW_BREAK, QORE_RT_DBG_FLOW_CONTINUE and QORE_RT_DBG_FLOW_RETURN (JITRuntime.cpp),
-    // and shifted by QORE_RT_DBG_FLOW_REPORT_SHIFT, the requests whose path leaves the frame of a handler, which
-    // reports them to the frame that runs it (qore_ir_set_handler_flow())
-    unsigned report = 0;
-    if (flow && current_ir_func->handler_body) {
-        for (int rc : {RC_BREAK, RC_CONTINUE, RC_RETURN}) {
-            if (flow->leavesFunction(rc)) {
-                report |= 1u << (rc == RC_BREAK ? 0 : (rc == RC_CONTINUE ? 1 : 2));
-            }
-        }
-    }
-    llvm::Value* flow_mask = llvm::ConstantInt::get(i64_type,
-        (flow_break ? 1 : 0) | (flow_continue ? 2 : 0) | (flow_return ? 4 : 0) | (report << 3));
-    llvm::Value* flow_rc = nullptr;
     if (synthetic) {
         // the entered block, which the parse tree outlives the native code with; without it, the block is resolved
         // from the marker's file and line
@@ -13644,8 +13553,8 @@ void QoreIRToLLVM::emitDebugStepHook(llvm::Module& module, llvm::Function* llvm_
                 ptr_type);
         llvm::Value* line_val = llvm::ConstantInt::get(i64_type, static_cast<uint64_t>(abs_line));
         auto fn = module.getOrInsertFunction("qore_rt_dbg_synthetic_block_step",
-                llvm::FunctionType::get(i64_type, {ptr_type, i64_type, ptr_type, ptr_type, i64_type}, false));
-        flow_rc = builder->CreateCall(fn, {file_ptr, line_val, sb_ptr, xsink_arg, flow_mask});
+                llvm::FunctionType::get(void_type, {ptr_type, i64_type, ptr_type, ptr_type}, false));
+        builder->CreateCall(fn, {file_ptr, line_val, sb_ptr, xsink_arg});
     } else {
         // the statement lives as long as the parse tree that the function was lowered from, which outlives the
         // native code
@@ -13658,58 +13567,14 @@ void QoreIRToLLVM::emitDebugStepHook(llvm::Module& module, llvm::Function* llvm_
             builder->CreateStore(stmt_ptr, stmt_cache_ptr);
         }
         auto fn = module.getOrInsertFunction("qore_rt_dbg_step",
-                llvm::FunctionType::get(i64_type, {ptr_type, ptr_type, ptr_type, i64_type}, false));
-        flow_rc = builder->CreateCall(fn, {stmt_ptr, sb_ptr, xsink_arg, flow_mask});
+                llvm::FunctionType::get(void_type, {ptr_type, ptr_type, ptr_type}, false));
+        builder->CreateCall(fn, {stmt_ptr, sb_ptr, xsink_arg});
     }
-    // An exception that the debugger raised: routes to the instruction's exception target or to the function-level
-    // error return
+    // Honor a debugger-raised exception (the only flow-control signal honored
+    // mid-native-frame); routes to the instruction's exception target or the
+    // function-level error-return block.
     emitExceptionCheck(module, llvm_func, inst);
-    if (flow_break || flow_continue || flow_return) {
-        // a request: the path of the request, which the IR models as an edge from the event (#6201); no SSA cleanups
-        // are pending here: the exception check above emptied the list (emitCondBrWithSsaPreamble())
-        assert(pending_ssa_cleanup.empty());
-        llvm::SwitchInst* sw = builder->CreateSwitch(flow_rc, cont, 3);
-        if (flow_return) {
-            sw->addCase(llvm::ConstantInt::get(llvm::cast<llvm::IntegerType>(i64_type), RC_RETURN), flow_return);
-        }
-        if (flow_break) {
-            sw->addCase(llvm::ConstantInt::get(llvm::cast<llvm::IntegerType>(i64_type), RC_BREAK), flow_break);
-        }
-        if (flow_continue) {
-            sw->addCase(llvm::ConstantInt::get(llvm::cast<llvm::IntegerType>(i64_type), RC_CONTINUE),
-                flow_continue);
-        }
-    } else {
-        builder->CreateBr(cont);
-    }
-    builder->SetInsertPoint(cont);
-}
-
-// documented in QoreIRToLLVM.h
-void QoreIRToLLVM::emitDebugFlowSwitch(llvm::Module& module, llvm::Function* llvm_func, llvm::Value* rc,
-        const QoreIRDebugFlowTargets& flow, bool report) {
-    llvm::BasicBlock* cont = llvm::BasicBlock::Create(ctx, "dbg_flow_cont", llvm_func);
-    llvm::SwitchInst* sw = builder->CreateSwitch(rc, cont, 3);
-    for (int request : {RC_RETURN, RC_BREAK, RC_CONTINUE}) {
-        QoreIRBasicBlock* target = flow.getTarget(request);
-        auto it = target ? block_map.find(target) : block_map.end();
-        if (it == block_map.end()) {
-            continue;
-        }
-        llvm::BasicBlock* dest = it->second;
-        // a request whose path leaves the frame of a handler is reported to the frame that runs it
-        if (report && flow.leavesFunction(request)) {
-            llvm::BasicBlock* report_bb = llvm::BasicBlock::Create(ctx, "dbg_flow_report", llvm_func);
-            llvm::IRBuilderBase::InsertPointGuard ipg(*builder);
-            builder->SetInsertPoint(report_bb);
-            builder->CreateCall(module.getOrInsertFunction("qore_rt_set_handler_flow",
-                llvm::FunctionType::get(void_type, {i64_type}, false)),
-                {llvm::ConstantInt::get(i64_type, request)});
-            builder->CreateBr(dest);
-            dest = report_bb;
-        }
-        sw->addCase(llvm::ConstantInt::get(llvm::cast<llvm::IntegerType>(i64_type), request), dest);
-    }
+    builder->CreateBr(cont);
     builder->SetInsertPoint(cont);
 }
 
@@ -14544,7 +14409,6 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     native_boxed_sources.clear();
     native_boxed_source_kinds.clear();
     known_not_nothing_values.clear();
-    lowering_debug_flow_block = false;
     preinstantiated_entry_loads.clear();
     preinstantiated_entry_cleanup_allocas.clear();
     preinstantiated_entry_cleanup_by_local.clear();
@@ -14557,11 +14421,6 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     exit_temp_cleanup_slot.clear();
     persistent_cleanup_allocas.clear();
     temp_cleanup_marks.clear();
-    debug_flow_run_marks = 0;
-    debug_flow_saved_marks.clear();
-    debug_flow_saved_pending_ssa.clear();
-    debug_flow_released.clear();
-    debug_flow_pending_released = SIZE_MAX;
     exception_edges.clear();
     ir_block_predecessor_counts.clear();
     ir_block_predecessor_counts_valid = false;
@@ -14609,9 +14468,9 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
             error = "cancelled during LLVM native PHI predeclaration";
             return false;
         }
-        // AOT native code has no paths of the debugger's flow requests: their blocks are erased with what they hold
+        // native code has no paths of the debugger's flow requests: their blocks are erased with what they hold
         // when the blocks are lowered, so they get no PHIs, which the PHI fixup pass would read freed (#6201)
-        if (aot_mode && block->debug_flow) {
+        if (block->debug_flow) {
             continue;
         }
         auto llvm_block_it = block_map.find(block.get());
@@ -16302,20 +16161,21 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
         }
     }
 
-    // the lowering state that the code of the blocks consumes in their order, which the paths of the debugger's flow
-    // requests at step events (QoreIRBasicBlock::debug_flow) leave as it was for the blocks after them: they run only
-    // on a request, from a step event of an earlier block, and the code that follows them in the list runs after the
-    // code before them (#6201)
-    bool in_debug_flow_run = false;
-    bool saved_local_reload_boundary_cleanup_pending = false;
     // Lower each block
     for (const auto& block : func.blocks) {
-        // AOT native code makes no step events (emitDebugStepHook()): the paths of the debugger's flow requests are
-        // only for the IR interpreter that runs the debug IR of the function, so they get no native code (#6201)
-        if (aot_mode && block->debug_flow) {
+        // native code takes no debugger's flow requests (emitDebugStepHook()): only the debug IR of AOT code has
+        // their paths (QoreIRFunction::hasDebugFlowPaths()), for the IR interpreter that runs it under a debugger, so
+        // they get no native code, in AOT code and in the closures of AOT code that the JIT compiles from that IR
+        // (#6201); only the step events of the IR enter them, so the code branches to none of them: if a JIT
+        // function's code did, its compilation fails, and the function stays on its tier
+        if (block->debug_flow) {
             if (llvm::BasicBlock* unused = block_map[block.get()]) {
                 if (unused->use_empty()) {
                     unused->eraseFromParent();
+                } else if (!aot_mode) {
+                    error = "the code of IR function '" + func.name + "' branches to block '" + block->name
+                        + "' of the paths of a debugger's flow requests, which native code does not have";
+                    return false;
                 } else {
                     llvm::IRBuilder<> ub(unused);
                     ub.CreateUnreachable();
@@ -16324,30 +16184,6 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
             }
             continue;
         }
-        lowering_debug_flow_block = block->debug_flow;
-        if (block->debug_flow != in_debug_flow_run) {
-            in_debug_flow_run = block->debug_flow;
-            if (in_debug_flow_run) {
-                saved_local_reload_boundary_cleanup_pending = local_reload_boundary_cleanup_pending;
-                // the reload state of the event is not known here: the next statement end releases it
-                local_reload_boundary_cleanup_pending = true;
-                // the temp scopes of the code: the paths release their temporaries, and the code after the paths
-                // still has them
-                debug_flow_run_marks = temp_cleanup_marks.size();
-                debug_flow_saved_marks = temp_cleanup_marks;
-                debug_flow_saved_pending_ssa = pending_ssa_cleanup;
-            } else {
-                local_reload_boundary_cleanup_pending = saved_local_reload_boundary_cleanup_pending;
-                temp_cleanup_marks = std::move(debug_flow_saved_marks);
-                pending_ssa_cleanup = std::move(debug_flow_saved_pending_ssa);
-                debug_flow_saved_marks.clear();
-                debug_flow_saved_pending_ssa.clear();
-                debug_flow_run_marks = 0;
-            }
-        }
-        // the releases of each path block (#6201)
-        debug_flow_released.clear();
-        debug_flow_pending_released = SIZE_MAX;
         aot_hash_string_extraction_cache.clear();
         llvm::BasicBlock* llvm_block = block_map[block.get()];
         if (!llvm_block) {
@@ -16729,8 +16565,8 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
             fflush(stderr);
         }
         for (const auto& inc : phi_inst->incoming) {
-            // AOT native code has no paths of the debugger's flow requests (see above)
-            if (aot_mode && inc.block && inc.block->debug_flow) {
+            // native code has no paths of the debugger's flow requests (see above)
+            if (inc.block && inc.block->debug_flow) {
                 continue;
             }
             llvm::Value* val = getVal(inc.value.id, error);
@@ -20380,11 +20216,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                                 llvm::ConstantInt::get(i64_type, VAL_NOTHING), cleanup_alloca);
                         builder->CreateCall(decref_fn, {old_val, xsink_arg});
                     }
-                    // a path of a debugger's request leaves the code after it, whose own exit of the block releases
-                    // them too (#6201)
-                    if (!lowering_debug_flow_block) {
-                        cleanup_it->second.clear();
-                    }
+                    cleanup_it->second.clear();
                 }
                 auto tracker_it = local_reload_trackers.find(key);
                 if (tracker_it != local_reload_trackers.end()) {
@@ -20785,12 +20617,6 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     qore_ir_loop_cancel_operation(br->target->loop_cancel), "loop_cancel_operation");
                 builder->CreateCall(check_cancel, {xsink_arg, operation});
                 emitExceptionCheck(module, llvm_func, inst);
-            }
-            // a return path of a debugger's request releases the temporaries that its position has before the end of
-            // the return paths that it shares, which releases the locals of the bottom blocks and returns (#6201)
-            if (lowering_debug_flow_block && br->target && br->target->debug_flow_return_tail) {
-                emitExitStatementCleanup(module, true, false, !temp_cleanup_marks.empty()
-                    ? temp_cleanup_marks.front().invoke_alloca_count : invoke_result_allocas.size());
             }
             builder->CreateBr(it->second);
             return true;
@@ -21321,23 +21147,6 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         }
         case QoreIROpcode::ReturnNothing: {
             llvm::Value* return_value = nullptr;
-            // the return of the path of a debugger's request in a fast entry whose return type requires a value
-            // raises the error of a missing return value (#6201): with no cleanup of a converted value, which would
-            // be released on every exit of the function, also on the hot path
-            if (!fast_entry_name.empty() && lowering_debug_flow_block && !aot_mode) {
-                const QoreTypeInfo* return_type = specializeType(fast_entry_return_type);
-                if (QoreTypeInfo::hasType(return_type)
-                        && !QoreTypeInfo::parseAcceptsReturns(return_type, NT_NOTHING)) {
-                    auto helper = module.getOrInsertFunction("qore_rt_coerce_nothing_return",
-                        llvm::FunctionType::get(i64_type, {ptr_type, ptr_type, ptr_type}, false));
-                    builder->CreateCall(helper, {getTypeInfoPointerArg(return_type),
-                        llvm::ConstantPointerNull::get(llvm::cast<llvm::PointerType>(ptr_type)), xsink_arg});
-                    // the exception is pending: the branch goes to the exception path
-                    emitExceptionBranch(module, llvm_func, inst, false, builder->getTrue());
-                    builder->CreateUnreachable();
-                    return true;
-                }
-            }
             if (!fast_entry_name.empty()) {
                 // a fast entry applies the declared return type to a missing return value like the caller of a
                 // standard entry does: a soft list becomes an empty list, and a type rejecting NOTHING raises
@@ -21373,21 +21182,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 builder->CreateCall(incref_fn, {return_value});
             }
             // the temporaries of the statements left are released before the on_block_exit handlers run, as in
-            // the AST; the return of the path of a debugger's request at a step event, which every step event has,
-            // releases those of the temp scopes still open, so that the size of the code of the paths grows with
-            // that of the function (#6201)
-            // the shared end of the return paths: each path released its temporaries before it branched here
-            if (!(lowering_debug_flow_block && current_lowering_block_
-                    && current_lowering_block_->debug_flow_return_tail)) {
-                emitExitStatementCleanup(module, true, false, lowering_debug_flow_block && !temp_cleanup_marks.empty()
-                    ? temp_cleanup_marks.front().invoke_alloca_count
-                    : (lowering_debug_flow_block ? invoke_result_allocas.size() : 0));
-            }
-            // the returns of the paths of a debugger's requests, which every step event of the function has, share
-            // the rest of the return, so that the size of the code of the paths grows with that of the function
-            // (#6201)
-            if (share_return_tail || (lowering_debug_flow_block && !(aot_mode
-                    && static_cast<const QoreIRReturnInstruction*>(inst)->outline_signal))) {
+            // the AST
+            emitExitStatementCleanup(module, true);
+            if (share_return_tail) {
                 // the rest of the return is the same for every return (see emitReturnTail())
                 emitSharedReturn(llvm_func, return_value ? return_value : getNothingReturnValue());
                 return true;
@@ -37100,56 +36897,19 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 } else {
                     // the handlers run through the runtime only if one of the scope is registered (see
                     // emitOnBlockExitExec())
-                    llvm::BasicBlock* skip_bb = builder->GetInsertBlock();
                     llvm::BasicBlock* done_bb = beginPendingHandlerRun(module, saved_count);
-                    {
-                        // the path of a debugger's request runs its handlers with the table-driven helpers (qore#6110),
-                        // whose code does not grow with the locals: it is cold, and its handlers run in it only, so
-                        // the code of the paths of a function with many handlers and locals grows with the function
-                        // (#6201)
-                        struct ObeTableModeScope {
-                            bool& mode;
-                            const bool saved;
-                            ObeTableModeScope(bool& mode, bool set) : mode(mode), saved(mode) {
-                                mode = mode || set;
-                            }
-                            ~ObeTableModeScope() {
-                                mode = saved;
-                            }
-                        } table_mode(obe_table_mode, lowering_debug_flow_block);
-                        publishLocalsForHandlers(module);
-                        // the locals whose reload storage is released before the handlers run are reloaded right
-                        // after them (see finalizeHandlerSites())
-                        recordHandlerSite(emitOnBlockExitHoldCall(module, saved_count,
-                            !qore_ir_exception_reaches_catch(inst->exception_target)), true);
-                    }
-                    // a debugger's request that the last handler run ended with (#6201)
-                    llvm::Value* handler_flow = nullptr;
-                    llvm::BasicBlock* run_end_bb = nullptr;
-                    if (sinst->flow && !aot_mode) {
-                        handler_flow = builder->CreateCall(module.getOrInsertFunction("qore_rt_take_scope_exit_flow",
-                            llvm::FunctionType::get(i64_type, {}, false)), {});
-                        run_end_bb = builder->GetInsertBlock();
-                    }
+                    publishLocalsForHandlers(module);
+                    // the locals whose reload storage is released before the handlers run are reloaded right after
+                    // them (see finalizeHandlerSites())
+                    recordHandlerSite(emitOnBlockExitHoldCall(module, saved_count,
+                        !qore_ir_exception_reaches_catch(inst->exception_target)), true);
                     endPendingHandlerRun(done_bb);
-                    if (handler_flow) {
-                        llvm::PHINode* flow_phi = builder->CreatePHI(i64_type, 2, "scope_exit_flow");
-                        flow_phi->addIncoming(llvm::ConstantInt::get(i64_type, 0), skip_bb);
-                        flow_phi->addIncoming(handler_flow, run_end_bb);
-                        handler_flow = flow_phi;
-                    }
                     // On-block-exit handlers execute user code and can modify any local variable on the
                     // thread-local stack.  The local caches are invalidated on both paths, as at a landing pad: this
                     // exit is on an exception path, where the cache of a local can have been left empty by the
                     // instruction that raised the exception (see the LandingPad case)
                     reloadAllLocalsFromRuntime(module, llvm_func);
                     emitExceptionCheck(module, llvm_func, inst);
-                    // the request becomes that of the block, as with the AST interpreter
-                    // (StatementBlock::execIntern()): its path, after the handlers (#6201)
-                    if (handler_flow) {
-                        emitDebugFlowSwitch(module, llvm_func, handler_flow, *sinst->flow,
-                            current_ir_func->handler_body);
-                    }
                 }
             }
             // ScopeExit produces NOTHING as its result

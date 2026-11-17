@@ -463,9 +463,6 @@ private:
     // Value IDs known not to be NOTHING.  This is intentionally narrower than
     // assigned-state: only typed locals proven assigned on every load contribute
     // here, so auto/any values assigned to NOTHING are not misclassified.
-    //! true while the block being lowered is a block of the paths of a debugger's flow requests
-    //! (QoreIRBasicBlock::debug_flow, #6201)
-    bool lowering_debug_flow_block = false;
     std::unordered_set<uint32_t> known_not_nothing_values;
 
     // LocalVar* keys whose LoadLocal results can be marked known-not-NOTHING.
@@ -823,17 +820,6 @@ private:
         size_t iterator_count = 0;
     };
     std::vector<TempCleanupMark> temp_cleanup_marks;
-    //! The number of temp_cleanup_marks open at the start of the current run of path blocks: the marks of the code
-    /** A path's release of the temporaries of a scope of the code changes no lowering state of the code (#6201)
-    */
-    size_t debug_flow_run_marks = 0;
-    //! The lowering state of the code saved at the start of a run of path blocks, restored at its end (#6201)
-    std::vector<TempCleanupMark> debug_flow_saved_marks;
-    std::vector<SsaCleanupEntry> debug_flow_saved_pending_ssa;
-    //! The ranges of invoke_result_allocas and of pending_ssa_cleanup that the path block being lowered released for
-    //! the temp scopes of the code, so that each is released once in it (#6201)
-    std::vector<std::pair<size_t, size_t>> debug_flow_released;
-    size_t debug_flow_pending_released = SIZE_MAX;
     //! The release code of the exception edges to each handler block (see getExceptionEdgeTarget())
     /** An edge releases the temporaries of the temp scopes that the exception leaves, in the order in which the AST
         interpreter unwinds them: those of argument lists, then the receivers (qore_ir_order_exception_release()).  The
@@ -1865,8 +1851,6 @@ private:
     struct HandlerSite {
         llvm::CallInst* call;
         bool reload;
-        //! true if the site uses the table-driven helpers (obe_table_mode when it was recorded)
-        bool table;
     };
     std::vector<HandlerSite> handler_sites;
 
@@ -1903,10 +1887,7 @@ private:
     //! @param exception_exit true for an exit by an exception, whose release of the locals releases the iterators
     //! that have a place among them (positioned_iterator_allocas), and which releases the other iterators (those of
     //! functional operators) first, before the temporaries, as the AST interpreter unwinds the operators
-    //! @param first_temp the first of the tracked call results that the exit can find holding a value: those before
-    //! it belong to temp scopes that have ended, which hold no value, and emitInvokeCleanup() releases them all
-    void emitExitStatementCleanup(llvm::Module& module, bool pending_ssa, bool exception_exit = false,
-        size_t first_temp = 0);
+    void emitExitStatementCleanup(llvm::Module& module, bool pending_ssa, bool exception_exit = false);
 
     // Returns the block that an exception raised by \a inst branches to on its way to the in-frame handler
     // \a handler: a block that first releases the temporaries of the temp scopes that the exception leaves - the
@@ -1975,11 +1956,6 @@ private:
     //! reload state that is kept until the end of a statement (false for DiscardTempsKeep, which closes the scope
     //! of an operand in the middle of a statement)
     void emitDiscardTemps(llvm::Module& module, uint32_t scope_id = 0, bool statement_end = true);
-
-    //! Returns where a path's release of invoke_result_allocas, going down from \a i, goes on: the start of a range
-    //! that the path's block released already and that ends at or after \a i (debug_flow_released), otherwise \a i,
-    //! when it releases the temporary before \a i (#6201)
-    size_t debugFlowPathSkipTemps(size_t i) const;
 
     // Register an alloca-backed cleanup slot and, for large functions, add its
     // address to the entry-block cleanup pointer array used by
@@ -2200,11 +2176,6 @@ private:
     // non-debug JIT execution pays at most one predictable not-taken branch.  No-op in AOT mode.
     void emitDebugStepHook(llvm::Module& module, llvm::Function* llvm_func,
             const QoreIRInstruction* inst, bool synthetic);
-    //! Branches to the path of the debugger's request \a rc (RC_RETURN, RC_BREAK or RC_CONTINUE) of \a flow, or
-    //! continues if it is 0 (#6201); \a report: the code of a handler, which reports a request whose path leaves it
-    //! to the frame that runs it (qore_rt_set_handler_flow())
-    void emitDebugFlowSwitch(llvm::Module& module, llvm::Function* llvm_func, llvm::Value* rc,
-            const QoreIRDebugFlowTargets& flow, bool report);
 
     // Get or create the per-function JIT deopt block.
     // On guard failure, branches here to set the thread-local deopt flag

@@ -60,7 +60,6 @@ class UserSignature;
 class QoreProgram;
 class QoreTypeInfo;
 struct QoreTypeParamInstantiation;
-struct QoreIRFunctionEffectSummary;
 
 #include <llvm/ExecutionEngine/Orc/LLJIT.h>
 #include <llvm/Support/thread.h>
@@ -697,17 +696,6 @@ DLLLOCAL bool qore_ir_function_runs_without_context(const QoreIRFunction& ir_fun
 DLLLOCAL void qore_ir_resolve_context_free_fast_entries(
         const std::vector<std::pair<const AbstractQoreFunctionVariant*, const QoreIRFunction*>>& functions,
         std::unordered_map<const AbstractQoreFunctionVariant*, BatchCalleeInfo>& batch_callees);
-
-//! Restricts the return facts of a callee of a JIT batch to those that the paths of a debugger's requests keep (#6201)
-/** The return facts of a function (QoreIRFunctionEffectSummary::never_returns_nothing and the exact kind of its boxed
-    return value) are those of its code; native code takes the path of a debugger's return request, which returns
-    NOTHING unless the declared return type requires a value, where it raises the error of a missing return value as
-    the AST interpreter does.  The native code of a caller relies on the facts at the call, so a callee whose path
-    returns NOTHING (QoreIRFunctionEffectSummary::debug_flow_returns_nothing) has neither fact for it.  AOT native
-    code has no paths, so an AOT batch keeps the facts of the code.
-*/
-DLLLOCAL void qore_ir_restrict_debug_flow_return_facts(const AbstractQoreFunctionVariant* variant,
-        const QoreIRFunctionEffectSummary& summary, BatchCalleeInfo& info);
 
 //! Populate conservative interprocedural summaries for a batch of lowered
 //! functions. The function pointers remain owned by the caller.

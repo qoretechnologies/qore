@@ -1415,42 +1415,6 @@ DLLLOCAL bool qore_jit_deopt_requested() {
     return val;
 }
 
-//! the bits of the flow mask of the step hooks of native code: the step event has a path for a break request
-//! (QoreIRDebugFlowTargets::break_target)
-static constexpr int64_t QORE_RT_DBG_FLOW_BREAK = 1;
-//! the bits of the flow mask of the step hooks of native code: the step event has a path for a continue request
-static constexpr int64_t QORE_RT_DBG_FLOW_CONTINUE = 2;
-//! the bits of the flow mask of the step hooks of native code: the step event has a path for a return request
-static constexpr int64_t QORE_RT_DBG_FLOW_RETURN = 4;
-//! the bits of the flow mask of the step hooks of native code: the path of a break, a continue or a return request
-//! (the bit shifted left by this) leaves the frame of a handler, which reports the request to the frame that runs it
-//! (qore_ir_take_handler_flow())
-static constexpr int QORE_RT_DBG_FLOW_REPORT_SHIFT = 3;
-
-//! Takes the flow that a debugger requested at a step event of native code (qore#6200, qore#6201)
-/** Every step event of code with the step hooks has a path for each request (\a flow_mask, see
-    QoreIRDebugFlowTargets): the code of a return statement without a value, or of a break or a continue statement,
-    placed before the statement, which the code of the event branches to, as the AST interpreter takes the request
-    (StatementBlock::execIntern()).  A request whose path leaves the frame of a handler is reported to the frame that
-    runs the handler (qore_ir_set_handler_flow()).  An exception that the debugger raised takes precedence.
-
-    Returns the request taken by a path (RC_RETURN, RC_BREAK or RC_CONTINUE) or 0.
-*/
-static int64_t qore_rt_dbg_flow(int rc, int64_t flow_mask, ExceptionSink* xsink) {
-    if (!rc || !xsink || *xsink) {
-        return 0;
-    }
-    int64_t bit = rc == RC_BREAK ? QORE_RT_DBG_FLOW_BREAK
-        : (rc == RC_CONTINUE ? QORE_RT_DBG_FLOW_CONTINUE : (rc == RC_RETURN ? QORE_RT_DBG_FLOW_RETURN : 0));
-    if (!(flow_mask & bit)) {
-        return 0;
-    }
-    if (flow_mask & (bit << QORE_RT_DBG_FLOW_REPORT_SHIFT)) {
-        qore_ir_set_handler_flow(rc);
-    }
-    return rc;
-}
-
 // Debug-step hook (issue #5352): fires a per-statement debugger step event from
 // JIT-compiled native code so single-stepping / breakpoints / LineCoverage work for
 // a function already running as native code when a debugger attaches mid-execution.
@@ -1458,27 +1422,29 @@ static int64_t qore_rt_dbg_flow(int rc, int64_t flow_mask, ExceptionSink* xsink)
 // `statement` is the statement that follows; `statements_block` is the function's
 // top-level StatementBlock passed as the onStep `blockStatement` context.
 //
-// A debugger-raised exception is honored by the exception check that the caller emits after this call; a return, a
-// break or a continue that the debugger requests is returned (qore_rt_dbg_flow()), for the caller to branch to the
-// path of the request (`flow_mask`).
-extern "C" DLLEXPORT int64_t qore_rt_dbg_step(const AbstractStatement* statement, void* statements_block,
-        ExceptionSink* xsink, int64_t flow_mask) {
+// Flow-control return codes from dbgStep (RC_RETURN/RC_BREAK/RC_CONTINUE) are
+// intentionally NOT honored here: a fixed native frame cannot redirect control flow
+// mid-execution.  Such commands take effect at the next function call boundary, where
+// UserVariantBase::evalTiered() deopts to the AST/IR interpreter (hasDebuggerAttached
+// downgrade).  A debugger-raised exception IS honored: the caller emits an exception
+// check immediately after this call.
+extern "C" DLLEXPORT void qore_rt_dbg_step(const AbstractStatement* statement, void* statements_block,
+        ExceptionSink* xsink) {
     ThreadLocalProgramData* tlpd = get_thread_local_program_data();
     if (!tlpd || !tlpd->runtimeCheck()) {
-        return 0;
+        return;
     }
-    return qore_rt_dbg_flow(tlpd->dbgStep(static_cast<const StatementBlock*>(statements_block), statement, xsink),
-        flow_mask, xsink);
+    tlpd->dbgStep(static_cast<const StatementBlock*>(statements_block), statement, xsink);
 }
 
 // Synthetic block-entry debug event from JIT native code (issue #5352): mirrors the IR
 // interpreter's DebugBlock handler firing dbgSyntheticBlockStep at block entry.  Resolves
 // the entered block from the marker's line; falls back to the function's top-level block.
-extern "C" DLLEXPORT int64_t qore_rt_dbg_synthetic_block_step(const char* file, int64_t abs_line,
-        void* statements_block, ExceptionSink* xsink, int64_t flow_mask) {
+extern "C" DLLEXPORT void qore_rt_dbg_synthetic_block_step(const char* file, int64_t abs_line,
+        void* statements_block, ExceptionSink* xsink) {
     ThreadLocalProgramData* tlpd = get_thread_local_program_data();
     if (!tlpd || !tlpd->runtimeCheck()) {
-        return 0;
+        return;
     }
     // without a file, the block is given; otherwise the block that starts at the line, if any
     const StatementBlock* dbg_block = nullptr;
@@ -1490,9 +1456,9 @@ extern "C" DLLEXPORT int64_t qore_rt_dbg_synthetic_block_step(const char* file, 
         dbg_block = static_cast<const StatementBlock*>(statements_block);
     }
     if (!dbg_block) {
-        return 0;
+        return;
     }
-    return qore_rt_dbg_flow(tlpd->dbgSyntheticBlockStep(dbg_block, xsink), flow_mask, xsink);
+    tlpd->dbgSyntheticBlockStep(dbg_block, xsink);
 }
 
 // --- Invoke helpers ---
@@ -14980,22 +14946,6 @@ static inline bool qore_rt_obe_hold_return(uint64_t* hold, bool error, uint64_t 
 static inline __attribute__((always_inline)) int8_t qore_rt_exec_on_block_exit_intern(int64_t saved_count,
         ExceptionSink* xsink, bool inline_lowered, uint64_t* hold);
 
-//! the debugger's request that the last handler run by qore_rt_exec_on_block_exit_intern() ended with (#6201)
-static thread_local int tl_scope_exit_flow = 0;
-
-//! Records the debugger's request \a rc that ends the native code of a handler, for the frame that runs it (#6201)
-extern "C" DLLEXPORT void qore_rt_set_handler_flow(int64_t rc) {
-    qore_ir_set_handler_flow(static_cast<int>(rc));
-}
-
-//! Returns and clears the debugger's request that the last handler that the handlers of a scope just run ended with
-//! (RC_RETURN, RC_BREAK or RC_CONTINUE), or 0, for the paths of the ScopeExit of native code (#6201)
-extern "C" DLLEXPORT int64_t qore_rt_take_scope_exit_flow() {
-    int rc = tl_scope_exit_flow;
-    tl_scope_exit_flow = 0;
-    return rc;
-}
-
 extern "C" DLLEXPORT void qore_rt_exec_on_block_exit_impl(int64_t saved_count, ExceptionSink* xsink, bool inline_lowered) {
     qore_rt_exec_on_block_exit_intern(saved_count, xsink, inline_lowered, nullptr);
 }
@@ -15022,8 +14972,6 @@ static inline __attribute__((always_inline)) int8_t qore_rt_exec_on_block_exit_i
     }
 
     int8_t held = 0;
-    // the request of the last handler run (#6201); taken by the frame through the paths of its ScopeExit
-    int handler_flow = 0;
     ExceptionSink obe_xsink;
     bool error = xsink && xsink->isException();
 
@@ -15096,8 +15044,6 @@ static inline __attribute__((always_inline)) int8_t qore_rt_exec_on_block_exit_i
                 // native code reports an exception by unwinding to this boundary with the exception already in
                 // the sink
                 if (jit_obe_handlers[i].aot_fn) {
-                    // native AOT code takes no requests: the last handler run ended without one
-                    handler_flow = 0;
                     // the handler runs with the AOT context of its function
                     QoreAOTContext* aot_ctx = jit_obe_handlers[i].aot_ctx;
                     uint64_t rv_bits = 0;
@@ -15121,18 +15067,10 @@ static inline __attribute__((always_inline)) int8_t qore_rt_exec_on_block_exit_i
                         }
                     }
                     uint64_t rv_bits = 0;
-                    // the request of a handler that the handler runs is taken by it (#6201)
-                    int outer_flow = qore_ir_take_handler_flow();
                     try {
                         rv_bits = jit_obe_handlers[i].compiled_fn(&obe_xsink);
                     } catch (const QoreJITException&) {
                         rv_bits = 0;
-                    }
-                    // the block takes the request of the last handler run, as with the AST interpreter
-                    // (StatementBlock::execIntern())
-                    handler_flow = qore_ir_take_handler_flow();
-                    if (outer_flow) [[unlikely]] {
-                        qore_ir_set_handler_flow(outer_flow);
                     }
                     if (qore_rt_obe_hold_return(hold, error, rv_bits, &obe_xsink)) {
                         held = 1;
@@ -15173,7 +15111,6 @@ static inline __attribute__((always_inline)) int8_t qore_rt_exec_on_block_exit_i
 
     // Remove handlers for this function scope
     jit_obe_handlers.resize(start);
-    tl_scope_exit_flow = handler_flow;
     return held;
 }
 
