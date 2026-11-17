@@ -45,9 +45,18 @@ qclass Expression [arg=QoreExpression* e];
     @param source The source to the expression
     @param label the label for the expression
 
-    @throw PARSE-EXCEPTION the source is not a single expression; source that defines code (a function, class,
-    constant, namespace, variable and the like) is refused, and then the code that is pending in the
-    %Program (parsed with Program::parsePending() and not committed yet) is rolled back as well (since %Qore 3.0)
+    @throw PARSE-EXCEPTION the source of the expression cannot be parsed or is not a single expression: source that
+    defines code (a function, class, constant, namespace, variable and the like) is refused, and nothing that it
+    defines is kept; a parse directive at the start of a line (such as \c %%requires, \c %%define or a parse option)
+    cannot be used in it (since %Qore 3.0)
+    @throw EXPRESSION-ERROR the Program has code pending (@ref Qore::Program::parsePending() "Program::parsePending()"
+    without @ref Qore::Program::parseCommit() "Program::parseCommit()" or
+    @ref Qore::Program::parseRollback() "Program::parseRollback()"), or a parse of it was rolled back without
+    @ref Qore::PO_ALLOW_REPARSE "PO_ALLOW_REPARSE"; the code must be committed or rolled back before an expression
+    can be created in the Program (since %Qore 3.0)
+
+    @note the expression adds no code to the Program and does not change its parse state: a parse directive in its
+    source raises a parse exception and is not applied
  */
 Expression::constructor(Program[QoreProgram] program, string source, string label) [flags=NAMED_ARGS] {
     ReferenceHolder<QoreExpression> exp(new QoreExpression(**program, *source, *label, xsink), xsink);

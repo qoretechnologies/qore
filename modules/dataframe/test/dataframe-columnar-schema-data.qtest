@@ -1,0 +1,250 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  dataframe-columnar-schema-data.qtest Copyright 2026 Qore Technologies, s.r.o.
+    MIT License
+*/
+
+%modern
+%disable-warning return-value-ignored
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+
+%requires QUnit
+%requires Util
+%requires FsUtil
+
+%requires dataframe
+
+%exec-class DataFrameColumnarSchemaDataTest
+
+#! A ColumnarResult whose column schema contradicts its data cannot be made, and the Arrow export of a DataFrame
+#! checks each value against the Arrow type of its column instead of assuming it (qore#6214)
+class DataFrameColumnarSchemaDataTest inherits QUnit::Test {
+    public {
+        const Kinds = ("auto", "int", "float", "bool", "number", "string", "date", "binary", "timestamp", "duration",
+            "decimal128", "list", "large_list", "fixed_size_list", "struct", "map", "dictionary");
+    }
+
+    private {
+        string tmp_dir;
+        hash<string, auto> data;
+    }
+
+    constructor() : QUnit::Test("DataFrameColumnarSchemaData", "1.0", \ARGV) {
+        data = {
+            "int8": new buffer<*int8>((1, NOTHING, 3)),
+            "int64": new buffer<*int64>((1, NOTHING, 3)),
+            "float32": new buffer<*float32>((1.5, NOTHING, 3.0)),
+            "float64": new buffer<*float64>((1.5, NOTHING, 3.0)),
+            "bool": new buffer<*bool>((True, NOTHING, False)),
+            "string": new buffer<*string>(("a", NOTHING, "c")),
+            "decimal128": new buffer<*decimal128>((1n, NOTHING, 3n)),
+            "lint": (1, NOTHING, 3),
+            "lnum": (1.5n, NOTHING, 2n),
+            "lstr": ("a", NOTHING, "c"),
+            "ldate": (2026-01-01T00:00:00Z, NOTHING, 2026-01-02T00:00:00Z),
+            "lbin": (<01>, NOTHING, <02>),
+            "llist": ((1, 2), NOTHING, (3, 4)),
+            "lhash": ({"a": 1}, NOTHING, {"key": "x", "value": 2}),
+        };
+
+        addTestCase("the case of the issue", \issueCase());
+        addTestCase("schema matrix through the DataFrame consumers", \matrix());
+        addTestCase("Arrow export of values that are not of the type of their column", \exportMismatch());
+        addTestCase("library-produced columns round trip", \validRoundTrip());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        tmp_dir = make_tmp_dir("dataframe-columnar-schema-data");
+    }
+
+    globalTearDown() {
+        if (tmp_dir) {
+            remove_tree(tmp_dir);
+        }
+    }
+
+    private issueCase() {
+        assertThrows("COLUMNAR-SCHEMA-ERROR", sub () {
+            DataFrame df = DataFrame::fromColumnarResult(ColumnarResult::fromColumnHash({"c": (1.5n, 2n)},
+                {"c": {"schema": {"kind": "binary"}}}));
+            df.toArrowIpc();
+        });
+    }
+
+    #! runs every DataFrame consumer on each result that can be made; each either succeeds or raises an exception
+    private matrix() {
+        int made = 0;
+        int n = 0;
+        foreach string dn in (keys data) {
+            foreach string kind in (Kinds) {
+                foreach *string buffer_type in ((NOTHING, "int64", "float32", "string", "decimal128")) {
+                    hash<auto> schema = {
+                        "kind": kind,
+                        "nullable": True,
+                        "fixed_size": 2,
+                        "children": kind == "map"
+                            ? ({"name": "key", "kind": "string"}, {"name": "value", "kind": "int"})
+                            : ({"name": "item", "kind": "int"},),
+                    };
+                    if (buffer_type) {
+                        schema.buffer_type = buffer_type;
+                    }
+                    list<ColumnarResult> results = ();
+                    try {
+                        results += ColumnarResult::fromColumnHash({"c": data{dn}}, {"c": {"schema": schema}});
+                    } catch (hash<ExceptionInfo> ex) {
+                    }
+                    # the same schema in a serialized payload
+                    try {
+                        ColumnarResult src = ColumnarResult::fromColumnHash({"c": data{dn}});
+                        hash<SerializationInfo> sd = Serializable::serializeToData(src);
+                        foreach hash<auto> i in (sd._index.pairIterator()) {
+                            if (exists i.value._members.kind && i.value._members.name == "c") {
+                                sd._index{i.key}._members = schema + {"name": "c"} - "children";
+                                break;
+                            }
+                        }
+                        results += Serializable::deserialize(sd);
+                    } catch (hash<ExceptionInfo> ex) {
+                    }
+                    foreach ColumnarResult r in (results) {
+                        ++made;
+                        n += runConsumers(r);
+                    }
+                }
+            }
+        }
+        assertTrue(made > 50, sprintf("made: %d", made));
+        assertTrue(n > 0);
+    }
+
+    #! runs the DataFrame consumers of a result; returns the number that succeeded
+    private int runConsumers(ColumnarResult r) {
+        int ok = 0;
+        list<code> ops = (
+            sub () { DataFrame df = DataFrame::fromColumnarResult(r); df.toArrowIpc(); },
+            sub () { DataFrame df = DataFrame::fromColumnarResult(r); df.toRecords(); },
+            sub () { DataFrame df = DataFrame::fromColumnarResult(r); ColumnarResult x = df.toColumnarResult();
+                x.toRows(); },
+            sub () {
+                string fn = sprintf("%s/m-%d.parquet", tmp_dir, ok);
+                DataFrame df = DataFrame::fromColumnarResult(r);
+                df.writeParquet(fn);
+                DataFrame copy = DataFrame::readParquet(fn);
+                copy.toRecords();
+                unlink(fn);
+            },
+        );
+        foreach code op in (ops) {
+            try {
+                op();
+                ++ok;
+            } catch (hash<ExceptionInfo> ex) {
+            }
+        }
+        return ok;
+    }
+
+    #! a DataFrame column keeps the schema of its ColumnarResult column; a value that fillna() puts in it that is not
+    #! of the Arrow type of the schema raises an exception in the export, and toColumnarResult() gives the column the
+    #! schema of its values
+    private exportMismatch() {
+        list<hash<auto>> cases = (
+            {"kind": "binary", "values": (<01>, NOTHING)},
+            {"kind": "binary", "values": (<0102>, NOTHING), "fixed_size": 2},
+            {"kind": "list", "values": ((1,), NOTHING), "children": ({"name": "item", "kind": "int"},)},
+            {"kind": "fixed_size_list", "values": ((1, 2), NOTHING), "fixed_size": 2,
+                "children": ({"name": "item", "kind": "int"},)},
+            {"kind": "struct", "values": ({"a": 1}, NOTHING), "children": ({"name": "a", "kind": "int"},)},
+            {"kind": "map", "values": ({"a": 1}, NOTHING), "children": ({"name": "key", "kind": "string"},
+                {"name": "value", "kind": "int"})},
+        );
+        foreach hash<auto> c in (cases) {
+            hash<auto> schema = c - "values";
+            ColumnarResult r = ColumnarResult::fromColumnHash({"c": c.values}, {"c": {"schema": schema}});
+            foreach auto fill in ((1, 1.5, "x", 2026-01-01T00:00:00Z, True)) {
+                string label = sprintf("%s fill %y", c.kind, fill);
+                DataFrame df = DataFrame::fromColumnarResult(r).fillna(fill);
+                assertThrows("DATAFRAME-IO-ERROR", \df.toArrowIpc(), NOTHING, label);
+                ColumnarResult copy = df.toColumnarResult();
+                assertEq((c.values[0], fill), copy.getColumn("c"), label);
+                ColumnarResult rt = Serializable::deserialize(Serializable::serialize(copy));
+                assertEq(copy.schemaV2(), rt.schemaV2(), label);
+            }
+        }
+        # a temporal column filled with a value that is not a date
+        ColumnarResult r = ColumnarResult::fromColumnHash({"t": (2026-01-01T00:00:00Z, NOTHING),
+            "u": (1s, NOTHING)}, {"t": {"native_type": "timestamp"}, "u": {"native_type": "interval"}});
+        foreach auto fill in ((1, "x", <01>)) {
+            DataFrame df = DataFrame::fromColumnarResult(r).fillna(fill);
+            try {
+                df.toArrowIpc();
+            } catch (hash<ExceptionInfo> ex) {
+                assertEq("DATAFRAME-IO-ERROR", ex.err, sprintf("temporal fill %y", fill));
+            }
+        }
+        # decimal and temporal columns whose values no longer fit their buffer: toColumnarResult() gives them the
+        # schema of their values
+        ColumnarResult dt = ColumnarResult::fromColumnHash({
+            "n": (1.25n, NOTHING),
+            "t": (2026-01-01T00:00:00Z, NOTHING),
+            "u": (1s, NOTHING),
+        }, {
+            "n": {"native_type": "numeric(10,2)"},
+            "t": {"native_type": "timestamp"},
+            "u": {"native_type": "interval"},
+        });
+        foreach auto fill in (("x", <01>, 1.123456n)) {
+            DataFrame df = DataFrame::fromColumnarResult(dt).fillna(fill);
+            ColumnarResult copy = df.toColumnarResult();
+            hash<auto> row = copy.toRows()[1];
+            hash<auto> record = df.toRecords()[1];
+            foreach string col in (("n", "t", "u")) {
+                assertEq(record{col}, row{col}, sprintf("%s fill %y", col, fill));
+            }
+            ColumnarResult rt = Serializable::deserialize(Serializable::serialize(copy));
+            assertEq(copy.schemaV2(), rt.schemaV2(), sprintf("fill %y", fill));
+        }
+    }
+
+    #! columns that the library produces convert to and from a DataFrame and export to Arrow and Parquet
+    private validRoundTrip() {
+        ColumnarResult r = ColumnarResult::fromColumnHash({
+            "i8": new buffer<*int8>((1, NOTHING)),
+            "f64": new buffer<*float64>((1.5, NOTHING)),
+            "s": ("a", NOTHING),
+            "b": (True, False),
+            "dec": (1.25n, NOTHING),
+            "ts": (2026-01-01T00:00:00Z, NOTHING),
+            "u": (1s, NOTHING),
+            "bin": (<01>, NOTHING),
+            "l": ((1, 2), NOTHING),
+            "st": ({"a": 1, "b": "x"}, NOTHING),
+            "m": ({"x": 1}, NOTHING),
+        }, {
+            "dec": {"native_type": "numeric(10,2)"},
+            "ts": {"native_type": "timestamp"},
+            "u": {"native_type": "interval"},
+            "l": {"schema": {"kind": "list", "children": ({"name": "item", "kind": "int"},)}},
+            "st": {"schema": {"kind": "struct", "children": ({"name": "a", "kind": "int"},
+                {"name": "b", "kind": "string"})}},
+            "m": {"schema": {"kind": "map", "children": ({"name": "key", "kind": "string"},
+                {"name": "value", "kind": "int"})}},
+        });
+        DataFrame df = DataFrame::fromColumnarResult(r);
+        assertEq(r.toRows(), df.toColumnarResult().toRows());
+        binary ipc = df.toArrowIpc();
+        assertTrue(ipc.size() > 0);
+        string fn = tmp_dir + "/valid.parquet";
+        df.writeParquet(fn);
+        DataFrame copy = DataFrame::readParquet(fn);
+        # Parquet has no duration type: a duration column is read back as its int64 microseconds
+        assertEq((map $1 - "u", df.toRecords()), (map $1 - "u", copy.toRecords()));
+        ColumnarResult rc = copy.toColumnarResult();
+        assertEq((map $1 - "u", r.toRows()), (map $1 - "u", rc.toRows()));
+        ColumnarResult rs = Serializable::deserialize(Serializable::serialize(rc));
+        assertEq(rc.schemaV2(), rs.schemaV2());
+    }
+}

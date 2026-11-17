@@ -101,11 +101,32 @@
     @endparblock
 
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
+    @par Strong Encapsulation Refuses Out-of-Line Methods in Namespace Blocks
+    @ref strong-encapsulation "%strong-encapsulation" (also set by @ref modern "%modern") refuses an out-of-line method
+    definition in a namespace block, as it does at the top level (see
+    @ref outofline_methods_in_namespaces "out-of-line methods in namespaces"; issue #6384).
+
+    @par Parse Directives Are Not Allowed in an Expression
+    A parse directive in the source of an @ref Qore::Expression "Expression" is now a parse exception and is not
+    applied; it changed the parse state of the Program that the expression was created in (see
+    @ref Qore::Expression::constructor() "Expression::constructor()").
+
     @par A Locked Program Keeps Its Restrictions
     @ref Qore::Program::disableParseOptions() "Program::disableParseOptions()", the parse directives that disable
     options and @ref Qore::Program::replaceParseOptions() "Program::replaceParseOptions()" can no longer remove the
     restrictions of a locked child Program, and an independent Program of restricted code takes and locks that code's
     restrictions; see @ref locked_parse_options.
+
+    @par A Deleted Object Keeps Its Class for Overload Selection
+    A deleted object now selects a variant by its class in every execution mode, at parse time and at run time (see
+    @ref overloading_deleted_objects); it matched no class type when the variant was resolved at run time, so such a
+    call raised \c RUNTIME-OVERLOAD-ERROR or selected another variant, depending on the mode and the call form.
+
+    @par Undefined or Invalid Types in cast<>() of NOTHING Are Parse Errors
+    A @ref cast "cast<>()" of a literal or constant @ref nothing to an or-nothing type or under
+    @ref broken-cast "%broken-cast" now raises a parse error for an undefined or invalid type in the target type, or a
+    type that cannot be cast to, as with any other operand (ex: \c cast<*NoSuchClass>(NOTHING),
+    \c cast<*code>(NOTHING)).
 
     @par Completed Objects Are Released After Constructor Argument Errors
     An exception while @ref constructor_argument_cleanup "releasing a completed constructor's arguments" now releases
@@ -206,11 +227,11 @@
     \c PARSE-COMMAND-ERROR or \c RUNTIME-COMMAND-ERROR by a module that has not set \c QoreModuleInfo::cmd_caller_aware
     (see @ref qore_modules); unrestricted code is not affected.
 
-    @par The Implicit Index Is Unset Outside the Code of Its Operator
-    An @ref implicit_index "implicit index" (<tt>$#</tt>) in a function, method or closure called from the code of a
-    map, select or other iterating operator or of a foreach statement, in a fold expression (also one in the code of
-    such an operator or statement), or at the top level gives @ref nothing instead of an enclosing index, and a typed
-    use of it there (<tt>int i = $#;</tt>, <tt>"s" + $#</tt>) is a parse error.
+    @par The Implicit Index Is a Parse Error Outside the Code of Its Operator
+    An @ref implicit_index "implicit index" (<tt>$#</tt>) outside the code that a map, select or other iterating
+    operator or a foreach statement runs for each element (as in a while loop, a function, method or closure body, a
+    fold expression or top-level code) is a parse error in every execution mode, instead of giving the caller's
+    index or \c 0.
 
     @par An Operator over a Single Value Gives It the Implicit Index 0
     A @ref map "map", @ref select "select" or @ref hmap "hash map" over a single value (not a list or an iterator) gives
@@ -285,6 +306,11 @@
     \c OPTION-VALUE-ERROR, instead of \c RUNTIME-TYPE-ERROR, which now means a type error in the code; soft types also
     refuse text that is no number or date.  Code that catches a refused value by its error code must use the new
     codes.  See @ref dataprovider_v3_11.
+
+    @par File Pollers Keep Polling After an Error in a File Event Handler
+    When a \c singleFileEvent() (or an observer it notifies) throws, a @ref filepollererrors "FilePoller" now logs the
+    error and retries that file at the next poll, and an @ref ftppollererrors "FtpPoller" or \c SftpPoller after the
+    \c "error_delay", instead of stopping polling; code that relied on the stop must call \c stop() itself.
 
     @par date() Raises an Exception for Text After a Date or Time
     @ref Qore::date(string) "date(string)" and @ref Qore::TimeZone::date(string) "TimeZone::date(string)" raise
@@ -493,6 +519,12 @@
     as before SqlUtil 1.7.2; add such an index to the template or use the \c omit option to keep it; see
     @ref SqlUtil::AbstractTable::getAlignSql() "AbstractTable::getAlignSql()" and @ref sqlutilv3_11_0.
 
+    @par SqlUtil Updates and Deletes Check Their Options
+    @ref SqlUtil::AbstractTable::update() "AbstractTable::update()", @ref SqlUtil::AbstractTable::del() "del()" and
+    their variants raise \c OPTION-ERROR for an unknown option and for \c "returning", which only an insert supports;
+    they ignored them (<a href="https://github.com/qoretechnologies/qore/issues/757">issue 757</a>); see
+    @ref sqlutilv3_11_0.
+
     @par Schema and Table Drops Commit Each Statement
     @ref Schema::AbstractSchema::drop() "AbstractSchema::drop()" and
     @ref SqlUtil::AbstractTable::dropCommit() "AbstractTable::dropCommit()" commit each statement, and on PostgreSQL
@@ -583,10 +615,10 @@
     set; see @ref modern "%modern".
 
     @par Compatibility Parse Options Refused Under \%modern
-    Parse directives and options that change the meaning of code, such as @ref no-negative-offsets "%no-negative-offsets" and
-    the \c %%broken-* options, cannot be used while @ref modern "%modern" is in effect, nor can
-    @ref modern "%modern" be set while one of them is in effect; legacy code that needs them is parsed without
-    @ref modern "%modern" (see @ref modern_option_consistency).
+    Options that change the meaning of code, such as @ref no-negative-offsets "%no-negative-offsets" and the
+    \c %%broken-* options, cannot be used while @ref modern "%modern" is in effect, nor with it in the same code; a
+    \c %%modern directive resets one that the application set through the API as a default for legacy code (see
+    @ref modern_option_consistency).
 
     @par Unassigned Local Variable Values Rejected Under \%modern
     @ref modern "%modern" implies @ref strict-parse-errors "%strict-parse-errors", so a local variable that cannot
@@ -710,8 +742,8 @@
 
     @par Minus-Equals With a Date Operand on an Integer Lvalue
     <tt>-=</tt> with a date operand on an integer lvalue assigns the date result of <tt>x - d</tt>, which an \c int
-    lvalue refuses with \c RUNTIME-TYPE-ERROR, instead of subtracting the date's integer value; see
-    @ref minus_equals_operator.
+    lvalue refuses (a parse error for an operand of type \c date, \c RUNTIME-TYPE-ERROR otherwise), instead of
+    subtracting the date's integer value; see @ref minus_equals_operator.
 
     @par Indexing a String Gives a char
     <tt>s[i]</tt> on a string returns a @ref char "char" instead of a one-character string; it converts to a string
@@ -750,6 +782,11 @@
     ordinary character; set the \c quote_escape option to a backslash to read or write files in the earlier format;
     see @ref csvutil_rfc4180.
 
+    @par FixedLengthUtil Validates Numeric Field Values
+    A @ref fixedlengthutilintro "FixedLengthUtil" \c "int", \c "float" or \c "number" field value that is not a number
+    of its type (ex: \c "12abc", read as \c 12 before) raises an exception when read or written; see
+    @ref fixedlengthnumericvalues (<a href="https://github.com/qoretechnologies/qore/issues/300">issue 300</a>).
+
     @par Destructors on a Cancelled or Interrupted Thread
     The destructor of a trusted class runs with cancellation and @ref sandbox_interrupt "program interrupts" deferred,
     so it completes, the destructor of a sandboxed class is skipped while a cancellation, an interrupt or a sandbox
@@ -778,8 +815,19 @@
     The @ref multiplication_operator "* operator" and \c *= with a @ref relative_dates "relative date" and a number
     give a relative date with each of its components multiplied (ex: <tt>months(1) * 2</tt> is 2 months; a float
     factor carries fractions as \c date("P...") does); they gave an int, and \c *= assigned it.  An \c int,
-    \c float or \c number lvalue multiplied by a date with \c *= raises an exception at run time, as it cannot hold
-    the result (issue #6109).
+    \c float or \c number lvalue multiplied by a date with \c *= cannot hold the result: a parse error for an
+    operand of type \c date, an exception at run time otherwise (issue #6109).
+
+    @par Compound Assignments That Can Never Store Their Result Are Parse Errors
+    A compound assignment whose result the lvalue's declared type can never hold, such as <tt>d /= 2</tt> on a
+    \c date lvalue, is a \c PARSE-TYPE-ERROR in every mode, as an assignment of the result is, where it raised an
+    exception when it ran (see @ref compound_assignment_parse_checks "parse-time checks"; issue #6103).
+
+    @par A Variable Used in Its Own Initializer Is a Parse Error
+    A use of a local variable, member or static class variable in its own initialization expression, where it has no
+    value yet (ex: <tt>int a = a + 1;</tt>, <tt>list&lt;auto&gt; l = (l,);</tt>), is a parse error in every mode; a use
+    in a closure created there and a global, which keeps its value, are not affected (see
+    @ref variable_initializer_scope; issue #526).
 
     @par Calls Through Method References on Deleted Objects Name the Method
     The \c OBJECT-ALREADY-DELETED exception of a call through a method call reference on a deleted object names the
@@ -787,7 +835,58 @@
     (see @ref call_reference_deleted_object; <a href="https://github.com/qoretechnologies/qore/issues/6083">issue
     6083</a>).
 
+    @par rindex() and rfind() Find a Match at a Multi-Byte Character Position
+    @ref Qore::rindex() "rindex()" and @ref <string>::rfind() "<string>::rfind()" search the characters up to and
+    including the one at the search position in every encoding; in a multi-byte encoding they searched only up to the
+    first byte of that character, so their results change for valid UTF-8 (and other multi-byte) text when that
+    character is not one byte (ex: <tt>rindex("aézaéb", "é", 4)</tt> is 4, not 1) (issue #6246).
+
+    @par brindex() Finds a Match That Ends at the Search Position, bindex() Takes Negative Positions
+    @ref Qore::brindex() "brindex()" finds a match that lies within the bytes up to and including the search
+    position, as @ref Qore::rindex() "rindex()" does with characters; it did not find a match that ends at the
+    position (ex: <tt>brindex("abc", "ab", 1)</tt> is 0, not -1).  @ref Qore::bindex() "bindex()" (and
+    \c QoreString::bindex() and \c QoreString::find() with a \c std::string in the C++ API) searches from a
+    negative position as an offset from the end, or from the start before it, as @ref Qore::index() "index()" does;
+    it gave -1 for a negative position farther from the end than the length of the substring (ex:
+    <tt>bindex("abc", "c", -2)</tt> is 2, not -1) (issue #6271).
+
+    @par <binary>::find() Searches From the Start for a Negative Offset Before It
+    @ref <binary>::find() "<binary>::find()" searches from the start of the binary object for a negative offset
+    before the start, as @ref <string>::find() "<string>::find()" and @ref Qore::bindex() "bindex()" do; it gave -1
+    (ex: <tt>binary("abcab").find(binary("b"), -6)</tt> is 1, not -1) (issue #6281).
+
+    @par Hashdecl Member Initializers Cannot Use the Local Variables of the Code Using the Hashdecl
+    A @ref hashdecl_initializer_scope "hashdecl member initialization expression" that names a local variable of the
+    function, method or closure that first uses the type-safe hash is a parse error, as it already was for class
+    members; 2.2.1 evaluated it with that code's variable (issue #6268).
+
+    @par Modulo-Equals by Zero Raises DIVISION-BY-ZERO
+    @ref modulo_equals_operator "%=" with a divisor of zero raises \c DIVISION-BY-ZERO as the other division operators
+    do, following the rule for @ref undefined_arithmetic "undefined arithmetic"; 2.2.1 assigned \c 0 (issue #1034).
+
+    @par Every Number Division by Zero Raises DIVISION-BY-ZERO
+    A @ref number_type "number" dividend of \c 0, infinity or NaN divided by zero raises \c DIVISION-BY-ZERO, as any
+    other dividend does (see @ref undefined_arithmetic); 2.2.1 gave NaN or infinity (ex: <tt>0n / 0n</tt>), also for
+    constant operands, which now raise the exception when they are parsed (issue #1034).
+
+    @par pow() of a Negative Float and a Fractional Exponent Returns NaN
+    @ref Qore::pow() "pow()" of a negative float and an exponent that is not an integer returns NaN, as the other math
+    functions do for an argument outside their domain (see @ref undefined_arithmetic); 2.2.1 raised
+    \c INVALID-POW-ARGUMENTS (issue #1034).
+
+    @par HTTP Servers Choose the Response Encoding from Accept-Charset by Its Weights
+    An HTTP server takes the response encoding of a request (\c cx."response-encoding") from \c Accept-Charset as
+    RFC 9110 defines it, with weights and optional whitespace (see
+    @ref Qore::get_http_accept_charset() "get_http_accept_charset()"); 2.2.1 took the first charset unless the value
+    or an element directly after a comma began with UTF-8 or \c "*", whatever the weights (issue #6343).
+
     @subsection qore_3_0_0_new_features New Features in Qore
+    @par Strict Number Parsing
+    @ref parse_int(string, string, bool) "parse_int()", @ref parse_float(string, string, bool) "parse_float()" and
+    @ref parse_number(string, string, bool) "parse_number()" take a \a strict argument that raises
+    \c PARSE-NUMBER-ERROR unless the string is the number and nothing else (see @ref strict_number_parsing;
+    <a href="https://github.com/qoretechnologies/qore/issues/305">issue 305</a>).
+
     @par Module Commands Know the Restrictions of the Code That Issues Them
     A binary module's command handler gets the effective restrictions of the issuing code, not those of the target
     %Program, from the new \c QoreModuleCommandContext (module API 2.3; see @ref qore_modules), also for
@@ -915,6 +1014,11 @@
       @ref Qore::decode_http_body() "decode_http_body()" apply the rules that all HTTP clients and servers use to
       find the encoding of a text body, including RFC 9110 parsing of the \c charset parameter
       (<a href="https://github.com/qoretechnologies/qore/issues/5469">issue 5469</a>)
+    - new @ref Qore::get_http_content_type_info() "get_http_content_type_info()" and
+      @ref Qore::get_http_accept_charset() "get_http_accept_charset()" return the character set, the media type and
+      the response encoding that an HTTP server reports for a request, the same for every HTTP version
+      (<a href="https://github.com/qoretechnologies/qore/issues/6318">issue 6318</a>,
+      <a href="https://github.com/qoretechnologies/qore/issues/6333">issue 6333</a>)
     - new @ref Qore::Socket::getQuicSSLCipherName() "Socket::getQuicSSLCipherName()" and
       @ref Qore::Socket::getQuicSSLCipherVersion() "Socket::getQuicSSLCipherVersion()" for HTTP/3 QUIC sessions
     - new @ref Qore::Socket::shutdownWrite() "Socket::shutdownWrite()" shuts down the sending side of a connection
@@ -969,6 +1073,12 @@
     receives the start and outcome of every operation and can reject a mutation before it runs, with metadata
     declared by the caller with @ref Qore::SQL::SqlMutationDeclaration "SqlMutationDeclaration"; see
     @ref sql_mutation_admission "Observer Semantics".
+
+    @par Set Operators in SqlUtil Selects
+    The \c "union", \c "union_all", \c "intersect" and \c "except" select options of @ref sqlutilintro "SqlUtil"
+    combine a select with selects of the same or other tables, with each database's SQL (ex: \c MINUS on Oracle),
+    and order and page the combined result; see @ref select_option_set_operators
+    (<a href="https://github.com/qoretechnologies/qore/issues/2961">issue 2961</a>).
 
     @par Language and Runtime
     @parblock
@@ -1120,6 +1230,13 @@
     method tell whether the sandbox trusts its code to use uncontrolled APIs (for a combination of sandboxes, whether
     every member does), so that a module refuses an operation that only an unrestricted caller may use unless the
     sandbox trusts its caller.
+
+    @par Asking Whether the Calling Code Is Restricted From a Domain
+    @ref Qore::SandboxManager::isCallerRestricted() "SandboxManager::isCallerRestricted()" and the C++ function
+    \c qore_caller_restricts_domain() (\c QORE_HAVE_CALLER_RESTRICTS_DOMAIN) tell module code whether the code that
+    calls it, not the module's own %Program, is restricted from a functional domain, so that it refuses an operation
+    that it performs for a restricted caller; see @ref sandbox_caller_domains
+    (<a href="https://github.com/qoretechnologies/qore/issues/6257">issue 6257</a>).
 
     @par C++ API: Module Threads and Callbacks Run Under the Caller's Sandbox
     A binary module can run work for sandboxed callers on its own worker or callback threads under each caller's
@@ -1274,6 +1391,9 @@
 
     - @ref csvutilintro "CsvUtil" module
       - CSV data is written and read as RFC 4180 by default (see @ref qore_3_0_0_compatibility)
+      - the writers can quote fields by type and write a field without a value without quotes, so that it can be told
+        apart from an empty string (see @ref csvwriter_quoting)
+        (<a href="https://github.com/qoretechnologies/qore/issues/3113">issue 3113</a>)
       - see @ref csvutil_v1_12 for all changes
 
     - @ref connectionproviderintro "ConnectionProvider" module
@@ -1349,6 +1469,9 @@
         (@ref Qore::Thread::ThreadCapabilityScope "ThreadCapabilityScope")
       - declares the \c THREAD_CONTROL @ref function_domains "domain": its threads start for a caller restricted with
         @ref Qore::PO_NO_THREAD_CONTROL "PO_NO_THREAD_CONTROL" and run under the caller's sandbox
+      - an error while a polled file is handled (ex: an observer that refuses the file event) keeps the file for the
+        next poll instead of stopping polling (see @ref filepollererrors;
+        <a href="https://github.com/qoretechnologies/qore/issues/6400">issue 6400</a>)
       - see @ref file_poller_2_1 for all changes
 
     - @ref ftppollerintro "FtpPoller" module
@@ -1356,6 +1479,9 @@
         (@ref Qore::Thread::ThreadCapabilityScope "ThreadCapabilityScope")
       - declares the \c THREAD_CONTROL @ref function_domains "domain": its threads start for a caller restricted with
         @ref Qore::PO_NO_THREAD_CONTROL "PO_NO_THREAD_CONTROL" and run under the caller's sandbox
+      - an error while a polled file is handled (ex: an observer that refuses the file event) keeps the remote file
+        and retries the poll after the \c "error_delay" option's delay instead of stopping polling (see
+        @ref ftppollererrors; <a href="https://github.com/qoretechnologies/qore/issues/6400">issue 6400</a>)
       - see @ref ftppollerv2_2 for all changes
 
     - @ref gmaildataproviderintro "GmailDataProvider" module
@@ -1406,6 +1532,17 @@
         @ref smtpclientintro "SmtpClient" module sends the message to all of them; only the first one was, so an
         untrusted display name must be quoted or given separately from the address
         (<a href="https://github.com/qoretechnologies/qore/issues/6134">issue 6134</a>)
+      - a message in any character encoding is parsed in time proportional to its length, as are encoded words and
+        quoted-printable text by the @ref mimeintro "Mime" module; it grew with the square of the number of header
+        lines (<a href="https://github.com/qoretechnologies/qore/issues/6139">issue 6139</a>)
+      - a parsed message without a \c Subject or a \c From header can be serialized; it raised
+        \c RUNTIME-OVERLOAD-ERROR (<a href="https://github.com/qoretechnologies/qore/issues/6267">issue 6267</a>)
+      - a message with an 8-bit part in a single-byte charset (ex: ISO-8859-15) is parsed and the part is decoded
+        with its charset; the parse failed with \c INVALID-ENCODING
+        (<a href="https://github.com/qoretechnologies/qore/issues/114">issue 114</a>)
+      - a message with a raw 8-bit header line that is not valid in the encoding of the message text (ex: a Latin-1
+        \c Subject read as UTF-8) is parsed; the parse failed with \c INVALID-ENCODING
+        (<a href="https://github.com/qoretechnologies/qore/issues/6326">issue 6326</a>)
       - see @ref mailmessage_v1_5_1 for all changes
 
     - @ref mapperintro "Mapper" module
@@ -1416,8 +1553,16 @@
       - the connection URL is not generated automatically and must be supplied by the user
       - see @ref Mewsrestclientv1_0_1 for all changes
 
+    - @ref mimeintro "Mime" module
+      - multipart boundaries, also those of the @ref mailmessageintro "MailMessage" module, are random and are
+        replaced when a part contains them; they were made from the current time and were not checked against the
+        parts (<a href="https://github.com/qoretechnologies/qore/issues/6307">issue 6307</a>)
+      - see @ref mime_1_9 for all changes
+
     - @ref openaidataproviderintro "OpenAiDataProvider" module
       - the \c transcribe-audio action and the Conversations API, replacing the deprecated Assistants API
+      - the \c multipart/form-data boundary of a file upload is random
+        (<a href="https://github.com/qoretechnologies/qore/issues/6307">issue 6307</a>)
       - see @ref openaidataprovider_v1_7 for all changes
 
     - @ref openairestclientintro "OpenAiRestClient" module
@@ -1431,6 +1576,8 @@
         (<a href="https://github.com/qoretechnologies/qore/issues/5563">issue 5563</a>)
       - fixed modifying a column named like a clause of <tt>ALTER TABLE ... MODIFY</tt>, such as \c scope, in table
         alignment, which failed with \c ORA-03050
+      - fixed a column declared with \c "default null", which was described with the default value \c null
+        (<a href="https://github.com/qoretechnologies/qore/issues/1746">issue 1746</a>)
 
     - @ref pgsqlsqlutilbaseintro "PgsqlSqlUtilBase" module
       - tables, sequences, and materialized views are listed only from the schemas of the connection's
@@ -1439,6 +1586,14 @@
       - the template tables of a schema description read the default schema once for all tables instead of reading
         the catalog three times per table (<a href="https://github.com/qoretechnologies/qore/issues/5584">issue
         5584</a>)
+      - fixed a column declared with \c "default null", which was described with a default value such as
+        \c NULL::character varying, so @ref schemareverseintro "SchemaReverse" gave it as a default and alignment
+        dropped it (<a href="https://github.com/qoretechnologies/qore/issues/1746">issue 1746</a>)
+
+    - @ref pop3clientintro "Pop3Client" module
+      - a line of a message that starts with \c "." is returned without the \c "." that the server adds before it
+        (RFC 1939 section 3) (<a href="https://github.com/qoretechnologies/qore/issues/6319">issue 6319</a>)
+      - see @ref pop3client_v2_1 for all changes
 
     - @ref providerindexintro "ProviderIndex" module
       - indexes can be built with worker processes, which
@@ -1452,6 +1607,11 @@
         @ref Qdx::QoreCodeFragmentHighlighter "QoreCodeFragmentHighlighter";
         <a href="https://github.com/qoretechnologies/qore/issues/5573">issue 5573</a>)
       - see @ref qdx_1_1_3 for all changes
+
+    - @ref qunitintro "QUnit" module
+      - the summary of a test lists the test cases that failed or ended with an error, with the failed assertion or
+        the exception and where it was raised (see @ref unittestformats; issue #3134)
+      - see @ref qunit_v0_5_2 for all changes
 
     - @ref reflectionintro "reflection" module
       - enum reflection (@ref Qore::Reflection::Enum "Reflection::Enum")
@@ -1514,6 +1674,8 @@
         @ref sqlite3_foreign_constraints)
       - fixed duplicate-row detection, and describing indexes (automatic indexes, lower-case unique indexes and
         quoted column names)
+      - fixed a column declared with \c "default null" or \c "default (null)", which was described with a
+        default value (<a href="https://github.com/qoretechnologies/qore/issues/1746">issue 1746</a>)
 
     - @ref sqlutilintro "SqlUtil" module
       - portable table partitioning APIs for PostgreSQL, Oracle, MySQL/MariaDB and SQL Server
@@ -1522,6 +1684,8 @@
       - alignment drops an index that the template does not have (see @ref qore_3_0_0_compatibility)
       - @ref SqlUtil::RestartableTransaction "RestartableTransaction" restarts Oracle transactions when sessions are
         killed (ex: during RAC rolling patching) or the connection is lost
+      - @ref SqlUtil::op_trunc_date() "op_trunc_date()" compares a truncated date column in where clauses
+        (<a href="https://github.com/qoretechnologies/qore/issues/2363">issue 2363</a>)
       - see @ref sqlutilv3_11_0 for all changes
 
     - @ref tablemapperintro "TableMapper" module
@@ -1531,6 +1695,9 @@
       - @ref Util::get_file_from_http() "get_file_from_http()" and @ref Util::get_file_from_url() "get_file_from_url()"
         use @ref httpclientiointro "HttpClientIo"
         (<a href="https://github.com/qoretechnologies/qore/issues/5469">issue 5469</a>)
+      - @ref Util::string_ends_with() "string_ends_with()" finds a suffix that ends with a multi-byte character
+        (ex: <tt>string_ends_with("café", "é")</tt> is @ref True "True"), through the fix of
+        @ref <string>::rfind() "<string>::rfind()" (issue #6246)
       - see @ref util_3_0 for all changes
 
     - @ref vscdebugadapterintro "VscDebugAdapter" module
@@ -1894,9 +2061,79 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - when more than one class of a hierarchy declares a member with an initialization expression, the value that a
+      later one replaces is released, so that an object that a base class stored there is destroyed (see
+      @ref member_initialization; issue #6411)
+    - argument and parameter values are released in the same order in every execution mode; compiled code released
+      some of them only at the end of the statement (issue #6262)
+    - a module blacklisted with @ref Qore::qore_add_module_to_blacklist() "qore_add_module_to_blacklist()" is also
+      refused when it is a @ref separated_modules "separated module", however it is loaded (issue #6450)
+    - a sleep with @ref Qore::usleep() "usleep()" or @ref Qore::sleep() "sleep()" that a signal interrupted while
+      it slept with \c nanosleep() (2) slept its whole time again instead of the time that was left (issue #6364)
+    - an out-of-line method definition in a namespace block resolves its class path relative to that namespace
+      (<tt>int I::C::m() {}</tt> in \c NS for \c NS::I::C), and a path that names no such class, which release builds
+      used to resolve by ignoring its first part, is now an error (see
+      @ref outofline_methods_in_namespaces "out-of-line methods in namespaces"; issue #6340)
+    - a parse that fails rolls back the local variables that it declared in the top-level block of a %Program, which a
+      later parse could not declare again, and a %Program whose first parse failed can declare them in the next one
+      (issue #678)
+    - the initializer of a \c private:internal member writes its own member when a class two or more levels below
+      declares a member with the same name again (or inherits one from two base classes); it wrote the other member,
+      and the methods of its class saw it unset (see @ref private_members; issue #6393)
+    - the parse options that a parse gives only part of its code (a module header, a file with
+      @ref push-parse-options "%push-parse-options", code parsed before a directive) are no longer visible to other
+      threads, and changes to the Program's options made meanwhile are kept; @ref lock-options "%lock-options" in a
+      file with %push-parse-options keeps its restrictions after the file (issues #6175, #6207)
+    - the time zone of a @ref Qore::Program "Program" is read and set atomically: setting it with
+      @ref Qore::TimeZone::setRegion() "TimeZone::setRegion()" and the other @ref Qore::TimeZone "TimeZone" methods
+      while other threads of the Program read it was a data race (issue #6346)
+    - with @ref broken-list-range "%broken-list-range", a range past the end of a list whose element type does not
+      allow @ref nothing (ex: \c list<int>) gives @ref nothing for the elements outside of the list in a list with the
+      or-nothing element type instead of raising a \c RUNTIME-TYPE-ERROR exception (issue #5757)
+    - a range of the @ref list_element_operator "[] operator" over a typed list holding @ref nothing in the range (a
+      hole left by @ref delete "delete" or @ref remove "remove", or a gap filled by an assignment past the end of the
+      list) gives a list with the or-nothing element type instead of raising a \c RUNTIME-TYPE-ERROR exception, which
+      failed an assertion in debug builds (issue #6435)
+    - the report of an unhandled exception or of a warning on stderr is written whole, so that the output of other
+      threads is no longer mixed into its lines (see @ref exception_handling; issue #6290)
+    - a range of the @ref list_element_operator "[] operator" (ex: <tt>x[-9..1]</tt>) gives only elements of its
+      value: a range of an empty value is empty, of the same type, and a range of a string with multi-byte
+      characters is resolved against its characters (issue #6306)
+    - @ref Qore::qore_add_module_to_blacklist() "qore_add_module_to_blacklist()" refuses a module whose load is in
+      progress; it accepted it, and the module was then loaded and registered anyway (issue #6454)
+    - the summary and the junit report of a @ref qunitintro "QUnit" test count skipped test cases, which they gave
+      as succeeded, and the junit report has a \c testsuite element and counts assertion failures apart from errors
+      (see @ref unittestformats; issue #2297)
+    - an empty \c "regex_mask" option of @ref FtpPoller::FtpPoller::constructor() "FtpPoller::constructor()" matches
+      every file; it caused the constructor to throw an \c INVALID-MEMBER exception (issue #3377)
+    - two @ref Qore::Program "Program" objects whose commits run code that parses code in each other waited for each
+      other's parse lock forever; such a wait is refused with \c PROGRAM-ERROR, and the wait of a parse action for a
+      parse lock can be ended with @ref Qore::cancel_thread() "cancel_thread()"; see @ref program_parse_lock_waits
+      (issue #5693)
+    - creating an @ref Qore::Expression "Expression" in a %Program with code pending, or whose parse was rolled back
+      without @ref Qore::PO_ALLOW_REPARSE "PO_ALLOW_REPARSE", raises \c EXPRESSION-ERROR; it let threads enter the
+      %Program before its code was committed, and could refer to code that a rollback deleted (issue #6353)
+    - a child process created with @ref Qore::fork() "fork()" while another thread changed the parse options of a
+      %Program or of a module, or created a %Program that copies the external data of its parent, could block when it
+      did the same, or when the %Program was destroyed (issue #6403)
+    - a @ref call_reference_pseudo_method "call reference to a pseudo-method" (ex: <tt>\\l.size()</tt> for a list
+      \c l, or <tt>\\o.className()</tt>) refers to the pseudo-method of the value; it raised a parse or run-time
+      exception (issue #995)
     - an allocation that fails while a thread enters another %Program (ex: in a binary module's
       \c QoreExternalProgramContextHelper or a parse commit) leaves the thread in the calling %Program and releases
       its thread count in the entered %Program, which could otherwise not be deleted (issue #6198)
+    - @ref Qore::Thread::ThreadPool::stop() "ThreadPool::stop()" and
+      @ref Qore::Thread::ThreadPool::stopWait() "ThreadPool::stopWait()" called from a task of the same pool raise
+      \c THREADPOOL-ERROR; they waited for the worker running the calling task and never returned (issue #6242)
+    - a task of a @ref Qore::Thread::ThreadPool "ThreadPool" that releases the last reference to the pool no longer
+      hangs: the pool's manager thread stops the pool instead of the task's worker, which waited for itself
+      (issue #6253)
+    - the initializer of a class static variable runs with the parse options of its declaration; it ran with those of
+      the code that triggered it, such as a script with other options that parses the declaring code (issue #6273)
+    - reading a character of a UTF-8 string by its offset with the @ref list_element_operator "[] operator" took time
+      linear in the offset, so a loop over the characters of a string was quadratic; a character in the ASCII text at
+      the start of a string is found in constant time, and @ref <string>::length() "<string>::length()" of ASCII text
+      is computed once (issue #6138)
     - the negative of an absolute date with microseconds (ex: <tt>-1970-01-01T00:00:01.5Z</tt>) is
       \c 1969-12-31T23:59:58.5Z; the microseconds were negated as an unsigned value and gave another date (issue #6103)
     - the decimal fraction of an ISO 8601 duration component (ex: \c P0.0000001Y for
@@ -1911,6 +2148,20 @@
       replace a range of it with a shorter string (issue #6188)
     - the @ref splice "splice" and @ref extract "extract" operators no longer read past the end of a list, which could
       crash, when they replace a range of it with fewer elements (issue #6192)
+    - out-of-bounds read of uninitialized heap memory when decoding a character at or after the end of a string in
+      UTF-16, UTF-32 or UCS-2 (potential information disclosure) (issue #6246)
+    - @ref <string>::getUnicode() "<string>::getUnicode()" returns 0 at and after the end of a string in IBM037 and
+      Shift_JIS, as in the other encodings; it raised \c INVALID-ENCODING (issue #6246)
+    - @ref Qore::brindex() "brindex()" finds a match that ends at the search position, and
+      @ref Qore::bindex() "bindex()" with a negative position farther from the end than the length of the substring
+      searches from that offset (or from the start) instead of giving -1; in the C++ API, \c QoreString::findAny()
+      finds any of the given bytes, as documented, instead of the whole string (issue #6271)
+    - @ref <binary>::find() "<binary>::find()" with a negative offset before the start searches from the start
+      instead of giving -1, as the string search functions do (issue #6281)
+    - @ref Qore::rindex() "rindex()" and @ref <string>::rfind() "<string>::rfind()" also find a match at the search
+      position when its character is not one byte, so results change for valid UTF-8 text (ex:
+      <tt>rindex("aézaéb", "é", 4)</tt> is 4, not 1), and a negative position before the start gives the results of
+      a single-byte encoding with them and @ref Qore::index() "index()" in multi-byte encodings (issue #6246)
     - the heartbeat of @ref WebSocketHandler::WebSocketHandler "WebSocketHandler" connections is measured on the
       monotonic clock: a step back of the system clock no longer stops the heartbeat PINGs for the size of the step
       (see @ref Qore::AsyncIoController::addTimerDelay() "AsyncIoController::addTimerDelay()")
@@ -1936,6 +2187,13 @@
     - a float out of the range of an integer, an infinite float and NaN now @ref float_to_int_conversion "convert to an
       integer" as a number does in every mode, saturated with NaN giving 0; the result was undefined and differed
       between the execution modes (issue #6181)
+    - an absolute date from an arbitrary-precision numeric value (ex: a \c softdate assignment) has the right
+      microseconds (\c 1731690000.5n gave a date 16 seconds later), and a value out of range, infinity and NaN
+      @ref conversions "convert to seconds" as an integer conversion does (issue #6212)
+    - @ref Qore::round() "round()", @ref Qore::ceil() "ceil()" and @ref Qore::floor() "floor()" round a float at a
+      precision above 9 or below -9, an int or number at a precision out of the range of a 32-bit int, and a number
+      at a precision above 308 or below -308 (it gave NaN); an int result out of range is the largest or smallest int
+      (\c round(9223372036854775807, -1) ended the process, and \c ceil(5, -25) gave 0) (issue #6212)
     - a @ref find "find expression" nested in the result, in-expression or where expression of another one can now be
       compiled with @ref qcc_tool "qcc"; it was refused as an unsupported expression (issue #5974)
     - @ref qcc_tool "qcc" no longer crashes compiling a user module whose header has a \c del closure, and the compiled
@@ -1957,6 +2215,10 @@
       module or be given to other code, and a static registration of a module that was already loaded could crash at
       exit; it is now checked as a load of the module by path and is never library code (see
       @ref sandbox_static_modules) (<a href="https://github.com/qoretechnologies/qore/issues/5986">issue 5986</a>)
+    - in the IR, JIT and tiered @ref execution_modes "execution modes" and in programs compiled with qcc, a call
+      through a method call reference held as the value of a hash key (<tt>h.r(...)</tt>) whose object had been
+      deleted evaluated its arguments before it raised \c OBJECT-ALREADY-DELETED
+      (<a href="https://github.com/qoretechnologies/qore/issues/6225">issue 6225</a>)
     - a call through \c self of an @ref abstract "abstract method" that another parent class implements raised
       \c RUNTIME-OVERLOAD-ERROR instead of calling the implementation, except in programs compiled with qcc
       (<a href="https://github.com/qoretechnologies/qore/issues/3070">issue 3070</a>)
@@ -2420,8 +2682,14 @@
     - writes of 2 GiB or more with @ref Qore::File "File" and @ref Qore::FileOutputStream "FileOutputStream" returned
       wrong counts or failed, also on macOS
     - empty binary values were stored as SQL \c NULL by the \c pgsql and \c sqlite3 drivers
+    - aligning a PostgreSQL column to a serial pseudo-type, also one that already was one, generated SQL that
+      PostgreSQL rejects (see @ref pgsqlsqlutilbasev119 "PgsqlSqlUtilBase v1.19")
+      (<a href="https://github.com/qoretechnologies/qore/issues/853">issue 853</a>)
     - the files of a separated user module other than its <tt>.qm</tt> file were parsed with the warnings of the code
       loading the module (see @ref user_modules)
+    - schema alignment dropped and created again each PostgreSQL index on an expression (see
+      @ref pgsqlsqlutilbasev119 "PgsqlSqlUtilBase v1.19")
+      (<a href="https://github.com/qoretechnologies/qore/issues/1429">issue 1429</a>)
     - fixed a memory leak when a binary module could not be loaded because a namespace it declares already exists
     - @ref Qore::sprintf() "sprintf()" and related functions are no longer constant functions, as they can raise
       exceptions
@@ -2482,13 +2750,19 @@
       bytes, and @ref Qore::strmul() "strmul()" keeps the encoding of its string
     - @ref Qore::gzip() "gzip()" and @ref Qore::bzip2() "bzip2()" raise their documented errors for invalid negative
       levels
+    - SqlUtil's @ref SqlUtil::cop_seq() "cop_seq()" without an alias, and a @ref SqlUtil::Table "Table" given to an
+      AbstractTable method through a Table (ex: the source of \c insertFromSelect()), raised
+      \c RUNTIME-OVERLOAD-ERROR (see @ref sqlutilv3_11_0) (<a href="https://github.com/qoretechnologies/qore/issues/2847">issue
+      2847</a>, <a href="https://github.com/qoretechnologies/qore/issues/6321">issue 6321</a>)
     - fixed \c QoreString::concat() of a string's first characters overrunning buffers and \c QoreString::compareSoft()
       for prefixes and empty strings in the C++ API
     - fixed data races when a Program parsed classes that other threads used, such as the classes of a binary module
       loaded with @ref Qore::load_module() "load_module()" or of a module that other threads ran
     - deeply nested values and code no longer exhaust the stack: closure chains and nested code are released
-      iteratively, and evaluating, serializing, comparing and formatting deeply nested expressions and data raise
-      \c STACK-LIMIT-EXCEEDED
+      iteratively, evaluating, serializing, comparing and formatting deeply nested expressions and data raise
+      \c STACK-LIMIT-EXCEEDED, and parsing them raises \c PARSE-STACK-LIMIT-EXCEEDED, which
+      @ref try-module "%try-module" does not handle as a missing module, nor a \c STACK-LIMIT-EXCEEDED of a module's
+      initialization in a thread with less than the default stack size (see @ref parse_nesting_limit)
     - a thread faulting with \c SIGBUS, \c SIGILL, \c SIGFPE or \c SIGTRAP hung instead of terminating the process
     - UTC offsets such as \c "+01:00" were refused as a DBI driver's \c timezone option
     - fixed @ref Qore::SQL::Datasource "Datasource" and @ref Qore::SQL::DatasourcePool "DatasourcePool" connection
@@ -2527,6 +2801,9 @@
     - \c peek() of input streams returned bytes 0x80 - 0xff as negative values
     - converting a string to an encoding that needs more bytes took time quadratic in its length
     - binary module metadata returned through \c QoreModuleInfo::info is released when the module is destroyed
+    - a @ref sql_cop_funcs "column operator" in the join columns of a SqlUtil @ref sql_jop_funcs "join function"
+      raised \c RUNTIME-TYPE-ERROR; it is applied to the joined table's columns (see @ref join_column_operators)
+      (<a href="https://github.com/qoretechnologies/qore/issues/738">issue 738</a>)
     - TLS was unusable when the OpenSSL configuration file could not be processed (see @ref openssl_config)
     - fixed an exception rethrown by an \c on_error handler being lost when another \c on_error handler of the same
       block ran after it, so that the function returned normally
@@ -2549,6 +2826,12 @@
       as its argument; such a connection is closed without a TLS \c close_notify alert
     - fixed \c qget: \c ftp:// and \c ftps:// downloads, saving an empty body, the exit status and error output of a
       failed retrieval, and a \c Content-Disposition file name that could write outside the current directory
+    - fixed \c sqlutil \c --dump with \c synonyms, which failed with \c METHOD-DOES-NOT-EXIST: an Oracle synonym is
+      dumped as a <tt>create or replace synonym</tt> statement made from the catalog
+      (<a href="https://github.com/qoretechnologies/qore/issues/1734">issue 1734</a>)
+    - fixed \c sqlutil \c --dump on Oracle, whose SQL scripts could not be run with \c sqlplus: a trigger, procedure,
+      function, package or type now ends with a line with a single \c "/", and every statement of a table or package
+      is on lines of its own (<a href="https://github.com/qoretechnologies/qore/issues/1735">issue 1735</a>)
     - fixed a crash when a file included with @ref include "%include" ends inside a literal or a block comment
     - fixed \c getEncoding() of @ref Qore::StringInputStream "StringInputStream",
       @ref Qore::StringOutputStream "StringOutputStream", @ref Qore::FileOutputStream "FileOutputStream" and
@@ -2556,6 +2839,9 @@
       @ref Qore::StringOutputStream::getData() "StringOutputStream::getData()" ignoring the constructor's encoding
     - fixed @ref Qore::TransformOutputStream "TransformOutputStream" and
       @ref Qore::TransformInputStream "TransformInputStream" holding back decompressed output that exceeds one buffer
+    - the @ref yamlintro "yaml" module's @ref Qore::YAML::parse_yaml() "parse_yaml()" parsed a string in another
+      encoding than UTF-8 as UTF-8, which raised a parse error; it is converted to UTF-8
+      (<a href="https://github.com/qoretechnologies/qore/issues/872">issue 872</a>)
     - fixed @ref Qore::Socket::readServerSentEvent() "Socket::readServerSentEvent()" with a content encoding
       returning only the first event of a compressed stream and rejecting the \c deflate, \c x-deflate, \c x-gzip and
       \c x-bzip2 HTTP content codings
@@ -2582,6 +2868,9 @@
     - fixed stream sockets bound on all interfaces being unreachable over IPv6 (see @ref qore_3_0_0_compatibility),
       and @ref Qore::Socket::bindINET() "Socket::bindINET()" trying only the first resolved address
     - fixed Base64 conversion of an empty binary leaving an unterminated string buffer
+    - a column operator in the set clause of a SqlUtil update raised an unclear \c INVALID-MEMBER; it raises
+      \c UPDATE-ERROR, which names the @ref sql_uop_funcs "update operators" to use instead (see
+      @ref sqlutilv3_11_0) (<a href="https://github.com/qoretechnologies/qore/issues/2962">issue 2962</a>)
     - fixed @ref Qore::Serializable "Serializable" deserialization losing references to containers deserialized
       after the value referring to them, and serialization referring to the wrong container when a released
       container's memory was reused
@@ -2663,6 +2952,9 @@
     - fixed a bug handling nested conditional parsing directives
       (<a href="https://github.com/qoretechnologies/qore/issues/4999">issue 4999</a>)
 
+    - SqlUtil could not write a string to a PostgreSQL \c json or \c jsonb column, which PostgreSQL refused as
+      \c text (see @ref pgsqlsqlutilbasev119 "PgsqlSqlUtilBase v1.19")
+      (<a href="https://github.com/qoretechnologies/qore/issues/4448">issue 4448</a>)
     - fixed a memory leak in the @ref Qore::TreeMap "TreeMap" class with objects that create circular references
       (<a href="https://github.com/qoretechnologies/qore/issues/5028">issue 5028</a>)
 
@@ -2704,6 +2996,10 @@
         (<a href="https://github.com/qoretechnologies/qore/issues/4996">issue 4996</a>)
     - \c qpp writes its output files to relative paths correctly and reports an error for a hashdecl member without
       a <tt>//!</tt> comment and for unexpected text after the comment of a function or constant group
+    - \c qpp reports an error for a function or constant with a <tt>//!</tt> comment outside a group and for a %Qore
+      declaration without one instead of dropping it or copying it unprocessed, takes <tt>-vv</tt> and
+      <tt>-v</tt><i>n</i> (not <tt>-v</tt> <i>n</i>), and gives generated code its source lines; see the \c qpp(1)
+      manual page
     - fixed a deadlock when a @ref Qore::Program "Program" was created from a Program in which a binary module such
       as \c python keeps data while another thread used the module
     - a value whose return is interrupted by an exception that a \c catch block handles is not returned; see
@@ -2803,6 +3099,38 @@
       @ref Qore::get_local_vars() "get_local_vars()" and @ref Qore::set_local_var_value() "set_local_var_value()"
       from the calls it makes or from a debugger's callbacks in the same thread
       (<a href="https://github.com/qoretechnologies/qore/issues/5871">issue 5871</a>)
+    - a call of a method that a class does not have, of the name of a member whose type can hold code (\c auto, no
+      type, or a code type), is no longer checked at parse time against the pseudo-method of objects of the same name,
+      which refused a call that the member's code accepts; the member's code is called at run time, and a named call
+      binds its names to the code's parameters (see @ref function_named_arguments; issue #6361)
+    - in the C++ API, \c QoreString::replace() clamps an offset past the end of the string to its end instead of
+      accessing memory outside the string, and \c QoreString::concat() with a position and a length takes only that
+      many characters in a single-byte encoding instead of the rest of the string (issue #6238)
+    - with a single-byte default encoding (ex: \c ISO-8859-1), @ref Qore::format_number() "format_number()",
+      @ref <number>::format() "<number>::format(string)" and @ref <float>::format() "<float>::format(string)" used
+      the rest of the format string as each separator: <tt>format_number(".,2", 1234567.891)</tt> gave
+      <tt>1.,2234.,2567,289</tt> instead of <tt>1.234.567,89</tt> (issue #6238)
+    - a @ref number_type "number" divisor that is not zero but converts to the float \c 0.0 (ex: \c 1e-400n) raised
+      \c DIVISION-BY-ZERO with @ref divide_equals_operator "/=" and was a parse error as a constant divisor of
+      @ref division_operator "/", while \c / with the divisor in a variable divided (issue #6387)
+    - a class or hashdecl member or static class variable initialization expression that uses a top-level local
+      variable no longer crashes the process when the class or hashdecl is first used in a closure and then used
+      elsewhere (see @ref member_initialization and @ref hashdecl_initializer_scope; issue #6268)
+    - a reference to \c self or to a member through \c self (ex: <tt>\\self.a</tt>), and an assignment through
+      \c self (ex: <tt>self.a = 20</tt>), in a @ref closure_default_values "default value of a closure" created in a
+      method ended the process with a segmentation fault (issues #6417, #5949)
+    - fixed a @ref where_clauses "where clause" key of @ref sqlutilintro "SqlUtil" that is both a column of the table
+      and a column alias of the query, which gave the alias's definition in the SQL (ex:
+      <tt>items.distinct items.ddt_number is not null</tt>): the column is used, as in SQL
+      (<a href="https://github.com/qoretechnologies/qore/issues/1747">issue 1747</a>)
+    - fixed a column alias of a distinct column of @ref sqlutilintro "SqlUtil" in the \c "orderby" option, a
+      where clause or the \c "groupby" option, which gave invalid SQL such as <tt>order by distinct ddt_number</tt>
+      (<a href="https://github.com/qoretechnologies/qore/issues/6331">issue 6331</a>,
+      <a href="https://github.com/qoretechnologies/qore/issues/6332">issue 6332</a>)
+    - @ref Qore::pow() "pow()" with @ref number_type "number" arguments and an exponent that is negative, NaN or
+      between -1 and 1 (ex: <tt>pow(2n, 0.5n)</tt>) ended the process with an MPFR assertion (issue #1034)
+    - a @ref number_type "number" division after a number operation that left an MPFR flag set (ex: <tt>nlog(0n)</tt>)
+      raised \c DIVISION-BY-ZERO for a divisor that is not zero (issue #1034)
 
     @section qore_2_2_1 Qore 2.2.1
 

@@ -152,7 +152,10 @@ class DataFrameMeltTypesTest inherits QUnit::Test {
         f32.addColumn("k", (1, 2, 3, 4, 5, 6));
         DataFrame::DataFrame f2 = f32.join(f32, ("k",));
         m = f2.melt(("k",), ("v", "v_right"));
-        assertEq(schema(f32, "v"), schema(m, "value"), "float32 values");
+        # the melted column holds its values as float64; its float32 schema is the type of its Arrow export (a
+        # ColumnarResult schema has the buffer type of its storage: qore#6214)
+        assertEq(schema(f32, "v"), schema(DataFrame::DataFrame::fromArrowIpc(m.toArrowIpc()), "value"),
+            "float32 values");
         # timestamps of different units: microseconds
         DataFrame::DataFrame ts = DataFrame::DataFrame::fromColumnarResult(ColumnarResult::fromColumnHash({
             "id": (1,), "a": (2024-01-01T10:00:00.5Z,), "b": (2024-01-02T10:00:00Z,),

@@ -41,6 +41,7 @@
 #include "qore/intern/QoreHashNodeIntern.h"
 #include "qore/intern/QC_TimeZone.h"
 #include "qore/intern/QC_FutureImpl.h"
+#include "qore/intern/ThreadPool.h"
 #include "qore/intern/QC_Promise.h"
 #include "qore/intern/QC_Channel.h"
 #include "qore/intern/FastRouteGuard.h"
@@ -55,6 +56,10 @@
 #include <numeric>
 #include <atomic>
 #include <optional>
+
+// the ThreadPool class (QC_ThreadPool.qpp), for qore_test_thread_pool_hold_dispatch()
+DLLLOCAL extern qore_classid_t CID_THREADPOOL;
+DLLLOCAL extern QoreClass* QC_THREADPOOL;
 
 // internal struct for call_async thread parameters
 struct CallAsyncParams {
@@ -92,7 +97,8 @@ static void call_async_thread(ExceptionSink* xsink, void* arg) {
     // Set up program context for the call reference
     QoreProgram* pgm = params->code->getProgram();
     if (pgm) {
-        QoreExternalProgramContextHelper pch(xsink, pgm);
+        // an internal entry: a C++ exception of the entry is raised in xsink (issue #6255)
+        ProgramThreadCountContextHelper pch(xsink, pgm, true);
         if (!*xsink) {
             QoreValue rv = params->code->invoke(params->args, xsink);
             if (*xsink) {
@@ -1692,7 +1698,8 @@ static void parallel_exec_worker(ExceptionSink* xsink, void* arg) {
         return;
     }
 
-    QoreExternalProgramContextHelper pch(xsink, pgm);
+    // an internal entry: a C++ exception of the entry is raised in xsink (issue #6255)
+    ProgramThreadCountContextHelper pch(xsink, pgm, true);
     if (*xsink) {
         parallel_capture_exception(state, xsink);
         state->counter.dec(xsink);
@@ -2449,6 +2456,26 @@ auto channel_select(list<auto> cases, timeout timeout = 0) [flags=NAMED_ARGS,CUR
     waiter->deref();
 
     return result_val;
+}
+
+//! Test support (not documented as API): holds the dispatch of the queued tasks of a thread pool
+/** In a debug build, while \a hold is set, the pool does not give its queued tasks to workers, so that they stay
+    queued until the pool stops and their cancel callbacks run (qore#6208)
+
+    Holding the dispatch of a pool controls its threads: code that may not control threads (\c THREAD_CONTROL) cannot
+    reference it
+
+    @return True in a debug build, False otherwise (where it does nothing)
+*/
+bool qore_test_thread_pool_hold_dispatch(ThreadPool[ThreadPool] pool, bool hold) [dom=THREAD_CONTROL] {
+#ifdef DEBUG
+    pool->dbgHoldDispatch(hold);
+    return true;
+#else
+    // only a debug build holds the dispatch
+    static_cast<void>(hold);
+    return false;
+#endif
 }
 
 // Test support for the HTTP fast routes (design/http-server-fast-routes.md); not documented as API.

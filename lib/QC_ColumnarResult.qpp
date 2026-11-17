@@ -151,6 +151,17 @@ ColumnarResult::copy() {
     Dense buffer columns are referenced directly, so callers can build projected
     or augmented column blocks without boxing dense values through row records.
 
+    A column description can also have a \c schema hash with a \c kind and \c buffer_type.  The schema is
+    checked against the column data: the kind of a buffer column must be one its buffer type can hold (\c bool in
+    \c buffer<bool>, \c int in an integer buffer, \c float in a floating-point buffer, \c string in
+    \c buffer<string>, \c decimal128 in \c buffer<decimal128>, \c date, \c timestamp and \c duration in
+    \c buffer<int64>), and a declared buffer type must be the buffer's.  A list column is stored as its kind gives:
+    a scalar kind in a buffer of its type (or of the declared buffer type), whose element type each value must have,
+    and a \c number, \c binary, \c list, \c large_list, \c fixed_size_list, \c struct or \c map kind in a
+    list, whose values must be of the kind (\c number: \c number, \c int, \c float or \c string; \c binary:
+    \c binary; the list kinds: \c list; \c struct and \c map: \c hash), checked recursively against the child
+    schemas.  A NOTHING or NULL value makes the column or child schema nullable.
+
     @par Integer Column Values
     @parblock
     A list column stored as a dense integer buffer (a column whose \a desc gives an integer type, ex: a
@@ -173,7 +184,8 @@ ColumnarResult::copy() {
     \c "integer", stored as \c buffer<int32>) raises a \c BUFFER-RANGE-ERROR exception.
 
     The values of a ColumnarResult created by deserialization (see @ref Qore::Serializable "Serializable") are
-    checked in the same way.  A columnar result returned by a DBI driver (ex: Datasource::selectColumnar()) is not
+    checked against the column schema, and a list column is not converted; a value that does not match raises a
+    \c DESERIALIZATION-ERROR exception.  A columnar result returned by a DBI driver (ex: Datasource::selectColumnar()) is not
     checked: the driver's values of such a column, such as the @ref number values of a scale-0 numeric column, are
     stored as integers.
     @endparblock
@@ -190,6 +202,8 @@ ColumnarResult compact = ColumnarResult::fromColumnHash({
     @throw COLUMNAR-RESULT-ERROR if a column value is not a list or buffer, if column lengths differ, or if a value
         in a column stored as a dense integer buffer is not an integer, float, number, numeric string, @ref null or
         @ref nothing (see "Integer Column Values" above)
+    @throw COLUMNAR-SCHEMA-ERROR a column schema does not match the column data
+    @throw BUFFER-TYPE-ERROR a value of a list column cannot be stored in the buffer of its kind
     @throw BUFFER-RANGE-ERROR an integer value is outside the range of a column of a narrower integer type
     @throw HASH-KEY-ERROR a column or field name in \a desc has a NUL character, which the keys of the records,
         column hashes and struct values of the result cannot contain
@@ -213,6 +227,7 @@ static ColumnarResult ColumnarResult::fromColumnHash(hash<auto> columns, *hash<a
     @throw COLUMNAR-RESULT-ERROR if row values are not hashes or cannot be
         converted to columns, or if a value in a column stored as a dense integer buffer is not an integer, float,
         number, numeric string, @ref null or @ref nothing (see fromColumnHash())
+    @throw COLUMNAR-SCHEMA-ERROR a column schema does not match the column data (see fromColumnHash())
     @throw HASH-KEY-ERROR a column or field name in \a desc has a NUL character, which the keys of the records,
         column hashes and struct values of the result cannot contain
 */
@@ -334,13 +349,14 @@ hash<auto> ColumnarResult::toColumnHash() [flags=RET_VALUE_ONLY] {
 
 //! Returns a hash of column containers with native Qore typing restored
 /** Like \c toColumnHash() but every temporal column is materialized into a
-    \c list<date>; non-temporal columns pass through with no copy.  Use this
+    \c list<date> (\c list<*date>, with NOTHING for each null, for a nullable column); non-temporal columns pass
+    through with no copy.  Use this
     only when the consumer requires native typing (e.g., assembling rows for a
     downstream API that cannot accept \c buffer<int64> microsecond payloads);
     prefer \c toColumnHash() in performance-sensitive code paths so the
     columnar representation survives.
 
-    @return hash keyed by column name; temporal columns are \c list<date>,
+    @return hash keyed by column name; temporal columns are \c list<date> or \c list<*date>,
             other columns are returned with no copy
 
     @par Example:

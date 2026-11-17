@@ -1,0 +1,182 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# checks when a call's temporary arguments are released; run by call-arg-ownership.qtest
+
+/** The AST interpreter gives the temporary arguments of a call to its parameters: a parameter holds the only reference
+    to the value of a temporary argument, so assigning to the parameter releases the value, and the parameters are
+    released in reverse order when the call ends; a call's value is released after them (qore#6055, qore#6053).  Each
+    check prints "name=result", where the result is the log of the destructors and of the code that ran.
+*/
+
+our list<string> log = ();
+
+class T {
+    private {
+        string n;
+    }
+
+    constructor(string n) {
+        self.n = n;
+    }
+
+    destructor() {
+        log += "~" + n;
+    }
+}
+
+#! a class whose destructor throws an exception
+class P {
+    private {
+        string n;
+    }
+
+    constructor(string n) {
+        self.n = n;
+    }
+
+    destructor() {
+        log += "~" + n;
+        throw "PX";
+    }
+}
+
+class D {
+    destructor() {
+        throw "DX";
+    }
+}
+
+auto sub fn(any t) {
+    t = NOTHING;
+    log += "body";
+    return 1;
+}
+
+auto sub g2(T a, T b) {
+    D dd();
+    return 1;
+}
+
+#! returns a value, then raises an exception when its local is released
+auto sub value_raises(T p) {
+    D dd();
+    return new T("v");
+}
+
+#! calls itself with a temporary argument
+auto sub recurse(T p, int n) {
+    if (n) {
+        return recurse(new T("p" + n), n - 1);
+    }
+    D dd();
+    return new T("v");
+}
+
+#! takes nine arguments, the last of which it releases
+auto sub nine(any a, any b, any c, any d, any e, any f, any g, any h, any t) {
+    t = NOTHING;
+    log += "body";
+    return 1;
+}
+
+auto sub two(T a, T b) {
+    log += "body";
+    return 1;
+}
+
+class C {
+    auto m(any t) {
+        t = NOTHING;
+        log += "body";
+        return 1;
+    }
+
+    static auto sm(any t) {
+        t = NOTHING;
+        log += "body";
+        return 1;
+    }
+
+    final auto fm(any t) {
+        t = NOTHING;
+        log += "body";
+        return 1;
+    }
+
+    auto selfCall() {
+        return m(new T("p"));
+    }
+
+    auto m9(any a, any b, any c, any d, any e, any f, any g, any h, any t) {
+        t = NOTHING;
+        log += "body";
+        return 1;
+    }
+
+    auto mr(T p) {
+        return new T("t");
+    }
+}
+
+#! returns the log of the code
+string sub run(code c) {
+    log = ();
+    try {
+        c();
+    } catch (hash<ExceptionInfo> ex) {
+        log += "caught:" + ex.err;
+    }
+    return sprintf("%y", log);
+}
+
+hash<string, string> sub checks() {
+    C o();
+    code cl = auto sub (any t) { t = NOTHING; log += "body"; return 1; };
+    code cl9 = auto sub (any a, any b, any c, any d, any e, any f, any g, any h, any t) {
+        t = NOTHING;
+        log += "body";
+        return 1;
+    };
+    return {
+        # assigning to the parameter releases the argument
+        "function": run(sub () { fn(new T("p")); }),
+        "method": run(sub () { o.m(new T("p")); }),
+        "static-method": run(sub () { C::sm(new T("p")); }),
+        "final-method": run(sub () { o.fm(new T("p")); }),
+        "self-call": run(sub () { o.selfCall(); }),
+        "closure": run(sub () { cl(new T("p")); }),
+        "in-expression": run(sub () { int x = fn(new T("p")) + 1; }),
+        # calls in a try block
+        "try-function": run(sub () { try { fn(new T("p")); } catch () {} }),
+        "try-method": run(sub () { try { o.m(new T("p")); } catch () {} }),
+        "try-static-method": run(sub () { try { C::sm(new T("p")); } catch () {} }),
+        "try-closure": run(sub () { try { cl(new T("p")); } catch () {} }),
+        # calls with more than eight arguments
+        "nine-arguments-function": run(sub () { nine(1, 2, 3, 4, 5, 6, 7, 8, new T("p")); }),
+        "nine-arguments-method": run(sub () { o.m9(1, 2, 3, 4, 5, 6, 7, 8, new T("p")); }),
+        "nine-arguments-closure": run(sub () { cl9(1, 2, 3, 4, 5, 6, 7, 8, new T("p")); }),
+        # the exception of the argument's destructor is raised at the assignment
+        "function-destructor-exception": run(sub () { fn(new P("p")); }),
+        # the parameters are released in reverse order on an exception and when the call ends
+        "exception-order": run(sub () { g2(new T("a"), new T("b")); }),
+        "release-order": run(sub () { two(new T("a"), new T("b")); }),
+        # with an exception pending, the call's value is released before the parameters (see #6039)
+        "value-before-parameters": run(sub () { value_raises(new T("p")); }),
+        "recursive-value-before-parameters": run(sub () { recurse(new T("p"), 1); }),
+        # the call's value is released after the temporary argument
+        "method-reference-value": run(sub () { call_function(\o.mr(), new T("a")); }),
+        "function-reference": run(sub () { call_function(\fn(), new T("p")); }),
+    };
+}
+
+# called three times, so that the checks run again after their first call (and in native code once compiled)
+hash<string, string> first = checks();
+bool stable = True;
+for (int i = 0; i < 2; ++i) {
+    if (checks() != first) {
+        stable = False;
+    }
+}
+map printf("%s=%s\n", $1.key, $1.value), first.pairIterator();
+printf("stable=%y\n", stable);

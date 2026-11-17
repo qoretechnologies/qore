@@ -221,10 +221,8 @@ public:
         return send_queue ? send_queue->size() : 0;
     }
 
-    //! Returns the WebSocket close reason
-    DLLLOCAL const char* getCloseReason() const {
-        return close_reason.c_str();
-    }
+    //! Returns the WebSocket close reason; can be called from any thread (reads under @ref error_lock)
+    DLLLOCAL std::string getCloseReason() const;
 
     //! Returns the current state as a string
     DLLLOCAL const char* getWsState() const {
@@ -237,18 +235,14 @@ public:
         }
     }
 
-    //! Returns true if the error state is set
-    DLLLOCAL bool hasError() const {
-        return error_info != nullptr;
-    }
+    //! Returns true if an error was recorded; can be called from any thread (reads @ref has_error, without a lock)
+    DLLLOCAL bool hasError() const;
 
-    //! Returns ref'd error info hash or nullptr
-    DLLLOCAL QoreHashNode* getErrorInfo() const {
-        if (error_info) {
-            error_info->ref();
-        }
-        return error_info;
-    }
+    //! Returns the recorded error with a new reference, or nullptr if none was recorded; can be called from any thread
+    /** Read under @ref error_lock, which the writer holds while it stores the complete error hash, so the hash is
+        returned complete and safely published to the calling thread
+    */
+    DLLLOCAL QoreHashNode* getErrorInfo() const;
 
     //! Queues a text frame for sending (thread-safe)
     /** @param text the UTF-8 text to send
@@ -446,6 +440,11 @@ private:
     /** After a protocol error of the client, the connection is reported closed with it, also when the client closes
         the connection before the server's close frame is written (issue #5878)
     */
+    //! Sets the close reason; the caller holds @ref m
+    /** @param reason the reason, which can contain NUL characters (from a close frame)
+    */
+    DLLLOCAL void setCloseReason(const std::string& reason);
+
     DLLLOCAL void setConnectionLost() {
         if (protocol_failed) {
             setClosed(WSCC_ProtocolError, protocol_reason.c_str());
@@ -479,6 +478,9 @@ private:
     //! The close code: the client's once its close frame has arrived
     std::atomic<uint16_t> close_code {1000};
     //! The close reason: the client's once its close frame has arrived
+    /** Written by threads that hold @ref m, with @ref error_lock held too (setCloseReason()); read with either lock
+        held: other threads read it under @ref error_lock (getCloseReason(), getOutput())
+    */
     std::string close_reason;
     bool close_sent = false;                //!< true once our close frame was queued
     bool close_received = false;            //!< true once the client's close frame arrived
@@ -493,11 +495,25 @@ private:
     int64 close_deadline_us = 0;
     size_t max_frame_size = WS_DEFAULT_MAX_FRAME_SIZE;
 
-    //! Error information (ref'd or nullptr)
+    //! Protects @ref error_info and @ref close_reason, which the thread driving the operation records and any thread
+    //! reads
+    /** A leaf lock: no other lock is taken and no Qore code runs while it is held
+    */
+    mutable QoreThreadLock error_lock;
+
+    //! Error information (ref'd or nullptr); protected by @ref error_lock
     QoreHashNode* error_info = nullptr;
+    //! Set (release) when @ref error_info is stored, under the lock that protects it; read (acquire) without a lock
+    //! by hasError()
+    std::atomic<bool> has_error{false};
 
     //! Frame callback — invoked from onPollComplete() after frames are pushed to recv_queue
     ResolvedCallReferenceNode* frame_callback = nullptr;
+    //! the run-time parse options of the code that set frame_callback, which it runs with (qore#6208); guarded by m
+    /** A callback that is a call reference to builtin code sets no options of its own, and the callback worker that
+        calls it has none
+    */
+    QoreThreadRuntimeParseOptions frame_callback_po;
 
     //! Optional I/O-thread frame handler — bypasses recv_queue entirely
     WsIoThreadFrameHandler* io_frame_handler = nullptr;
@@ -603,6 +619,9 @@ private:
     DLLLOCAL void setError(ExceptionSink* xsink);
 
     //! Transitions to CLOSED state with the given code and reason
+    /** @param code the close code
+        @param reason the close reason, or nullptr to keep the stored one
+    */
     DLLLOCAL void setClosed(uint16_t code, const char* reason);
 
     //! Sets the state of the operation; every change of the state is made with this method

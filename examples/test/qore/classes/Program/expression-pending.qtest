@@ -1,0 +1,90 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class ExpressionPendingTest
+
+#! An Expression in a Program with code pending (issue #6353)
+/** Creating an Expression in a Program with code that Program::parsePending() added and that is neither committed nor
+    rolled back, or whose parse was rolled back without PO_ALLOW_REPARSE, raises EXPRESSION-ERROR: the Program keeps
+    refusing entry until the code is committed, and no expression can refer to code that a rollback deletes.
+*/
+public class ExpressionPendingTest inherits QUnit::Test {
+    constructor() : QUnit::Test("ExpressionPendingTest", "1.0", \ARGV) {
+        addTestCase("refused while pending", \pendingTest());
+        addTestCase("pending code rolled back", \rollbackTest());
+        addTestCase("expression created before", \createdBeforeTest());
+        addTestCase("failed expression", \failedExpressionTest());
+        addTestCase("reparse", \reparseTest());
+        set_return_value(main());
+    }
+
+    pendingTest() {
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.parsePending("int sub f() { return 1; }", "pending");
+        assertThrows("EXPRESSION-ERROR", "code pending", sub () { Expression e(p, "1 + 1", "expr"); });
+        assertThrows("EXPRESSION-ERROR", "code pending", \p.getExpression(), ("1 + 1", "expr"));
+        # the Program still refuses entry while the code is pending
+        assertThrows("PROGRAM-ERROR", "undergoing parsing", \p.callFunction(), "f");
+        p.parseCommit();
+        assertEq(1, p.callFunction("f"));
+        # once the code is committed, an expression can be created and can call it
+        Expression e(p, "f() + 1", "expr");
+        assertEq(2, e.eval());
+    }
+
+    rollbackTest() {
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.parsePending("int sub f() { return 1; }", "pending");
+        # an expression that calls the pending function is refused, so it cannot outlive the function
+        assertThrows("EXPRESSION-ERROR", "code pending", sub () { Expression e(p, "f()", "expr"); });
+        p.parseRollback();
+        # without PO_ALLOW_REPARSE, a Program whose parse was rolled back cannot be used: an expression does not make
+        # it usable
+        assertThrows("EXPRESSION-ERROR", "rolled back", sub () { Expression e(p, "2", "expr"); });
+        assertThrows("PROGRAM-ERROR", "undergoing parsing", \p.callFunction(), "f");
+    }
+
+    createdBeforeTest() {
+        Program p(PO_NEW_STYLE | PO_ALLOW_REPARSE | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.parse("int sub g() { return 2; }", "base");
+        Expression e(p, "g()", "expr");
+        assertEq(2, e.eval());
+        p.parsePending("int sub f() { return 1; }", "pending");
+        # an expression created before the code was added cannot run in the Program while the code is pending
+        assertThrows("PROGRAM-ERROR", "undergoing parsing", \e.eval());
+        assertThrows("EXPRESSION-ERROR", "code pending", sub () { Expression e2(p, "g()", "expr"); });
+        p.parseCommit();
+        assertEq(2, e.eval());
+        assertEq(1, p.callFunction("f"));
+    }
+
+    failedExpressionTest() {
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.parse("int sub g() { return 2; }", "base");
+        # an expression that cannot be parsed leaves the Program as it was: threads can enter it
+        assertThrows("PARSE-EXCEPTION", sub () { Expression e(p, "1 +", "expr"); });
+        assertEq(2, p.callFunction("g"));
+        Expression e(p, "g() * 2", "expr");
+        assertEq(4, e.eval());
+    }
+
+    reparseTest() {
+        Program p(PO_NEW_STYLE | PO_ALLOW_REPARSE | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.parse("int sub g() { return 2; }", "base");
+        p.parsePending("int sub f() { return 1; }", "pending");
+        assertThrows("EXPRESSION-ERROR", "code pending", sub () { Expression e(p, "f()", "expr"); });
+        p.parseRollback();
+        # the committed code is unaffected, and the Program can be entered after the rollback
+        assertEq(2, p.callFunction("g"));
+        Expression e(p, "g()", "expr");
+        assertEq(2, e.eval());
+        p.parse("int sub f() { return 3; }", "reparse");
+        assertEq(3, p.callFunction("f"));
+    }
+}

@@ -1235,6 +1235,15 @@ protected:
     DLLLOCAL void init(const QoreFunction* func, const AbstractQoreFunctionVariant*& variant, bool is_copy,
         const qore_class_private* cctx, QoreObject* self, QoreProgram* pgm_ctx);
 
+    //! substitutes the type parameters of the code making the call in the call's explicit receiver
+    /** The receiver of a static method call in generic code can have the type parameters of the code making the call
+        (B<U>::m() in sub f<U>(), G<T>::m() or m() in a method of G<T>), which are those of the running instantiation of
+        that code, current when the call starts (qore#6308); code running without an instantiation binds the type
+        parameters of the method's class to the types of the arguments (qore#6186); out of line, so that the calls
+        without an explicit receiver keep their code
+    */
+    DLLLOCAL QORE_INTERN_NOINLINE void substituteCallerReceiverTypeParams(const QoreFunction* func);
+
     //! the call entry; LexicalInvocation: a legacy AST call with a non-default semantic policy; NAMED: a named call
     //! whose variant is resolved at run time by parameter name (arg_names is set)
     template <bool LexicalInvocation, bool NAMED = false>
@@ -1710,6 +1719,10 @@ protected:
     //! True when native JIT compilation is permanently unavailable for this variant
     mutable std::atomic<bool> jit_compile_failed{false};
     bool is_closure = false;  //!< true for closure variants
+    //! true for a closure parsed in a member default of a generic hashdecl, which names the type parameters of the
+    //! hashdecl and runs with an instantiation of it as the receiver; a call of it with such a receiver runs the IR
+    //! specialized for the receiver, as a call of a method of a generic class does (qore#6269)
+    bool generic_hashdecl_code = false;
     //! the functional domains declared in Qore source with \c [dom=...] (QDOM_* bits; QDOM_DEFAULT = none)
     int64 declared_domain = QDOM_DEFAULT;
     //! Deopt counter: incremented on JIT guard failure, triggers recompilation
@@ -1836,6 +1849,13 @@ public:
         declared_domain = dom;
     }
 
+    //! Marks a closure parsed in a member default of a generic hashdecl (see \a generic_hashdecl_code)
+    /** must be called at parse time, before the closure can be called
+    */
+    DLLLOCAL void setGenericHashDeclCode() {
+        generic_hashdecl_code = true;
+    }
+
     /** Install serialized closure IR during single-threaded AOT registration, before publication.
         @param lazy_ir immutable metadata required to reconstruct the fallback IR
     */
@@ -1878,6 +1898,40 @@ public:
     //! Returns the function that owns the variant, if known
     DLLLOCAL const QoreFunction* getSourceFunction() const {
         return source_qf;
+    }
+
+    //! Recompiles the variant as UserVariantBase::attemptJITRecompilation() does after its profiled guards have
+    //! deoptimized, without the deoptimizations
+    /** The function is compiled alone, not in a batch, so its recursive calls are made with the native self-recursive
+        call helper.  For tests only (dbg_jit_recompile_native_code(), qore#6317).
+
+        @return true if native code is installed after the recompilation
+    */
+    DLLLOCAL bool dbgRecompileNativeCode() const {
+        if (!cached_ir.load(std::memory_order_acquire)) {
+            return false;
+        }
+        int expected = jit_recompile_state.load(std::memory_order_acquire);
+        if (expected == 1 || !jit_recompile_state.compare_exchange_strong(expected, 1)) {
+            return false;
+        }
+        attemptJITRecompilation();
+        return hasCachedFunction();
+    }
+
+    //! Removes the installed native code of the variant without recompiling it
+    /** As UserVariantBase::attemptJITRecompilation() removes it while it recompiles the variant; the variant runs on
+        the IR tier until it is compiled again.  For tests only (dbg_jit_drop_native_code(), qore#6317).
+
+        @return true if native code was installed
+    */
+    DLLLOCAL bool dbgDropNativeCode() const {
+        bool had = hasCachedFunction();
+        cached_jit_fn.store(nullptr, std::memory_order_release);
+        if (current_tier.load(std::memory_order_acquire) == TIER_JIT) {
+            current_tier.store(TIER_IR, std::memory_order_release);
+        }
+        return had;
     }
 
     DLLLOCAL UserSignature* getUserSignature() const {
@@ -2770,6 +2824,13 @@ public:
         ExceptionSink* xsink, const QoreTypeParamInstantiation* explicit_type_param_instantiation,
             LexicalSemanticPolicy invocation_policy) const;
 
+    //! Returns true if an accessible generic variant takes the given explicit type arguments (issue #6152)
+    /** Then the variants without type parameters are candidates of the call as well, as at run time.  Parse-time
+        only: out of line, so that the inlining of the run-time code of this unit does not change.
+    */
+    DLLLOCAL __attribute__((noinline, cold)) bool parseHasExplicitTypeArgsVariant(const qore_class_private* class_ctx,
+            const type_vec_t* explicit_type_args, const QoreTypeInfo* receiver_type_info) const;
+
     // find variant at parse time, throw parse exception if no variant can be matched
     // class_ctx is only for use in a class hierarchy and is only set if there is a current class context and it's
     // reachable
@@ -2778,14 +2839,19 @@ public:
         assigned), so a variant whose every parameter accepts the type of its argument or no value is a possible match
         at run time; then the given variant is not committed at parse time (see parseFindVariant())
 
+        @param receiver_type_info the receiver type that the chosen variant's parameter types are substituted with
+        @param chosen_type_param_inst the type arguments of the chosen variant (explicit or inferred), with which the
+        types of its parameters of type parameters are substituted; a deleted object or no value is not accepted by a
+        parameter whose type argument is a class, as for a parameter declared with that class
         @param args_with_value if given, true for each argument whose expression always has a value of its type (see
         parse_arg_always_has_value()); such an argument cannot select another variant by having no value
         @param union_rt if given, it gives the return type of the given variant (nullptr if it has none that the call
         can have), and is set to the return type that covers it and every other variant that could be resolved at run
         time (qore_union_return_type()), or nullptr if there is no such type; all of the variants are then checked
     */
-    DLLLOCAL bool parseOtherVariantMayMatch(const AbstractQoreFunctionVariant* chosen, const type_vec_t& argTypeInfo,
-            const qore_class_private* class_ctx, QoreParseOptions po,
+    DLLLOCAL bool parseOtherVariantMayMatch(const AbstractQoreFunctionVariant* chosen,
+            const QoreTypeInfo* receiver_type_info, const QoreTypeParamInstantiation* chosen_type_param_inst,
+            const type_vec_t& argTypeInfo, const qore_class_private* class_ctx, QoreParseOptions po,
             const arg_value_vec_t* args_with_value = nullptr,
             const std::vector<bool>* named_positions = nullptr, const QoreTypeInfo** union_rt = nullptr) const;
 
@@ -2867,6 +2933,20 @@ public:
             const qore_class_private* class_ctx, int& err, const QoreTypeInfo* expected_type_info,
             bool infer_from_args, const type_vec_t* explicit_type_args = nullptr,
             const char* call_desc = nullptr) const;
+
+    //! Returns the receiver of a call of a static method of a generic class made at run time without one
+    /** The type arguments of the class are inferred from the types of the values of the arguments, as
+        parseInferClassReceiverTypeInfo() infers them from the types of the arguments of a call G::m(...): for a call
+        through a call reference \\G::m() or with call_static_method("G", "m", ...) (qore#6285); the type parameters
+        that no argument binds take their defaults; nullptr is returned if they cannot be inferred, and the call's
+        variant search then raises the error
+
+        @param args the arguments of the call
+        @param bound a receiver of the method's class whose type arguments without type parameters are kept: only
+        the others are inferred
+    */
+    DLLLOCAL const QoreTypeInfo* runtimeInferClassReceiverTypeInfo(const QoreListNode* args,
+            const QoreTypeInfo* bound = nullptr) const;
 
     // returns true if there are no uncommitted parse variants in the function
     DLLLOCAL bool pendingEmpty() const {

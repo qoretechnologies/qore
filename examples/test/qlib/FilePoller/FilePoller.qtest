@@ -20,7 +20,7 @@ class MyFilePoller inherits FilePoller {
         list fl = ();
     }
 
-    constructor(string dir) : FilePoller(dir, ".*") {
+    constructor(string dir, *hash<auto> opts) : FilePoller(dir, ".*", opts) {
     }
 
     singleFileEvent(hash h) {
@@ -99,6 +99,8 @@ public class FilePollerTest inherits QUnit::Test {
         addTestCase("dropping the last reference to a started poller stops its thread", \lastReferenceTest());
         addTestCase("the last reference dropped in the polling thread stops it without a deadlock",
             \lastReferenceInPollThreadTest());
+        addTestCase("an observer refusal keeps the file and polling", \observerRefusalTest());
+        addTestCase("a file list error stops polling", \listErrorStopsTest());
 
         # Return for compatibility with test harness that checks return value
         set_return_value(main());
@@ -277,6 +279,63 @@ printf(\"stopped\\n\");
         assertEq(Files, fp.fl);
     }
 
+    # issue #6400: an observer that refuses a file event leaves the file in place, and polling continues, so the file
+    # is handled again on the next poll, once the observer accepts it; the other files of the poll that were not
+    # handled yet are handled then too
+    private observerRefusalTest() {
+        TmpDir dir("FilePollerRefusal-");
+        list<string> paths = map dir.path + DirSep + $1, ("a-refused.txt", "b-later.txt");
+        File f();
+        foreach string path in (paths) {
+            f.open2(path, O_CREAT | O_TRUNC | O_WRONLY);
+            f.close();
+        }
+
+        Logger logger("test", LoggerLevel::getLevelInfo());
+        CapturingAppender capture();
+        logger.addAppender(capture);
+
+        # refuses the first two events, and accepts the others, removing their files
+        RefusingObserver observer(2, True);
+        FileDelayedPollerDataProvider fp({
+            "path": dir.path,
+            # the default sort is by name, ascending, so the first file is handled first
+            "poll_interval": 1,
+        });
+        fp.setLogger(logger);
+        fp.registerObserver(observer);
+        on_exit fp.stopEvents();
+        fp.observersReady();
+
+        observer.waitAccepted(capture, 2);
+        fp.stopEvents();
+
+        # the first file was delivered again after each refusal (polling went on), and the second file, which was not
+        # handled in the polls where the first one was refused, was delivered once after it
+        assertEq(("a-refused.txt", "a-refused.txt", "a-refused.txt", "b-later.txt"), observer.getReceived());
+        map assertFalse(is_file($1), "the accepting observer removed " + $1), paths;
+        assertRegex("event handler for a file in .* failed: .*REFUSED: .*the file is kept", capture.getLog());
+    }
+
+    # a file list error is not a refusal: it stops polling, as before
+    private listErrorStopsTest() {
+        string dir = tmp_location() + DirSep + "FilePollerListError-" + get_random_string();
+        mkdir(dir);
+
+        MessageCollector msgs();
+        MyFilePoller fp(dir, {
+            "poll_interval": 1,
+            "log_info": sub (string msg) { msgs.add(msg); },
+        });
+        rmdir(dir);
+        fp.start();
+        on_exit fp.stopNoWait();
+
+        assertRegex("^cannot get file list from ", msgs.waitForMatch("^cannot get file list from "));
+        msgs.waitForMatch("^polling finished$");
+        fp.waitStop();
+    }
+
     private filePollerDataProviderTest() {
         Logger logger();
         {
@@ -354,5 +413,150 @@ class MyObserver inherits Observer {
                 throw "ERROR", "no files in timeout";
             }
         }
+    }
+}
+
+#! An observer that refuses a number of events by throwing, and then accepts the next one
+class RefusingObserver inherits Observer {
+    public {
+        #! how long to wait for the accepted event; only a guard against a hang
+        const EventTimeout = 30s;
+    }
+
+    private {
+        #! the number of events to refuse
+        int refusals;
+        #! remove the file when the event is accepted
+        bool remove_file;
+        #! the number of events received
+        int attempts = 0;
+        #! the names of the files of the events received, in order
+        list<string> received();
+        #! the number of events accepted
+        int accepted = 0;
+        Mutex m();
+        Condition cond();
+    }
+
+    constructor(int refusals, bool remove_file = False) {
+        self.refusals = refusals;
+        self.remove_file = remove_file;
+    }
+
+    update(string event_id, hash<auto> data_) {
+        m.lock();
+        on_exit m.unlock();
+
+        received += data_.name;
+        if (++attempts <= refusals) {
+            throw "REFUSED", sprintf("event %d refused", attempts);
+        }
+        if (remove_file && data_.filepath) {
+            unlink(data_.filepath);
+        }
+        ++accepted;
+        cond.broadcast();
+    }
+
+    list<string> getReceived() {
+        m.lock();
+        on_exit m.unlock();
+
+        return received;
+    }
+
+    #! Waits until \a count events have been accepted
+    /** @throw ERROR the events were not accepted in @ref EventTimeout; the poller's log is included in the exception
+    */
+    waitAccepted(CapturingAppender capture, int count) {
+        int start = clock_get_monotonic_us();
+
+        m.lock();
+        on_exit m.unlock();
+
+        while (accepted < count) {
+            int left_ms = EventTimeout.durationMilliseconds() - (clock_get_monotonic_us() - start) / 1000;
+            if (left_ms <= 0) {
+                throw "ERROR", sprintf("%d of %d events accepted in %y after %d event(s): %y; poller log:\n%s",
+                    accepted, count, EventTimeout, attempts, received, capture.getLog());
+            }
+            cond.wait(m, left_ms);
+        }
+    }
+}
+
+#! Collects log messages from a poller log callback so that they can be matched deterministically
+class MessageCollector {
+    public {
+        #! how long to wait for a matching message; only a guard against a hang
+        const DefaultTimeout = 30s;
+    }
+
+    private {
+        list<string> msgs();
+        Mutex m();
+        Condition cond();
+    }
+
+    #! Stores a message and wakes any waiter
+    add(string msg) {
+        m.lock();
+        on_exit m.unlock();
+
+        msgs += msg;
+        cond.broadcast();
+    }
+
+    #! Waits for a message matching \a pattern and returns it
+    /** @throw MESSAGE-TIMEOUT no matching message was collected in \a to
+    */
+    string waitForMatch(string pattern, timeout to = DefaultTimeout) {
+        int start = clock_get_monotonic_us();
+
+        m.lock();
+        on_exit m.unlock();
+
+        while (True) {
+            foreach string msg in (msgs) {
+                if (regex(msg, pattern)) {
+                    return msg;
+                }
+            }
+            int elapsed_ms = (clock_get_monotonic_us() - start) / 1000;
+            if (elapsed_ms >= to) {
+                throw "MESSAGE-TIMEOUT", sprintf("no message matching %y received in %dms; messages: %y", pattern,
+                    to, msgs);
+            }
+            cond.wait(m, to - elapsed_ms);
+        }
+    }
+}
+
+#! An appender that stores all log messages in memory
+class CapturingAppender inherits LoggerAppenderWithLayout {
+    private {
+        list<string> lines();
+        Mutex m();
+    }
+
+    constructor() : LoggerAppenderWithLayout("capture",
+            new LoggerLayoutPattern("%d{YYYY-MM-DD HH:mm:SS.xx} T%t [%p]: %m%n")) {
+        open();
+    }
+
+    processEventImpl(int type, auto params) {
+        if (type == LoggerAppender::EVENT_LOG) {
+            m.lock();
+            on_exit m.unlock();
+            lines += params.toString();
+        }
+    }
+
+    #! Returns all captured log messages as a single string
+    string getLog() {
+        m.lock();
+        on_exit m.unlock();
+
+        return lines ? lines.join("") : "<no log messages>";
     }
 }

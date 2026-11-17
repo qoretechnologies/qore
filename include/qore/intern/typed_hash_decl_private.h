@@ -34,6 +34,7 @@
 #define _QORE_INTERN_TYPED_HASH_DECL_PRIVATE_H
 
 #include "qore/intern/QoreClassIntern.h"
+#include "qore/intern/QoreDeferredRelease.h"
 
 #include <algorithm>
 #include <functional>
@@ -54,7 +55,8 @@ public:
             : QoreMemberInfoBase(loc, n_typeInfo, n_parseTypeInfo, e) {
     }
 
-    DLLLOCAL HashDeclMemberInfo(const HashDeclMemberInfo& old) : QoreMemberInfoBase(old), init(old.init) {
+    DLLLOCAL HashDeclMemberInfo(const HashDeclMemberInfo& old) : QoreMemberInfoBase(old), init(old.init),
+            default_receiver_type_info(old.default_receiver_type_info) {
     }
 
     DLLLOCAL bool equal(const HashDeclMemberInfo& other) const;
@@ -74,9 +76,20 @@ public:
 
     DLLLOCAL HashDeclMemberInfo* instantiate(const QoreTypeInfo* receiver_type_info) const;
 
+    //! Returns the type that the default value of the member is evaluated with as the receiver, or nullptr
+    /** The member of an instantiation of a generic hashdecl (HD<string> of HD<X>) shares the initializer of the
+        generic hashdecl, whose types can name its type parameters (new hash<HD2<X, int>>()); they are the type
+        arguments of the instantiation when the initializer is evaluated with its type as the receiver (qore#6240)
+    */
+    DLLLOCAL const QoreTypeInfo* getDefaultReceiverTypeInfo() const {
+        return default_receiver_type_info;
+    }
+
 private:
     //! has parseInit() been called on this member?
     bool init = false;
+    //! the type of the instantiation of a generic hashdecl whose member this is, if it has a default value
+    const QoreTypeInfo* default_receiver_type_info = nullptr;
 };
 
 typedef QoreMemberMapBase<HashDeclMemberInfo> HashDeclMemberMap;
@@ -388,18 +401,9 @@ public:
     DLLLOCAL int parseCheckMemberAccess(const QoreProgramLocation* loc, const char* mem,
             const QoreTypeInfo*& memberTypeInfo, int pflag) const;
 
-    //! Calls the function for each member, including inherited members, parent members first
-    /** @param f called with the member name and info; returning non-zero stops the iteration
-
-        @return the non-zero value returned by \a f, or 0 if every member was visited
-    */
+    //! Calls the function for each member declared in this hashdecl itself; see forEachMember()
     template <typename F>
-    DLLLOCAL int forEachMember(F&& f) const {
-        if (parentHashDecl) {
-            if (int rc = get(*parentHashDecl)->forEachMember(f)) {
-                return rc;
-            }
-        }
+    DLLLOCAL int forEachLocalMember(F& f) const {
         for (auto& i : members.member_list) {
             if (int rc = f(i.first, i.second)) {
                 return rc;
@@ -408,13 +412,39 @@ public:
         return 0;
     }
 
-    DLLLOCAL const HashDeclMemberInfo* findMember(const char* m) const {
-        const HashDeclMemberInfo* mi = members.find(m);
-        if (mi) {
-            return mi;
+    //! Calls the function for each member, including inherited members, parent members first
+    /** The chain of parents is walked iteratively, as it can be as long as the code declares it (issue #6047)
+
+        @param f called with the member name and info; returning non-zero stops the iteration
+
+        @return the non-zero value returned by \a f, or 0 if every member was visited
+    */
+    template <typename F>
+    DLLLOCAL int forEachMember(F&& f) const {
+        if (!parentHashDecl) {
+            return forEachLocalMember(f);
         }
-        if (parentHashDecl) {
-            return get(*parentHashDecl)->findMember(m);
+        std::vector<const typed_hash_decl_private*> chain;
+        for (const typed_hash_decl_private* p = this; p;
+                p = p->parentHashDecl ? get(*p->parentHashDecl) : nullptr) {
+            chain.push_back(p);
+        }
+        for (auto i = chain.rbegin(), e = chain.rend(); i != e; ++i) {
+            if (int rc = (*i)->forEachLocalMember(f)) {
+                return rc;
+            }
+        }
+        return 0;
+    }
+
+    //! Returns the member, which can be inherited, or nullptr if there is none
+    /** The chain of parents is walked iteratively (see forEachMember()) */
+    DLLLOCAL const HashDeclMemberInfo* findMember(const char* m) const {
+        for (const typed_hash_decl_private* p = this; p;
+                p = p->parentHashDecl ? get(*p->parentHashDecl) : nullptr) {
+            if (const HashDeclMemberInfo* mi = p->members.find(m)) {
+                return mi;
+            }
         }
         return nullptr;
     }
@@ -490,12 +520,14 @@ public:
         return hd ? hd->getTypeInfo(or_nothing) : nullptr;
     }
 
+    //! Returns true if the hashdecl has the member, which can be inherited
+    /** The chain of parents is walked iteratively (see forEachMember()) */
     DLLLOCAL bool hasMember(const char* name) const {
-        if (members.inList(name)) {
-            return true;
-        }
-        if (parentHashDecl) {
-            return get(*parentHashDecl)->hasMember(name);
+        for (const typed_hash_decl_private* p = this; p;
+                p = p->parentHashDecl ? get(*p->parentHashDecl) : nullptr) {
+            if (p->members.inList(name)) {
+                return true;
+            }
         }
         return false;
     }
@@ -769,7 +801,9 @@ public:
 
     DLLLOCAL void releaseParentHashDecl() {
         if (parentHashDecl) {
-            const_cast<typed_hash_decl_private*>(get(*parentHashDecl))->deref();
+            // the release of the parent can release its own parent in turn: a long chain of inheritance is released
+            // with a bounded recursion (issue #6047)
+            qore_release_parent_hashdecl(const_cast<typed_hash_decl_private*>(get(*parentHashDecl)));
             parentHashDecl = nullptr;
         }
     }

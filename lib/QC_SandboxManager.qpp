@@ -1400,6 +1400,44 @@ static bool SandboxManager::isSandboxed() [flags=RET_VALUE_ONLY] {
     return static_cast<bool>(governing);
 }
 
+//! Returns @ref True if the code that calls into the library is restricted from any of the given functional domains
+/** A module is a capability: its code runs with its own %Program's options, whatever the restrictions of the code
+    that calls it.  Library code that performs an operation of a functional domain on behalf of its caller, such as
+    opening a database connection from a connection string that the caller gives, uses this method to refuse a caller
+    that is restricted from that domain, also where the operation is reached through other module code, a closure or
+    a callback.
+
+    The calling code is the code of the nearest %Program on the thread's call stack that is not the %Program of a user
+    module: the current %Program if it is not a module's, else the %Program that entered the module code, through any
+    number of calls between modules.  The @ref parse_options "parse options" of that %Program decide (for example
+    @ref Qore::PO_NO_DATABASE "PO_NO_DATABASE" for @ref Qore::DOM_DATABASE "DOM_DATABASE"), as do the restrictions
+    of a sandboxed caller that the module code runs with; the options of the module's own %Program do not, and neither
+    does a sandbox that governs the code without restricting the domain (unlike isSandboxed()).
+
+    It reveals only whether the calling code is restricted, so it is not restricted itself.
+
+    @param domain the @ref functional_domain_constants "functional domains" to check, as a bitmask of \c DOM_*
+    constants; only the domains that a parse option restricts are answered (the domains of the options that allow
+    something, such as @ref Qore::DOM_INJECTION "DOM_INJECTION", never count as restricted)
+
+    @return @ref True if the calling code is restricted from any of the domains in \a domain; @ref False if not
+
+    @par Example:
+    @code{.py}
+# a connection string is opened only for a caller that may open database connections itself
+if (SandboxManager::isCallerRestricted(DOM_DATABASE)) {
+    throw "PERMISSION-DENIED", "the calling code may not open database connections";
+}
+    @endcode
+
+    @see isSandboxed()
+
+    @since %Qore 3.0
+*/
+static bool SandboxManager::isCallerRestricted(softint domain) [flags=RET_VALUE_ONLY] {
+    return qore_caller_restricts_domain(domain);
+}
+
 //! Returns @ref True if the current thread's code may use uncontrolled APIs
 /** Resolves the sandboxes that govern the code as isGoverned() does, as the filesystem and network checks do: a policy
     barrier (callWithSystemPolicy()) and a system-policy capability of trusted code (createSystemPolicyCall()) are

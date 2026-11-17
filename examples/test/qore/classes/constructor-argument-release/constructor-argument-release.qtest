@@ -8,13 +8,14 @@
 %no-child-restrictions
 %prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
 %requires QUnit
+%requires ../../../TestInterpreter.qm
 %requires FsUtil
 %requires ../../../ExecModeHarness.qm
 %exec-class ConstructorArgumentReleaseTest
 
 class ConstructorArgumentReleaseTest inherits QUnit::Test {
     private {
-        string qore_bin = ENV.QORE_BINARY ?? QORE_ARGV[0];
+        string qore_bin = TestInterpreter::qore_interpreter();
         string libdir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
         string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? libdir + DirSep + "qcc";
         string prefix = "LD_LIBRARY_PATH=" + quote(libdir) + " DYLD_LIBRARY_PATH=" + quote(libdir)
@@ -33,8 +34,11 @@ class ConstructorArgumentReleaseTest inherits QUnit::Test {
         hash<ExecModeHarness::ModeRunResult> result = ExecModeHarness::run_command(command, False,
             ir_tier ? ExecModeHarness::IRTierEnv : NOTHING);
         assertEq(0, result.rc, sprintf("child exited normally: %s\n%s", command, result.out));
-        if (ir_tier) ExecModeHarness::check_ir_tier(result);
-        else if (result.mode) ExecModeHarness::check_native(result);
+        if (ir_tier) {
+            ExecModeHarness::check_ir_tier(result);
+        } else if (result.mode) {
+            ExecModeHarness::check_native(result);
+        }
         return result.out;
     }
     private matrix(string source, string expected_file, string extra_env = "") {
@@ -92,7 +96,17 @@ class ConstructorArgumentReleaseTest inherits QUnit::Test {
         string build = tmp.path + DirSep + "build";
         string config = ENV.Qore_DIR ?? (libdir + "/cmake");
         string configure = "cmake -S " + quote(get_script_dir()) + " -B " + quote(build);
-        if (is_file(config + "/QoreConfig.cmake")) configure += " -DQore_DIR=" + quote(config);
+        # the probe is built against the Qore under test: without its QoreConfig.cmake, find_package(Qore) would
+        # silently find another Qore (the installed one), so the test fails instead; the Qore_DIR environment
+        # variable gives the directory for a Qore that is not a build tree (such as an installed one)
+        string config_file = config + "/QoreConfig.cmake";
+        if (!is_file(config_file)) {
+            fail(sprintf("%y does not exist; set Qore_DIR to the directory of the QoreConfig.cmake of the Qore under "
+                "test (%s)", config_file, qore_bin));
+        }
+        # cmake does not resolve a relative Qore_DIR against the current directory (it would find the installed
+        # Qore instead), so the configuration directory of the Qore under test is given as an absolute path
+        configure += " -DQore_DIR=" + quote(realpath(config));
         checked(configure);
         checked("cmake --build " + quote(build) + " --target ctorprobe -j2");
         string modules = build + (ENV.QORE_MODULE_DIR ? ":" + ENV.QORE_MODULE_DIR : "");

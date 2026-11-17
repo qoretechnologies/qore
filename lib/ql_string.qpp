@@ -39,6 +39,7 @@
 #include "qore/intern/InputStreamLineIterator.h"
 
 #include <cctype>
+#include <cerrno>
 #include <cfloat>
 #include <cstdio>
 #include <cstdlib>
@@ -87,6 +88,69 @@ static int fix_num(QoreString& tmp, const QoreString& fmt, ExceptionSink* xsink)
 
     tmp.replace(off, t.size(), ".");
     return 0;
+}
+
+// checks that the text of a number parsed in strict mode is a number and nothing else (issue #305): text is the
+// text given and fmt the format, for the exception; tmp is the text with the format applied by fix_num() (no
+// thousands separators, and "." as decimal point); integer: digits with an optional sign, otherwise a decimal number
+// with an optional sign, fraction and exponent; func is the name of the function, for the exception.  Returns 0 if the
+// text is a number, -1 if not, with a PARSE-NUMBER-ERROR exception raised
+static int check_strict_num(const char* text, const QoreString& tmp, const QoreString& fmt, bool integer, const char* func, ExceptionSink* xsink) {
+    const char* start = tmp.c_str();
+    const char* end = start + tmp.size();
+    const char* p = start;
+    if (p < end && (*p == '+' || *p == '-')) {
+        ++p;
+    }
+    const char* digits = p;
+    while (p < end && isdigit(static_cast<unsigned char>(*p))) {
+        ++p;
+    }
+    bool have_digits = p > digits;
+    if (!integer) {
+        if (p < end && *p == '.') {
+            ++p;
+            const char* fraction = p;
+            while (p < end && isdigit(static_cast<unsigned char>(*p))) {
+                ++p;
+            }
+            have_digits = have_digits || p > fraction;
+        }
+        // an exponent follows a significand and has digits; otherwise the "e" is text that is not part of the number
+        if (have_digits && p < end && (*p == 'e' || *p == 'E')) {
+            const char* e = p + 1;
+            if (e < end && (*e == '+' || *e == '-')) {
+                ++e;
+            }
+            const char* exp_digits = e;
+            while (e < end && isdigit(static_cast<unsigned char>(*e))) {
+                ++e;
+            }
+            if (e > exp_digits) {
+                p = e;
+            }
+        }
+    }
+    if (!have_digits) {
+        xsink->raiseException("PARSE-NUMBER-ERROR", "%s(): \"%s\" has no digits of %s in format \"%s\"", func, text,
+            integer ? "an integer" : "a number", fmt.c_str());
+        return -1;
+    }
+    if (p != end) {
+        xsink->raiseException("PARSE-NUMBER-ERROR", "%s(): \"%s\" is not %s in format \"%s\": \"%s\" follows \"%s\"",
+            func, text, integer ? "an integer" : "a number", fmt.c_str(), p, QoreString(start, p - start).c_str());
+        return -1;
+    }
+    return 0;
+}
+
+// applies the format to the text of a number, and in strict mode checks that it is a number and nothing else; returns
+// 0 for no error, -1 if an exception was raised
+static int prepare_num(const QoreAsciiCompatStringHelper& text, const QoreString& fmt, QoreString& tmp, bool strict, bool integer, const char* func, ExceptionSink* xsink) {
+    if (fix_num(tmp, fmt, xsink)) {
+        return -1;
+    }
+    return strict ? check_strict_num(text.c_str(), tmp, fmt, integer, func, xsink) : 0;
 }
 
 static QoreStringNode* qore_regex_escape_string(const QoreStringNode* str, ExceptionSink* xsink) {
@@ -367,11 +431,6 @@ static size_t count_quotes(const char*& str, size_t& len, const char* quote, siz
         break;
     }
     return rv;
-}
-
-// count how many consecutive quotes
-static size_t count_quotes(const char*& str, size_t& len, const QoreString& quote) {
-    return count_quotes(str, len, quote.c_str(), quote.size());
 }
 
 QoreListNode* split_with_quote(ExceptionSink* xsink, const QoreString* sep, const QoreString* str,
@@ -969,6 +1028,38 @@ printf(abc); # will print out "Number: 820"
 string abc = "He\llo\, worl\d!";
 printf(abc); # will print out "Hello, world!"
     @endcode
+
+    @section strict_number_parsing Strict Number Parsing
+    @ref parse_int(), @ref parse_float() and @ref parse_number() convert the number at the start of a string and
+    ignore the rest: \c parse_float("12abc", ".,") returns \c 12.0.  With
+    their \a strict argument @ref True "True"
+    (@ref parse_int(string, string, bool) "parse_int(string, string, bool)",
+    @ref parse_float(string, string, bool) "parse_float(string, string, bool)",
+    @ref parse_number(string, string, bool) "parse_number(string, string, bool)"), the string must be the number
+    and nothing else, or a \c PARSE-NUMBER-ERROR exception is raised.
+
+    Once the thousands separators of the format have been removed, wherever they are, and its decimal point has been
+    replaced by \c ".", the string must be:
+    - for @ref parse_int(string, string, bool) "parse_int()": an optional sign (\c "+" or \c "-") and decimal
+      digits, in the range of an @ref int_type "int"
+    - for @ref parse_float(string, string, bool) "parse_float()" and
+      @ref parse_number(string, string, bool) "parse_number()": an optional sign, decimal digits with an optional
+      decimal point and fraction, or a decimal point and a fraction, and an optional exponent (\c "e" or \c "E", an
+      optional sign and decimal digits)
+
+    So an empty string, a sign alone, whitespace before or after the number, text after it, and the names and forms
+    that the non-strict conversion also accepts (\c "inf", \c "nan", hexadecimal numbers) raise the exception.  A
+    value out of the range of a float gives an infinite float, as without strict mode.
+
+    |!String|!Format|!Strict result
+    |\c "1.150.200,55"|\c ".,"|\c 1150200.55
+    |\c "-12e3"|\c ",."|\c -12000.0
+    |\c "12abc"|\c ",."|\c PARSE-NUMBER-ERROR
+    |\c " 12"|\c ",."|\c PARSE-NUMBER-ERROR
+    |\c "-"|\c ",."|\c PARSE-NUMBER-ERROR
+    |\c ""|\c ",."|\c PARSE-NUMBER-ERROR
+
+    @since %Qore 3.0
  */
 ///@{
 
@@ -985,7 +1076,7 @@ int len = length(str);
     @endcode
 
     @note
-    - this operation has <i>O(n)</i> complexity if called on a string with a multi-byte @ref character_encoding "character encoding", otherwise it is <i>O(1)</i>
+    - this operation has <i>O(n)</i> complexity if called on a string with a multi-byte @ref character_encoding "character encoding", otherwise it is <i>O(1)</i>; a UTF-8 string remembers the length of the ASCII text at its start, so for a UTF-8 string that only holds ASCII text it is <i>O(1)</i> after the first call, and for any other UTF-8 string it is linear in the number of bytes after the ASCII text at its start
     - equivalent to <string>::length()
 
     @see
@@ -1375,7 +1466,8 @@ int index() [flags=RUNTIME_NOOP] {
 
     @param str the string to search in
     @param substr the substring to find in \a str
-    @param pos the starting character position for the search
+    @param pos the starting byte position for the search; a negative position is an offset from the end of the
+    string, and a negative position before the start of the string is the start of the string
 
     @return the byte position of a substring within a string, -1 is returned if the substring is not found
 
@@ -1414,7 +1506,9 @@ int bindex() [flags=RUNTIME_NOOP] {
 
     @param str the string to search in
     @param substr the substring to find in \a str; if the @ref character_encoding "character encoding" of this string does not match \a str, then it will be converted to <em>str</em>'s @ref character_encoding "character encoding" before processing
-    @param pos the starting character position for the search, -1 means start from the end of the string
+    @param pos the starting character position for the search, -1 means start from the end of the string;
+    the substring is found when it lies within the characters from the start of the string up to and including the
+    character at this position, in every @ref character_encoding "character encoding"
 
     @return the character position of a substring within a string, -1 is returned if the substring is not found
 
@@ -1456,7 +1550,9 @@ int rindex() [flags=RUNTIME_NOOP] {
 
     @param str the string to search in
     @param substr the substring to find in \a str
-    @param pos the starting character position for the search, -1 means start from the end of the string
+    @param pos the starting byte position for the search, -1 means start from the end of the string; the substring
+    is found when it lies within the bytes from the start of the string up to and including the byte at this position,
+    as with @ref Qore::rindex() "rindex()"
 
     @return the byte position of a substring within a string, -1 is returned if the substring is not found
 
@@ -3202,5 +3298,125 @@ int parse_int(string str, string format) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
    }
 
    return strtoll(tmp.getBuffer(), 0, 10);
+}
+
+//! returns a number corresponding to the string and the argument giving the format; in strict mode the string must be the number and nothing else
+/** @par Example:
+    @code{.py}
+number n = parse_number("1.150.200,55", ".,", True);
+# throws PARSE-NUMBER-ERROR: "12x" has text after the number
+n = parse_number("12x", ".,", True);
+    @endcode
+
+    @param str the string to parse
+    @param format the format of the number in the string, consisting of two characters, the first for the thousands separator, the second for the decimal point (ex: \c ".," for many European locales)
+    @param strict if @ref True "True", the string must be a number and nothing else (see @ref strict_number_parsing); if @ref False "False", the function behaves as @ref parse_number(string, string) "parse_number(string, string)", which converts the number at the start of the string and ignores the rest
+
+    @return the number value represented by the string
+
+    @throw PARSE-NUMBER-ERROR in strict mode: the string is not a number in the given format and nothing else
+
+    @see
+    - @ref strict_number_parsing
+    - @ref parse_int(string, string, bool) "parse_int(string, string, bool)"
+    - @ref parse_float(string, string, bool) "parse_float(string, string, bool)"
+
+    @since %Qore 3.0
+*/
+number parse_number(string str, string format, bool strict) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+   QoreAsciiCompatStringHelper text(*str);
+   TempEncodingHelper tfmt(format, text.getEncoding(), xsink);
+   if (*xsink) {
+      return QoreValue();
+   }
+
+   QoreString tmp(text.c_str(), text.size(), text.getEncoding());
+   if (prepare_num(text, **tfmt, tmp, strict, false, "parse_number", xsink)) {
+      return QoreValue();
+   }
+
+   return new QoreNumberNode(tmp.getBuffer());
+}
+
+//! returns a floating-point value corresponding to the string and the argument giving the format; in strict mode the string must be the number and nothing else
+/** @par Example:
+    @code{.py}
+float f = parse_float("1.150.200,55", ".,", True);
+# throws PARSE-NUMBER-ERROR: "12x" has text after the number
+f = parse_float("12x", ".,", True);
+    @endcode
+
+    @param str the string to parse
+    @param format the format of the number in the string, consisting of two characters, the first for the thousands separator, the second for the decimal point (ex: \c ".," for many European locales)
+    @param strict if @ref True "True", the string must be a number and nothing else (see @ref strict_number_parsing); if @ref False "False", the function behaves as @ref parse_float(string, string) "parse_float(string, string)", which converts the number at the start of the string and ignores the rest
+
+    @return the floating-point value represented by the string
+
+    @throw PARSE-NUMBER-ERROR in strict mode: the string is not a number in the given format and nothing else
+
+    @see
+    - @ref strict_number_parsing
+    - @ref parse_number(string, string, bool) "parse_number(string, string, bool)"
+    - @ref parse_int(string, string, bool) "parse_int(string, string, bool)"
+
+    @since %Qore 3.0
+*/
+float parse_float(string str, string format, bool strict) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+   QoreAsciiCompatStringHelper text(*str);
+   TempEncodingHelper tfmt(format, text.getEncoding(), xsink);
+   if (*xsink) {
+      return QoreValue();
+   }
+
+   QoreString tmp(text.c_str(), text.size(), text.getEncoding());
+   if (prepare_num(text, **tfmt, tmp, strict, false, "parse_float", xsink)) {
+      return QoreValue();
+   }
+
+   return q_strtod(tmp.getBuffer());
+}
+
+//! returns an integer corresponding to the string and the argument giving the format; in strict mode the string must be the integer and nothing else
+/** @par Example:
+    @code{.py}
+int i = parse_int("1.150.200", ".,", True);
+# throws PARSE-NUMBER-ERROR: "1.150,5" has a decimal fraction
+i = parse_int("1.150,5", ".,", True);
+    @endcode
+
+    @param str the string to parse
+    @param format the format of the number in the string, consisting of two characters, the first for the thousands separator, the second for the decimal point (ex: \c ".," for many European locales)
+    @param strict if @ref True "True", the string must be an integer and nothing else, and in the range of an @ref int_type "int" (see @ref strict_number_parsing); if @ref False "False", the function behaves as @ref parse_int(string, string) "parse_int(string, string)", which converts the integer at the start of the string, ignores the rest, and gives the nearest @ref int_type "int" to an integer out of its range
+
+    @return the integer value represented by the string
+
+    @throw PARSE-NUMBER-ERROR in strict mode: the string is not an integer in the given format and nothing else, or it is out of the range of an @ref int_type "int"
+
+    @see
+    - @ref strict_number_parsing
+    - @ref parse_number(string, string, bool) "parse_number(string, string, bool)"
+    - @ref parse_float(string, string, bool) "parse_float(string, string, bool)"
+
+    @since %Qore 3.0
+*/
+int parse_int(string str, string format, bool strict) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+   QoreAsciiCompatStringHelper text(*str);
+   TempEncodingHelper tfmt(format, text.getEncoding(), xsink);
+   if (*xsink) {
+      return QoreValue();
+   }
+
+   QoreString tmp(text.c_str(), text.size(), text.getEncoding());
+   if (prepare_num(text, **tfmt, tmp, strict, true, "parse_int", xsink)) {
+      return QoreValue();
+   }
+
+   errno = 0;
+   int64 rv = strtoll(tmp.getBuffer(), 0, 10);
+   if (strict && errno == ERANGE) {
+      xsink->raiseException("PARSE-NUMBER-ERROR", "parse_int(): \"%s\" is out of the range of an int", text.c_str());
+      return QoreValue();
+   }
+   return rv;
 }
 ///@}

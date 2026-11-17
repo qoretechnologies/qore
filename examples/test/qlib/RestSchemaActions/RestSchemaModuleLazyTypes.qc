@@ -98,7 +98,7 @@ class RestSchemaModuleLazyTypesBase inherits QUnit::Test {
         string dir = make_tmp_dir();
         on_exit remove_tree(dir);
         string output = dir + DirSep + mode + ".json";
-        string qore = ENV.QORE_EXECUTABLE ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string qore = TestInterpreter::qore_interpreter();
         string cmd = sprintf("%s %s %s %s %s 2>&1", qore, get_script_dir() + DirSep + "RestSchemaModuleTypes.q",
             mode, output, modules.join(" "));
         string log = backquote(cmd);

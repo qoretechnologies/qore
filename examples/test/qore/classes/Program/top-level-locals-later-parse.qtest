@@ -1,0 +1,57 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class TopLevelLocalsLaterParseTest
+
+#! The top-level local variables of the later parses of a Program with PO_ALLOW_REPARSE
+/** Each later parse of a Program with PO_ALLOW_REPARSE (the only Programs that can be parsed more than once) can
+    declare top-level local variables; they are added to the Program's top-level variables and are instantiated with
+    them when the new code runs.  There is no ILLEGAL-TOP-LEVEL-LOCAL-VARIABLE error any more: since issue #678, a
+    parse that could declare none could not be made.
+*/
+public class TopLevelLocalsLaterParseTest inherits QUnit::Test {
+    constructor() : QUnit::Test("TopLevelLocalsLaterParseTest", "1.0", \ARGV) {
+        addTestCase("later parses", \laterParsesTest());
+        addTestCase("one parse without PO_ALLOW_REPARSE", \parseOnceTest());
+        set_return_value(main());
+    }
+
+    laterParsesTest() {
+        Program p(PO_NEW_STYLE | PO_ALLOW_REPARSE | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.parse("our int r; int a = 1; r = a;", "first");
+        p.run();
+        assertEq(1, p.getGlobalVariable("r"));
+        p.parse("int b = 2; r = a + b;", "second");
+        p.run();
+        assertEq(3, p.getGlobalVariable("r"));
+        p.parse("int c = 3; r = a + b + c;", "third");
+        p.run();
+        assertEq(6, p.getGlobalVariable("r"));
+        # a variable that an earlier parse declared cannot be declared again
+        assertThrows("PARSE-ERROR", "already declared", \p.parse(), ("int b = 4;", "fourth"));
+    }
+
+    #! a Program without PO_ALLOW_REPARSE is parsed once: a later parse, which could declare top-level local variables,
+    #! cannot be made, also when the option is removed between the parses
+    parseOnceTest() {
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.parse("our int r; int a = 1; r = a;", "first");
+        assertThrows("PARSE-ERROR", "only happen once", \p.parse(), ("int b = 2;", "second"));
+
+        p = new Program(PO_NEW_STYLE | PO_ALLOW_REPARSE | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.parse("our int r; int a = 1; r = a;", "first");
+        p.disableParseOptions(PO_ALLOW_REPARSE);
+        assertThrows("PARSE-ERROR", "only happen once", \p.parse(), ("int b = 2;", "second"));
+
+        p = new Program(PO_NEW_STYLE | PO_ALLOW_REPARSE | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.parse("our int r; int a = 1; r = a;", "first");
+        p.replaceParseOptions(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        assertThrows("PARSE-ERROR", "only happen once", \p.parse(), ("int b = 2;", "second"));
+    }
+}

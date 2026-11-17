@@ -26,6 +26,7 @@
 
 #include "cppapiuser-module.h"
 #include <qore/OutputStream.h>
+#include <qore/QoreColumnarResult.h>
 #include <qore/QoreSandboxManager.h>
 #include <qore/QoreColumnarResult.h>
 
@@ -364,6 +365,19 @@ string cpp_api_reverse(string str) [flags=RET_VALUE_ONLY] {
         return QoreValue();
     }
     return api->reverse(*str, xsink);
+}
+
+//! loads a module into the current Program as a binary module's code does, with ModuleManager::parseLoadModule()
+/** The load is a parse-time module load without a directive location; a parse stack error that it raises is
+    located at the directive of the enclosing module load, if any (issue #6047)
+
+    @param name the module to load
+
+    @return the error of the load, or NOTHING if the module was loaded
+*/
+*string cpp_api_parse_load_module(string name) [dom=MODULES] {
+    QoreStringNode* err = ModuleManager::parseLoadModule(name->c_str(), getProgram());
+    return err ? QoreValue(err) : QoreValue();
 }
 
 //! adds each element of \a vals to an opaque counter handle owned by the cppapitest module
@@ -2083,6 +2097,36 @@ nothing cpp_api_class_key_value_set(string key, auto value) {
     }
     ValueHolder old(kv_probe_class->setKeyValue(key->c_str(), value.refSelf()), xsink);
     return QoreValue();
+}
+
+
+//! adds a column with the given data and schema kind, precision and scale with QoreColumnarResult::addColumn()
+/** @param data the column data (a list or a buffer)
+    @param kind the schema kind
+    @param precision the decimal precision of the schema
+    @param scale the decimal scale of the schema
+
+    @return a ColumnarResult with the column \c c
+*/
+object cpp_api_columnar_add_column(auto data, string kind, int precision = 0, int scale = 0) {
+    QoreColumnarTypeDescriptor schema;
+    if (!strcmp(kind->c_str(), "decimal128")) {
+        schema.kind = QoreColumnarTypeKind::Decimal128;
+        schema.column_type = QoreColumnarColumnType::Number;
+    } else if (!strcmp(kind->c_str(), "int")) {
+        schema.kind = QoreColumnarTypeKind::Int;
+        schema.column_type = QoreColumnarColumnType::Int;
+    } else if (!strcmp(kind->c_str(), "binary")) {
+        schema.kind = QoreColumnarTypeKind::Binary;
+        schema.column_type = QoreColumnarColumnType::Binary;
+    }
+    schema.precision = static_cast<int32_t>(precision);
+    schema.scale = static_cast<int32_t>(scale);
+    ReferenceHolder<QoreColumnarResult> result(new QoreColumnarResult, xsink);
+    if (result->addColumn("c", data.refSelf(), schema, xsink)) {
+        return QoreValue();
+    }
+    return qore_columnar_result_to_object(result.release(), xsink);
 }
 
 //! Creates a ColumnarResult with QoreColumnarResult::fromColumnHash(), the C++ API that DBI drivers call

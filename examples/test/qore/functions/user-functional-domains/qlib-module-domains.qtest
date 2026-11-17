@@ -9,6 +9,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
 %requires QUnit
+%requires ../../../TestInterpreter.qm
 %requires FsUtil
 
 %exec-class QlibModuleDomainsTest
@@ -72,7 +73,7 @@ class QlibModuleDomainsTest inherits QUnit::Test {
     }
 
     constructor() : QUnit::Test("QlibModuleDomainsTest", "1.0", \ARGV) {
-        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        qore_bin = TestInterpreter::qore_interpreter();
         libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
         qlib_dir = realpath(get_script_dir() + "/../../../../../qlib");
         script = tmp.path + "/restricted.q";
@@ -84,7 +85,8 @@ class QlibModuleDomainsTest inherits QUnit::Test {
         addTestCase("a restricted Program loads the modules that declare their domains", \testLoad());
         addTestCase("a restricted Program cannot call the APIs that declare a domain", \testTaggedApis());
         addTestCase("module state that a subclass must not change is internal", \testInternalState());
-        addTestCase("sandboxed code cannot open a database from a connection string", \testRawDatasource());
+        addTestCase("a sandbox alone does not refuse a database connection string",
+            \testRawDatasource());
         addTestCase("the APIs that declare a domain work in an unrestricted Program", \testUnrestricted());
         addTestCase("a QUnit test runs in a restricted Program and never exits the process", \testQUnit());
         addTestCase("a module that does not declare its domains stays refused", \testUndeclared());
@@ -157,17 +159,22 @@ printf(\"end\\n\");
         assertEq("loaded\nINVALID-FUNCTION-ACCESS\nend\n", out);
     }
 
-    #! module code builds no connection from a connection string that sandboxed code gives it (qorus#856)
+    #! a sandbox alone, as a trusted Qorus interface has, does not refuse a connection string: the calling code's
+    #! DATABASE domain decides (qorus#856, qore#6257; code restricted with PO_NO_DATABASE, which cannot load these
+    #! modules first, is refused in sqlutil-caller-database.qtest)
     testRawDatasource() {
+        # a driver that does not exist: an allowed call fails to load it
         list<list<string>> cases = (
-            ("DbDataProvider", "DbDataProvider::DbDataProviderBase::getDatasource(\"pgsql:u/p@db\")"),
-            ("SqlUtil", "SqlUtil::AbstractTable::getTable(\"pgsql:u/p@db\", \"t\")"),
-            ("SqlUtil", "SqlUtil::AbstractDatabase::getDatabase(\"pgsql:u/p@db\")"),
+            ("DbDataProvider", "DbDataProvider::DbDataProviderBase::getDatasource(\"qore6257nodriver:u/p@db\")",
+             "LOAD-MODULE-ERROR"),
+            ("SqlUtil", "SqlUtil::AbstractTable::getTable(\"qore6257nodriver:u/p@db\", \"t\")",
+             "LOAD-MODULE-ERROR"),
+            ("SqlUtil", "SqlUtil::AbstractDatabase::getDatabase(\"qore6257nodriver:u/p@db\")", "LOAD-MODULE-ERROR"),
         );
         foreach list<string> c in (cases) {
-            string out = run(InterfaceRestrictions, c[0], sprintf("try { %s; printf(\"opened\\n\"); } "
-                "catch (hash<ExceptionInfo> ex) { printf(\"%%s\\n\", ex.err); }", c[1]), True);
-            assertEq("loaded\nPERMISSION-DENIED\nend\n", out, c[1]);
+            string code = sprintf("try { %s; printf(\"opened\\n\"); } catch (hash<ExceptionInfo> ex) { "
+                "printf(\"%%s\\n\", ex.err); }", c[1]);
+            assertEq("loaded\n" + c[2] + "\nend\n", run(InterfaceRestrictions, c[0], code, True), c[1]);
         }
     }
 

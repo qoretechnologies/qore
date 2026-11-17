@@ -71,6 +71,23 @@ class LifetimeFtpPoller inherits FtpPoller {
     }
 }
 
+#! a poller created with the hash-only constructor
+class MyHostFtpPoller inherits FtpPoller {
+    public {
+        list<hash<FtpPollerFileEventInfo>> files;
+    }
+
+    constructor(hash<auto> opts) : FtpPoller(opts) {
+    }
+
+    singleFileEvent(hash<FtpPollerFileEventInfo> fih) {
+        files += fih;
+    }
+
+    postSingleFileEvent(hash<FtpPollerFileEventInfo> fih) {
+    }
+}
+
 class FtpPollerTest inherits QUnit::Test {
     public {
     }
@@ -92,6 +109,9 @@ class FtpPollerTest inherits QUnit::Test {
         addTestCase("data provider test", \dataProviderTest());
         addTestCase("start_thread from the thread's capability", \capabilityTest());
         addTestCase("start_thread from the thread's capability in a restricted Program", \restrictedCapabilityTest());
+        addTestCase("regex mask test", \regexMaskTest());
+        addTestCase("an observer refusal keeps the file and polling", \observerRefusalTest());
+        addTestCase("a post-transfer error stops polling", \postTransferErrorStopsTest());
 
         # Return for compatibility with test harness that checks return value
         set_return_value(main());
@@ -185,6 +205,64 @@ class FtpPollerTest inherits QUnit::Test {
             "the poller was destroyed in the thread that dropped its last reference, which the thread had left");
     }
 
+    # issue #3377: an empty "regex_mask" matches every file with both constructors
+    private regexMaskTest() {
+        int port = getPort();
+
+        # PORT only supports IPv4, so we can't use "localhost", which may resolve
+        # to an IPv6 address
+        FtpServer serv(port, m_options.verbose - 1, "127.0.0.1");
+        on_exit serv.shutdown();
+
+        TmpDir tmp_dir();
+        string dir = tmp_dir.path;
+        serv.setPwd(dir);
+
+        port = serv.getPort();
+
+        TmpFile txt1("regex_mask_test_", ".txt", dir);
+        TmpFile txt2("regex_mask_test_", ".txt", dir);
+        TmpFile dat("regex_mask_test_", ".dat", dir);
+        list<string> all = sort(map basename($1.path), (txt1, txt2, dat));
+        list<string> txt = sort(map basename($1.path), (txt1, txt2));
+
+        code get_names = list<string> sub (list<hash<FtpPollerFileEventInfo>> files) {
+            return sort(map $1.name, files);
+        };
+
+        # runs one poll with the FtpClient constructor and returns the names of the files found
+        code poll_client = list<string> sub (hash<auto> opts) {
+            FtpClient ftp_client(url: "ftp://user:pass@127.0.0.1:" + port);
+            MyFtpPoller poller(ftp_client, {"path": dir} + opts);
+            assertTrue(poller.runOnce());
+            return get_names(poller.files);
+        };
+
+        # runs one poll with the hash-only constructor and returns the names of the files found
+        code poll_host = list<string> sub (hash<auto> opts) {
+            MyHostFtpPoller poller({
+                "host": "127.0.0.1",
+                "port": port,
+                "user": "user",
+                "pass": "pass",
+                "path": dir,
+            } + opts);
+            assertTrue(poller.runOnce());
+            return get_names(poller.files);
+        };
+
+        foreach code poll in ((poll_client, poll_host)) {
+            # an empty regex mask matches every file, also when it overrides a glob mask
+            assertEq(all, poll({"regex_mask": ""}));
+            assertEq(all, poll({"regex_mask": "", "mask": "*.dat"}));
+            # a regex mask overrides the glob mask
+            assertEq(txt, poll({"regex_mask": "\\.txt$", "mask": "*.dat"}));
+            # without a regex mask, the glob mask is used
+            assertEq((basename(dat.path),), poll({"regex_mask": NOTHING, "mask": "*.dat"}));
+            assertEq(all, poll({}));
+        }
+    }
+
     private errorDelayOptionTest() {
         assertEq(FtpPoller::ErrorDelaySeconds,
             FtpPollerDataProviderBase::ConstructorOptions.error_delay.default_value);
@@ -273,6 +351,91 @@ class FtpPollerTest inherits QUnit::Test {
             poller.start();
             assertRegex("FTP error in ", info.waitForMatch("FTP error in "));
         }
+    }
+
+    # issue #6400: an observer that refuses a file event leaves the remote file in place, and polling continues, so
+    # the file is handled again after the error delay, once the observer accepts it
+    private observerRefusalTest() {
+        Logger logger("test", LoggerLevel::getLevelInfo());
+        CapturingAppender capture();
+        logger.addAppender(capture);
+
+        # PORT only supports IPv4, so we can't use "localhost", which may resolve to an IPv6 address
+        FtpServer serv(getPort(), m_options.verbose - 1, "127.0.0.1");
+        on_exit serv.shutdown();
+
+        TmpDir tmp_dir();
+        serv.setPwd(tmp_dir.path);
+        serv.setDirect();
+        int port = serv.getPort();
+
+        string remote_path = tmp_dir.path + DirSep + "refused.txt";
+        File f();
+        f.open2(remote_path, O_CREAT | O_TRUNC | O_WRONLY);
+        f.write("data");
+        f.close();
+
+        # refuses the first two events and accepts the third
+        RefusingObserver observer(2);
+        # the retries after a refusal must wait the error delay, not the poll interval, which the test would not meet
+        FtpDelayedPollerDataProvider prov({
+            "url": sprintf("ftp://user:pass@127.0.0.1:%d%s", port, tmp_dir.path),
+            "poll_interval": 3600,
+            "error_delay": 1,
+            "remote_file_disposition": "DELETE",
+        });
+        prov.setLogger(logger);
+        prov.registerObserver(observer);
+        on_exit prov.stopEvents();
+        prov.observersReady();
+
+        hash<auto> event = observer.waitAccepted(capture);
+        # stopping cancels an FTP command in progress, so the deletion of the accepted file is waited for first
+        capture.waitForMatch("refused\\.txt.*: deleted on the remote host");
+        prov.stopEvents();
+
+        assertEq("refused.txt", event.name);
+        # the file was delivered again after each refusal: polling went on
+        assertEq(3, observer.getAttempts());
+        assertFalse(is_file(remote_path), "the remote file of the accepted event was deleted; poller log:\n"
+            + capture.getLog());
+        assertRegex("event handler error in .*REFUSED.*the remote file is kept", capture.getLog());
+    }
+
+    # an error after a file was handled is fatal: polling stops, so the file is not handled more than once
+    private postTransferErrorStopsTest() {
+        FtpServer serv(getPort(), m_options.verbose - 1, "127.0.0.1");
+        on_exit serv.shutdown();
+
+        TmpDir tmp_dir();
+        serv.setPwd(tmp_dir.path);
+        int port = serv.getPort();
+
+        TmpFile tf("ftp_post_error_", NOTHING, tmp_dir.path);
+
+        FailingPostFtpPoller poller(new FtpClient("ftp://user:pass@127.0.0.1:" + port), {
+            "path": tmp_dir.path,
+            "poll_interval": 1,
+            "error_delay": 1,
+        });
+
+        # runs the poller inline in another thread, which ends when polling stops
+        Counter done(1);
+        *hash<ExceptionInfo> stop_ex;
+        background sub () {
+            on_exit done.dec();
+            try {
+                poller.startInline();
+            } catch (hash<ExceptionInfo> ex) {
+                stop_ex = ex;
+            }
+        }();
+        on_exit poller.stopNoWait();
+
+        # only a guard against a hang
+        assertEq(0, done.waitForZero(30s), "polling stopped after the post-transfer error");
+        assertEq("POST-ERROR", stop_ex.err);
+        assertEq((basename(tf.path),), poller.files);
     }
 
     #! without the option, a poller created in a host's capability scope starts its thread with the host's
@@ -434,6 +597,85 @@ try {
     }
 }
 
+#! A poller whose post-transfer handling fails
+class FailingPostFtpPoller inherits FtpPoller {
+    public {
+        list<string> files();
+    }
+
+    constructor(FtpClient ftp, hash<auto> opts) : FtpPoller(ftp, opts) {
+    }
+
+    singleFileEvent(hash<FtpPollerFileEventInfo> fih) {
+        files += fih.name;
+    }
+
+    postSingleFileEvent(hash<FtpPollerFileEventInfo> fih) {
+        throw "POST-ERROR", sprintf("cannot dispose of %y", fih.name);
+    }
+}
+
+#! An observer that refuses a number of events by throwing, and then accepts the next one
+class RefusingObserver inherits Observer {
+    public {
+        #! how long to wait for the accepted event; only a guard against a hang
+        const EventTimeout = 30s;
+    }
+
+    private {
+        #! the number of events to refuse
+        int refusals;
+        #! the number of events received
+        int attempts = 0;
+        #! the accepted event
+        *hash<auto> accepted;
+        Mutex m();
+        Condition cond();
+    }
+
+    constructor(int refusals) {
+        self.refusals = refusals;
+    }
+
+    update(string event_id, hash<auto> data_) {
+        m.lock();
+        on_exit m.unlock();
+
+        if (++attempts <= refusals) {
+            throw "REFUSED", sprintf("event %d refused", attempts);
+        }
+        accepted = data_;
+        cond.broadcast();
+    }
+
+    int getAttempts() {
+        m.lock();
+        on_exit m.unlock();
+
+        return attempts;
+    }
+
+    #! Waits for the accepted event and returns it
+    /** @throw ERROR no event was accepted in @ref EventTimeout; the poller's log is included in the exception
+    */
+    hash<auto> waitAccepted(CapturingAppender capture) {
+        int start = clock_get_monotonic_us();
+
+        m.lock();
+        on_exit m.unlock();
+
+        while (!accepted) {
+            int left_ms = EventTimeout.durationMilliseconds() - (clock_get_monotonic_us() - start) / 1000;
+            if (left_ms <= 0) {
+                throw "ERROR", sprintf("no event accepted in %y after %d event(s); poller log:\n%s", EventTimeout,
+                    attempts, capture.getLog());
+            }
+            cond.wait(m, left_ms);
+        }
+        return accepted;
+    }
+}
+
 class MyObserver inherits Observer {
     public {
         #! how long to wait for all expected file events
@@ -535,6 +777,7 @@ class CapturingAppender inherits LoggerAppenderWithLayout {
     private {
         list<string> lines();
         Mutex m();
+        Condition cond();
     }
 
     constructor() : LoggerAppenderWithLayout("capture",
@@ -547,6 +790,31 @@ class CapturingAppender inherits LoggerAppenderWithLayout {
             m.lock();
             on_exit m.unlock();
             lines += params.toString();
+            cond.broadcast();
+        }
+    }
+
+    #! Waits for a log message matching \a pattern; the timeout only guards against a hang
+    /** @throw MESSAGE-TIMEOUT no matching message was logged in \a to
+    */
+    waitForMatch(string pattern, timeout to = 30s) {
+        int start = clock_get_monotonic_us();
+
+        m.lock();
+        on_exit m.unlock();
+
+        while (True) {
+            foreach string line in (lines) {
+                if (regex(line, pattern)) {
+                    return;
+                }
+            }
+            int left_ms = to - (clock_get_monotonic_us() - start) / 1000;
+            if (left_ms <= 0) {
+                throw "MESSAGE-TIMEOUT", sprintf("no log message matching %y in %dms; log:\n%s", pattern, to,
+                    lines.join(""));
+            }
+            cond.wait(m, left_ms);
         }
     }
 

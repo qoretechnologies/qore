@@ -151,6 +151,7 @@ QoreValue FindNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
 int FindNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {
     push_cvar(nullptr);
 
+    unsigned implicit_element_reads = parse_context.implicit_element_reads;
     parse_context.typeInfo = nullptr;
     int err = parse_init_value(find_exp, parse_context);
     if (where) {
@@ -166,6 +167,7 @@ int FindNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {
         }
     }
     pop_cvar();
+    reads_implicit_element = parse_context.implicit_element_reads != implicit_element_reads;
 
     parse_context.typeInfo = nullptr;
     return err;

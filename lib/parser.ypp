@@ -91,7 +91,10 @@
 // use the call stack for each level of the tree
 #define QORE_MAX_PARSE_DEPTH 1000
 
-#define YYINITDEPTH 300
+// The parser's initial stack is in the frame of yyparse(), which is on the call stack once for each module that a
+// parse loads from its source (the module is parsed while the parse that requires it waits); a stack of 300 symbols
+// made the frame about 25KB.  A parse that nests more deeply grows the stack on the heap (see below).
+#define YYINITDEPTH 64
 // The parser grows its stack on the heap, which bison only does for a C++ parser whose semantic value and location
 // types can be copied with memcpy() (checked below). The stack holds a symbol for each pending operator of a nested
 // expression, and when the parser reduces them, it nests one node in the next without reading another token, so
@@ -1304,6 +1307,25 @@ struct MethodDef {
     bool static_flag;
 
     DLLLOCAL MethodDef(const QoreProgramLocation* loc, int64 dom, int mod, char* n, int n_sig_first_line, int n_sig_last_line, QoreValue params, BCAList* bcal, RetTypeInfo* returnTypeInfo, StatementBlock *b) : loc(loc), m(0), name(parse_generic_callable_decl_name(loc, n, type_params, "method")), static_flag(mod & OFM_STATIC) {
+        // the out-of-line method rules that take an ANGLE_IDENTIFIER (for "Class::method<T>") also match an
+        // unqualified generic name, as the scanner returns one token for both; such a declaration names no class
+        // and is a function declaration missing the "sub" keyword (issue #6323)
+        if (name.size() < 2) {
+            // strong encapsulation (as with %modern) does not allow out-of-line method definitions
+            if (parse_check_parse_option(PO_STRONG_ENCAPSULATION)) {
+                parse_error(*loc, "invalid declaration '%s()': a function declaration requires the 'sub' keyword "
+                    "(ex: 'sub %s(...) {}')", name.ostr, name.ostr);
+            } else {
+                parse_error(*loc, "invalid declaration '%s()': a function declaration requires the 'sub' keyword "
+                    "(ex: 'sub %s(...) {}'), and an out-of-line method definition requires a class-qualified name "
+                    "(ex: 'Class::%s(...) {}')", name.ostr, name.ostr, name.ostr);
+            }
+            params.discard(nullptr);
+            delete bcal;
+            delete b;
+            delete returnTypeInfo;
+            return;
+        }
         if (check_method(loc, name.getIdentifier(), bcal, returnTypeInfo)) {
             params.discard(nullptr);
             delete bcal;
@@ -1334,6 +1356,10 @@ struct MethodDef {
     }
 
     DLLLOCAL void add(qore_ns_private& ns) {
+        // there is no method when the declaration had errors, which have already been reported
+        if (!m) {
+            return;
+        }
         // the following method takes ownership of "m" unconditionally
         ns.parseAddMethodToClass(loc, name, m, static_flag);
         m = 0;
@@ -1638,6 +1664,10 @@ public:
         LexicalSemanticPolicy policy;
         LexicalParsePolicyHelper::capture(policy);
         mi->bindInitializationPolicy(policy, true);
+        // the initializer runs with the parse options of the declaration, as a function does (qore#6292)
+        if (QoreProgram* pgm = getProgram()) {
+            mi->bindDeclarationParseOptions(qore_program_private::getParseWarnOptions(pgm));
+        }
         if (!(mi && mi->parseHasTypeInfo()) && parse_check_parse_option(PO_REQUIRE_TYPES))
             parse_error(*mi->loc, "member '%s' declared without type information, but parse options require type information for all declarations", name);
     }
@@ -1734,6 +1764,10 @@ struct ClassVarInfo : public MemberInfo {
         LexicalSemanticPolicy policy;
         LexicalParsePolicyHelper::capture(policy);
         vi->bindInitializationPolicy(policy);
+        // the initializer runs with the parse options of the declaration, as a constant's does (qore#6205)
+        if (QoreProgram* pgm = getProgram()) {
+            vi->bindDeclarationParseOptions(qore_program_private::getParseWarnOptions(pgm));
+        }
         if (!(vi && vi->parseHasTypeInfo()) && parse_check_parse_option(PO_REQUIRE_TYPES)) {
             parse_error(*vi->loc, "class static variable '%s' declared without type information, but parse options "
                 "require type information for all declarations", name);
@@ -2657,7 +2691,7 @@ static void check_operator_bin_xor(const QoreProgramLocation* loc, QoreValue n, 
 %parse-param {yyscan_t yyscanner}
 %locations
 // the location is initialized as a trivial type (see YYLTYPE_IS_TRIVIAL), which would start columns at 1
-%initial-action { @$ = QoreParserLocation(); }
+%initial-action { @$ = QoreParserLocation(); (void)yynerrs; }
 // remove this and use the following line when bison is updated on all build environments enough to support parse.error verbose
 %error-verbose
 
@@ -3174,8 +3208,11 @@ top_level_command:
     }
     | outofline_methoddef {
         check_expression_definition($1->loc, "method");
-        // see if strong encapsulation is enabled
-        check_strong_encapsulation($1->loc, "method", $1->name.ostr);
+        // see if strong encapsulation is enabled; an unqualified name has already been reported as a function
+        // declaration without "sub"
+        if ($1->name.size() > 1) {
+            check_strong_encapsulation($1->loc, "method", $1->name.ostr);
+        }
         $1->parseAddToClassAndDel();
     }
     | statement {
@@ -3490,6 +3527,11 @@ namespace_decl:
         $$ = new NSNode($1);
     }
     | outofline_methoddef {
+        // see if strong encapsulation is enabled, as for an out-of-line method at the top level (issue #6384); an
+        // unqualified name is a function declaration without "sub"
+        if ($1->name.size() > 1) {
+            check_strong_encapsulation($1->loc, "method", $1->name.ostr);
+        }
         $$ = new NSNode($1);
     }
     ;
@@ -3834,61 +3876,61 @@ case_code:
     {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @5.last_line, @1.first_col, @5.last_col);
         check_case(loc, ">=", $3);
-        $$ = new CaseNodeWithOperator(loc, $3, $5, QoreLogicalGreaterThanOrEqualsOperatorNode::doGreaterThanOrEquals);
+        $$ = new CaseNodeWithOperator(loc, $3, $5, QoreSwitchCaseOperator::GreaterThanOrEquals, @2.semantic_policy);
     }
     | TOK_CASE LOGICAL_GE exp ':' // nothing
     {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @4.last_line, @1.first_col, @4.last_col);
         check_case(loc, ">=", $3);
-        $$ = new CaseNodeWithOperator(loc, $3, nullptr, QoreLogicalGreaterThanOrEqualsOperatorNode::doGreaterThanOrEquals);
+        $$ = new CaseNodeWithOperator(loc, $3, nullptr, QoreSwitchCaseOperator::GreaterThanOrEquals, @2.semantic_policy);
     }
     | TOK_CASE LOGICAL_LE exp ':' statements
     {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @5.last_line, @1.first_col, @5.last_col);
         check_case(loc, "<=", $3);
-        $$ = new CaseNodeWithOperator(loc, $3, $5, QoreLogicalLessThanOrEqualsOperatorNode::doLessThanOrEquals);
+        $$ = new CaseNodeWithOperator(loc, $3, $5, QoreSwitchCaseOperator::LessThanOrEquals, @2.semantic_policy);
     }
     | TOK_CASE LOGICAL_LE exp ':' // nothing
     {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @4.last_line, @1.first_col, @4.last_col);
         check_case(loc, "<=", $3);
-        $$ = new CaseNodeWithOperator(loc, $3, nullptr, QoreLogicalLessThanOrEqualsOperatorNode::doLessThanOrEquals);
+        $$ = new CaseNodeWithOperator(loc, $3, nullptr, QoreSwitchCaseOperator::LessThanOrEquals, @2.semantic_policy);
     }
     | TOK_CASE LOGICAL_EQ exp ':' statements
     {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @5.last_line, @1.first_col, @5.last_col);
         check_case(loc, "==", $3);
-        $$ = CaseNodeWithOperator::makeEquality(loc, $3, $5, @2.semantic_policy);
+        $$ = new CaseNodeWithOperator(loc, $3, $5, QoreSwitchCaseOperator::Equals, @2.semantic_policy);
     }
     | TOK_CASE LOGICAL_EQ exp ':' // nothing
     {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @4.last_line, @1.first_col, @4.last_col);
         check_case(loc, "==", $3);
-        $$ = CaseNodeWithOperator::makeEquality(loc, $3, nullptr, @2.semantic_policy);
+        $$ = new CaseNodeWithOperator(loc, $3, nullptr, QoreSwitchCaseOperator::Equals, @2.semantic_policy);
     }
     | TOK_CASE '<' exp ':' statements
     {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @5.last_line, @1.first_col, @5.last_col);
         check_case(loc, "<", $3);
-        $$ = new CaseNodeWithOperator(loc, $3, $5, QoreLogicalLessThanOperatorNode::doLessThan);
+        $$ = new CaseNodeWithOperator(loc, $3, $5, QoreSwitchCaseOperator::LessThan, @2.semantic_policy);
     }
     | TOK_CASE '<' exp ':' // nothing
     {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @4.last_line, @1.first_col, @4.last_col);
         check_case(loc, "<", $3);
-        $$ = new CaseNodeWithOperator(loc, $3, nullptr, QoreLogicalLessThanOperatorNode::doLessThan);
+        $$ = new CaseNodeWithOperator(loc, $3, nullptr, QoreSwitchCaseOperator::LessThan, @2.semantic_policy);
     }
     | TOK_CASE '>' exp ':' statements
     {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @5.last_line, @1.first_col, @5.last_col);
         check_case(loc, ">", $3);
-        $$ = new CaseNodeWithOperator(loc, $3, $5, QoreLogicalGreaterThanOperatorNode::doGreaterThan);
+        $$ = new CaseNodeWithOperator(loc, $3, $5, QoreSwitchCaseOperator::GreaterThan, @2.semantic_policy);
     }
     | TOK_CASE '>' exp ':' // nothing
     {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @4.last_line, @1.first_col, @4.last_col);
         check_case(loc, ">", $3);
-        $$ = new CaseNodeWithOperator(loc, $3, nullptr, QoreLogicalGreaterThanOperatorNode::doGreaterThan);
+        $$ = new CaseNodeWithOperator(loc, $3, nullptr, QoreSwitchCaseOperator::GreaterThan, @2.semantic_policy);
     }
     | TOK_CASE REGEX_MATCH REGEX ':' statements
     {

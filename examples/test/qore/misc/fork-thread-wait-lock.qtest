@@ -1,0 +1,79 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - fork() and the fork handler of the thread list
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class ForkThreadWaitLockTest
+
+#! a child of fork() can wait after another thread of the parent held the lock of the records of cancellable waits
+/** In debug builds, every cancellable wait (ex: the poll before a file read) records itself in the thread list under
+    a lock of its own.  The child of a fork() made while another thread held that lock inherited it held, and its first
+    cancellable wait waited for it forever, since the thread holding it does not exist in the child.  The thread list's
+    fork handler now initializes the lock and its condition again in the child.
+
+    dbg_fork_while_thread_wait_lock_held() (debug builds) holds the lock in another thread while fork() is called; the
+    child exits with 98 at once if it inherited the lock held, so the test fails without waiting, and otherwise reads a
+    file and exits with 0.
+*/
+class ForkThreadWaitLockTest inherits QUnit::Test {
+    constructor() : Test("ForkThreadWaitLockTest", "1.0") {
+        addTestCase("a child can wait after fork() while another thread held the wait lock", \forkTest());
+        addTestCase("positive control: a child reads a file after a plain fork()", \plainForkTest());
+        set_return_value(main());
+    }
+
+    forkTest() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the test needs a debug build of the library");
+        }
+        if (!Option::HAVE_FORK) {
+            testSkip("fork() is not available");
+        }
+        string path = get_script_path();
+        int status = call_function("dbg_fork_while_thread_wait_lock_held", int sub () {
+            return readFile(path);
+        });
+        assertNeq(98, status, "the child did not inherit the lock held");
+        assertEq(0, status, "the child read the file after fork()");
+        # the parent's waits are unaffected
+        assertEq(0, readFile(path), "the parent reads the file");
+    }
+
+    plainForkTest() {
+        if (!Option::HAVE_FORK) {
+            testSkip("fork() is not available");
+        }
+        string path = get_script_path();
+        hash<PipeInfo> pipe = File::getPipe();
+        # the child must not write the parent's buffered output again when it exits
+        flush();
+        int pid = fork();
+        if (!pid) {
+            pipe.read.close();
+            pipe.write.write(string(readFile(path)));
+            Qore::exit(0);
+        }
+        pipe.write.close();
+        assertGt(0, pid);
+        string result;
+        # the read ends when the child has exited and closed its end of the pipe
+        while (*binary data = pipe.read.readBinary(4096)) {
+            result += data.toString();
+        }
+        assertEq("0", result, "the child read the file");
+    }
+
+    #! reads the start of a file through a cancellable wait; returns 0 if data was read
+    static int readFile(string path) {
+        ReadOnlyFile f(path);
+        *binary b = f.readBinary(16);
+        return b.size() == 16 ? 0 : 1;
+    }
+}

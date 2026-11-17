@@ -10,6 +10,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
+%requires ../TestInterpreter.qm
 %requires FsUtil
 %requires Util
 %requires json
@@ -19,7 +20,7 @@
 
 %exec-class AOTSccIncrementalDriverPart2
 
-#! runs part 2 of 3 of the cases of AOTSccIncrementalDriverBase
+#! runs part 2 of 9 of the cases of AOTSccIncrementalDriverBase
 class AOTSccIncrementalDriverPart2 inherits AOTSccIncrementalDriverBase {
     constructor() : AOTSccIncrementalDriverBase("AOTSccIncrementalDriverPart2", 2) {
     }

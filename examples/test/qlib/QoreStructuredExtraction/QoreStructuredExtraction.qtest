@@ -12,9 +12,7 @@
 %requires Util
 %requires QUnit
 
-%try-module DataProviderML
-%define NoDataProviderML
-%endtry
+%requires DataProviderML
 
 %exec-class QoreStructuredExtractionTest
 
@@ -185,10 +183,8 @@ public class QoreStructuredExtractionTest inherits QUnit::Test {
             \sandboxParseStubTest());
 
         # Processor tests (need DataProviderML module)
-%ifndef NoDataProviderML
         addTestCase("QoreExtractionProcessor - constructor validation",
             \processorConstructorTest());
-%endif
 
         set_return_value(main());
     }
@@ -775,7 +771,6 @@ public class QoreStructuredExtractionTest inherits QUnit::Test {
 
     # ===================== Processor Tests =====================
 
-%ifndef NoDataProviderML
     processorConstructorTest() {
         # Test missing text_field
         assertThrows("CONSTRUCTOR-ERROR", "text_field",
@@ -815,5 +810,4 @@ public class QoreStructuredExtractionTest inherits QUnit::Test {
         });
         assertEq("extract-structured", proc.getName());
     }
-%endif
 }

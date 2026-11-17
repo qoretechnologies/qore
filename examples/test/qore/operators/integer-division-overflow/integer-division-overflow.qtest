@@ -8,6 +8,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
 %requires QUnit
+%requires ../../../TestInterpreter.qm
 %requires FsUtil
 %requires ../../../ExecModeHarness.qm
 
@@ -18,15 +19,14 @@
     modulo (%, %=) of the smallest integer by -1 ended the process with SIGFPE in every execution mode.  Integer
     arithmetic wraps, so the quotient is the smallest integer, and the remainder is 0.
 
-    The modulo-equals operator assigns 0 for a divisor of 0 in AST execution; the other execution modes raised
-    DIVISION-BY-ZERO instead.
+    The modulo-equals operator raises DIVISION-BY-ZERO for a divisor of 0 in every execution mode (qore#1034).
 */
 class IntegerDivisionOverflowTest inherits QUnit::Test {
     public {
         #! the line that the worker prints: the quotient and the remainder of each form of the operation, then the
-        #! results of the modulo-equals operator with a divisor of 0
+        #! errors of the modulo-equals operator with a divisor of 0 and the value it leaves (qore#1034)
         const Expected = "-9223372036854775808 0 -9223372036854775808 0 -9223372036854775808 0 -9223372036854775808 0 "
-            "-9223372036854775808 0 0 0 0";
+            "-9223372036854775808 0 DIVISION-BY-ZERO DIVISION-BY-ZERO DIVISION-BY-ZERO 3";
     }
 
     private {
@@ -37,7 +37,7 @@ class IntegerDivisionOverflowTest inherits QUnit::Test {
     }
 
     constructor() : QUnit::Test("IntegerDivisionOverflow", "1.0", \ARGV) {
-        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        qore_bin = TestInterpreter::qore_interpreter();
         libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
         qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
         worker = get_script_dir() + DirSep + "integer-division-overflow-worker.q";

@@ -17,6 +17,8 @@
 Copyright (C) 2026 Qore Technologies, s.r.o.
 """
 
+import errno
+import fcntl
 import importlib.util
 import json
 import os
@@ -432,6 +434,206 @@ class CacheStoreTest(unittest.TestCase):
         left = sorted(e["key"] for _, e in self.cache.candidates(base))
         # the least recently used one went, not the oldest stored one
         self.assertEqual(sorted(keys[:1] + keys[2:]), left)
+
+
+class LockFileCreationRaceTest(unittest.TestCase):
+    """The lock files (prune.lock, objects/<key>.lock) when another job creates the same file at the same time
+    (qore#6234)
+
+    macOS's openat() with O_CREAT and without O_EXCL fails with ENOENT in a process that loses the race to create a
+    file that does not exist yet: a prune started at the same time as another one on a cache without prune.lock failed
+    with FileNotFoundError.  These tests make that interleaving happen on every platform: os.open() is wrapped so that
+    the first call that creates the file has another job create it first, and then behaves as macOS does for the
+    loser (ENOENT without O_EXCL; EEXIST, as on every platform, with O_EXCL).
+    """
+
+    def setUp(self):
+        d = tempfile.TemporaryDirectory(prefix="qore-qmod-cache-race-")
+        self.addCleanup(d.cleanup)
+        self.root = Path(d.name)
+        self.cache = qc.Cache(str(self.root / "cache"))
+        self.cache.make_dirs("objects")
+
+    def lose_creation_race(self, target):
+        """Wraps os.open() so that this job loses the race to create @p target once; returns the race's state"""
+        real_open = os.open
+        state = {"raced": False, "other": None}
+
+        def racing_open(path, flags, mode=0o777, *, dir_fd=None):
+            if os.path.basename(path) == target and flags & os.O_CREAT and not state["raced"]:
+                state["raced"] = True
+                # another job creates the file between this job's lookup and its create
+                fd = real_open(path, os.O_RDWR | os.O_CREAT | os.O_EXCL, 0o666, dir_fd=dir_fd)
+                try:
+                    state["other"] = os.fstat(fd).st_ino
+                finally:
+                    os.close(fd)
+                if flags & os.O_EXCL:
+                    raise FileExistsError(errno.EEXIST, os.strerror(errno.EEXIST), path)
+                # what macOS's openat() gives the job that lost the race
+                raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), path)
+            return real_open(path, flags, mode, dir_fd=dir_fd)
+        # os is the one module of the process, so this replaces os.open() for the whole process while the test runs;
+        # only the opens that create @p target behave differently, every other one is the real os.open()
+        patcher = unittest.mock.patch.object(qc.os, "open", racing_open)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        return state
+
+    def test_prune_that_loses_the_race_to_create_prune_lock(self):
+        import argparse
+        import contextlib
+        import io
+        self.assertFalse(os.path.lexists(os.path.join(self.cache.root, "prune.lock")))
+        state = self.lose_creation_race("prune.lock")
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            rc = qc.cmd_prune(argparse.Namespace(cache_dir=self.cache.dir, build_dir=None, max_age_days=None,
+                                                 max_size=0, job=None))
+        self.assertTrue(state["raced"])
+        self.assertEqual(0, rc)
+        self.assertIn("MiB before pruning", out.getvalue())
+        # this job used the file the other job created
+        self.assertEqual(state["other"], os.lstat(os.path.join(self.cache.root, "prune.lock")).st_ino)
+
+    def test_lock_of_an_entry_that_loses_the_race_to_create_it(self):
+        key = "c" * 64
+        state = self.lose_creation_race(key + ".lock")
+        fd = self.cache.open_lock(key)
+        self.assertIsNotNone(fd)
+        try:
+            self.assertTrue(state["raced"])
+            self.assertEqual(state["other"], os.fstat(fd).st_ino)
+            # opened for writing, as the job that created it would have: the lock and the last use work
+            self.assertEqual(os.O_RDWR, fcntl.fcntl(fd, fcntl.F_GETFL) & os.O_ACCMODE)
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        finally:
+            os.close(fd)
+
+    def test_store_that_loses_the_race_to_create_the_lock(self):
+        key, base = "c" * 64, "b" * 64
+        files = {}
+        for suffix in qc.STORED_SUFFIXES:
+            p = self.root / ("src" + suffix)
+            p.write_bytes(b"module" + suffix.encode())
+            files[suffix] = str(p)
+        entry = {"schema": qc.SCHEMA, "key": key, "base_key": base, "deps": [], "optional": [], "resolution": [],
+                 "mode": 0o755, "files": {(s or "qmod"): qc.sha256_file(p) for s, p in files.items()}}
+        state = self.lose_creation_race(key + ".lock")
+        real_open_lock = self.cache.open_lock
+        modes = []
+
+        def recording_open_lock(k, create=True):
+            fd = real_open_lock(k, create)
+            if fd is not None:
+                modes.append(fcntl.fcntl(fd, fcntl.F_GETFL) & os.O_ACCMODE)
+            return fd
+        with unittest.mock.patch.object(self.cache, "open_lock", recording_open_lock):
+            self.cache.store(base, key, entry, files)
+        self.assertTrue(state["raced"])
+        # the store held the lock file it opened for writing (it sets the entry's last use through it), not the
+        # read-only fallback for a cache that cannot be written
+        self.assertEqual([os.O_RDWR], modes)
+        self.assertEqual(state["other"], os.lstat(self.cache.lock_path(key)).st_ino)
+        self.assertEqual([key], [e["key"] for _, e in self.cache.candidates(base)])
+
+
+class OpenOrCreateTest(unittest.TestCase):
+    """open_or_create(): O_CREAT without O_EXCL made of O_CREAT | O_EXCL and an open of the existing file"""
+
+    def setUp(self):
+        d = tempfile.TemporaryDirectory(prefix="qore-qmod-cache-create-")
+        self.addCleanup(d.cleanup)
+        self.dir = d.name
+        self.dfd = os.open(self.dir, os.O_RDONLY)
+        self.addCleanup(os.close, self.dfd)
+
+    def open(self, name):
+        return qc.open_or_create(name, self.dfd, os.O_RDWR | os.O_NOFOLLOW, 0o640)
+
+    def test_creates(self):
+        fd = self.open("a")
+        try:
+            st = os.fstat(fd)
+            self.assertTrue(os.path.isfile(os.path.join(self.dir, "a")))
+            self.assertEqual(os.lstat(os.path.join(self.dir, "a")).st_ino, st.st_ino)
+            self.assertEqual(0, st.st_mode & 0o037)
+        finally:
+            os.close(fd)
+
+    def test_opens_the_existing_file_unchanged(self):
+        p = os.path.join(self.dir, "a")
+        with open(p, "w") as f:
+            f.write("content")
+        ino = os.lstat(p).st_ino
+        fd = self.open("a")
+        try:
+            self.assertEqual(ino, os.fstat(fd).st_ino)
+        finally:
+            os.close(fd)
+        with open(p) as f:
+            self.assertEqual("content", f.read())
+
+    def test_link_is_not_followed_without_o_nofollow(self):
+        """A caller that leaves O_NOFOLLOW out gets it anyway: a dangling link raises OSError (without it, O_EXCL gives
+        EEXIST and the open that follows the link ENOENT, forever)"""
+        target = os.path.join(self.dir, "target")
+        os.symlink(target, os.path.join(self.dir, "dangling"))
+        real_open = os.open
+        calls = []
+
+        def bounded_open(path, flags, mode=0o777, *, dir_fd=None):
+            # a helper that follows the link loops (EEXIST, then ENOENT): fail instead of hanging the suite
+            calls.append(flags)
+            if len(calls) > 10:
+                raise AssertionError("open_or_create() keeps looping on the dangling link")
+            return real_open(path, flags, mode, dir_fd=dir_fd)
+        with unittest.mock.patch.object(qc.os, "open", bounded_open):
+            with self.assertRaises(OSError) as cm:
+                os.close(qc.open_or_create("dangling", self.dfd, os.O_RDWR))
+        # the link is refused, not followed (macOS gives EMLINK for O_NOFOLLOW on a link, Linux ELOOP)
+        self.assertIn(cm.exception.errno, (errno.ELOOP, errno.EMLINK))
+        # O_CREAT | O_EXCL (EEXIST), then the open without following the link
+        self.assertEqual(2, len(calls))
+        self.assertTrue(all(f & os.O_NOFOLLOW for f in calls))
+        self.assertFalse(os.path.lexists(target))
+        self.assertTrue(os.path.islink(os.path.join(self.dir, "dangling")))
+
+    def test_link_is_not_followed(self):
+        target = os.path.join(self.dir, "target")
+        os.symlink(target, os.path.join(self.dir, "dangling"))
+        with open(os.path.join(self.dir, "existing"), "w"):
+            pass
+        os.symlink(os.path.join(self.dir, "existing"), os.path.join(self.dir, "link"))
+        for name in ("dangling", "link"):
+            with self.assertRaises(OSError):
+                os.close(self.open(name))
+        self.assertFalse(os.path.lexists(target))
+
+    def test_file_removed_after_it_was_found(self):
+        """Another job removes the file between this job's EEXIST and its open: the file is created again, as
+        O_CREAT does"""
+        p = os.path.join(self.dir, "a")
+        with open(p, "w"):
+            pass
+        real_open = os.open
+        calls = []
+
+        def removing_open(path, flags, mode=0o777, *, dir_fd=None):
+            calls.append(flags & (os.O_CREAT | os.O_EXCL))
+            if not flags & os.O_CREAT and len(calls) == 2:
+                os.unlink(path, dir_fd=dir_fd)
+            return real_open(path, flags, mode, dir_fd=dir_fd)
+        with unittest.mock.patch.object(qc.os, "open", removing_open):
+            fd = self.open("a")
+        try:
+            excl = os.O_CREAT | os.O_EXCL
+            # created exclusively: EEXIST; opened: ENOENT; created exclusively again
+            self.assertEqual([excl, 0, excl], calls)
+            self.assertEqual(os.lstat(p).st_ino, os.fstat(fd).st_ino)
+            self.assertTrue(os.path.isfile(p))
+        finally:
+            os.close(fd)
 
 
 class AuditSampleTest(unittest.TestCase):
@@ -1681,7 +1883,6 @@ env > "{finished}"
     def test_prune_leaves_work_in_progress(self):
         """Prune never touches a store in progress: a young temporary directory, an object whose entry is not
         written yet, or one that a job holds"""
-        import fcntl
         self.build_all()
         cache = qc.Cache(str(self.cache))
         objects = Path(cache.objects)
@@ -1774,7 +1975,6 @@ env > "{finished}"
         self.assertEqual([keys["Top"]], self.entry_keys())
 
     def test_prune_never_removes_an_entry_being_read(self):
-        import fcntl
         self.build_all()
         keys = self.keys()
         cache = qc.Cache(str(self.cache))
@@ -1793,7 +1993,6 @@ env > "{finished}"
         self.assertNotIn("in use", out)
 
     def test_one_pruner_at_a_time(self):
-        import fcntl
         self.build_all()
         cache = qc.Cache(str(self.cache))
         fd = os.open(os.path.join(cache.root, "prune.lock"), os.O_RDWR | os.O_CREAT)

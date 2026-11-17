@@ -36,6 +36,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
+%requires ../../TestInterpreter.qm
 %requires FsUtil
 
 %exec-class NestedCallableTypesTest
@@ -134,7 +135,7 @@ text after nested parameters: PARSE-TYPE-ERROR
     }
 
     constructor() : QUnit::Test("NestedCallableTypesTest", "1.0") {
-        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        qore_bin = TestInterpreter::qore_interpreter();
         libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
 
         addTestCase("nested callable types in every execution mode", \modesTest());

@@ -44,6 +44,7 @@
 #include "qore/intern/ModuleInfo.h"
 #include "qore/intern/QC_SandboxManager.h"
 #include "qore/ParseOptionMap.h"
+#include "qore/intern/ql_debug.h"
 
 #include "qore/intern/ModuleInfo.h"
 extern QoreModuleManager QMM;
@@ -1554,6 +1555,22 @@ const WARN_NONEXHAUSTIVE_SWITCH = QP_WARN_NONEXHAUSTIVE_SWITCH;
     code into the same %Program object will fail with an exception.  If parsing fails due to a parse exception, the Program
     object is generally no longer usable and must be recreated to be used.
 
+    @anchor program_parse_lock_waits
+    @par Waiting for the Parse Lock
+    A parse action waits while another thread holds the Program's parse lock, which a thread holds for the whole parse
+    action, including the code that a commit runs (such as the initializers of global variables and static class
+    members).  A thread that holds the parse lock of one Program and waits for that of another could otherwise wait
+    forever: when the initializers of two Programs that are committed in two threads each parse code in the other
+    Program, each thread waits for a lock that the other holds.  The wait of a parse action that would close such a
+    cycle (also through further threads and Programs) is therefore refused with a \c PROGRAM-ERROR exception, and the
+    wait of a parse action for the parse lock can be ended with @ref Qore::cancel_thread() "cancel_thread()" or
+    @ref Qore::SandboxManager::requestInterrupt() "SandboxManager::requestInterrupt()", as other blocking waits can
+    (unless cancellation is deferred, as in the destructor of a trusted class).  A wait that does not close a cycle is
+    not refused, also when the thread that holds the lock waits for the parse lock of a third Program itself.  Some
+    internal waits for the parse lock (of binary modules, for example) can neither be refused nor ended; when such a
+    wait closes a cycle, a wait of a parse action in the cycle is refused instead (unless all of them wait in code
+    run with cancellation deferred by @ref Qore::defer_thread_cancel() "defer_thread_cancel()").
+
     @ref parse_options "Parse option constants" can be used to limit the capabilities of a Program object. These options should be
     binary-OR'ed together and passed to the Program object's constructor. Also see @ref command_line_processing for equivalent
     command-line options, and @ref parse_directives for equivalent parse directives.
@@ -1662,10 +1679,18 @@ Program::constructor(softint parse_options = PO_DEFAULT, *bool independent)
         ? qore_program_private::restrictForCreator(creator, QoreParseOptions(parse_options), restrictions,
             restricted)
         : QoreParseOptions(parse_options);
-    if (qore_program_private::checkNewProgramModernOptions(independent ? nullptr : creator, po, xsink)) {
+    // the parent's options are read once: the %modern check and the options that the child inherits use the same
+    // value, also if they change meanwhile (issue #6176)
+    QoreProgram* parent = independent ? nullptr : creator;
+    QoreParseOptions parent_po = parent ? qore_program_private::readParseOptions(*parent) : QoreParseOptions();
+    if (qore_program_private::checkNewProgramModernOptions(parent, parent_po, po, xsink)) {
         return;
     }
-    QoreProgram* pgm = new QoreProgram(independent ? nullptr : creator, po);
+#ifdef DEBUG
+    // tests hold the creation here to change the parent's options after the check
+    qore_dbg_child_program_create_hold();
+#endif
+    QoreProgram* pgm = new QoreProgram(parent, po, false, nullptr, parent ? &parent_po : nullptr);
     //pgm->registerQoreObject(self, xsink);
     assert(!xsink->isEvent());
     program_set_independent_creator(*pgm, independent, restricted, restrictions);
@@ -1709,10 +1734,18 @@ Program::constructor(ParseOptions[QoreParseOptionsData] parse_options, *bool ind
     QoreParseOptions po = independent
         ? qore_program_private::restrictForCreator(creator, parse_options->get(), restrictions, restricted)
         : parse_options->get();
-    if (qore_program_private::checkNewProgramModernOptions(independent ? nullptr : creator, po, xsink)) {
+    // the parent's options are read once: the %modern check and the options that the child inherits use the same
+    // value, also if they change meanwhile (issue #6176)
+    QoreProgram* parent = independent ? nullptr : creator;
+    QoreParseOptions parent_po = parent ? qore_program_private::readParseOptions(*parent) : QoreParseOptions();
+    if (qore_program_private::checkNewProgramModernOptions(parent, parent_po, po, xsink)) {
         return;
     }
-    QoreProgram* pgm = new QoreProgram(independent ? nullptr : creator, po);
+#ifdef DEBUG
+    // tests hold the creation here to change the parent's options after the check
+    qore_dbg_child_program_create_hold();
+#endif
+    QoreProgram* pgm = new QoreProgram(parent, po, false, nullptr, parent ? &parent_po : nullptr);
     assert(!xsink->isEvent());
     program_set_independent_creator(*pgm, independent, restricted, restrictions);
     // the code of a Program that sandboxed code creates is sandboxed, although the Program has no manager of its own;
@@ -2596,6 +2629,7 @@ pgm.setParseOptions(PO_NO_THREADS | PO_NO_GUI);
     @endcode
 
     @throw OPTIONS-LOCKED Parse options have been locked and cannot be changed
+    @throw PROGRAM-ERROR the change would set or clear @ref PO_ALLOW_REPARSE while code is parsed in the Program or is pending (since %Qore 3.0)
     @throw PROGRAM-OPTION-ERROR invalid parse options used
 
     @see Program::disableParseOptions() for a reciprocal method that disables parse options; also see Program::replaceParseOptions()
@@ -2620,6 +2654,7 @@ pgm.setParseOptions(opts);
     @endcode
 
     @throw OPTIONS-LOCKED Parse options have been locked and cannot be changed
+    @throw PROGRAM-ERROR the change would set or clear @ref PO_ALLOW_REPARSE while code is parsed in the Program or is pending (since %Qore 3.0)
 
     @since %Qore 3.0
     @note Compatibility semantics of already parsed code are unchanged; see @ref lexical_compatibility_options.
@@ -2673,6 +2708,7 @@ pgm.disableParseOptions(PO_NO_THREADS | PO_NO_GUI);
     @endcode
 
     @throw OPTIONS-LOCKED Parse options have been locked and cannot be changed
+    @throw PROGRAM-ERROR the change would set or clear @ref PO_ALLOW_REPARSE while code is parsed in the Program or is pending (since %Qore 3.0)
     @throw PROGRAM-OPTION-ERROR invalid parse options used
 
     @see Program::setParseOptions() for a reciprocal method that enables parse options; also see Program::replaceParseOptions()
@@ -2697,6 +2733,7 @@ pgm.disableParseOptions(opts);
     @endcode
 
     @throw OPTIONS-LOCKED Parse options have been locked and cannot be changed
+    @throw PROGRAM-ERROR the change would set or clear @ref PO_ALLOW_REPARSE while code is parsed in the Program or is pending (since %Qore 3.0)
 
     @since %Qore 3.0
     @note Compatibility semantics of already parsed code are unchanged; see @ref lexical_compatibility_options.
@@ -2724,6 +2761,7 @@ pgm.replaceParseOptions(PO_NO_THREADS | PO_NO_GUI);
     @throw OPTION-ERROR The calling Program does not have the @ref PO_NO_CHILD_PO_RESTRICTIONS option set, and therefore cannot call Program::replaceParseOptions()
     @throw OPTIONS-LOCKED the parse options are locked, and the replacement would remove a restriction locked in or
     add an option that gives more freedom
+    @throw PROGRAM-ERROR the change would set or clear @ref PO_ALLOW_REPARSE while code is parsed in the Program or is pending (since %Qore 3.0)
 
     @see Program::setParseOptions() and Program::disableParseOptions().
      @note Compatibility semantics of already parsed code are unchanged; see @ref lexical_compatibility_options.
@@ -3741,8 +3779,10 @@ pgm.setThreadEntryHandler(
     If \a on_enter raises an exception, the thread does not run the Program's code: the call that entered the
     Program raises the exception instead, and no \a on_exit runs for that entry (a thread started in the Program
     ends without running its code).  An exception raised by \a on_exit is raised after any exception that was already
-    propagating; the Program has been left in any case.  If \a on_exit cannot be run because no memory can be
-    allocated, the exit raises \c THREAD-ENTRY-HANDLER-ERROR in the same way.
+    propagating; the Program has been left in any case.  If \a on_enter or \a on_exit cannot be run because no
+    memory can be allocated, the entry or the exit raises \c THREAD-ENTRY-HANDLER-ERROR in the same way, also in
+    a call into the Program from Qore code (any other step of an entry that fails so raises
+    \c PROGRAM-ENTRY-ERROR).
 
     @par Restrictions
     This method requires both @ref Qore::Program::setThreadInit() "setThreadInit()"'s functional domain (@ref
@@ -4160,6 +4200,12 @@ code Program::getCallReference(string identifier) [flags=RET_VALUE_ONLY,NAMED_AR
 //! returns an expression object for the given source code
 /** @param source The source to the expression
     @param label the label for the expression
+
+    @throw EXPRESSION-ERROR the Program has code pending (@ref Qore::Program::parsePending() "Program::parsePending()"
+    without @ref Qore::Program::parseCommit() "Program::parseCommit()" or
+    @ref Qore::Program::parseRollback() "Program::parseRollback()"), or a parse of it was rolled back without
+    @ref Qore::PO_ALLOW_REPARSE "PO_ALLOW_REPARSE"; the code must be committed or rolled back before an expression
+    can be created in the Program (since %Qore 3.0)
 
     @since %Qore 0.9.5
 

@@ -1,0 +1,65 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its check runs a legacy script in a child process that sets --exec-mode=ast
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../TestInterpreter.qm
+
+%exec-class BrokenListRangePastEndTest
+
+#! qore#5757: with %broken-list-range, a range of a list<int> past its end gives NOTHING elements
+/** A range of a list whose element type does not allow NOTHING (list<int>) that reaches outside of the list raised
+    RUNTIME-TYPE-ERROR with %broken-list-range (an assertion in a debug build): its slice had the list's element type,
+    which the NOTHING of each element outside of the list does not have.  Such a slice now has the list's or-nothing
+    element type (list<*int>), as %broken-list-range gives NOTHING for each element outside of the list; a slice in
+    range keeps the list's element type, and the type of the range expression allows NOTHING, as a functional operator
+    over it gives NOTHING values.
+
+    The script next to the test (broken-list-range-past-end/past-end.q) is legacy code, as %modern refuses
+    %broken-list-range (qore#5682): it runs with the AST interpreter only, which qore requires for code that is not
+    %modern, and qcc does not compile it.
+*/
+class BrokenListRangePastEndTest inherits QUnit::Test {
+    public {
+        const Expected = "int past end: [null, null, null] list<*int>
+int map past end: [null, null, null] list<nothing>
+int map across end: [12, 13, null, null] list<*int>
+int across end: [12, 13, null, null] list<*int>
+int reverse across end: [null, null, 13, 12] list<*int>
+int in range: [11, 12] list<int>
+int before start: [null, null, null] list<*int>
+int across start: [10, 11] list<int>
+int selector across end: [12, 13, null, null] list<*int>
+int foreach across end: [13, null, null] list<auto>
+int select across end: [12, 13, null, null] list<*int>
+softlist across end: [13, null] list<*int>
+string across end: [\"b\", null, null] list<*string>
+auto across end: [1, 2, null, null] list<*int>
+untyped across end: [1, 2, null, null] list
+empty int list: [null, null] list<*int>
+or-nothing list across end: [13, null] list<*int>
+in range to list<int>: [11, 12] list<int>
+across end to list<int>: RUNTIME-TYPE-ERROR
+";
+    }
+
+    constructor() : QUnit::Test("broken list range past the end", "1.0", \ARGV) {
+        addTestCase("AST interpreter", \astTest());
+        set_return_value(main());
+    }
+
+    private astTest() {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        string script = get_script_dir() + DirSep + "broken-list-range-past-end" + DirSep + "past-end.q";
+        int status;
+        string out = backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s --exec-mode=ast %s 2>&1",
+            libqore_dir, libqore_dir, qore_bin, script), \status);
+        assertEq(0, status, out);
+        assertEq(Expected, out);
+    }
+}

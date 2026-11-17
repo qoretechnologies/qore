@@ -6,6 +6,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
+%requires ../../TestInterpreter.qm
 
 %exec-class HttpFastPublishedTest
 
@@ -30,7 +31,7 @@ class HttpFastPublishedTest inherits QUnit::Test {
         if (ENV.QORE_HTTP_FAST_PUBLISHED_TEST) {
             native = ENV.QORE_HTTP_FAST_PUBLISHED_TEST;
         } else {
-            foreach *string exe in (ENV.QORE_DEBUG_BINARY, ENV.QORE_BINARY, ENV.QORE_EXECUTABLE, QORE_ARGV[0]) {
+            foreach *string exe in (ENV.QORE_DEBUG_BINARY, TestInterpreter::qore_interpreter()) {
                 if (!exe) {
                     continue;
                 }

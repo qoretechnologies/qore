@@ -499,8 +499,28 @@ int ForEachStatement::parseInitImpl(QoreParseContext& parse_context) {
     }
 
     parse_context.typeInfo = nullptr;
-    if (parse_init_value(list, parse_context) && !err) {
-        err = -1;
+    {
+        // a local loop variable declared by the statement has no value in the iterated expression (qore#526); a
+        // global keeps its value when the statement runs again, so it is not checked
+        const VarRefNode* decl = t == NT_VARREF && var.get<const VarRefNode>()->isGlobalDecl()
+            ? var.get<const VarRefNode>()
+            : nullptr;
+        const void* decl_target = nullptr;
+        const char* decl_what = nullptr;
+        if (decl) {
+            qore_var_t decl_type = decl->getType();
+            if (decl_type == VT_LOCAL || decl_type == VT_CLOSURE || decl_type == VT_LOCAL_TS) {
+                decl_target = decl->ref.id;
+                decl_what = "local variable";
+            }
+        }
+        QoreParseInitializerTarget init_target(decl_target);
+        if (parse_init_value(list, parse_context) && !err) {
+            err = -1;
+        }
+        if (decl_target && init_target.raiseUseError(decl_what, decl->getName()) && !err) {
+            err = -1;
+        }
     }
 
     if (code) {

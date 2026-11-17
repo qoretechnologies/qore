@@ -235,6 +235,9 @@ $function$
 
 
     @section pgsqlsqlutilbasev119 PgsqlSqlUtilBase v1.19
+    - fixed writing a string to a \c json or \c jsonb column with an insert, an update or an upsert, which
+      PostgreSQL refused as \c text; the value is cast to the column's type in the SQL
+      (<a href="https://github.com/qoretechnologies/qore/issues/4448">issue 4448</a>)
     - the drop SQL of a partitioned table drops each of its partitions in a statement of its own before the table:
       dropping the table took a lock on every partition and its indexes at once, and with hundreds of partitions
       failed with "out of shared memory" on a server with the default \c max_locks_per_transaction
@@ -263,6 +266,10 @@ $function$
     - fixed listing functions on PostgreSQL 10 and earlier, which raised an error (column \c prokind does not
       exist)
       - the default mode (\c IN) of a procedure's argument is left out of its name, as for a function
+    - fixed a column declared with \c "default null", which was described with a default value such as
+      \c NULL::character varying or \c NULL::numeric, so @ref schemareverseintro "SchemaReverse" gave it as a
+      default and table alignment dropped it
+      (<a href="https://github.com/qoretechnologies/qore/issues/1746">issue 1746</a>)
     - a template table built from a description, as for each table of a schema description in
       @ref SqlUtil::Tables::populate() "Tables::populate()" and schema alignment, no longer reads the catalog three
       times (the default schema, a temporary table of its name and the tablespace of a table of its name): the default
@@ -437,6 +444,9 @@ $function$
     - added targeted canonical-name partition metadata lookup without loading the complete child-relation catalog
     - added portable list and explicit modulus/remainder hash partitioning, recursive subpartition creation and
       introspection, and catalog-estimated row-count / allocated-size metadata
+    - fixed schema alignment dropping and creating again each index on an expression, as PostgreSQL returns the
+      expression in another form than it is declared in; the expressions are compared as PostgreSQL parses them
+      (<a href="https://github.com/qoretechnologies/qore/issues/1429">issue 1429</a>)
     - fixed an insert-only upsert, and an upsert of a table whose columns are all key columns, sending \c BEGIN in
       an open transaction and inserting a row that already exists: PostgreSQL wrote a warning and a duplicate key
       error to its log for every such row, every time, as in each schema alignment for its reference data.  With
@@ -448,6 +458,11 @@ $function$
     - with PostgreSQL before 9.5, an insert-first or insert-only upsert of a row that conflicts with a unique key
       other than the upsert key raises the conflict instead of dropping the row (see
       @ref sqlutilv3_11_0 "SqlUtil v3.11.0")
+    - fixed aligning a column to the \c smallserial, \c serial or \c bigserial pseudo-type, which generated an
+      <tt>alter ... type</tt> to the pseudo-type that PostgreSQL rejects, also for a column that already was one: the
+      column gets the pseudo-type's integer type and a sequence of its own as its default, named as PostgreSQL
+      names it (with a number when the name is taken)
+      (<a href="https://github.com/qoretechnologies/qore/issues/853">issue 853</a>)
 
     @section pgsqlsqlutilbasev18 PgsqlSqlUtilBase v1.8
     - updated to support \c jdbc and \c odbc drivers as well as the native \c pgsql driver
@@ -690,6 +705,12 @@ string sub pgsql_get_string_literal(string v) {
         return "E'" + replace(replace(v, "\\", "\\\\"), "'", "''") + "'";
     }
     return "'" + replace(v, "'", "''") + "'";
+}
+
+# returns True if a column default expression read from the catalog is a NULL (ex: NULL, NULL::character varying,
+# (NULL)::numeric), as PostgreSQL reports a "default null" declaration for some types; a string such as 'NULL' is not
+bool sub pgsql_is_null_default(*string expr) {
+    return exists expr && expr =~ /^\(*\s*null\s*\)*(\s*::\s*[^':]+(\s*::\s*[^':]+)*)?\s*\)*$/i;
 }
 
 # returns the value of a string literal (ex: 'a''b' or E'a\\b'), or NOTHING if the argument is not a string literal
@@ -1055,16 +1076,22 @@ public class PgsqlIndex inherits SqlUtil::AbstractIndex {
         return predicate == pix.predicate && equalFeatures(pix);
     }
 
-    private bool equalFeatures(PgsqlIndex pix) {
+    #! compares the features of the index other than its name, uniqueness, keys and predicate
+    /** @param pix the other index
+        @param keymap maps each key of this index to the key of \a pix in the same position when they are written
+        differently (an expression as given and as PostgreSQL returns it)
+    */
+    private bool equalFeatures(PgsqlIndex pix, *hash<string, string> keymap) {
         if (include != pix.include || nulls_not_distinct != pix.nulls_not_distinct) {
             return False;
         }
         foreach string col in (columns.keys()) {
+            string pcol = keymap{col} ?? col;
             string direction = order{col} ?? "asc";
-            string other_direction = pix.order{col} ?? "asc";
+            string other_direction = pix.order{pcol} ?? "asc";
             if (direction != other_direction
                     || (nulls{col} ?? (direction == "desc" ? "first" : "last"))
-                    != (pix.nulls{col} ?? (other_direction == "desc" ? "first" : "last"))) {
+                    != (pix.nulls{pcol} ?? (other_direction == "desc" ? "first" : "last"))) {
                 return False;
             }
         }
@@ -1079,32 +1106,51 @@ public class PgsqlIndex inherits SqlUtil::AbstractIndex {
         if (!AbstractIndex::hashesEqualUnordered(with_options, pix.with_options)) {
             return False;
         }
-        if (!AbstractIndex::hashesEqualUnordered(opclass, pix.opclass)) {
+        *hash<auto> ocls = keymap && opclass
+            ? (map {keymap{$1.key} ?? $1.key: $1.value}, opclass.pairIterator())
+            : opclass;
+        if (!AbstractIndex::hashesEqualUnordered(ocls, pix.opclass)) {
             return False;
         }
         return True;
     }
 
-    #! Compares index definitions using PostgreSQL's parsed predicate representation
+    #! Compares index definitions using PostgreSQL's parsed key expression and predicate representation
     /** @param ix the index to compare
         @param ds datasource containing the indexed table
         @param table_name qualified SQL table name
         @return True if the keys, options, and parsed predicates match
-        @throw DBI-ERROR if PostgreSQL cannot plan a predicate
+        @throw DBI-ERROR if PostgreSQL cannot plan a key expression or a predicate
         @note Uses EXPLAIN without ANALYZE; no table rows are read or modified. The caller must hold
         the table lock and ensure that all referenced columns already exist.
 
         @par Example
-        Schema alignment compares a declared active-order predicate with PostgreSQL's stored expression,
-        including any casts inserted by the server.
+        Schema alignment compares a declared active-order predicate, or a declared key expression such as
+        <tt>(CASE owner WHEN 'x' THEN a ELSE b END)</tt>, with PostgreSQL's stored expression, including any casts
+        inserted by the server.
     */
     bool equalForAlignment(AbstractIndex ix, AbstractDatasource ds, string table_name) {
         if (!(ix instanceof PgsqlIndex)) {
             return False;
         }
         PgsqlIndex pix = cast<PgsqlIndex>(ix);
-        if (name != pix.name || unique != pix.unique || columns.keys() != pix.columns.keys()
-                || !equalFeatures(pix)) {
+        if (name != pix.name || unique != pix.unique || columns.size() != pix.columns.size()) {
+            return False;
+        }
+        # issue #1429: a key expression is compared in the form that PostgreSQL parses it to, as PostgreSQL returns
+        # it in another form than it is declared in (ex: with casts)
+        *hash<string, string> keymap;
+        list<string> pkeys = pix.columns.keys();
+        foreach string key in (columns.keys()) {
+            string pkey = pkeys[$#];
+            if (key != pkey) {
+                if (predicateOutput(ds, table_name, key) != predicateOutput(ds, table_name, pkey)) {
+                    return False;
+                }
+                keymap{key} = pkey;
+            }
+        }
+        if (!equalFeatures(pix, keymap)) {
             return False;
         }
         if (predicate == pix.predicate) {
@@ -1116,6 +1162,7 @@ public class PgsqlIndex inherits SqlUtil::AbstractIndex {
         return predicateOutput(ds, table_name, predicate) == predicateOutput(ds, table_name, pix.predicate);
     }
 
+    #! returns an index predicate or key expression as PostgreSQL parses it
     private static string predicateOutput(AbstractDatasource ds, string table_name, string predicate) {
         hash<auto> row = ds.selectRow("explain (verbose, costs off, format json) select (" + predicate
             + ") from " + table_name);
@@ -1125,7 +1172,8 @@ public class PgsqlIndex inherits SqlUtil::AbstractIndex {
         }
         *string output = plan[0].Plan.Output[0];
         if (!output) {
-            throw "INDEX-DEFINITION-ERROR", "PostgreSQL did not return a parsed index predicate";
+            throw "INDEX-DEFINITION-ERROR", sprintf("PostgreSQL did not return a parsed index expression for %y",
+                predicate);
         }
         return output;
     }
@@ -1242,6 +1290,15 @@ public class PgsqlColumn inherits SqlUtil::AbstractColumn {
 
         #! A number literal in SQL
         const NumberLiteralRegex = "^[-+]?([0-9]+(\\.[0-9]*)?|\\.[0-9]+)([eE][-+]?[0-9]+)?$";
+
+        #! Maps the serial pseudo-types to the integer types of their columns
+        /** @since PgsqlSqlUtilBase 1.19
+        */
+        const SerialTypeMap = {
+            "smallserial": "smallint",
+            "serial": "integer",
+            "bigserial": "bigint",
+        };
     }
 
     #! empty constructor for subclasses
@@ -1320,7 +1377,12 @@ list l = col.getModifySql(t, newcol);
 
         # get new native type declaration string
         string nts = c.getNativeTypeString();
-        if (getNativeTypeString() != nts) {
+        # issue #853: a serial pseudo-type is not a type of a column, which has the integer type of the pseudo-type
+        # with a sequence as its default
+        *string serial_type = SerialTypeMap{c.native_type};
+        if (serial_type) {
+            l += getModifySerialSql(t, serial_type);
+        } else if (getNativeTypeString() != nts) {
             #printf("ME: %s\nDB: %s\n", nts, getNativeTypeString());
             # first drop any default value if it's changing
             if (def_val !== c.def_val)
@@ -1348,6 +1410,138 @@ list l = col.getModifySql(t, newcol);
         if (c.comment != comment)
             l += sprintf("comment on column %s.%s is %s", t.getSqlName(), ddl_name, t.getSqlValue(c.comment));
         return l;
+    }
+
+    #! Returns the SQL that makes the column a column of a serial pseudo-type, as PostgreSQL creates one
+    /** The column gets the integer type of the pseudo-type and a sequence of its own as its default, which starts
+        after the column's greatest value; nothing is done if the column already has that type and a sequence as its
+        default.  A sequence that is already the column's default is kept, and gets the column's new type with
+        PostgreSQL 10 and later.
+
+        @param t the table of the column
+        @param serial_type the integer type of the pseudo-type
+
+        @return the SQL statements
+
+        @since PgsqlSqlUtilBase 1.19
+    */
+    private list<string> getModifySerialSql(AbstractTable t, string serial_type) {
+        list<string> l = ();
+        string tn = t.getSqlName();
+        bool as_type = pgsql_get_server_version_num(t.getDatasource()) >= 100000;
+        # the sequence of a default from nextval(), as SQL names it
+        *string seq = getDefaultSequence();
+        if (!seq && exists def_val) {
+            l += sprintf("alter table %s alter %s drop default", tn, ddl_name);
+        }
+        if (native_type != serial_type) {
+            l += sprintf("alter table %s alter %s type %s", tn, ddl_name, serial_type);
+            if (seq && as_type) {
+                l += sprintf("alter sequence %s as %s", seq, serial_type);
+            }
+        }
+        if (seq) {
+            return l;
+        }
+
+        # the sequence is named as PostgreSQL names the sequence of a serial column, with the names of the table and
+        # of its schema in the catalog; issue #853: a name that a relation of the schema has is not taken
+        AbstractDatasource ds = t.getDatasource();
+        hash<auto> rel = ds.selectRow("select c.relname, n.nspname from pg_catalog.pg_class c "
+            "join pg_catalog.pg_namespace n on n.oid = c.relnamespace where c.oid = %v::regclass", tn);
+        string seq_name = PgsqlColumn::chooseSerialSequenceName(rel.relname, name,
+            bool sub (string candidate) {
+                return exists ds.selectRow("select 1 as e from pg_catalog.pg_class c "
+                    "join pg_catalog.pg_namespace n on n.oid = c.relnamespace where n.nspname = %v "
+                    "and c.relname = %v", rel.nspname, candidate);
+            });
+        seq = pgsql_quote_identifier(rel.nspname) + "." + pgsql_quote_identifier(seq_name);
+        string seq_lit = pgsql_get_string_literal(seq);
+        l += sprintf("create sequence %s%s owned by %s.%s", seq, as_type ? " as " + serial_type : "", tn, ddl_name);
+        l += sprintf("select setval(%s, coalesce(max(%s), 0) + 1, false) from %s", seq_lit, ddl_name, tn);
+        l += sprintf("alter table %s alter %s set default nextval(%s)", tn, ddl_name, seq_lit);
+        return l;
+    }
+
+    #! Returns the sequence of the column's default for SQL if the default is a call to \c nextval(), otherwise
+    #! @ref nothing
+    /** @since PgsqlSqlUtilBase 1.19
+    */
+    private *string getDefaultSequence() {
+        *string lit = (def_val =~ x/^nextval\(('(?:[^']|'')*')(?:::regclass)?\)$/)[0];
+        return lit ? pgsql_get_string_literal_value(lit) : NOTHING;
+    }
+
+    #! Returns the name of the sequence of a serial column as PostgreSQL chooses it
+    /** As PostgreSQL's \c ChooseRelationName(): \c <table>_<column>_seq, or, if a relation of the schema has that
+        name, \c <table>_<column>_seq1, \c <table>_<column>_seq2 and so on, the first that none has; see
+        makeObjectName() for the shortening of the names
+
+        @param table the name of the table in the catalog
+        @param column the name of the column in the catalog
+        @param taken returns @ref True if a relation of the table's schema has the given name
+
+        @return the name of the sequence in the catalog
+
+        @since PgsqlSqlUtilBase 1.19
+    */
+    static string chooseSerialSequenceName(string table, string column, code taken) {
+        string label = "seq";
+        int pass = 0;
+        while (True) {
+            string name = PgsqlColumn::makeObjectName(table, column, label);
+            if (!taken(name)) {
+                return name;
+            }
+            label = sprintf("seq%d", ++pass);
+        }
+    }
+
+    #! Returns a name made of two names and a label as PostgreSQL's \c makeObjectName() makes it
+    /** \c <name1>_<name2>_<label>, with the longer of the two names shortened by a byte at a time (\a name2 when
+        they are as long) until the name is at most 63 bytes long (\c NAMEDATALEN - 1), each name then cut at the
+        last whole character within its length
+
+        @param name1 the first name
+        @param name2 the second name
+        @param label the label
+
+        @return the name
+
+        @since PgsqlSqlUtilBase 1.19
+    */
+    static string makeObjectName(string name1, string name2, string label) {
+        int name1bytes = name1.size();
+        int name2bytes = name2.size();
+        # the "_" after each name and the label
+        int avail = 63 - (1 + label.size() + 1);
+        while (name1bytes + name2bytes > avail) {
+            if (name1bytes > name2bytes) {
+                --name1bytes;
+            } else {
+                --name2bytes;
+            }
+        }
+        return sprintf("%s_%s_%s", PgsqlColumn::clipBytes(name1, name1bytes),
+            PgsqlColumn::clipBytes(name2, name2bytes), label);
+    }
+
+    #! returns the leading whole characters of a string that are at most the given number of bytes long
+    private static string clipBytes(string str, int bytes) {
+        if (str.size() <= bytes) {
+            return str;
+        }
+        string rv = "";
+        int size = 0;
+        for (int i = 0; i < str.length(); ++i) {
+            string ch = str[i];
+            size += ch.size();
+            if (size > bytes) {
+                break;
+            }
+            rv += ch;
+        }
+        return rv;
     }
 
     #! Returns @ref True "True" if a default value read from the server is the declared default value
@@ -2982,6 +3176,11 @@ public class PgsqlDatabase inherits SqlUtil::AbstractDatabase {
 #! provides the PostgreSQL-specific implementation of the SqlUtil::AbstractTable interface
 public class PgsqlTable inherits SqlUtil::AbstractTable {
     public {
+        #! the JSON types, whose values are cast from the text bound for them in DML
+        /** @since PgsqlSqlUtilBase 1.19
+        */
+        const JsonTypes = {"json": True, "jsonb": True};
+
         #! maps PostgreSQL type names to type configurations
         const PgsqlTypeMap = (
             "abstime": ("qore": Type::Date,),
@@ -4106,6 +4305,24 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
         return {"sql": sql, "args": scalar_binds + array_binds};
     }
 
+    #! Returns the placeholder of a value written to the given column by an insert, an update or an upsert
+    /** A value of a \c json or \c jsonb column is bound as the text of the JSON and cast to the column's type, as
+        PostgreSQL does not convert a value bound as \c text to \c json or \c jsonb by itself (issue #4448)
+
+        @param column the name of the column
+
+        @return \c "%v::json" or \c "%v::jsonb" for a \c json or \c jsonb column, otherwise \c "%v"
+
+        @since PgsqlSqlUtilBase 1.19
+    */
+    private string getColumnValuePlaceholder(string column) {
+        *AbstractColumn c = columns{column};
+        if (c && JsonTypes{c.native_type}) {
+            return "%v::" + c.native_type;
+        }
+        return "%v";
+    }
+
     #! Overrides the default doReturningImpl to return all rows for bulk operations
     private *hash<auto> doReturningImpl(hash<auto> opt, reference<string> sql, list<auto> args) {
         list<auto> l = ();
@@ -4573,7 +4790,7 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
         sql += ") do update set ";
         list<string> sl = ();
         foreach hash<auto> i in (row{updc}.pairIterator()) {
-            string exp = sprintf("%s = %v", getColumnSqlName(i.key));
+            string exp = getColumnSqlName(i.key) + " = " + getColumnValuePlaceholder(i.key);
             sl += exp;
         }
         sql += foldl $1 + ", " + $2, sl;
@@ -4844,6 +5061,11 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
             # normalize default value expressions
             if (defval =~ /::bpchar$/) {
                 defval =~ s/::bpchar$//;
+            }
+            # issue #1746: a column declared with "default null" has no default value; PostgreSQL reports it for some
+            # types as a cast NULL (ex: NULL::character varying, NULL::numeric)
+            if (pgsql_is_null_default(defval)) {
+                remove defval;
             }
             # issue #4348: strip quotes from columns using reserved words
             row.column_name =~ s/^"(.*)"$/$1/g;

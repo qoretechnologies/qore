@@ -96,8 +96,8 @@
           "message": "Prodleva v sekundách před opakováním pokusu po chybě FTP"
         },
         "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.ZXJyb3JfZGVsYXk.desc": {
-          "source": "The number of seconds to wait before polling again after an FTP error; the error is logged at error level, and then polling continues after this delay.\n\nTransient problems such as a network interruption or a server restart are common with FTP; a low value recovers from such problems quickly, while a high value reduces the load on a server that is failing persistently.\n\n**NOTE**: files are not polled while this delay is in effect",
-          "message": "Počet sekund čekání před dalším dotazováním po chybě FTP; chyba je zaznamenána na úrovni error a dotazování pokračuje po této prodlevě.\n\nPřechodné problémy, jako je výpadek sítě nebo restart serveru, jsou u FTP běžné; nízká hodnota zajišťuje rychlé zotavení z takových problémů, zatímco vysoká hodnota snižuje zatížení serveru při trvalých selháních.\n\n**POZNÁMKA**: během trvání této prodlevy se soubory nedotazují"
+          "source": "The number of seconds to wait before polling again after an FTP error and after a refused file; the error is logged at error level, and then polling continues after this delay.\n\nTransient problems such as a network interruption or a server restart are common with FTP; a low value recovers from such problems quickly, while a high value reduces the load on a server that is failing persistently.\n\n**NOTE**: files are not polled while this delay is in effect",
+          "message": "Počet sekund čekání před dalším dotazováním po chybě FTP a po odmítnutém souboru; chyba je zaznamenána na úrovni error a dotazování pokračuje po této prodlevě.\n\nPřechodné problémy, jako je výpadek sítě nebo restart serveru, jsou u FTP běžné; nízká hodnota zajišťuje rychlé zotavení z takových problémů, zatímco vysoká hodnota snižuje zatížení serveru při trvalých selháních.\n\n**POZNÁMKA**: během trvání této prodlevy se soubory nedotazují"
         },
         "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cmVnZXg.display_name": {
           "source": "Regular Expression Match",
