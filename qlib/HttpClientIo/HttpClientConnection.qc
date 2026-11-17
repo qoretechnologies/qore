@@ -126,6 +126,15 @@ public class HttpClientConnection inherits HttpClientConnectionBase {
             @ref tryReserveStream()), so no request can reserve a stream of the connection that is being closed.
         */
         bool expire_closing = False;
+
+        #! The number of ready notifiers registered while the connection was connecting (#6430)
+        /** Asynchronous waiters (@ref HttpClientConnectionManager::acquireConnectionAsync(),
+            @ref HttpClientRequestPollOperation, connection monitor pings) wait for a pending connection with a
+            notifier and without a stream reservation; @ref releaseExpiredReservation() does not close a connection
+            that one of them may still wait for.  It is never decremented: a waiter that gave up keeps the connection
+            connecting, which then ends with its own connect timeout.
+        */
+        int ready_waiters = 0;
     }
 
     #! Returns the protocol identifier: "h1", "h2", or "h3"
@@ -310,12 +319,32 @@ public class HttpClientConnection inherits HttpClientConnectionBase {
         HttpClientConnectionBase::releaseStreamReservation();
     }
 
+    #! Registers a notifier that is signaled when the connection is ready or closed
+    /** As the base class method; a notifier queued while the connection is connecting is counted as a waiter for
+        the connection, which @ref releaseExpiredReservation() does not close under it (#6430)
+
+        @param notifier the EventNotifier to signal
+
+        @return @ref True if the notifier was queued (the connection is connecting), @ref False if the connection is
+        ready or closed already
+    */
+    bool registerReadyNotifier(EventNotifier notifier) {
+        AutoLock al(lock);
+        bool queued = AbstractHttpPollConnection::registerReadyNotifier(notifier);
+        if (queued) {
+            ++ready_waiters;
+        }
+        return queued;
+    }
+
     #! Releases the stream reservation of a request whose time ran out before the connection was ready
     /** Several requests can reserve streams of a connection that is still connecting, each with its own deadline
-        (see @ref tryReserveStream()).  A request whose deadline passes first gives up only its own reservation: the
-        connection is closed only if no other request has a stream reserved or active on it, and otherwise it keeps
-        connecting for the other requests; its connect is bounded by its own connect timeout, and the connection
-        manager's idle eviction does not close a connection with a reservation (#6184, #6430).
+        (see @ref tryReserveStream()), and asynchronous waiters can wait for it with a notifier (see
+        @ref registerReadyNotifier()).  A request whose deadline passes first gives up only its own reservation: the
+        connection is closed only if no other request has a stream reserved or active on it and no notifier was
+        registered for it, and otherwise it keeps connecting for the others; its connect is bounded by its own
+        connect timeout, and the connection manager's idle eviction does not close a connection with a reservation
+        (#6184, #6430).
 
         The check and the decision to close are made under \c lock, which @ref tryReserveStream() takes, and a
         connection that is to be closed accepts no further reservation, so no request can reserve a stream of it
@@ -334,7 +363,7 @@ public class HttpClientConnection inherits HttpClientConnectionBase {
                 HttpClientConnectionBase::releaseStreamReservation();
             }
             # the reservations are read first, as in getOutstandingStreamCount()
-            if (getPendingStreamCount() || getPollOperation().getActiveStreamCount()) {
+            if (ready_waiters || getPendingStreamCount() || getPollOperation().getActiveStreamCount()) {
                 return False;
             }
             expire_closing = True;
@@ -342,7 +371,12 @@ public class HttpClientConnection inherits HttpClientConnectionBase {
         # closed outside the lock: the close can call back into the connection
         try {
             close();
-        } catch () {
+        } catch (hash<ExceptionInfo> ex) {
+            # the connection accepts no further reservation, so it must end up closed: its state is set directly,
+            # and the pool scans evict a closed connection
+            log(LoggerLevel::INFO, "closing the connection after a request's time ran out failed: %s: %s", ex.err,
+                ex.desc);
+            AbstractHttpPollConnection::setClosed();
         }
         return True;
     }
@@ -644,8 +678,9 @@ public class HttpClientConnection inherits HttpClientConnectionBase {
             # a connection closed locally, by its owner, can wake a waiting request before the error of the abort is
             # recorded (#6430)
             if (!err.err) {
-                throw "HTTPCLIENT-CONNECT-ERROR", sprintf("connection %d to %s:%d was closed before it became ready",
-                    connection_id, url_info.host ?? "<unknown>", url_info.port ?? 0), err;
+                throw "HTTPCLIENT-CONNECT-ERROR", sprintf("connection %d to %s:%d was closed without an error %s",
+                    connection_id, url_info.host ?? "<unknown>", url_info.port ?? 0,
+                    ready ? "after it became ready" : "before the request could use it"), err;
             }
             throw "HTTPCLIENT-CONNECT-ERROR", sprintf("connection closed: %s: %s", err.err, err.desc ?? "unknown"),
                 err;

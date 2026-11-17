@@ -157,6 +157,8 @@ class HttpClientIoConnectWaitTest inherits QUnit::Test {
             \testSharedPendingConnection());
         addTestCase("a manager request is not failed by another request's expired wait",
             \testSharedPendingConnectionManager());
+        addTestCase("a request whose wait expires leaves a pending connection to an asynchronous waiter",
+            \testAsyncWaiterOnPendingConnection());
         addTestCase("a request's timeout bounds the happy-eyeballs race", \testRaceBoundByRequestTimeout());
         addTestCase("a request's timeout bounds the wait for a connection that another request creates",
             \testCreationWaitBoundByRequestTimeout());
@@ -299,6 +301,37 @@ class HttpClientIoConnectWaitTest inherits QUnit::Test {
         assertEq(0, done.waitForZero(60s), "the manager request ends when the manager is closed");
         assertFalse(mgr_ok, "the manager request does not succeed");
         assertTrue(exists mgr_err, "the manager request raises an error");
+    }
+
+    #! An asynchronous waiter of a pending connection is not failed by a request's expired wait (#6430)
+    /** acquireConnectionAsync() returns a notifier for a pending pooled connection without reserving a stream of
+        it.  A stream handle's request on the same connection times out; the connection must keep connecting for the
+        asynchronous waiter.  Before the fix, the expiring request saw no other reservation and closed it.
+    */
+    testAsyncWaiterOnPendingConnection() {
+        SilentListener listener();
+        on_exit listener.close();
+        string url = listener.getUrl();
+
+        HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{
+            "protocol": "h2",
+            "connect_timeout": 60s,
+            "request_timeout": 60s,
+        });
+        on_exit mgr.closeAll();
+
+        HttpClientStreamHandle s1 = mgr.acquireStream(url);
+        HttpClientConnection conn = s1.getConnection();
+
+        *HttpClientConnection async_conn;
+        *EventNotifier notifier = mgr.acquireConnectionAsync(url, \async_conn);
+        assertTrue(exists notifier, "the asynchronous waiter waits for the connection");
+        assertTrue(async_conn == conn, "the asynchronous waiter waits for the pending connection");
+
+        *hash<ExceptionInfo> err = getError(sub () { s1.request("GET", "/", NOTHING, NOTHING, 500ms); });
+        assertEq("HTTPCLIENT-TIMEOUT", err.err, "s1 times out; got " + describe(err));
+        assertFalse(conn.isClosed(), "the connection is not closed under the asynchronous waiter");
+        assertEq(HttpClientConnectionState::Connecting, conn.getConnectionState(), "the connection is connecting");
     }
 
     #! The happy-eyeballs race of the "auto" protocol is bounded by the request's timeout (#6429)

@@ -166,11 +166,11 @@ public class Http1ClientStreamHandle inherits HttpClientStreamHandle {
                     AutoLock al(lock);
                     state = HttpClientStreamState::Pending;
                 }
-                releaseReservationIfHeld();
                 streaming = False;
                 request_body_streaming = False;
                 remove data_channel;
-                throw "HTTPCLIENT-TIMEOUT", "connection establishment timed out";
+                # the reservation is released, and the connection closed only if no other request waits for it (#6430)
+                throwConnectWaitExpired();
             }
         }
 
@@ -240,9 +240,9 @@ public class Http1ClientStreamHandle inherits HttpClientStreamHandle {
                     AutoLock al(lock);
                     state = HttpClientStreamState::Pending;
                 }
-                releaseReservationIfHeld();
                 streaming = False;
-                throw "HTTPCLIENT-TIMEOUT", "connection establishment timed out";
+                # the reservation is released, and the connection closed only if no other request waits for it (#6430)
+                throwConnectWaitExpired();
             }
         }
 

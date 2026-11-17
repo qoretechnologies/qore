@@ -640,7 +640,8 @@ public class HttpClientStreamHandle {
         @note Other requests can wait for the same connection while it connects (see
         @ref HttpClientConnectionManager::acquireStream()), each with its own timeout: a request whose time runs out
         first gives up only its own stream, and the connection is closed only if no other request waits for it or uses
-        it; otherwise it keeps connecting, bounded by its connect timeout
+        it, including asynchronous waiters (see @ref HttpClientConnection::registerReadyNotifier()); otherwise it keeps
+        connecting, bounded by its connect timeout
     */
     hash<auto> request(string method, string path, *hash<auto> headers, *data body,
             *timeout timeout_ms) {
@@ -674,8 +675,9 @@ public class HttpClientStreamHandle {
             # without an overall deadline, the transport's own connect deadline ends the wait
             date remaining = end_time ? end_time - now_us() : milliseconds(connect_timeout * 2);
             if (remaining <= 0us) {
-                releaseReservationIfHeld();
-                throw "HTTPCLIENT-TIMEOUT", "connection establishment timed out";
+                # the reservation is released, and the connection closed only if no other request waits for it
+                # (#6430)
+                throwConnectWaitExpired();
             }
             if (!conn.waitForReady(timeout_ms: remaining)) {
                 throwConnectWaitExpired();

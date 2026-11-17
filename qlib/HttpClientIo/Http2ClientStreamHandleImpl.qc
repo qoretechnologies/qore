@@ -180,7 +180,8 @@ public class Http2ClientStreamHandle inherits HttpClientStreamHandle {
                     request_body_streaming = False;
                     delete data_channel;
                 }
-                throw "HTTPCLIENT-TIMEOUT", "connection establishment timed out";
+                # the reservation is released, and the connection closed only if no other request waits for it (#6430)
+                throwConnectWaitExpired();
             }
         }
 
@@ -235,7 +236,8 @@ public class Http2ClientStreamHandle inherits HttpClientStreamHandle {
                     state = HttpClientStreamState::Pending;
                     streaming = False;
                 }
-                throw "HTTPCLIENT-TIMEOUT", "connection establishment timed out";
+                # the reservation is released, and the connection closed only if no other request waits for it (#6430)
+                throwConnectWaitExpired();
             }
         }
 
