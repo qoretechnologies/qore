@@ -2620,6 +2620,60 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         cond_block->is_loop_header = true;
         // the statement checks for cancellation at the start of every iteration, as in the AST interpreter
         cond_block->loop_cancel = QoreIRLoopCancel::For;
+        // The locals declared in the statement's initializer live until the loop ends.  When one can hold an object,
+        // whose destructor can raise an exception, they get the cleanups of a block's locals: a return from the body
+        // releases them through emitBlockCleanups() (a break or a continue does not: the flow target is pushed above
+        // their entry), an exception out of the loop releases them in their own cleanup block before it reaches the
+        // enclosing target, and the exception that their release at the loop's end raises goes to the enclosing
+        // target (qore#6084)
+        const LVList* for_lvars = for_stmt->getLVList();
+        bool for_lvars_cleanup = false;
+        if (for_lvars) {
+            for (unsigned i = 0; i < for_lvars->size(); ++i) {
+                if (qore_ir_type_may_hold_object(for_lvars->lv[i]->getTypeInfo())) {
+                    for_lvars_cleanup = true;
+                    break;
+                }
+            }
+        }
+        QoreIRBasicBlock* for_lvar_exception_cleanup_block = nullptr;
+        QoreIRBasicBlock* for_saved_exception_target = nullptr;
+        // pops the compile-time state pushed for the locals unless the lowering of the statement has completed
+        struct ForLvarsState {
+            QoreIRLowering& lowering;
+            bool entry = false;
+            bool handler = false;
+            ~ForLvarsState() {
+                pop();
+            }
+            void pop() {
+                if (handler) {
+                    lowering.exception_stack.pop_back();
+                    handler = false;
+                }
+                if (entry) {
+                    lowering.cleanup_stack.pop_back();
+                    entry = false;
+                }
+            }
+        } for_lvars_state{*this};
+        if (for_lvars_cleanup) {
+            BlockCleanupEntry lvars_entry;
+            lvars_entry.type = BlockCleanupEntry::Lvars;
+            lvars_entry.lvars = for_lvars;
+            lvars_entry.loc = for_stmt->loc;
+            pushBlockCleanup(lvars_entry);
+            for_lvars_state.entry = true;
+            if ((for_saved_exception_target = getCurrentExceptionTarget())) {
+                for_lvar_exception_cleanup_block = createBlock("for.lvars.exception.cleanup");
+                if (!for_lvar_exception_cleanup_block) {
+                    error = "IR builder failed to create the exception cleanup block of a for statement's locals";
+                    return false;
+                }
+                exception_stack.push_back(for_lvar_exception_cleanup_block);
+                for_lvars_state.handler = true;
+            }
+        }
         QoreValue init = for_stmt->getAssignment();
         if (init && !init.isNothing()) {
             // the value of the initializer is not used: it and its temps are released before the loop runs, as in
@@ -2769,9 +2823,29 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         // (reverse order ensures destructors are called in LIFO order like in AST mode)
         // The loop variables are declared in the for statement's initialization (e.g., "int j = 2")
         // and must be cleaned up after the loop exits.
-        if (const LVList* loop_lvars = for_stmt->getLVList()) {
-            for (int i = static_cast<int>(loop_lvars->size()) - 1; i >= 0; --i) {
-                builder.createUninstantiateLocal(loop_lvars->lv[i], stmt->loc);
+        for_lvars_state.pop();
+        if (for_lvars) {
+            for (int i = static_cast<int>(for_lvars->size()) - 1; i >= 0; --i) {
+                builder.createUninstantiateLocal(for_lvars->lv[i], stmt->loc);
+            }
+        }
+        if (for_lvars_cleanup) {
+            // a destructor's exception goes to the enclosing target (qore#6084)
+            if (QoreIRBasicBlock* target = getCurrentExceptionTarget()) {
+                builder.createCheckException(stmt->loc)->exception_target = target;
+            }
+            if (for_lvar_exception_cleanup_block) {
+                // an exception out of the loop releases the locals before it reaches the enclosing target
+                QoreIRBasicBlock* after_block = builder.getBlock();
+                builder.getFunction()->moveBlockToEnd(for_lvar_exception_cleanup_block);
+                builder.setBlock(for_lvar_exception_cleanup_block);
+                for (int i = static_cast<int>(for_lvars->size()) - 1; i >= 0; --i) {
+                    auto* ui = builder.createUninstantiateLocal(for_lvars->lv[i], stmt->loc);
+                    ui->is_block_exit = true;
+                }
+                builder.createCheckException(stmt->loc)->exception_target = for_saved_exception_target;
+                builder.createBranch(for_saved_exception_target, stmt->loc);
+                builder.setBlock(after_block);
             }
         }
         pop_invariant_hoists();

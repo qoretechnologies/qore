@@ -46,6 +46,11 @@ class CleanupDestructorExceptionsTest inherits QUnit::Test {
                 "s_return", "s_return_nested", "s_break_inner_try") {
             assertRegex("\n" + t + " caught ", out, t);
         }
+        foreach string t in ("for_end", "for_break", "for_return", "for_outer_break") {
+            assertRegex("\n" + t + " caught ", out, t);
+        }
+        assertRegex("\nfor_return -> \"after\"\n", out);
+        assertRegex("\nfor_body_throw: \\[\"~ft\", \"catch:BODY\"\\]\n", out);
         assertRegex("\ns_return -> \"after\"\n", out);
         # the catch block in the loop body ends the try statement that the break left: the loop goes on
         assertRegex("\ns_break_inner_try i=3\n", out);

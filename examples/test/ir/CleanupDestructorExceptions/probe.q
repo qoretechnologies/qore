@@ -57,6 +57,14 @@ auto sub s_return_nested() { try { { D d("retn"); return 1; } } catch (hash<Exce
 # a try statement in the loop body catches the exception of the block it encloses
 sub s_break_inner_try() { int i = 0; while (++i < 3) { try { D d("bi" + i); break; } catch (hash<ExceptionInfo> ex) { printf("s_break_inner_try caught %s\n", ex.desc); } } printf("s_break_inner_try i=%d\n", i); }
 
+# the locals declared in a for statement's initializer live until the loop ends
+sub for_end() { try { for (D d = new D("for-end"); False; ) { } } catch (hash<ExceptionInfo> ex) { printf("for_end caught %s\n", ex.desc); } }
+sub for_break() { try { for (D d = new D("for-brk"); True; ) { break; } } catch (hash<ExceptionInfo> ex) { printf("for_break caught %s\n", ex.desc); } }
+auto sub for_return() { try { while (True) { for (D d = new D("for-ret"); True; ) { return 1; } } } catch (hash<ExceptionInfo> ex) { printf("for_return caught %s\n", ex.desc); } return "after"; }
+sub for_outer_break() { try { while (True) { for (D d = new D("for-ob"); True; ) { break; } break; } } catch (hash<ExceptionInfo> ex) { printf("for_outer_break caught %s\n", ex.desc); } }
+# an exception raised in the body releases the initializer's locals before the catch block runs
+sub for_body_throw() { try { for (T t("ft"); True; ) { throw "BODY"; } } catch (hash<ExceptionInfo> ex) { log += "catch:" + ex.err; } }
+
 # qore#6244: the temporaries of other lowering paths
 int y = 5;
 auto x;
@@ -98,7 +106,10 @@ for (int i = 0; i < 2; ++i) {
     }
     printf("ret_in_try: %y\n", log);
 }
-foreach string t in ("s_end", "s_break", "s_continue", "s_foreach_break", "s_for_break", "s_switch_break", "s_return",
+log = ();
+for_body_throw();
+printf("for_body_throw: %y\n", log);
+foreach string t in ("for_end", "for_break", "for_return", "for_outer_break", "s_end", "s_break", "s_continue", "s_foreach_break", "s_for_break", "s_switch_break", "s_return",
         "s_return_nested", "s_break_inner_try", "t7", "t7a", "t10", "t10b", "t10d", "t5b", "t5c", "t11", "t12", "t14",
         "t15", "t16", "t20", "t24", "push_value") {
     try {
