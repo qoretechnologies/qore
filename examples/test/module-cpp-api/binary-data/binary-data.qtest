@@ -20,6 +20,8 @@
 class BinaryDataTest inherits QUnit::Test {
     constructor() : QUnit::Test("BinaryDataTest", "1.0", \ARGV) {
         addTestCase("empty binary values have data", \testEmpty());
+        addTestCase("a part of a value appended or prepended to it", \testOwnPart());
+        addTestCase("a part of a value written or spliced into it", \testOwnPartWriteSplice());
         set_return_value(main());
     }
 
@@ -41,5 +43,99 @@ class BinaryDataTest inherits QUnit::Test {
         hash<auto> h = cpp_api_binary_data(b);
         assertEq(3, h.size, "a value with data: the size");
         assertFalse(h.null, "a value with data: the data pointer");
+    }
+
+    #! BinaryNode::append() and prepend() of a part of the value itself (issue #6312: the buffer grows
+    #! geometrically, so it moves for some appends and has room for others)
+    testOwnPart() {
+        binary b = binary("abcdefgh");
+        # the start of the value, appended 300 times (the buffer moves for some appends and has room for others)
+        binary r = cpp_api_binary_add_own_part(b, 0, 8, 300, False);
+        assertEq(8 * 301, r.size());
+        assertEq(binary(strmul("abcdefgh", 301)), r);
+        # one byte of the value at a time (the buffer has room for most appends)
+        r = cpp_api_binary_add_own_part(b, 2, 1, 100, False);
+        assertEq(108, r.size());
+        assertEq(b, r.substr(0, 8));
+        assertEq(binary(strmul("c", 100)), r.substr(8));
+        # the end of the value
+        r = cpp_api_binary_add_own_part(b, 6, 2, 3, False);
+        assertEq(binary("abcdefghghghgh"), r);
+
+        # prepended: the part is read from where it is after the data moves forward
+        r = cpp_api_binary_add_own_part(b, 6, 2, 1, True);
+        assertEq(binary("ghabcdefgh"), r);
+        r = cpp_api_binary_add_own_part(b, 0, 8, 4, True);
+        assertEq(binary(strmul("abcdefgh", 5)), r);
+        r = cpp_api_binary_add_own_part(b, 0, 1, 50, True);
+        assertEq(binary(strmul("a", 50) + "abcdefgh"), r);
+
+        # nothing added
+        assertEq(b, cpp_api_binary_add_own_part(b, 3, 0, 10, False));
+        assertEq(b, cpp_api_binary_add_own_part(b, 3, 0, 10, True));
+        # a part that is not in the value
+        assertThrows("BINARY-PART-ERROR", \cpp_api_binary_add_own_part(), (b, 4, 5, 1, False));
+        assertThrows("BINARY-PART-ERROR", \cpp_api_binary_add_own_part(), (b, -1, 1, 1, False));
+    }
+
+    #! returns \a n zero bytes
+    static binary zeros(int n) {
+        binary z;
+        for (int i = 0; i < n; ++i) {
+            z += <00>;
+        }
+        return z;
+    }
+
+    #! returns what BinaryNode::writeTo() of a part of \a b at \a pos makes
+    static binary expectedWrite(binary b, int pos, int offset, int size) {
+        binary part = b.substr(offset, size);
+        binary start = pos > b.size() ? b + zeros(pos - b.size()) : b.substr(0, pos);
+        binary rv = start + part;
+        if (pos + size < b.size()) {
+            rv += b.substr(pos + size);
+        }
+        return rv;
+    }
+
+    #! BinaryNode::writeTo() and splice() of a part of the value itself (issue #6312: the buffer can move when the
+    #! value grows, and the part can be moved by the change)
+    testOwnPartWriteSplice() {
+        binary b = binary("abcdefghijklmnop");
+        # each case: position, part offset, part size
+        list<list<int>> writes = (
+            (16, 0, 16),    # the whole value appended: the buffer grows
+            (20, 4, 8),     # beyond the end: a gap of zero bytes, then the part
+            (10, 0, 16),    # overlapping the end: the value grows
+            (2, 0, 8),      # inside the value, overlapping the part (the part is read before it is overwritten)
+            (0, 6, 10),     # inside the value, overlapping the part from above
+            (5, 5, 4),      # the part written over itself
+            (3, 7, 0),      # nothing written
+        );
+        foreach list<int> w in (writes) {
+            assertEq(expectedWrite(b, w[0], w[1], w[2]), cpp_api_binary_write_own_part(b, w[0], w[1], w[2]),
+                sprintf("writeTo(%d) of the part at %d with size %d", w[0], w[1], w[2]));
+        }
+        assertThrows("BINARY-PART-ERROR", \cpp_api_binary_write_own_part(), (b, 0, 10, 7));
+
+        # each case: offset, length, part offset, part size
+        list<list<int>> splices = (
+            (16, 0, 0, 16),  # appended: the buffer grows
+            (8, 0, 0, 16),   # inserted in the middle: the part is moved by the insertion
+            (0, 0, 4, 8),    # inserted at the start
+            (2, 4, 8, 8),    # replaces fewer bytes than it inserts
+            (2, 10, 0, 4),   # replaces more bytes than it inserts: the part is moved by the removal
+            (4, 4, 4, 4),    # replaces itself
+            (6, 2, 0, 0),    # removes bytes, inserts nothing
+        );
+        foreach list<int> sp in (splices) {
+            binary e = b.substr(0, sp[0]) + b.substr(sp[2], sp[3]);
+            if (sp[0] + sp[1] < b.size()) {
+                e += b.substr(sp[0] + sp[1]);
+            }
+            assertEq(e, cpp_api_binary_splice_own_part(b, sp[0], sp[1], sp[2], sp[3]),
+                sprintf("splice(%d, %d) of the part at %d with size %d", sp[0], sp[1], sp[2], sp[3]));
+        }
+        assertThrows("BINARY-PART-ERROR", \cpp_api_binary_splice_own_part(), (b, 0, 0, 16, 1));
     }
 }
