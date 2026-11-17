@@ -483,7 +483,8 @@ class DebuggerStepFlowTest inherits QUnit::Test {
             # the calls of each kind that a frame running when the debugger attached makes after the attach, which
             # start with the debugger attached and take the request as with the AST interpreter (#6201); a function
             # that the native code of the frame calls directly (a callee of its JIT batch) runs as native code,
-            # which ignores the request and makes no event for the callee's block (#6289)
+            # which ignores the request and makes no event for the callee's block (#6289), and a method or static
+            # method that the IR interpreter runs inline runs in the IR frame (#6473)
             {"function": "callpath_function_caller", "flow": "return", "tag": "callpath_function", "hit": 1, "block": False,
                 "call_path": True, "calls": True,
                 "result": "5",
@@ -517,12 +518,20 @@ class DebuggerStepFlowTest inherits QUnit::Test {
                 "steps": (646, "b603", 603, "b643", 643, 646, "b603", 603, 604, "b643", 643, 646, "b603", 603, 604,
                     648, "b640", 640),
             },
+            # the IR interpreter runs the method inline in the frame that was running when the debugger attached,
+            # which ignores the break (#6473)
             {"function": "callpath_method_caller", "flow": "break", "tag": "callpath_method", "hit": 1, "block": False,
                 "call_path": True, "calls": True,
                 "result": "5",
                 "log": ("1", "11", "null", "31", "41"),
                 "steps": (646, "b603", 603, "b643", 643, 646, "b603", 603, 604, "b643", 643, 646, "b603", 603, 604,
                     648, "b640", 640),
+                "ir": {
+                    "result": "5",
+                    "log": ("1", "11", "21", "31", "41"),
+                    "steps": (646, "b603", 603, 604, "b643", 643, 646, "b603", 603, 604, "b643", 643, 646, "b603",
+                    603, 604, 648, "b640", 640),
+                },
             },
             {"function": "callpath_static_caller", "flow": "return", "tag": "callpath_static", "hit": 1, "block": False,
                 "call_path": True, "calls": True,
@@ -531,12 +540,20 @@ class DebuggerStepFlowTest inherits QUnit::Test {
                 "steps": (657, "b608", 608, "b654", 654, 657, "b608", 608, 609, "b654", 654, 657, "b608", 608, 609,
                     659, "b652", 652),
             },
+            # the IR interpreter runs the method inline in the frame that was running when the debugger attached,
+            # which ignores the break (#6473)
             {"function": "callpath_static_caller", "flow": "break", "tag": "callpath_static", "hit": 1, "block": False,
                 "call_path": True, "calls": True,
                 "result": "5",
                 "log": ("1", "11", "null", "31", "41"),
                 "steps": (657, "b608", 608, "b654", 654, 657, "b608", 608, 609, "b654", 654, 657, "b608", 608, 609,
                     659, "b652", 652),
+                "ir": {
+                    "result": "5",
+                    "log": ("1", "11", "21", "31", "41"),
+                    "steps": (657, "b608", 608, 609, "b654", 654, 657, "b608", 608, 609, "b654", 654, 657, "b608",
+                    608, 609, 659, "b652", 652),
+                },
             },
             {"function": "callpath_closure_caller", "flow": "return", "tag": "callpath_closure", "hit": 1, "block": False,
                 "call_path": True, "calls": True,

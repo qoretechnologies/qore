@@ -141,7 +141,7 @@
 
     A request that is ignored lets the statement run as without the request; the step events of the code and its
     breakpoints are still reported.  A function that such native code calls directly, as compiled together with it,
-    also runs as native code.  The next call of the function runs on the AST interpreter and takes every request.
+    also runs as native code, and a method that such an IR frame runs inline runs in the IR interpreter.  The next call of the function runs on the AST interpreter and takes every request.
 
     @subsection debugging_variables Variables and Expressions
 

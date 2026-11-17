@@ -606,9 +606,11 @@ A request at a step event of code without paths:
 In both, the step events and breakpoints are still reported.  The callees of a JIT batch that the native code of such
 a frame calls directly run as native code too (they make no event for the callee's block on their next calls, #6289);
 the other calls that it makes start with the debugger attached and run on the AST interpreter.  The inline call paths
-of the IR interpreter refuse to run while a debugger is attached, as the fast paths of the JIT runtime do: the inline
-functions, native leaves and closures, and the inline methods and static methods
-(`executeInterpreterInlineIRMethodTarget()`, `tryExecuteInterpreterInlineIRStaticMethod()`).  In the IR interpreter, the DebugBlock and DebugStatement
+of the IR interpreter refuse to run while a debugger is attached, as the fast paths of the JIT runtime do, for inline
+functions, native leaves and closures; inline methods and static methods still run inline in the IR frame
+(`executeInterpreterInlineIRMethodTarget()`, `tryExecuteInterpreterInlineIRStaticMethod()`), as on develop: the check
+cost +58 Ir per IR method call in the target (it stopped the inlining of its helpers) and +10 in its callers, so it
+is left to #6473, and `debugger-step-flow.qtest` pins the break that the inlined callee ignores.  In the IR interpreter, the DebugBlock and DebugStatement
 cases take the return when the instruction has no `QoreIRDebugFlowTargets` (`qore_ir_debug_flow_targets()` is null);
 an instruction with a record and no target (the body of a handler lowered inline in debug IR) still returns for every
 request.  A handler without paths never reports a request (`qore_ir_set_handler_flow()`), so the ScopeExit case gets
