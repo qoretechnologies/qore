@@ -13,8 +13,8 @@
 %exec-class StringOwnPartTest
 
 #! Tests QoreString operations whose source is part of the string's own text, in the C++ API
-/** The text moves when the string grows or stops being a view (which can release the view's parent), and the
-    operation itself can move the source (issue #6312).  The strings are large enough that the growth reallocates
+/** A source that is part of the target's text (including a view) is handled when the operation changes the text
+    (issue #6312).  The strings are large enough that the growth reallocates
     their buffers.
 */
 class StringOwnPartTest inherits QUnit::Test {

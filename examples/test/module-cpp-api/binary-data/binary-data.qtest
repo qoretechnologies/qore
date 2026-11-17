@@ -107,7 +107,7 @@ class BinaryDataTest inherits QUnit::Test {
             (16, 0, 16),    # the whole value appended: the buffer grows
             (20, 4, 8),     # beyond the end: a gap of zero bytes, then the part
             (10, 0, 16),    # overlapping the end: the value grows
-            (2, 0, 8),      # inside the value, overlapping the part (the part is read before it is overwritten)
+            (2, 0, 8),      # inside the value, overlapping the part (overlapping parts are handled)
             (0, 6, 10),     # inside the value, overlapping the part from above
             (5, 5, 4),      # the part written over itself
             (3, 7, 0),      # nothing written

@@ -1753,7 +1753,7 @@ binary cpp_api_binary_splice_own_part(binary b, int offset, int length, int poff
 //! Changes a string with a QoreString operation whose source is part of the string's own text
 /** @param str the string to copy
     @param view_from -1 to change a copy of \a str; else the byte offset of a view (QoreStringNode::substr() to the
-    end of a copy of \a str, at least 4096 bytes long) that is changed, with no other reference to the copy
+    end of a copy of \a str, at least 4096 bytes long) that is changed
     @param op the operation; \a a, \a b and \a c are byte offsets and sizes in the string changed:
     - \c "splice": QoreString::splice() of the bytes at \a a with length \a b with the whole string
     - \c "replace": QoreString::replace() of the bytes at \a a with length \a b with the text from byte \a c
@@ -1785,7 +1785,7 @@ string cpp_api_string_own_part(string str, int view_from, string op, int a, int 
         if (*xsink) {
             return QoreValue();
         }
-        // the view holds the only reference to the copy
+        // the view is changed
         rv = view.release();
     }
     QoreStringNode* s = *rv;
@@ -1858,7 +1858,8 @@ string cpp_api_string_own_part(string str, int view_from, string op, int a, int 
 //! Runs a QoreString operation whose source is a QoreString with the string itself and with a copy of it
 /** @param str the string to copy
     @param view_from -1 to change a copy of \a str; else the byte offset of a view (QoreStringNode::substr() to the
-    end of a copy of \a str, at least 4096 bytes long) that is changed, with no other reference to the copy
+    end of a copy of \a str, at least 4096 bytes long) that is changed; another view of the same text is kept for
+    \c "set-sibling"
     @param op the operation: \c "encode", \c "decode", \c "html-encode", \c "decode-url", \c "encode-url",
     \c "encode-uri-request", \c "decode-uri-request", \c "escape", \c "trim", \c "trim-leading",
     \c "trim-trailing", \c "trim-trailing-text", \c "concat-pos", \c "concat-pos-len", \c "set-sibling" (set() with

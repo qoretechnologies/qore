@@ -419,9 +419,8 @@ public:
             size_t& byte_len, ExceptionSink* xsink) const;
 
     //! returns the byte offset of \a p in the string's text, or -1 if it does not point into it
-    /** The text moves when the string grows (check_char()) or stops being a view (materialize(), which can free the
-        parent's buffer); a source that is part of the text is found again at its offset afterwards (the offsets are
-        kept) or copied first
+    /** The text can move when the string changes; a source that is part of the target's text (including a view) is
+        located again at its offset after the buffer changes, or copied first
     */
     DLLLOCAL qore_offset_t ownDataOffset(const char* p) const {
         if (view_parent) {

@@ -68,6 +68,7 @@
 #include <iconv.h>
 #include <map>
 #include <memory>
+#include <new>
 
 //! returns a copy of a source string that is the target of an operation or part of its text, or nullptr if it cannot
 //! be made (out of line: the slow path of the operations that take a source string)
@@ -1706,7 +1707,7 @@ void qore_string_private::splice_simple(size_t offset, size_t num, QoreString* e
 
 void qore_string_private::splice_simple(size_t offset, size_t num, const char* str, size_t str_len,
         QoreString* extract) {
-    // a source that is part of the string's text is found again after mutableBuffer(), which can free a view's parent
+    // a source that is part of the target's text (including a view) is located again after the buffer changes
     qore_offset_t own = str_len ? ownDataOffset(str) : -1;
     mutableBuffer();
     // the callers give an offset within the string; see QoreString::replace()
@@ -3964,7 +3965,22 @@ const QoreEncoding* QoreString::getEncoding() const {
 }
 
 static QORE_INTERN_NOINLINE QoreString* qore_own_source_copy(const QoreString* str) {
-    return new (std::nothrow) QoreString(str->c_str(), str->size(), str->getEncoding());
+    // every allocation is checked: a copy that cannot be made fails the operation
+    size_t n = str->size();
+    std::unique_ptr<char, QoreFreeDeleter> buf(static_cast<char*>(malloc(n + 1)));
+    if (!buf) {
+        return nullptr;
+    }
+    memcpy(buf.get(), str->c_str(), n);
+    buf.get()[n] = '\0';
+    try {
+        // the string adopts the buffer
+        QoreString* rv = new QoreString(buf.get(), n, n + 1, str->getEncoding());
+        buf.release();
+        return rv;
+    } catch (std::bad_alloc&) {
+        return nullptr;
+    }
 }
 
 QORE_INTERN_NOINLINE void qore_string_private::concatOwnText(const char* str) {
@@ -3985,7 +4001,7 @@ qore_offset_t qore_string_private::ownDataOffsetViewPath(const char* p) const {
     if (!len) {
         return -1;
     }
-    // the view's text starts at view_offset in the parent's buffer; materialize() keeps the offsets
+    // the view's text starts at view_offset in the parent's buffer; the offsets are kept when the buffer changes
     const qore_string_private* parent = qore_string_private::get(view_parent);
     if (!parent->buffer) {
         return -1;
