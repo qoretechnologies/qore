@@ -53,6 +53,7 @@ class FakeBillwerkRestHandler inherits AbstractHttpRequestHandler {
         if (hdr.method == "PUT") {
             return makeResponse(("Content-Type": mime), 200, input);
         }
+        return makeResponse(405, "method not allowed");
     }
 }
 

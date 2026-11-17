@@ -192,6 +192,11 @@ public namespace ReturnNoValueChecks {
             }
         } catch (hash<ExceptionInfo> ex) {
         }
+        # the end is reached at run time without a return statement: the call of a closure, whose code the parse does
+        # not analyze, keeps the parse from knowing that it is, which would be a MISSING-RETURN parse error
+        # (issue #5940)
+        code c = sub () {};
+        c();
     }
 
     #! the code continues after the catch block of an interrupted return
@@ -255,6 +260,11 @@ public namespace ReturnNoValueChecks {
         if (n > 0) {
             return 1;
         }
+        # the end is reached at run time without a return statement: the call of a closure, whose code the parse does
+        # not analyze, keeps the parse from knowing that it is, which would be a MISSING-RETURN parse error
+        # (issue #5940)
+        code c = sub () {};
+        c();
     }
 
     hash<auto> sub return_unassigned_hash(int n) {

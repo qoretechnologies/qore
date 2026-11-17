@@ -11201,8 +11201,6 @@ static void ut_debug_step_folded_statements_mode(UnitTestCounters& c, qore_exec_
     UT_ASSERT_EQ(c, allow_debugger, static_cast<bool>(pgm->getParseOptions64() & PO_ALLOW_DEBUGGER),
         "the folded debug step target program allows a debugger as requested");
     pgm->setExecMode(mode, true);
-    // the code is parsed as at the top level, with no return type of running code (see ut_self_call_without_method())
-    const QoreTypeInfo* old_return_type = saveReturnTypeInfo(nullptr);
     pgm->parse("%modern\n"
         "class Q {\n"                                       // 2
         "    public { static Queue qin(); static Queue qout(); static Queue qready(); }\n" // 3
@@ -11234,7 +11232,6 @@ static void ut_debug_step_folded_statements_mode(UnitTestCounters& c, qore_exec_
         "    return Q::qout.get();\n"
         "}\n",
         "debug-step-folded-test", &xsink, nullptr, 0);
-    saveReturnTypeInfo(old_return_type);
     UT_ASSERT(c, !xsink, "folded debug step target program parses");
     if (xsink) {
         xsink.handleExceptions();
@@ -20782,11 +20779,6 @@ static void ut_self_call_without_method(UnitTestCounters& c, QoreProgram* parent
         pgm->waitForTerminationAndDeref(&xs);
         xs.clear();
     });
-    // the code is parsed as at the top level, with no return type of running code: StatementBlock::parseCheckReturn()
-    // reads the return type of the running code (getReturnTypeInfo()), here hash for run_debug_unit_tests(), and not
-    // the one of the code being parsed (parse_get_return_type_info()), so the blocks of the methods were refused
-    // (issue #5940)
-    const QoreTypeInfo* old_return_type = saveReturnTypeInfo(nullptr);
     pgm->parse("%modern\n"
         "class UtBgBase {\n"
         "    public { static Queue q(); }\n"
@@ -20802,7 +20794,6 @@ static void ut_self_call_without_method(UnitTestCounters& c, QoreProgram* parent
         "UtBgChild sub ut_make() { return new UtBgChild(); }\n"
         "string sub ut_take() { return UtBgBase::q.get(10s); }\n",
         "ut-self-call-without-method", &xsink, nullptr, 0);
-    saveReturnTypeInfo(old_return_type);
     UT_ASSERT(c, !xsink, "the self call test program parses");
     if (xsink) {
         xsink.handleExceptions();

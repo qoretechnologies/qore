@@ -143,6 +143,7 @@ string sub use(string what) {
             case \\\"static_obj\\\": return ModuleInitProbe::Probe::static_obj.work();
             case \\\"init_obj\\\": return ModuleInitProbe::Probe::init_obj.work();
             case \\\"init_cb\\\": { code c = ModuleInitProbe::Probe::init_cb; return c(); }
+            default: return \\\"unknown\\\";
         }
     } catch (hash<ExceptionInfo> ex) {
         return ex.err;

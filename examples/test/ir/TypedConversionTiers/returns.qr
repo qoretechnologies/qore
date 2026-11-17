@@ -11,7 +11,9 @@ softlist<string> sub r_wrap() { return "x"; }
 softlist<string> sub r_concat(string a, string b) { return a + b; }
 softlist<int> sub r_size(list<int> l) { return l.size(); }
 softstring sub r_int_string(string a) { return a.size(); }
-softint sub r_missing() { }
+# the end is reached at run time without a return statement: the call of a closure, whose code the parse does not
+# analyze, keeps the parse from knowing that it is, which would be a MISSING-RETURN parse error (issue #5940)
+softint sub r_missing() { code c = sub () {}; c(); }
 final class Getters {
     public {
         auto unset;

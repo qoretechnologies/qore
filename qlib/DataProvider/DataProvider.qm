@@ -1804,6 +1804,8 @@ auto v = limit.acceptsValue(NOTHING);  # NOTHING, not 20
       rendered with a template listing all of their arguments, such as \c map: an argument with a list value raised
       \c RUNTIME-OVERLOAD-ERROR, and a missing argument was described with the default value of the first argument
       instead of its own
+    - \c DataProviderBulkRecordIterator::nextImpl(), which is not used, raises \c INVALID-OPERATION instead of
+      falling off its end without a return value (issue #5940)
 
     @section dataprovider_v3_11 DataProvider v3.11
     - added @ref DataProvider::DataProviderActionCatalog::registerLazyAppActions()

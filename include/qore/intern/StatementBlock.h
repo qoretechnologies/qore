@@ -215,11 +215,9 @@ public:
         return on_block_exit_list;
     }
 
-    DLLLOCAL virtual bool hasFinalReturn() const {
-        if (statement_list.empty())
-            return false;
-
-        return (*statement_list.last())->hasFinalReturn();
+    //! Returns true once the block has been parse-initialized
+    DLLLOCAL bool isParseInitialized() const {
+        return parse_initialized;
     }
 
     DLLLOCAL void setupLVList(QoreParseContext& parse_context) {
@@ -236,12 +234,16 @@ protected:
     statement_list_t statement_list;
     block_list_t on_block_exit_list;
     LVList* lvars = nullptr;
+    //! true once the block has been parse-initialized; the analysis of the code that calls the function, method or
+    //! closure of the block reads it (issue #5940)
+    bool parse_initialized = false;
 
     // start must be the element before the start position
     DLLLOCAL int parseInitIntern(QoreParseContext& parse_context, statement_list_t::iterator start);
     DLLLOCAL void parseCommitIntern(statement_list_t::iterator start);
-    DLLLOCAL bool hasLastReturn(AbstractStatement* as);
-    DLLLOCAL int parseCheckReturn();
+    //! Checks that the end of the code of the variant cannot be reached without a return statement if it has a declared
+    //! return type that does not accept NOTHING (issue #5940)
+    DLLLOCAL int parseCheckReturn(const UserVariantBase* uvb);
 
     DLLLOCAL int execIntern(QoreValue& return_value, ExceptionSink* xsink);
     DLLLOCAL int execIntern(RuntimeConfig& rc, QoreValue& return_value, ExceptionSink* xsink);

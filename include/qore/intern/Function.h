@@ -2616,6 +2616,11 @@ public:
         return vlist.size() == 1 && (ilist.size() <= 1 || !hasInheritedVariants());
     }
 
+    //! Returns true if a call of the function can resolve only to one of its own variants (no inherited variants)
+    DLLLOCAL bool hasOnlyOwnVariants() const {
+        return ilist.size() <= 1 || !hasInheritedVariants();
+    }
+
     DLLLOCAL QoreListNode* runtimeGetCallVariants() const;
 
     // returns 0 for OK, -1 for error
