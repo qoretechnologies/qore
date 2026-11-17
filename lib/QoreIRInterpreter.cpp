@@ -1294,6 +1294,18 @@ public:
         v.discard(xsink);
     }
 
+    //! As release(), and returns true if the value released was a node whose release left an exception in the sink
+    /** A scalar value is not released: its store tests no more than release() does (#6244)
+    */
+    DLLLOCAL bool releaseRaised(size_t i, ExceptionSink* xsink) {
+        // the inline tag test: hasNode() is a call
+        if (!slots[i].isPointer()) {
+            return false;
+        }
+        release(i, xsink);
+        return *xsink;
+    }
+
     //! Stores a value in the given slot, which takes its reference; the slot's value has been released
     /** An object stored in the slot of an object local is marked with a real reference, as a variable on the runtime
         stack marks the object it holds (see QoreIRFunction::real_reference_locals)
@@ -15397,7 +15409,8 @@ load_local_done:
                     assert(local_inst->mode != AssignmentMode::Normal || qore_ir_value_node_type(stored) != NT_REFERENCE
                         || (local_inst->slot_id < func.interpreter_reference_slots.size()
                             && func.interpreter_reference_slots[local_inst->slot_id]));
-                    locals_slot_cache.release(local_inst->slot_id, xsink);
+                    // a destructor of the value replaced can raise an exception (see below)
+                    bool release_raised = locals_slot_cache.releaseRaised(local_inst->slot_id, xsink);
                     locals_slot_cache.set(local_inst->slot_id, stored);
                     if (local_inst->slot_id < locals_instantiated.size()) {
                         // For IR-only locals, this bit also records that the slot
@@ -15415,7 +15428,7 @@ load_local_done:
                     // a destructor of the value replaced raises its exception at the store, which goes to the store's
                     // handler, as the other paths of the store take it (#6244); an instruction after it without a
                     // handler of its own would otherwise take it out of the frame
-                    if (xsink && *xsink && branchToExceptionTarget(inst)) {
+                    if (release_raised && branchToExceptionTarget(inst)) {
                         break;
                     }
                     ++ip;
