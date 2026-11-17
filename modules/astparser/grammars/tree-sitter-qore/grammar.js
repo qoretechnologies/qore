@@ -1417,7 +1417,7 @@ module.exports = grammar({
         /[0-9]{2}:[0-9]{2}(:[0-9]{2}(\.[0-9]+)?)?/,
       )),
       // Timezone applies to both date-only and date+time forms
-      // (Qore scanner: {YEAR}-{MONTH}-{DAY}?{TZ}?)
+      // (Qore scanner: {YEAR}-{MONTH}-{DAY}{TZ}?)
       optional(choice(
         /[+-][0-9]{2}(:?[0-9]{2}(:?[0-9]{2})?)?/,  // timezone offset: +HH, +HHMM, +HH:MM, etc.
         'Z',                                          // UTC timezone
