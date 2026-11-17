@@ -2021,7 +2021,11 @@ bool Program::parseDiagnosticsCollected() [flags=RET_VALUE_ONLY] {
 //! Returns the structured parse diagnostics (errors and warnings) collected during the last parse action
 /** Structured diagnostic collection must be enabled with @ref Qore::Program::setParseDiagnosticsCollected()
     before parsing; if it is not enabled, or if no diagnostics were raised, an empty list is returned.  The
-    diagnostics are returned in the order in which they were raised.
+    diagnostics are returned in the order in which they were raised.\n
+    An exception raised in the parse action without a parse error (for example in the initialization of a constant,
+    by a module command, or by a parse directive) is an error diagnostic too, with its code and description and at
+    its location (the location of the constant for an exception that the initialization of a constant raises without
+    one); an exception raised before the parse action starts (ex: a sandbox restriction refusing the parse) is not.
 
     @return a list of @ref ParseDiagnosticInfo hashes, one per parse error or warning collected
 

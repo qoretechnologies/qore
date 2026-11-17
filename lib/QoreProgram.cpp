@@ -75,6 +75,7 @@
 #include <string>
 #include <set>
 #include <typeinfo>
+#include <utility>
 #include <vector>
 
 extern bool threads_initialized;
@@ -1296,11 +1297,33 @@ void qore_program_private::collectModuleLoadErrors(const QoreProgramLocation& lo
     if (!collect_diagnostics) {
         return;
     }
-    for (const QoreException* e = qore_es_private::get(xsink)->head; e; e = e->next) {
+    for (QoreException* e = qore_es_private::get(xsink)->head; e; e = e->next) {
         QoreStringValueHelper err(e->err);
         QoreStringValueHelper desc(e->desc);
         diagnostics.push_back(QoreDiagnostic(true, err->c_str(), -1, loc, desc->c_str()));
+        e->diagnostic_pgm_id = programId;
     }
+}
+
+void qore_program_private::addExceptionDiagnostics(ExceptionSink* xsink) {
+    if (!collect_diagnostics || !xsink || !*xsink) {
+        return;
+    }
+    for (QoreException* e = qore_es_private::get(*xsink)->head; e; e = e->next) {
+        if (e->diagnostic_pgm_id == programId) {
+            continue;
+        }
+        QoreStringValueHelper err(e->err);
+        QoreStringValueHelper desc(e->desc);
+        // an exception without a source location (raised by builtin code) has no file
+        diagnostics.emplace_back(err->c_str(), e->isBuiltin() ? std::string() : e->file, e->source, *e,
+            desc->c_str());
+        e->diagnostic_pgm_id = programId;
+    }
+}
+
+void qore_add_parse_exception_diagnostics(QoreProgram& pgm, ExceptionSink& xsink) {
+    qore_program_private::get(pgm)->addExceptionDiagnostics(&xsink);
 }
 
 QoreListNode* qore_program_private::getParseDiagnosticList() const {
