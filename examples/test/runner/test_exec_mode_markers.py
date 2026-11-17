@@ -282,6 +282,7 @@ class ExecModeMarkerTest(unittest.TestCase):
         # - test-interpreter-options (#6250): its checks run in child interpreters started with options of their own
         # - frame-check-stack (#6124, #6414): its checks run a fixture that sets its own execution mode, in child
         #   processes and in qcc executables
+        # - RestSchemaImportTool (#6190): its checks run tools/rest-schema-import.qr in child processes
         self.assertEqual(sorted(["examples/test/ir/AOTConstantImportStale.qtest",
                                  "examples/test/ir/JITFinalizeCancellation.qtest",
                                  "examples/test/ir/AOTInitParseOptions.qtest",
@@ -344,6 +345,7 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/qore/functions/user-functional-domains/qlib-module-domains.qtest",
                                  "examples/test/qore/functions/user-functional-domains/qlib-all-modules-load.qtest",
                                  "examples/test/qlib/HttpClientIo/ConnectionManagerTeardown.qtest",
+                                 "examples/test/qlib/RestSchemaActions/RestSchemaImportTool.qtest",
                                  "examples/test/qlib/RestSchemaActions/RestSchemaModuleLazyTypes-1.qtest",
                                  "examples/test/qlib/RestSchemaActions/RestSchemaModuleLazyTypes-2.qtest",
                                  "examples/test/qlib/RestSchemaActions/RestSchemaModuleLazyTypes-3.qtest",
