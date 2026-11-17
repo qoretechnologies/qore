@@ -69,6 +69,10 @@
 // the rule's action runs (see QORE_GENERIC_STATIC_REF_CUT())
 #define YY_USER_ACTION { yylloc->update(yylineno, yyleng, yytext); \
     set_native_token_info(yylloc, yyextra); \
+    if (yyextra->line_start_directive_active && (YY_START == INITIAL || YY_START == generic_rescan) && yyleng == 1 \
+            && (yytext[0] == ';' || yytext[0] == '{' || yytext[0] == '}')) { \
+        yyextra->line_start_directive_active = false; \
+    } \
     if (YY_START == generic_rescan) { BEGIN(INITIAL); } }
 
 int yyparse(yyscan_t yyscanner);
@@ -1277,6 +1281,196 @@ static bool qore_parse_in_expression() {
     return pgm && qore_program_private::get(*pgm)->expression_mode;
 }
 
+//! the names of the parse directives (the rules of the scanner that start with ^%; see unknown-directive.qtest)
+static const char* const qore_parse_directive_names[] = {
+    "allow-bare-refs",
+    "allow-debugger",
+    "allow-injection",
+    "allow-opaque-references",
+    "allow-reparse",
+    "allow-returns",
+    "allow-statement-no-effect",
+    "allow-weak-references",
+    "append-include-path",
+    "append-module-path",
+    "assume-global",
+    "assume-local",
+    "broken-auto-cast",
+    "broken-cast",
+    "broken-int-assignments",
+    "broken-list-parsing",
+    "broken-list-range",
+    "broken-logic-precedence",
+    "broken-loop-statement",
+    "broken-namespace-resolution",
+    "broken-narrowed-types",
+    "broken-operators",
+    "broken-range",
+    "broken-references",
+    "broken-soft-types",
+    "broken-sprintf",
+    "broken-varargs",
+    "correct-cast",
+    "correct-int-assignments",
+    "correct-list-parsing",
+    "correct-list-range",
+    "correct-logic-precedence",
+    "correct-loop-statement",
+    "correct-namespace-resolution",
+    "correct-narrowed-types",
+    "correct-operators",
+    "correct-range",
+    "correct-references",
+    "correct-soft-types",
+    "correct-sprintf",
+    "correct-varargs",
+    "define",
+    "disable-all-warnings",
+    "disable-debug",
+    "disable-warning",
+    "elif",
+    "else",
+    "enable-all-warnings",
+    "enable-debug",
+    "enable-warning",
+    "endif",
+    "endtry",
+    "exec-class",
+    "fp-fast-math",
+    "if",
+    "ifdef",
+    "ifndef",
+    "include",
+    "lock-options",
+    "lock-warnings",
+    "lockdown",
+    "loose-args",
+    "loose-types",
+    "modern",
+    "module-cmd",
+    "negative-offsets",
+    "new-style",
+    "no-all-operator",
+    "no-any-operator",
+    "no-char-type",
+    "no-child-restrictions",
+    "no-class-defs",
+    "no-constant-defs",
+    "no-count",
+    "no-database",
+    "no-debugging",
+    "no-drop",
+    "no-enum",
+    "no-external-access",
+    "no-external-info",
+    "no-external-process",
+    "no-filesystem",
+    "no-find-modifiers",
+    "no-first",
+    "no-global-vars",
+    "no-gui",
+    "no-io",
+    "no-iterate",
+    "no-locale-control",
+    "no-module-path-directives",
+    "no-modules",
+    "no-namespace-defs",
+    "no-negative-offsets",
+    "no-network",
+    "no-new",
+    "no-process-control",
+    "no-reflection",
+    "no-stream-fusion",
+    "no-streaming-operators",
+    "no-strict-parse-errors",
+    "no-string-index-char",
+    "no-subroutine-defs",
+    "no-summarize",
+    "no-take",
+    "no-takeuntil",
+    "no-takewhile",
+    "no-terminal-io",
+    "no-thread-classes",
+    "no-thread-control",
+    "no-thread-info",
+    "no-threads",
+    "no-top-level",
+    "no-transient",
+    "no-typedef",
+    "no-uncontrolled-apis",
+    "old-style",
+    "perl-bool-eval",
+    "prepend-module-path",
+    "push-parse-options",
+    "require-dollar",
+    "require-our",
+    "require-prototypes",
+    "require-types",
+    "requires",
+    "set-time-zone",
+    "streaming-any",
+    "strict-args",
+    "strict-bool-eval",
+    "strict-parse-errors",
+    "strict-types",
+    "strict-warnings",
+    "strong-encapsulation",
+    "try-child-module",
+    "try-module",
+    "try-reexport-module",
+};
+
+//! returns the edit distance of two strings
+static size_t qore_directive_distance(const std::string& a, const std::string& b) {
+    std::vector<size_t> prev(b.size() + 1), cur(b.size() + 1);
+    for (size_t j = 0; j <= b.size(); ++j) {
+        prev[j] = j;
+    }
+    for (size_t i = 1; i <= a.size(); ++i) {
+        cur[0] = i;
+        for (size_t j = 1; j <= b.size(); ++j) {
+            size_t sub = prev[j - 1] + (a[i - 1] == b[j - 1] ? 0 : 1);
+            cur[j] = std::min(std::min(prev[j] + 1, cur[j - 1] + 1), sub);
+        }
+        std::swap(prev, cur);
+    }
+    return prev[b.size()];
+}
+
+bool qore_parse_directive_known(const std::string& name) {
+    for (const char* known : qore_parse_directive_names) {
+        if (name == known) {
+            return true;
+        }
+    }
+    return false;
+}
+
+std::string qore_parse_directive_error(const std::string& name) {
+    const char* best = nullptr;
+    size_t best_dist = SIZE_MAX;
+    for (const char* known : qore_parse_directive_names) {
+        if (name == known) {
+            // a directive whose rule does not match: an argument it does not take, or one it needs
+            return "invalid syntax for parse directive '%" + name + "'";
+        }
+        size_t d = qore_directive_distance(name, known);
+        if (d < best_dist) {
+            best_dist = d;
+            best = known;
+        }
+    }
+    std::string desc = "unknown parse directive '%" + name + "'";
+    // a name close enough to a directive's is probably a misspelling of it
+    // (and shares more than half of it: a name of one or two letters suggests nothing)
+    if (best && best_dist <= std::max<size_t>(2, name.size() / 3) && best_dist * 2 < name.size()) {
+        desc += "; did you mean '%";
+        desc += best;
+        desc += "'?";
+    }
+    return desc;
+}
+
 //! Refuses a parse directive in the code of an expression (issue #6258)
 /** An expression adds no code to its Program and does not change its parse state: a parse directive in it (a parse
     option, %requires, %define, %include, a conditional, etc.) is a parse error and is not applied.  Used first in the
@@ -2236,6 +2430,24 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[YMWDHSu])+
 ^%include{WS}*$                         { QORE_EXPR_DIRECTIVE();
                                             parse_error(*get_loc(yylloc), "missing argument to %%include"); }
 ^%include{WS}+                          { QORE_EXPR_DIRECTIVE(); BEGIN(incl); }
+^%[A-Za-z][A-Za-z0-9_-]*                {
+        // a line that starts with % and a name that no parse directive's rule matches: scanned as before, as a
+        // context reference (the part of the name that is a word), which is valid in the code of a context
+        // statement; a syntax error on the line reports the name as an unknown or invalid parse directive (issue #56)
+        yyextra->line_start_directive.assign(yytext + 1, yyleng - 1);
+        yyextra->line_start_directive_loc = get_loc(yylloc);
+        yyextra->line_start_directive_active = true;
+        int word = 1;
+        while (word < yyleng && (isalnum(static_cast<unsigned char>(yytext[word])) || yytext[word] == '_')) {
+            ++word;
+        }
+        if (word < yyleng) {
+            yyless(word);
+            yylloc->last_col = yylloc->first_col + word;
+        }
+        yylval->string = strdup(yytext + 1);
+        return CONTEXT_REF;
+    }
 <exec_class_state>{
    [^\n\r]+                             {
                                            char* cn = trim(yytext);

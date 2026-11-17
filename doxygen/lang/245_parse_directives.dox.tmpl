@@ -4,6 +4,13 @@
 
     %Qore supports the use of parse directives in order to set parsing options, load modules, control warnings, and include other files.
 
+    @anchor unknown_parse_directives
+    A parse directive starts with a \c % sign at the start of a line.  A syntax error in a statement that starts with
+    a line that starts with a name that is not a parse directive (<tt>%%require mymod</tt>) names it and suggests the closest parse directive
+    (<tt>unknown parse directive '%%require'; did you mean '%%requires'?</tt>), and one with a parse directive followed
+    by text that it does not take names the directive.  Such a line is otherwise scanned as code that starts with a
+    @ref context "context" reference (\c %%name), which is valid in the code of a context statement.
+
     Parse directives that set parsing options can be used any time parse options have not been locked on a @ref Qore::Program "Program object". They are used most often when it's not possible or desirable to set the parse options in the qore command line.
 
     The recommended parse directive for %Qore programming is @ref modern "%modern", which combines all the recommended parse options into a single directive:
