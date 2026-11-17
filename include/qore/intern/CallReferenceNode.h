@@ -203,14 +203,17 @@ public:
         names) inherits, if any, otherwise, in the code of a class that is or inherits the method's class
         (\a code_class), the receiver of its running instantiation if it binds the type parameters of the method's
         class (\\G::m() in G<T>); if there is none, a call through the reference binds them to the types of its
-        arguments, as a call G::m(...) does (see getCallReceiverTypeInfo(); qore#6285)
+        arguments, as a call G::m(...) does (see getCallReceiverTypeInfo(); qore#6285); for a method of a class
+        without type parameters that has variants of a generic class, the class (see
+        qore_class_private::getInheritedStaticCallReceiverTypeInfo(); qore#6448)
     */
     DLLLOCAL static const QoreTypeInfo* getRuntimeReceiverTypeInfo(const QoreMethod& m, const QoreClass* scope_cls,
             const qore_class_private* code_class);
 
     //! Returns the receiver of a call of the static method \a m with the arguments \a args
     /** \a receiver_type_info, or else for a method of a generic class the receiver that binds the type parameters of
-        the class to the types of the arguments, if any (qore#6285)
+        the class to the types of the arguments, if any (qore#6285), and for a method of a class without type
+        parameters that has variants of a generic class, the class (qore#6448)
     */
     DLLLOCAL static const QoreTypeInfo* getCallReceiverTypeInfo(const QoreMethod& m,
             const QoreTypeInfo* receiver_type_info, const QoreListNode* args);

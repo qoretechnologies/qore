@@ -1238,8 +1238,13 @@ LocalStaticMethodCallReferenceNode::LocalStaticMethodCallReferenceNode(const Qor
 const QoreTypeInfo* LocalStaticMethodCallReferenceNode::getRuntimeReceiverTypeInfo(const QoreMethod& m,
         const QoreClass* scope_cls, const qore_class_private* code_class) {
     const QoreClass* mcls = m.getClass();
-    if (!mcls || !mcls->hasTypeParameters()) {
+    if (!mcls) {
         return nullptr;
+    }
+    // the method of a class without type parameters that has variants of a generic class binds the type parameters
+    // of the generic class wherever it is called from (qore#6448)
+    if (!mcls->hasTypeParameters()) {
+        return qore_class_private::getInheritedStaticCallReceiverTypeInfo(m);
     }
     if (scope_cls) {
         if (const QoreTypeInfo* rv = qore_class_private::get(*scope_cls)->getStaticCallReceiverTypeInfo(m)) {
@@ -1275,8 +1280,11 @@ const QoreTypeInfo* LocalStaticMethodCallReferenceNode::getCallReceiverTypeInfo(
         return receiver_type_info;
     }
     const QoreClass* mcls = m.getClass();
-    if (!mcls || !mcls->hasTypeParameters()) {
+    if (!mcls) {
         return nullptr;
+    }
+    if (!mcls->hasTypeParameters()) {
+        return qore_class_private::getInheritedStaticCallReceiverTypeInfo(m);
     }
     return qore_method_private::get(m)->getFunction()->runtimeInferClassReceiverTypeInfo(args);
 }
@@ -1288,8 +1296,11 @@ const QoreTypeInfo* LocalStaticMethodCallReferenceNode::getCallReceiverTypeInfo(
         return receiver_type_info;
     }
     const QoreClass* mcls = m.getClass();
-    if (!mcls || !mcls->hasTypeParameters()) {
+    if (!mcls) {
         return nullptr;
+    }
+    if (!mcls->hasTypeParameters()) {
+        return qore_class_private::getInheritedStaticCallReceiverTypeInfo(m);
     }
     // the type arguments are inferred from the values of the arguments
     if (args && args->needs_eval()) {
