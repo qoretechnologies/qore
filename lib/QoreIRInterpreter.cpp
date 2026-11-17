@@ -12,6 +12,7 @@
 #include "qore/intern/QoreJITIncludes.h"
 #include <qore/intern/QoreIRInterpreter.h>
 #include <qore/intern/QoreHashKeyHelper.h>
+#include "QoreIRTypeProfile.h"
 
 #include <algorithm>
 #include <cmath>
@@ -23711,5 +23712,53 @@ QoreValue QoreIRInterpreter::evalLValueTernary(QoreIROpcode op, const QoreValue&
         xsink->raiseException("IR-INTERPRETER-ERROR", "unsupported lvalue ternary opcode");
     }
     return QoreValue();
+}
+#endif // QORE_IR_INTERPRETER_GIVEN_ARGS_UNIT
+
+// QoreIRInterpreterGivenArgs.cpp compiles this file again (see above): these functions are defined once
+#ifndef QORE_IR_INTERPRETER_GIVEN_ARGS_UNIT
+QoreIRFunction::~QoreIRFunction() {
+    // no eviction may run on the guard profiles once they are being freed (issue #6421)
+    if (guard_profile_types) {
+        qore_generic_cache_unregister(guard_profile_types.get());
+    }
+    delete cached_pre_instantiated;
+    for (auto* loc : owned_locations) {
+        delete loc;
+    }
+}
+
+void QoreIRFunction::initGuardProfiles() {
+    if (guard_profile_count < num_guards) {
+        if (!guard_profile_types) {
+            guard_profile_types = std::make_unique<QoreIRGuardProfileTypes>(*this);
+        } else {
+            // no eviction may run on the profiles that are replaced
+            qore_generic_cache_unregister(guard_profile_types.get());
+        }
+        guard_profiles.reset(new TypeProfile[num_guards]());
+        for (uint32_t i = 0; i < num_guards; ++i) {
+            guard_profiles[i].type_cache = guard_profile_types.get();
+        }
+        guard_profile_count = num_guards;
+    }
+}
+
+void TypeProfile::recordNewTypeInfo(const TypeProfileTypeKey& key) {
+    auto add = [this, &key] () {
+        std::lock_guard<std::mutex> lock(extended_mutex);
+        if (!extended_type_counts) {
+            extended_type_counts = std::make_unique<std::unordered_map<TypeProfileTypeKey, uint32_t,
+                TypeProfileTypeKeyHash>>();
+        }
+        ++(*extended_type_counts)[key];
+    };
+    if (key.serial && type_cache) {
+        // the entry is added with the registry locked, so the eviction of the type cannot run in between
+        qore_generic_cache_insert_weak(type_cache, {key.type_info}, add);
+    } else {
+        // a type that is never freed while the library is initialized
+        add();
+    }
 }
 #endif // QORE_IR_INTERPRETER_GIVEN_ARGS_UNIT

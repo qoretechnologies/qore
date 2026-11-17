@@ -22260,6 +22260,31 @@ static QoreValue f_dbg_jit_recompile_native_code(const QoreListNode* params, Run
     return uvb->dbgRecompileNativeCode();
 }
 
+//! returns the number of types that the guard type profiles of a user function's IR count (issue #6421)
+/** A type that is destroyed is evicted from the profiles, so a test can check that no type of a deleted Program is
+    left in them
+
+    @param code a call reference to a user function with one variant
+
+    @return the number of types counted by the guard profiles of the function's IR, or -1 if the function has no IR
+
+    @throw DBG-ARGUMENT-ERROR the call reference does not refer to a user function with one variant
+*/
+static QoreValue f_dbg_ir_guard_profile_type_count(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    const ResolvedCallReferenceNode* code = get_param_value(params, 0).get<const ResolvedCallReferenceNode>();
+    const QoreFunction* qf = code->getFunction();
+    const AbstractQoreFunctionVariant* variant = qf && qf->numVariants() == 1 ? qf->first() : nullptr;
+    const UserVariantBase* uvb = variant ? variant->getUserVariantBase() : nullptr;
+    if (!uvb) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_ir_guard_profile_type_count() requires a call reference to "
+            "a user function with one variant");
+        return QoreValue();
+    }
+    const QoreIRFunction* ir = uvb->getCachedIR();
+    return ir ? (int64)ir->getGuardProfileTypeCount() : (int64)-1;
+}
+
 //! returns the number of background JIT compiles refused because a Program they refer to is being or was deleted
 static QoreValue f_dbg_get_bg_compile_refused_count(const QoreListNode* params, RuntimeConfig& rc,
         ExceptionSink* xsink) {
@@ -26541,6 +26566,8 @@ void init_debug_functions(QoreNamespace& qns) {
         QDOM_DEBUG_HOOK, nothingTypeInfo, 1, QC_PROGRAM->getTypeInfo(), QORE_PARAM_NO_ARG, "pgm");
     qns.addBuiltinVariant("dbg_get_bg_compile_refused_count", f_dbg_get_bg_compile_refused_count, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_ir_guard_profile_type_count", f_dbg_ir_guard_profile_type_count, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, bigIntTypeInfo, 1, codeTypeInfo, QORE_PARAM_NO_ARG, "code");
     qns.addBuiltinVariant("dbg_force_finalize_cancel", f_dbg_force_finalize_cancel, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         nothingTypeInfo, 2, stringTypeInfo, QORE_PARAM_NO_ARG, "loop", bigIntTypeInfo, QORE_PARAM_NO_ARG, "index");
     qns.addBuiltinVariant("dbg_hold_bg_compile", f_dbg_hold_bg_compile, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
