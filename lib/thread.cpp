@@ -2660,6 +2660,36 @@ int check_stack(ExceptionSink* xsink) {
     ThreadData* td = thread_data.get();
     return check_stack_intern(xsink, td);
 }
+
+// the stack check of check_stack_intern() for a frame that is not allocated yet (qore#6414); a function of its own, so
+// that the check of every call is not changed
+int check_stack_reserve(ExceptionSink* xsink, size_t reserve) {
+    ThreadData* td = thread_data.get();
+    // a thread with no stack guard (QTF_NO_STACK_GUARD) has no limit
+    if (!td->stack_limit) {
+        return 0;
+    }
+    size_t pos = get_stack_pos();
+#ifdef STACK_DIRECTION_DOWN
+    if (td->stack_limit <= pos && pos - td->stack_limit >= reserve) {
+#else
+    if (td->stack_limit >= pos && td->stack_limit - pos >= reserve) {
+#endif
+        return 0;
+    }
+    // the frame does not fit: raised as check_stack_intern() raises it for the limit
+    if (td->sandbox_budgets.isStackLost()) {
+        td->sandbox_budgets.raiseLost(xsink, "call");
+        return -1;
+    }
+    if (int64 sandbox_bytes = td->sandbox_budgets.findStackLimit(td->stack_limit)) {
+        QoreSandboxBudgetStack::raiseStackLimit(xsink, sandbox_bytes);
+        return -1;
+    }
+    xsink->raiseException("STACK-LIMIT-EXCEEDED", "this thread's stack has exceeded the stack size limit " \
+        "(%lu bytes)", td->getUsableStackSize());
+    return -1;
+}
 #endif
 
 size_t qore_sandbox_tighten_stack(int64 bytes, size_t& saved) {
