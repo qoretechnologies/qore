@@ -4187,6 +4187,8 @@ static bool writeLValuePath(AOTInstWriteCtx& ctx) {
     ctx.writer.writeU8(static_cast<uint8_t>(pi->unary_op));
     ctx.writer.writeU8(static_cast<uint8_t>(pi->binary_mut_op));
     ctx.writer.writeU8(static_cast<uint8_t>(pi->ternary_op));
+    // whether the value of the operation is used (QORE_AOT_LVPATH_REF_RV_VERSION)
+    ctx.writer.writeU8(pi->ref_rv ? 1 : 0);
     if ((ctx.writer.feature_flags & QORE_AOT_FEAT_LVPATH_DELETE_EXPR) != 0) {
         // Legacy reserved byte. New writers do not set this feature; if a
         // caller does, emit "not present" rather than executable AST fallback.
@@ -4242,6 +4244,11 @@ static std::unique_ptr<QoreIRInstruction> readLValuePath(
     pi->unary_op = static_cast<LVUnaryOp>(QoreAOTBinaryReader::readU8(ctx.ptr));
     pi->binary_mut_op = static_cast<LVBinaryMutOp>(QoreAOTBinaryReader::readU8(ctx.ptr));
     pi->ternary_op = static_cast<LVTernaryOp>(QoreAOTBinaryReader::readU8(ctx.ptr));
+    // whether the value of the operation is used; an instruction of an earlier format uses it (see
+    // QORE_AOT_LVPATH_REF_RV_VERSION, qore#6328)
+    if (ctx.reader.getHeader().version >= QORE_AOT_LVPATH_REF_RV_VERSION) {
+        pi->ref_rv = QoreAOTBinaryReader::readU8(ctx.ptr) != 0;
+    }
     if ((ctx.reader.getHeader().feature_flags & QORE_AOT_FEAT_LVPATH_DELETE_EXPR) != 0) {
         if (QoreAOTBinaryReader::readU8(ctx.ptr)) {
             std::string error;

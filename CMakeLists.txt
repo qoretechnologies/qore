@@ -2920,6 +2920,10 @@ add_executable(qore-aot-ir-instruction-test examples/test/ir/aot_ir_instruction_
 target_include_directories(qore-aot-ir-instruction-test PRIVATE
     ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include)
 target_link_libraries(qore-aot-ir-instruction-test PRIVATE libqore)
+add_executable(qore-aot-lvalue-path-ref-rv-test examples/test/ir/aot_lvalue_path_ref_rv.cpp)
+target_include_directories(qore-aot-lvalue-path-ref-rv-test PRIVATE
+    ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include)
+target_link_libraries(qore-aot-lvalue-path-ref-rv-test PRIVATE libqore)
 add_executable(qore-aot-builtin-type-path-test examples/test/ir/aot_builtin_type_path_cache.cpp)
 target_include_directories(qore-aot-builtin-type-path-test PRIVATE
     ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include)
