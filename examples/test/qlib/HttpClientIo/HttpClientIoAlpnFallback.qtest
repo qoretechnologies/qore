@@ -74,9 +74,10 @@ class AltSvcTestManager inherits HttpClientIo::HttpClientConnectionManager {
         string key = sprintf("%s:%d", info.host, info.port ?? 443);
         AutoWriteLock al(pool_lock);
         cacheProtocol(key, protocol);
-        h3_probe_times{key} = now_us() - age;
+        # the probe times are on the monotonic clock (#6455)
+        h3_probe_times{key} = clock_get_monotonic_us() - age.durationMicroseconds();
         if (protocol == "h1") {
-            h1_probe_times{key} = now_us() - age;
+            h1_probe_times{key} = clock_get_monotonic_us() - age.durationMicroseconds();
         }
     }
 
