@@ -183,7 +183,8 @@ public class Http2ClientConnection inherits HttpClientConnection {
         # a full send buffer takes nothing: the send waits for the buffer to drain and is made again, as on HTTP/3;
         # the wait is woken by the I/O thread when it hands the stream's data to the transport, and when the stream
         # closes or is reset, so a cancel or a reset ends it at once (issue #5879)
-        *date deadline;
+        # on the monotonic clock, in microseconds
+        *int deadline;
         while (True) {
             try {
                 poll_op.sendStreamData(stream_id, data, end_stream);
@@ -193,9 +194,9 @@ public class Http2ClientConnection inherits HttpClientConnection {
                     rethrow;
                 }
                 if (!deadline) {
-                    deadline = now_us() + milliseconds(drain_timeout);
+                    deadline = clock_get_monotonic_us() + drain_timeout * 1000;
                 }
-                int remaining = (deadline - now_us()).durationMilliseconds();
+                int remaining = (deadline - clock_get_monotonic_us() + 999) / 1000;
                 if (remaining <= 0) {
                     throw "HTTP2-FLOW-CONTROL", sprintf("stream %d: the send buffer did not drain within %d ms; the "
                         "data was not sent", stream_id, drain_timeout);

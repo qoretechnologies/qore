@@ -86,6 +86,8 @@ public:
     // internal use only - for internal counters
     DLLLOCAL void waitForZero();
     DLLLOCAL void dec();
+    //! waits until the count is at most \a n; returns 0, or ETIMEDOUT if it is still higher after \a timeout_ms
+    DLLLOCAL int waitForCountAtMost(int n, int timeout_ms);
 
     // internal use only - the fork handlers of process-wide counters (see QoreForkCounter)
     //! acquires the counter's lock before fork()

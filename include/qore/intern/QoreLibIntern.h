@@ -533,6 +533,11 @@ DLLLOCAL q_method_t qore_get_lexical_program_method(q_method_t method);
 DLLLOCAL bool needs_scan(const AbstractQoreNode* n);
 DLLLOCAL bool needs_scan(const QoreValue& v);
 
+//! returns the node that a call reference value holds and that is scanned for recursive references, or nullptr
+/** the callback of a sandbox-bound callback, or the value of a reference to a pseudo-method (issue #995)
+*/
+DLLLOCAL const AbstractQoreNode* qore_get_call_reference_scan_node(const AbstractQoreNode* n);
+
 #ifdef DEBUG
 //! the offset in microseconds that debug builds add to the system clock (q_epoch(), q_epoch_us(), q_epoch_ns()), to test
 //! code under a step of the system clock; set with dbg_set_realtime_offset(); the monotonic clock is not affected
@@ -1256,6 +1261,17 @@ DLLLOCAL QORE_INTERN_NOINLINE int64 qore_plus_equals_char_int_operand(const Qore
 //! returns the float that += adds to a float lvalue for a char operand: the char converted as its one-character
 //! string is (\c "5" gives 5.0, \c "a" 0.0); out of line, as qore_plus_equals_char_string()
 DLLLOCAL QORE_INTERN_NOINLINE double qore_plus_equals_char_float_operand(const QoreValue v);
+
+//! returns true if a divisor of an arbitrary-precision division is zero: the divisor as the division converts it
+/** A number is tested itself, and any other value as the number that it converts to, so that a divisor that is not
+    zero but converts to the float \c 0.0 (ex: \c 1e-400n) is not taken for zero (qore#6387); an int, a float, a
+    boolean, NOTHING and NULL are tested by their float, which is zero exactly when their number is
+*/
+DLLLOCAL bool qore_number_divisor_is_zero(const QoreValue& v);
+
+//! returns true if a constant divisor of the \c / operator is zero for every type of the dividend: as a float and as
+//! a number (see qore_number_divisor_is_zero(); qore#6387)
+DLLLOCAL bool qore_constant_divisor_is_zero(const QoreValue& v);
 
 //! QoreValue::isNothing() with the test of an inline value made inline, for the compound assignment paths
 DLLLOCAL QORE_INTERN_ALWAYS_INLINE bool qore_value_is_nothing(const QoreValue& v) {
@@ -2195,6 +2211,83 @@ public:
 class ClosureParseEnvironment;
 class VNode;
 
+//! A variable or member whose initialization expression is being parsed (qore#526)
+/** A use of the variable or member in its own initialization expression reads it before it has a value: the
+    expression is parsed while an object of this class exists, a use is recorded with parseUse(), and the code that
+    parses the declaration raises the parse error with raiseUseError() if getUseLoc() gives a location.
+
+    A use in the body of a closure created in the expression is not recorded: the closure captures the variable and
+    reads it when it is called, which can be after the variable is assigned (ex: a closure that calls itself).  The
+    targets are hidden in a new variable block (VariableBlockHelper), such as a function body parsed on demand while
+    the expression is parsed.
+*/
+class QoreParseInitializerTarget {
+public:
+    //! starts the parse of the initialization expression of the given variable or member
+    /** @param target the local variable (LocalVar), the static class variable (QoreVarInfo) or the class of the
+        member (qore_class_private)
+        @param member the name of the member for a member, otherwise nullptr
+    */
+    DLLLOCAL QoreParseInitializerTarget(const void* target, const char* member = nullptr);
+
+    DLLLOCAL ~QoreParseInitializerTarget();
+
+    //! returns the location of the first use of the target in its initialization expression, or nullptr
+    DLLLOCAL const QoreProgramLocation* getUseLoc() const {
+        return use_loc;
+    }
+
+    //! raises the parse error for a use of the target in its initialization expression, if there was one
+    /** @param what the kind of the target in the message (ex: \c "local variable")
+        @param name the name of the target
+
+        @return -1 if the error was raised, 0 if not
+    */
+    DLLLOCAL int raiseUseError(const char* what, const char* name) const {
+        return raiseUseError(use_loc, what, name);
+    }
+
+    //! raises the parse error for a use of a variable or member at the given location in its initialization
+    //! expression, if a location is given
+    /** for a declaration that raises the error after its other parse errors, such as type errors
+
+        @return -1 if the error was raised, 0 if not
+    */
+    DLLLOCAL static int raiseUseError(const QoreProgramLocation* use_loc, const char* what, const char* name);
+
+    //! records a use of the given variable or member at parse time
+    DLLLOCAL static void parseUse(const void* target, const char* member, const QoreProgramLocation* loc);
+
+    //! sets the targets of the current parse and returns the previous ones (for a new variable block)
+    DLLLOCAL static QoreParseInitializerTarget* swapCurrent(QoreParseInitializerTarget* targets);
+
+private:
+    const void* target;
+    const char* member;
+    //! the closure parse environment of the initialization expression
+    ClosureParseEnvironment* cenv;
+    //! the location of the first use, if any
+    const QoreProgramLocation* use_loc = nullptr;
+    QoreParseInitializerTarget* prev;
+};
+
+//! hides the initialization expressions being parsed for its scope (qore#526)
+/** For the initialization expression of a member or a static class variable, which can be parsed on demand while
+    another initialization expression is parsed, and which runs at another time than that expression
+*/
+class QoreParseInitializerTargetBarrier {
+public:
+    DLLLOCAL QoreParseInitializerTargetBarrier() : saved(QoreParseInitializerTarget::swapCurrent(nullptr)) {
+    }
+
+    DLLLOCAL ~QoreParseInitializerTargetBarrier() {
+        QoreParseInitializerTarget::swapCurrent(saved);
+    }
+
+private:
+    QoreParseInitializerTarget* saved;
+};
+
 // pushes a marker on the local variable parse stack so that searches can skip to global thread-local variables when the search hits the marker
 /* the block is also a new capture root: a closure being parsed in the enclosing context (e.g. one whose body
    references a function whose body is parsed on demand) cannot capture variables found from inside the block, so
@@ -2207,6 +2300,8 @@ public:
 
 private:
     ClosureParseEnvironment* closure_parse_env;
+    //! the initialization expressions being parsed outside of the block (qore#526)
+    QoreParseInitializerTarget* initializer_targets;
 };
 
 //! Parses the initializer of a declaration (a class or hashdecl member, a class static variable) in its own scope

@@ -1,0 +1,23 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its AOT module loads run in child processes (the fixture), one for each stack size
+# test-platform: macos - thread stack sizes and the parse-time stack limit
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%include ParseStackBoundary.qc
+
+%exec-class ParseStackBoundaryPart5
+
+#! runs part 5 of 5 of the cases of ParseStackBoundaryBase: chains of AOT modules
+class ParseStackBoundaryPart5 inherits ParseStackBoundaryBase {
+    constructor() : ParseStackBoundaryBase("ParseStackBoundaryPart5", 5) {
+    }
+}

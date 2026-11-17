@@ -1222,6 +1222,20 @@ string sql = pk.getTableConstraintSql();
             return new Sqlite3View(name, row.sql);
         }
 
+        #! Returns a view object for a view of a schema description
+        private AbstractView makeViewImpl(string name, string src) {
+            return new Sqlite3View(name, src);
+        }
+
+        #! Compares the query of a view with the query of a view of a schema description
+        /** SQLite keeps the statement that created the view as it was given, of which the query follows \c AS
+        */
+        private bool viewSourceEqualImpl(AbstractView live, AbstractView tmpl) {
+            string src = live.src;
+            src =~ s/^\s*create\s+(temp\s+|temporary\s+)?view\s+(if\s+not\s+exists\s+)?("(?:[^"]|"")*"|`[^`]*`|\[[^\]]*\]|\S+)\s+as\s+//is;
+            return AbstractDatabase::normalizeViewSource(src) == AbstractDatabase::normalizeViewSource(tmpl.src);
+        }
+
         private AbstractFunction makeFunctionImpl(string name, string src, *hash<auto> opts) {
             throw "UNSUPPORTED";
         }

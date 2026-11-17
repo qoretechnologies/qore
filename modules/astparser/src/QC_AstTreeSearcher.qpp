@@ -88,7 +88,7 @@ AstTreeSearcher::constructor() {
 
     @return hash with hover info, or NOTHING if not found:
     - \c description: the signature of the declaration, such as \c "int sub size()"
-    - \c docComment: the doc comment of the declaration, if any: the consecutive \c #! and \c /** comments
+    - \c docComment: the doc comment of the declaration, if any: the consecutive \c #! and <tt>/&#42;&#42;</tt> comments
       immediately before it, as written in the source (since %Qore 3.0)
 
     @par Example:

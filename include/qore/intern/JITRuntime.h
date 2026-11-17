@@ -92,6 +92,10 @@ extern "C" {
 
 //! Check the current native stack guard for generated code entry points
 int qore_rt_check_stack(ExceptionSink* xsink);
+//! raises STACK-LIMIT-EXCEEDED and returns -1 if the stack of the thread cannot take \a reserve more bytes beyond its
+//! stack check: the thunk of a compiled function whose frame exceeds the stack guard checks for the frame before the
+//! frame is allocated (QoreIRFrameCheck, qore#6414)
+int qore_rt_check_stack_reserve(ExceptionSink* xsink, int64_t reserve);
 
 // --- Outlined function-body return token (design/aot-function-outlining.md) ---
 
@@ -961,6 +965,12 @@ void qore_rt_exec_on_block_exit_forward(int64_t saved_count, ExceptionSink* xsin
     QoreHandlerRunContext
 */
 void qore_rt_handler_return(uint64_t value_bits, ExceptionSink* xsink);
+
+//! Sets the parse options that the top-level code runs with from here on (QoreIROpcode::SetCodeParseOptions,
+//! qore#6293)
+/** The options are given as four 32-bit words, from the lowest; see set_toplevel_code_parse_options()
+*/
+void qore_rt_set_code_parse_options(int64_t w0, int64_t w1, int64_t w2, int64_t w3);
 
 //! Discard (without firing) on_block_exit handlers registered since saved_count,
 //! truncating the thread-local handler stack back to that mark.  Used by the JIT

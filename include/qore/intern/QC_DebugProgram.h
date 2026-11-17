@@ -247,7 +247,10 @@ public:
       //printd(5, "QoreDebugProgramWithCoreObject::onExit() getRetValue#0: type: %d, in: %p\n", returnValue.type, returnValue.getInternalNode());
       ReferenceArgumentHelper rah(returnValue, &xsink2);
       params[1] = rah.getArg(); // caller owns ref
-      callMethod("onExit", pgm, 2, params, rs, rts, xsink, xsink2);
+      // the end of the Program's run (its top-level block) goes to onRunExit(), whose default calls onExit(); the
+      // end of a thread gives no statement (#3401)
+      callMethod(qore_program_private::isTopLevelBlock(pgm, blockStatement) ? "onRunExit" : "onExit", pgm, 2, params,
+         rs, rts, xsink, xsink2);
       returnValue = rah.getOutputValue(); // caller owns ref
       //printd(5, "QoreDebugProgramWithCoreObject::onExit() getRetValue#3: type: %d, in: %p\n", returnValue.type, returnValue.getInternalNode());
    }

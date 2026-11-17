@@ -74,8 +74,8 @@ class AsyncRace {
         */
         *EventNotifier current_notifier;
 
-        #! True if this race set the per-key @c creating flag (clears it on teardown)
-        bool we_set_creating = False;
+        #! The claim of the creation of the key that this race took, if any (released on teardown)
+        int creating_claim = 0;
     }
 }
 
@@ -295,7 +295,23 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         #! Mutex + condition to serialize connection creation per pool key
         Mutex create_mutex();
         Condition create_cond();
-        hash<string, bool> creating;
+        #! The claims of the creation of a connection per pool key: the serial of the claim that owns it
+        /** A claim is released only by its owner (see @ref releaseCreationLocked()): a waiter can take the creation
+            over from a stalled creator, and the stalled creator must not release the new claim when it ends
+        */
+        hash<string, int> creating;
+
+        #! The serial of the last claim of @ref creating
+        int creation_serial = 0;
+
+        #! Happy-eyeballs races that a request's deadline cut off and that go on in the background (#6429)
+        /** Keyed by the serial of the creation claim that the race took over (one entry per race, also when two
+            races for one key run at once); each value has the pool \c key and the candidates (\c h3conn,
+            \c h2conn, \c h1conn).  The race's claim of @ref creating stays held until the race ends, so later
+            requests wait for its winner.  Protected by @ref create_mutex; @ref closeAll() closes the candidates of
+            every race.
+        */
+        hash<string, hash<auto>> bg_races;
 
         #! Protocol cache: "host:port" -> "h1", "h2", or "h3"
         /** \c "h3" is set only by a ready, winning H3 candidate;
@@ -318,22 +334,23 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         */
         hash<string, int> alt_svc_port_map;
 
-        #! Last H3 probe times: "host:port" -> timestamp
-        hash<string, date> h3_probe_times;
+        #! Last H3 probe times: "host:port" -> time on the monotonic clock in microseconds
+        hash<string, int> h3_probe_times;
 
         #! Address families that HTTP/3 connections failed to reach: "host:port" -> family -> expiry time
         /** A host name can resolve to addresses of both families while the server only receives QUIC datagrams on
             one of them; a family whose connection attempt never reached a server is not used for new HTTP/3
-            connections to the origin until the entry expires (see @ref H3FamilyFailureTtl)
+            connections to the origin until the entry expires (see @ref H3FamilyFailureTtl); the expiry times are on
+            the monotonic clock in microseconds
         */
-        hash<string, hash<string, date>> h3_failed_families;
+        hash<string, hash<string, int>> h3_failed_families;
 
-        #! Last HTTP/1.1 fallback times: "host:port" -> timestamp
+        #! Last HTTP/1.1 fallback times: "host:port" -> time on the monotonic clock in microseconds
         /** Written by @ref cacheProtocol() whenever \c "h1" is cached; read by
             @ref resolveProtocol() to re-run the happy-eyeballs race after
             @ref H1_REPROBE_INTERVAL.
         */
-        hash<string, date> h1_probe_times;
+        hash<string, int> h1_probe_times;
 
         #! Pending Alt-Svc discoveries from async callbacks
         /** Thread-safe unlimited Queue: the I/O thread pushes {url, alt_svc}
@@ -679,13 +696,41 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         establishment; @ref acquireStream() always uses the synchronous request
         path.  Kept optional so existing @c acquireStream(url) callers are
         unaffected.
+        @param timeout_ms the most time to wait for a connection: for the happy-eyeballs race of the \c "auto"
+        protocol, for a connection that another request is creating, and for the probe of a plain-HTTP HTTP/2
+        connection; if it runs out, \c HTTPCLIENT-TIMEOUT is raised.  Each connection's own connect phase is bounded
+        by the \c connect_timeout option, also when the wait for it ends first: a happy-eyeballs race that the
+        timeout cuts off goes on in the background, and its winner is pooled for later requests.  Without a value,
+        or with a value of 0 or less, the waits are bounded by the \c connect_timeout option only.  A connection that
+        is still connecting can be returned: the stream's request waits for it with its own timeout (see
+        @ref HttpClientStreamHandle::request() "request()").
+
+        @note The requests of the connection manager (@ref request(), @ref submitRequestAsync(),
+        @ref acquireAndStartStreaming(), @ref requestAsync()) acquire their streams internally, not through this
+        method, so a subclass that overrides it does not intercept them
 
         @return a stream handle ready for submitting requests
 
         @throw HTTPCLIENT-URL-ERROR if the URL is invalid
         @throw HTTPCLIENT-CAPACITY-ERROR if no connection can be acquired
+        @throw HTTPCLIENT-TIMEOUT \a timeout_ms ran out before a connection was acquired (since HttpClientIo 1.0)
     */
-    HttpClientStreamHandle acquireStream(string url, *bool non_blocking) {
+    HttpClientStreamHandle acquireStream(string url, *bool non_blocking, *timeout timeout_ms) {
+        return acquireStreamUntil(url, non_blocking,
+            timeout_ms > 0 ? clock_get_monotonic_us() + timeout_ms * 1000 : NOTHING);
+    }
+
+    #! Acquires a stream handle for the given URL by a deadline
+    /** @param url the target URL
+        @param non_blocking retained plumbing only (see @ref acquireStream())
+        @param deadline the time by which the connection must be acquired, if any, on the monotonic clock in
+        microseconds (@ref Qore::clock_get_monotonic_us() "clock_get_monotonic_us()"); see @ref acquireStream()
+
+        @return a stream handle ready for submitting requests
+
+        @throw HTTPCLIENT-TIMEOUT the deadline passed before a connection was acquired
+    */
+    private HttpClientStreamHandle acquireStreamUntil(string url, *bool non_blocking, *int deadline) {
         # Pin @c pool_lock across this method: see @ref pool_lock_pin.
         RWLock pool_lock_pin = pool_lock;
         # Register as an in-flight caller so the destructor drains us: see @ref in_flight_drain.
@@ -707,7 +752,7 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         # set if no stream of the connection was reserved: a new connection whose connect failed; its request raises
         # the connection's error, and no reservation is marked or released (#6193; see getConnection())
         bool unreserved;
-        HttpClientConnection conn = getConnection(url_info, \from_pool, non_blocking, \unreserved);
+        HttpClientConnection conn = getConnection(url_info, \from_pool, non_blocking, \unreserved, deadline);
 
         # Create protocol-appropriate stream handle; release the reservation
         # if the constructor throws to avoid leaking a pending slot
@@ -784,6 +829,9 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         @return the stream handle ready for reading
 
         @throw HTTPCLIENT-CONNECT-ERROR if the connection cannot be established
+        @throw HTTPCLIENT-TIMEOUT the request was not started within the \c request_timeout option, which bounds the
+        acquisition of the connection and the wait for it to become ready, over all attempts; no attempt starts once
+        it has run out
 
         @note If the request times out on a pooled connection, the connection is
         evicted and the request is retried once on a fresh connection, handling
@@ -802,12 +850,25 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         int max_retries = opts.max_request_retries;
         bool timeout_retried = False;
         bool h3_close_retried = False;
+        # the request_timeout option bounds the start of the request as a whole (#6429): the acquisition of each
+        # attempt's connection and the wait for it to become ready share one deadline, and no attempt starts once it
+        # has passed; an acquisition that it ends raises HTTPCLIENT-TIMEOUT, which is final
+        *int request_deadline = opts.request_timeout > 0
+            ? clock_get_monotonic_us() + opts.request_timeout * 1000
+            : NOTHING;
         while (True) {
-            HttpClientStreamHandle stream = acquireStream(url);
+            HttpClientStreamHandle stream = acquireStreamUntil(url, NOTHING, request_deadline);
+            stream.setRequestDeadline(request_deadline, opts.request_timeout);
             try {
                 stream.startStreaming(method, path, headers, body_streaming, body);
                 return stream;
             } catch (hash<ExceptionInfo> ex) {
+                # no retry starts once the request's time has run out; a deadline says nothing about the protocol;
+                # the stream's flag decides, not the clock: a wait can end up to a clock tick before the deadline
+                if (stream.requestDeadlineExpired()
+                        || (request_deadline && clock_get_monotonic_us() >= request_deadline)) {
+                    rethrow;
+                }
                 # HTTP3-CONNECTION-CLOSED and HTTP3-READ-ERROR retry only ONCE:
                 # the Gmail/Google idle-close pattern needs one retry on a fresh
                 # connection, but if the fresh connection ALSO fails the server
@@ -833,9 +894,10 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
                     evictDeadConnections(url);
                     continue;
                 }
-                # Only retry timeout on reused pooled connections (stale connection)
+                # Only retry timeout on reused pooled connections (stale connection) on which the request was
+                # submitted: a connection that never became ready is not stale (#6429)
                 if (ex.err == "HTTPCLIENT-TIMEOUT"
-                        && stream.wasConnectionReused() && !timeout_retried
+                        && stream.wasConnectionReused() && stream.isSubmitted() && !timeout_retried
                         && retries < max_retries && canRetryRequest(method, stream)) {
                     timeout_retried = True;
                     ++retries;
@@ -844,7 +906,7 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
                         "evicting stale connection and retrying (%d/%d)",
                         timed_out_conn.getProtocol(), timed_out_conn.getConnectionId(),
                         retries, max_retries);
-                    try { timed_out_conn.close(); } catch () {}
+                    closeTimedOutConnection(timed_out_conn);
                     evictDeadConnections(url);
                     continue;
                 }
@@ -873,7 +935,9 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         @throw HTTPCLIENT-URL-ERROR if the URL is invalid or missing a host
         @throw HTTPCLIENT-SHUTDOWN if the connection manager is shutting down
         @throw HTTPCLIENT-CAPACITY-ERROR if no connection can be acquired after retries
-        @throw HTTPCLIENT-TIMEOUT if the connection establishment times out
+        @throw HTTPCLIENT-TIMEOUT if the connection establishment times out: the \c request_timeout option bounds
+        the acquisition of the connection and the wait for it to become ready, over all attempts; no attempt starts
+        once it has run out, and a timeout of the acquisition is not retried and causes no protocol fallback
         @throw HTTPCLIENT-STATE-ERROR if the stream is already in use
 
         @throw HTTPCLIENT-REQUEST-BODY-ERROR a GET request specifies a body or enables request-body streaming
@@ -892,10 +956,17 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         int retries = 0;
         int max_retries = opts.max_request_retries;
         bool h3_close_retried = False;
+        # the request_timeout option bounds the submission of the request as a whole (#6429): the acquisition of each
+        # attempt's connection and the wait for it to become ready share one deadline, and no attempt starts once it
+        # has passed; an acquisition that it ends raises HTTPCLIENT-TIMEOUT, which is final
+        *int request_deadline = opts.request_timeout > 0
+            ? clock_get_monotonic_us() + opts.request_timeout * 1000
+            : NOTHING;
         while (True) {
             *HttpClientStreamHandle stream;
             try {
-                stream = acquireStream(url);
+                stream = acquireStreamUntil(url, NOTHING, request_deadline);
+                stream.setRequestDeadline(request_deadline, opts.request_timeout);
                 stream.setDecodeText(decode_text);
                 hash<auto> result = stream.submitAsync(method, path, headers, body);
                 # Wrap the Future so Set-Cookie extraction happens when
@@ -915,6 +986,13 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
                 # calls releaseReservationIfHeld() on all pre-submit failure paths
                 # (waitForReady timeout, cancel, submitAsyncImpl exception), and
                 # the destructor is a final safety net
+                # no retry starts once the request's time has run out, and an acquisition that the deadline ended is
+                # final: a deadline says nothing about the protocol, so there is no fallback either (#6429)
+                # the stream's flag decides, not the clock: a wait can end up to a clock tick before the deadline
+                if ((ex.err == "HTTPCLIENT-TIMEOUT" && (!stream || stream.requestDeadlineExpired()))
+                        || (request_deadline && clock_get_monotonic_us() >= request_deadline)) {
+                    rethrow;
+                }
                 if (isHttp3ConnectionCloseError(ex.err)) {
                     if (!h3_close_retried && retries < max_retries
                             && canRetryRequest(method, stream, ex.err)) {
@@ -1001,7 +1079,11 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         @param path the full request path to send (must include any base path from the URL)
         @param headers request headers (optional)
         @param body request body (optional)
-        @param timeout_ms request timeout (optional)
+        @param timeout_ms request timeout (optional; the \c request_timeout option by default): it bounds the whole
+        request: the acquisition of its connection (the happy-eyeballs race of the \c "auto" protocol, and the wait
+        for a connection that another request is creating), the wait for the connection to become ready, the wait for
+        the response, and every attempt to send the request again; no attempt starts once it has run out, and the
+        request then raises \c HTTPCLIENT-TIMEOUT
         @param decode_text if @ref False, the response body is returned as binary data after its content encoding is
         decompressed: the octets of the resource, including any byte order mark; by default a text body is decoded to
         a string; see @ref HttpClientStreamHandle::setDecodeText()
@@ -1016,16 +1098,16 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         - \b Instant: dead connections (FIN/RST from server) are detected by the async
           I/O thread via epoll/kqueue + \c recv(MSG_PEEK) and marked as closed before
           the pool scan returns them.  No timeout needed — detection is immediate.
-        - \b Timeout: for "half-open" connections (server went silent — no FIN/RST),
-          reused pooled connections use \c connect_timeout as the request deadline instead
-          of the full \c request_timeout.  If the server doesn't respond within
-          \c connect_timeout, the connection is evicted and the request is retried once
-          on a fresh connection, also with \c connect_timeout as the deadline.  This
-          provides fast stale detection (typically 2-5s) instead of waiting the full
-          \c request_timeout (30-60s).  Timeouts on freshly created connections are not
-          retried — they indicate a genuinely slow or unreachable server.
+        - \b Inactivity: for "half-open" connections (server went silent — no FIN/RST), a
+          request on a reused pooled connection that fails on the \c io_timeout option (no data
+          received) is sent again once on a fresh connection, within the request's remaining time.
+          The request's timeout is a hard deadline: a request is never sent again once it has run
+          out, so without \c io_timeout (or \c tcp_user_timeout / TCP keepalive at the TCP level) a
+          half-open connection ends the request with \c HTTPCLIENT-TIMEOUT.  Timeouts on freshly
+          created connections, or on connections that never became ready, are not retried.
 
-        @throw HTTPCLIENT-TIMEOUT if the request times out (after retry for pooled connections)
+        @throw HTTPCLIENT-TIMEOUT if the request times out (after retry for pooled connections), also while its
+        connection is acquired
         @throw HTTPCLIENT-REQUEST-ERROR if the request fails due to a protocol or transport error
         @throw HTTPCLIENT-URL-ERROR if the URL is invalid or missing a host, or if it addresses a UNIX domain
         socket with TLS or with a forced HTTP/2 or HTTP/3 protocol
@@ -1158,19 +1240,21 @@ HttpClientResponseStream stream = mgr.openStream("https://example.com/file.iso",
             list<binary> pending = ();
             bool ended = False;
             *hash<auto> resp;
-            date sent = now_us();
-            *date header_deadline = wait > 0 ? sent + milliseconds(wait) : NOTHING;
+            # on the monotonic clock, so that a change of the system clock does not end the wait early or late
+            int sent = clock_get_monotonic_us();
+            *int header_deadline = wait > 0 ? sent + wait * 1000 : NOTHING;
             while (!(resp = sh.getResponse()).status_code) {
                 *timeout slice;
                 if (header_deadline) {
-                    slice = (header_deadline - now_us()).durationMilliseconds();
+                    int left_us = header_deadline - clock_get_monotonic_us();
+                    slice = left_us > 0 ? (left_us + 999) / 1000 : 0;
                     if (slice <= 0) {
                         throw "HTTPCLIENT-TIMEOUT", sprintf("no response received from %y within %d ms",
                             rf.getRequestUrl(), wait);
                     }
                 }
                 if (opts.io_timeout > 0) {
-                    int io_ms = opts.io_timeout - sh.getInactiveTime(sent) / 1000;
+                    int io_ms = opts.io_timeout - sh.getInactiveTimeSince(sent) / 1000;
                     if (io_ms <= 0) {
                         throw "HTTPCLIENT-TIMEOUT", sprintf("no data received from %y for %d ms (io_timeout)",
                             rf.getRequestUrl(), opts.io_timeout);
@@ -1572,77 +1656,28 @@ HttpClientResponseStream stream = mgr.openStream("https://example.com/file.iso",
         hash<HttpClientResendInfo> resend();
         bool timeout_retried = False;
         bool proxy_connect_retried = False;
-        # Wall-clock fail-safe across the entire retry loop.  Without this, a
-        # bug in per-stream wait handling (incorrect deadline, non-firing
-        # future, cancel deadlock) could cause infinite hangs even when each
-        # individual f.get() call is supposed to be bounded.  We saw this
-        # empirically where a 120s request_timeout failed to fire and the
-        # calling thread parked in FutureImpl::get() for 30+ min.  The
-        # budget gives us a hard ceiling regardless of per-stream
-        # behavior — but it must be GENEROUS enough to cover the legitimate
-        # retry path (request_timeout for the first attempt + connect_timeout
-        # for each retry on a fresh connection), otherwise it will pre-empt
-        # the existing recovery path before it can fire.  We allow:
-        #   max(per_attempt * 2, per_attempt + max_retries * connect_timeout)
-        # which covers both "two full attempts" and "one attempt + one retry
-        # per max_retries with connect_timeout each" — whichever is larger.
-        int per_attempt_ms = exists timeout_ms
-            ? timeout_ms : opts.request_timeout;
-        int retry_overhead_ms = max_retries * opts.connect_timeout;
-        int total_budget_ms = per_attempt_ms * 2;
-        if (per_attempt_ms + retry_overhead_ms > total_budget_ms) {
-            total_budget_ms = per_attempt_ms + retry_overhead_ms;
-        }
-        # without a request timeout there is no overall deadline (see the io_timeout option), and no budget
-        *date budget_deadline = per_attempt_ms > 0 ? now_us() + milliseconds(total_budget_ms) : NOTHING;
+        # The request's timeout bounds the whole request (#6429): the acquisition of each attempt's connection, the
+        # wait for it to become ready, the wait for the response, and the decision to send the request again share one
+        # deadline; no attempt starts once it has passed.  Without a request timeout there is no deadline (see the
+        # io_timeout option).
+        timeout request_limit = timeout_ms ?? opts.request_timeout;
+        *int request_deadline = request_limit > 0 ? clock_get_monotonic_us() + request_limit * 1000 : NOTHING;
         while (True) {
             *HttpClientStreamHandle stream;
             try {
-                # Bail at the top of the loop if the wall-clock fail-safe has
-                # fired.  This is the *only* place we cap on total elapsed
-                # time — we deliberately do NOT clamp effective_timeout below
-                # because that would pre-empt the per-attempt timeout (e.g.
-                # the test pattern that expects request_timeout to fire then
-                # connect_timeout to retry on a fresh connection).
-                if (budget_deadline && now_us() >= budget_deadline) {
-                    throw "HTTPCLIENT-TIMEOUT",
-                        sprintf("total request budget of %d ms exceeded across "
-                            "%d attempt%s", total_budget_ms, resend.retries + 1,
-                            resend.retries == 0 ? "" : "s");
-                }
-
-                stream = acquireStream(url);
-                # Per-request timeout resolution:
-                # 1. Caller-provided timeout always wins (the caller knows best,
-                #    e.g. LLM queries with 60s timeout).
-                # 2. After a stale-connection retry: use connect_timeout for fast
-                #    fail — if the fresh connection also times out, the server is
-                #    genuinely unreachable.
-                # 3. Otherwise: NOTHING — falls through to the default
-                #    request_timeout configured on the connection manager.
-                #
-                # NOTE: reused pooled connections intentionally use the default
-                # request_timeout rather than connect_timeout.  Using
-                # connect_timeout for "stale detection" caused false timeouts
-                # on slow-response endpoints (AI/LLM, long-running APIs) where
-                # the connection is alive but the response takes longer than
-                # connect_timeout.  True stale connections are detected at the
-                # TCP/protocol layer (RST, GOAWAY, connection-reset errors) and
-                # retried via the isConnectionError path below.
-                *timeout effective_timeout;
-                if (exists timeout_ms) {
-                    effective_timeout = timeout_ms;
-                } else if (timeout_retried) {
-                    effective_timeout = opts.connect_timeout;
-                }
-                log(LoggerLevel::DEBUG, "requestIntern %s %s: reused=%y timeout_retried=%y "
-                    "effective_timeout=%y budget_remaining=%dms",
+                # the acquisition of the connection is bounded by the request's deadline: the happy-eyeballs race,
+                # the wait for a connection that another request is creating
+                stream = acquireStreamUntil(url, NOTHING, request_deadline);
+                stream.setRequestDeadline(request_deadline, request_limit);
+                # every attempt, including a resend after a stale connection was detected, waits until the request's
+                # deadline (the stream ends its waits there); reused pooled connections are not given a shorter
+                # time: a slow response is not a dead connection.  Stale connections are detected at the
+                # TCP/protocol layer (RST, GOAWAY, connection-reset errors) or by the io_timeout option.
+                log(LoggerLevel::DEBUG, "requestIntern %s %s: reused=%y timeout_retried=%y remaining=%dms",
                     method, path, stream.wasConnectionReused(), timeout_retried,
-                    effective_timeout,
-                    budget_deadline ? (budget_deadline - now_us()).durationMilliseconds() : -1);
+                    request_deadline ? (request_deadline - clock_get_monotonic_us()) / 1000 : -1);
                 stream.setDecodeText(decode_text);
-                hash<auto> resp = stream.request(method, path, headers, body,
-                    effective_timeout);
+                hash<auto> resp = stream.request(method, path, headers, body, timeout_ms);
                 checkAltSvc(url, resp);
                 return resp;
             } catch (hash<ExceptionInfo> ex) {
@@ -1651,6 +1686,12 @@ HttpClientResponseStream stream = mgr.openStream("https://example.com/file.iso",
                 # start a second transaction on another socket.  Surface the error so the caller
                 # discards the leased connection (which makes the server roll back and tear down).
                 if (getPinnedConnection()) {
+                    rethrow;
+                }
+                # no retry or resend starts once the request's time has run out (#6429); the stream's flag decides,
+                # not only the clock: a wait can end up to a clock tick before the deadline
+                if ((stream && stream.requestDeadlineExpired())
+                        || (request_deadline && clock_get_monotonic_us() >= request_deadline)) {
                     rethrow;
                 }
                 # Handle HTTPCLIENT-TIMEOUT before the generic isConnectionError
@@ -1663,18 +1704,23 @@ HttpClientResponseStream stream = mgr.openStream("https://example.com/file.iso",
                 # up to MaxRequestRetries full-timeout retries against a dead
                 # server (e.g. 3 × 10s = 30s+), when the correct behavior is:
                 # only retry once on a reused pooled connection (stale detection),
-                # never on a fresh connection (genuinely unreachable).
+                # never on a fresh connection (genuinely unreachable).  A connection that never became ready (the
+                # request was not submitted on it) is not a stale connection: other requests may be waiting for it
+                # too, and its connect is bounded by connect_timeout (#6429).
                 if (ex.err == "HTTPCLIENT-TIMEOUT") {
-                    if (stream && stream.wasConnectionReused() && !timeout_retried
+                    if (stream && stream.wasConnectionReused() && stream.isSubmitted() && !timeout_retried
                             && resend.retries < max_retries && canRetryRequest(method, stream)) {
                         timeout_retried = True;
                         ++resend.retries;
                         HttpClientConnection timed_out_conn = stream.getConnection();
-                        log(LoggerLevel::DEBUG, "request timed out on pooled %s connection %d, "
-                            "evicting stale connection and retrying with connect_timeout=%y (%d/%d)",
-                            timed_out_conn.getProtocol(), timed_out_conn.getConnectionId(),
-                            opts.connect_timeout, resend.retries, max_retries);
-                        try { timed_out_conn.close(); } catch () {}
+                        log(LoggerLevel::DEBUG, "request timed out on pooled %s connection %d (%s), "
+                            "evicting stale connection and retrying within the remaining %s (%d/%d)",
+                            timed_out_conn.getProtocol(), timed_out_conn.getConnectionId(), ex.desc,
+                            request_deadline
+                                ? sprintf("%d ms", (request_deadline - clock_get_monotonic_us()) / 1000)
+                                : "time (no deadline)",
+                            resend.retries, max_retries);
+                        closeTimedOutConnection(timed_out_conn);
                         evictDeadConnections(url);
                         continue;
                     }
@@ -1849,6 +1895,27 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
                 heCloseLegs(race.h3conn, race.h2conn, race.h1conn);
             }
             remove async_races;
+        }
+
+        # close the candidates of the synchronous races that go on in the background (#6429): closing a candidate
+        # signals the race's notifier at once (setClosed() notifies the ready notifiers), so the watch of each race
+        # completes, and its step, on a callback worker, sees the shutdown and ends the race.  The in_flight drain
+        # below waits for every race to end (a step that re-submitted its watch before the shutdown was seen is
+        # waited for by the drain only, not by the callback barrier), so the drain does not depend on a race's own
+        # bound, which can be longer than its ceiling once an HTTP/1.1 candidate started.  The safety timers of the
+        # watches are cancelled.  The candidates are closed outside the lock.
+        {
+            list<hash<auto>> races;
+            {
+                AutoLock al(create_mutex);
+                races = (map bg_races{$1}, keys bg_races) ?? ();
+            }
+            foreach hash<auto> race in (races) {
+                if (race.safety_timer) {
+                    controller.cancelTimer(race.safety_timer);
+                }
+                heCloseLegs(race.h3conn, race.h2conn, race.h1conn);
+            }
         }
 
         try {
@@ -2187,7 +2254,8 @@ printf("%d connection(s) migrated\n", migrated);
                 # full race so a server that has since enabled ALPN (or a
                 # now-reachable QUIC path) is rediscovered.
                 if (h1_probe_times.hasKey(key)
-                        && (now_us() - h1_probe_times{key}) < H1_REPROBE_INTERVAL) {
+                        && (clock_get_monotonic_us() - h1_probe_times{key})
+                            < H1_REPROBE_INTERVAL.durationMicroseconds()) {
                     return "h1";
                 }
                 log(LoggerLevel::DEBUG, "re-probing HTTP/3 + HTTP/2 for %s after the HTTP/1.1 "
@@ -2205,9 +2273,10 @@ printf("%d connection(s) migrated\n", migrated);
             # Cached as "h2" after a race or H3 fallback — re-probe both protocols
             # after H3_REPROBE_INTERVAL without delaying TCP behind a QUIC timeout
             if (canUseHttp3() && h3_probe_times.hasKey(key)) {
-                date elapsed = now_us() - h3_probe_times{key};
-                if (elapsed >= H3_REPROBE_INTERVAL) {
-                    log(LoggerLevel::DEBUG, "re-probing HTTP/3 + HTTP/2 for %s after %y elapsed", key, elapsed);
+                int elapsed_us = clock_get_monotonic_us() - h3_probe_times{key};
+                if (elapsed_us >= H3_REPROBE_INTERVAL.durationMicroseconds()) {
+                    log(LoggerLevel::DEBUG, "re-probing HTTP/3 + HTTP/2 for %s after %y elapsed", key,
+                        microseconds(elapsed_us));
                     return "happy-eyeballs";
                 }
             }
@@ -2236,8 +2305,13 @@ printf("%d connection(s) migrated\n", migrated);
         @param unreserved set to True if a stream of the connection was not reserved for the caller: only a new
         connection whose connect failed, or that is draining, before its reservation (see below); the caller then
         neither marks nor releases a reservation
+        @param deadline the time by which the connection must be acquired, if any, on the monotonic clock in
+        microseconds: it bounds the wait for a connection that another request is creating, the happy-eyeballs race
+        and the h2c probe, and no connection is created once it has passed (#6429)
 
         @return the connection; a stream of it is reserved for the caller unless \a unreserved is set
+
+        @throw HTTPCLIENT-TIMEOUT \a deadline passed before a connection was acquired
 
         @par Invariant of a failed reservation (#6193)
         A new connection is added to the pool and reserved under the pool's write lock, so no other request can have
@@ -2247,7 +2321,7 @@ printf("%d connection(s) migrated\n", migrated);
         connection is evicted by the next pool scan.
     */
     private HttpClientConnection getConnection(hash<auto> url_info, reference<bool> from_pool,
-            *bool non_blocking, *reference<bool> unreserved) {
+            *bool non_blocking, *reference<bool> unreserved, *int deadline) {
         string key = getPoolKey(url_info);
 
         # Persistent-session pin: if a leased connection is pinned for this manager's remote, use it
@@ -2329,10 +2403,27 @@ printf("%d connection(s) migrated\n", migrated);
             # their own, flooding the server with N handshakes when 1 suffices.
             # The wait is bounded by connect_timeout; on timeout, the waiting thread
             # takes over creation to prevent indefinite blocking when the creator stalls.
+            # It is bounded by the caller's deadline as well, which raises HTTPCLIENT-TIMEOUT (#6429).
+            int claim;
             {
                 AutoLock al(create_mutex);
                 if (creating{key}) {
-                    int rc = create_cond.wait(create_mutex, opts.connect_timeout);
+                    int wait_ms = opts.connect_timeout;
+                    bool deadline_bound = False;
+                    if (deadline) {
+                        int remaining = getAcquireWaitMs(deadline, key);
+                        # a connect timeout of 0 waits without a limit
+                        if (!wait_ms || remaining < wait_ms) {
+                            wait_ms = remaining;
+                            deadline_bound = True;
+                        }
+                    }
+                    log(LoggerLevel::DEBUG, "waiting for the connection that another request is creating for %s",
+                        key);
+                    int rc = create_cond.wait(create_mutex, wait_ms);
+                    if (rc == ETIMEDOUT && deadline_bound) {
+                        throwAcquireTimeout(key, "another request is creating the connection");
+                    }
                     if (rc == ETIMEDOUT) {
                         # Creator stalled — take over creation
                         log(LoggerLevel::DEBUG, "creation wait timed out for %s, taking over", key);
@@ -2341,12 +2432,17 @@ printf("%d connection(s) migrated\n", migrated);
                         continue;
                     }
                 }
-                creating{key} = True;
+                claim = claimCreationLocked(key);
             }
+            # a happy-eyeballs race that goes on in the background owns the claim from then on, and releases it when
+            # it ends; otherwise the claim is released here, if it is still this caller's (a waiter can have taken
+            # the creation over)
+            bool handed_over = False;
             on_exit {
-                AutoLock al(create_mutex);
-                remove creating{key};
-                create_cond.broadcast();
+                if (!handed_over) {
+                    AutoLock al(create_mutex);
+                    releaseCreationLocked(key, claim);
+                }
             }
 
             # We are the designated creator for this key.
@@ -2452,6 +2548,11 @@ printf("%d connection(s) migrated\n", migrated);
                 }
             }
 
+            # no connection is created for a request whose time has run out (#6429)
+            if (deadline) {
+                getAcquireWaitMs(deadline, key);
+            }
+
             # Create connection outside the write lock so constructor-side setup cannot
             # stall unrelated pool operations.
             HttpClientConnection conn;
@@ -2464,7 +2565,7 @@ printf("%d connection(s) migrated\n", migrated);
                 # here is retained plumbing only and no longer alters this
                 # branch (the option-2 stopgap's single-H2 line was superseded
                 # by the real async race).
-                conn = createConnectionHappyEyeballs(url_info, key);
+                conn = createConnectionHappyEyeballs(url_info, key, deadline, claim, \handed_over);
             } else {
                 conn = createConnection(url_info, key, protocol);
             }
@@ -2480,10 +2581,26 @@ printf("%d connection(s) migrated\n", migrated);
                 submitConnectionToController(key, conn);
 
                 bool h2c_ok = False;
+                # the probe is bounded by the caller's deadline as well (#6429): a probe that it ends proves nothing
+                # about the server, so no protocol is cached then
+                int probe_ms = H2C_PROBE_TIMEOUT.durationMilliseconds();
+                bool deadline_bound = False;
+                if (deadline) {
+                    int remaining = ceilMs(deadline - clock_get_monotonic_us());
+                    if (remaining < probe_ms) {
+                        probe_ms = remaining;
+                        deadline_bound = True;
+                    }
+                }
                 try {
-                    h2c_ok = conn.waitForReady(timeout_ms: H2C_PROBE_TIMEOUT);
+                    # at least 1 ms: a wait of 0 returns at once
+                    h2c_ok = conn.waitForReady(timeout_ms: max(1, probe_ms));
                 } catch () {
                     # Connection closed during probe (server rejected h2c)
+                }
+                if (!h2c_ok && deadline_bound && !conn.isClosed()) {
+                    try { conn.close(); } catch () {}
+                    throwAcquireTimeout(key, "the HTTP/2 probe of the server did not end");
                 }
                 if (!h2c_ok) {
                     log(LoggerLevel::DEBUG, "h2c probe failed for %s, falling back to HTTP/1.1", key);
@@ -2538,7 +2655,7 @@ printf("%d connection(s) migrated\n", migrated);
     */
     private hash<auto> prepareH3Probe(hash<auto> url_info, string key) {
         AutoWriteLock al(pool_lock);
-        h3_probe_times{key} = now_us();
+        h3_probe_times{key} = clock_get_monotonic_us();
         if (alt_svc_port_map.hasKey(key)) {
             url_info.port = alt_svc_port_map{key};
         }
@@ -2558,7 +2675,7 @@ printf("%d connection(s) migrated\n", migrated);
         @return the address families to avoid, or @ref NOTHING if there are none
     */
     private *list<int> getH3AvoidedFamilies(string key) {
-        date now = now_us();
+        int now = clock_get_monotonic_us();
         AutoWriteLock al(pool_lock);
         # A connection is closed, and the request waiting for it woken, before its failure is processed by
         # handleConnectionResult(), which records the family and only then removes the connection from the pool; a
@@ -2587,7 +2704,7 @@ printf("%d connection(s) migrated\n", migrated);
     */
     private recordH3FamilyFailure(string key, HttpClientConnection conn, *string err) {
         AutoWriteLock al(pool_lock);
-        recordH3FamilyFailureLocked(key, conn, err, now_us());
+        recordH3FamilyFailureLocked(key, conn, err, clock_get_monotonic_us());
     }
 
     #! Internal: records that an HTTP/3 connection failed without reaching a server; @ref pool_lock must be held
@@ -2597,9 +2714,9 @@ printf("%d connection(s) migrated\n", migrated);
         @param key the origin pool key
         @param conn the connection
         @param err the error code of the failure
-        @param now the current time
+        @param now the current time on the monotonic clock in microseconds
     */
-    private recordH3FamilyFailureLocked(string key, HttpClientConnection conn, *string err, date now) {
+    private recordH3FamilyFailureLocked(string key, HttpClientConnection conn, *string err, int now) {
         if (conn.getProtocol() != "h3" || !H3UnreachedErrors{err}) {
             return;
         }
@@ -2615,7 +2732,7 @@ printf("%d connection(s) migrated\n", migrated);
         }
         log(LoggerLevel::DEBUG, "%s: HTTP/3 connection %d in address family %d failed without reaching a server "
             "(%s); trying another family for new connections", key, conn.getConnectionId(), family, err);
-        h3_failed_families{key}{family} = now + H3FamilyFailureTtl;
+        h3_failed_families{key}{family} = now + H3FamilyFailureTtl.durationMicroseconds();
     }
 
     #! Internal: creates a connection for an explicitly selected or cached protocol
@@ -2987,10 +3104,19 @@ printf("%d connection(s) migrated\n", migrated);
 
         @param url_info parsed URL info
         @param key the host:port pool key
+        @param deadline the time by which the race must end for the caller, if any, on the monotonic clock in
+        microseconds (#6429); when it passes first, the race goes on in the background, bounded by the candidates'
+        connect timeouts, and its winner is pooled for later requests (see @ref heHandOverRace()), and
+        \c HTTPCLIENT-TIMEOUT is raised
+        @param claim the caller's claim of the creation of the key (see @ref creating), which a race that goes on in
+        the background takes over
+        @param handed_over set to @ref True if the race went on in the background, which then owns \a claim
         @return the winning connection (H3, H2 or H1)
 
+        @throw HTTPCLIENT-TIMEOUT \a deadline passed before a candidate connected
     */
-    private HttpClientConnection createConnectionHappyEyeballs(hash<auto> url_info, string key) {
+    private HttpClientConnection createConnectionHappyEyeballs(hash<auto> url_info, string key, *int deadline,
+            int claim = 0, *reference<bool> handed_over) {
         # Stagger delay: H3 gets a head start before H2 begins
         int HappyEyeballsStaggerMs = 100;
 
@@ -3021,11 +3147,15 @@ printf("%d connection(s) migrated\n", migrated);
         }
 
         # The other candidates, once started; every candidate that does not win is closed, also when an exception
-        # ends the race (the winner is returned, and heThrowConnectError() closes them all before it throws)
+        # ends the race (the winner is returned, and heThrowConnectError() closes them all before it throws), unless
+        # the race was handed over to the background
         *Http2ClientConnection h2conn;
         *Http1ClientConnection h1conn;
+        handed_over = False;
         on_error {
-            heCloseLegs(h3conn, h2conn, h1conn);
+            if (!handed_over) {
+                heCloseLegs(h3conn, h2conn, h1conn);
+            }
         }
 
         # Wait for H3 with stagger timeout using poll on the connection's notifier
@@ -3052,7 +3182,13 @@ printf("%d connection(s) migrated\n", migrated);
             # grace) so a lost controller completion can never strand this
             # call on a critical path forever; the controller's own per-op
             # timeout (<= connect_timeout) always wins in healthy operation.
-            controller.waitForNotifier(h3_notifier, HappyEyeballsStaggerMs,
+            # The stagger is bounded by the caller's deadline as well (#6429); when it has passed, HTTP/2 is still
+            # started, so that the race handed over to the background races both protocols.
+            int stagger_ms = HappyEyeballsStaggerMs;
+            if (deadline) {
+                stagger_ms = min(stagger_ms, ceilMs(deadline - clock_get_monotonic_us()));
+            }
+            controller.waitForNotifier(h3_notifier, stagger_ms,
                 opts.connect_timeout + AsyncQueueSafetyGraceMs);
             h3_notifier.acknowledge();
             *HttpClientConnection w = hePickReady(h3conn);
@@ -3083,7 +3219,49 @@ printf("%d connection(s) migrated\n", migrated);
         # and a certificate refusal or a sandbox denial of another candidate must not be hidden behind a plain
         # connection error (see heThrowConnectError()).  Each candidate is bounded by its own connect timeout; the
         # wait is bounded too, in case an outcome is not signaled.
-        date deadline = now_us() + milliseconds(opts.connect_timeout + AsyncQueueSafetyGraceMs);
+        int race_deadline = clock_get_monotonic_us() + (opts.connect_timeout + AsyncQueueSafetyGraceMs) * 1000;
+        bool expired = False;
+        *HttpClientConnection w = heRunRace(url_info, key, h3conn, h2conn, \h1conn, race_notifier, \race_deadline,
+            deadline, \expired, claim);
+        if (w) {
+            return w;
+        }
+        if (expired) {
+            # the deadline belongs to the request, not to the connection: the race goes on in the background, and
+            # its winner is pooled for later requests (#6429)
+            log(LoggerLevel::DEBUG, "happy eyeballs: the request's time for %s ran out in the race; the race goes on "
+                "in the background", key);
+            # the background race owns the claim from here on, whether or not it could be watched
+            handed_over = True;
+            heHandOverRace(url_info, key, h3conn, h2conn, h1conn, race_notifier, race_deadline, claim);
+            log(LoggerLevel::DEBUG, "happy eyeballs: handed the race for %s over to the background", key);
+            throwAcquireTimeout(key, "no protocol connected in the happy-eyeballs race");
+        }
+
+        # No candidate connected: collect error details, clean up all of them, and throw
+        heThrowConnectError(h3conn, h2conn, h1conn, key);
+    }
+
+    #! Internal: runs a synchronous happy-eyeballs race until a candidate wins, all of them settle, or a bound passes
+    /** @param url_info parsed URL info
+        @param key the host:port pool key
+        @param h3conn the HTTP/3 candidate
+        @param h2conn the HTTP/2 candidate
+        @param h1conn the HTTP/1.1 candidate, started here when the server refuses HTTP/2 via ALPN
+        @param race_notifier signaled when a candidate settles
+        @param race_deadline the bound of the race on the monotonic clock in microseconds; extended when the HTTP/1.1
+        candidate starts
+        @param deadline the caller's deadline on the monotonic clock in microseconds, if any
+        @param expired set to @ref True if \a deadline passed before an outcome
+        @param claim the creation claim of the race, which identifies it in @ref bg_races if it goes on in the
+        background
+
+        @return the committed winner, or @ref nothing if no candidate won (all of them settled, the race's bound
+        passed, the caller's deadline passed, or the manager is shutting down)
+    */
+    private *HttpClientConnection heRunRace(hash<auto> url_info, string key, Http3ClientConnection h3conn,
+            Http2ClientConnection h2conn, reference<*Http1ClientConnection> h1conn, EventNotifier race_notifier,
+            reference<int> race_deadline, *int deadline, reference<bool> expired, int claim) {
         while (True) {
             *HttpClientConnection w = hePickReady(h3conn, h2conn, h1conn);
             if (w) {
@@ -3096,18 +3274,31 @@ printf("%d connection(s) migrated\n", migrated);
             if (!h1conn && heH2RefusedViaAlpn(h2conn)) {
                 h1conn = heStartH1Leg(url_info, key);
                 h1conn.registerReadyNotifier(notifier: race_notifier);
+                heNoteBackgroundH1Leg(claim, h1conn);
                 # the new candidate is bounded by its own connect timeout
-                deadline = now_us() + milliseconds(opts.connect_timeout + AsyncQueueSafetyGraceMs);
+                race_deadline = clock_get_monotonic_us() + (opts.connect_timeout + AsyncQueueSafetyGraceMs) * 1000;
                 # its state is read before the next wait, so an outcome it reached already is not missed
                 continue;
             }
             if (heSettled(h3conn) && heSettled(h2conn) && (!h1conn || heSettled(h1conn))) {
-                break;
+                return;
             }
-            int remaining = (deadline - now_us()).durationMilliseconds();
-            if (remaining <= 0) {
+            int now = clock_get_monotonic_us();
+            # the caller's deadline ends the caller's part of the race (#6429)
+            if (deadline && now >= deadline) {
+                expired = True;
+                return;
+            }
+            if (now >= race_deadline) {
                 log(LoggerLevel::DEBUG, "happy eyeballs: no outcome of the race for %s in time", key);
-                break;
+                return;
+            }
+            if (shutdown) {
+                return;
+            }
+            int remaining = ceilMs(race_deadline - now);
+            if (deadline) {
+                remaining = min(remaining, ceilMs(deadline - now));
             }
             # Async wait via the I/O controller (replaces a handler-thread
             # Socket::poll syscall).  See the h3_notifier path above; the
@@ -3116,9 +3307,230 @@ printf("%d connection(s) migrated\n", migrated);
             controller.waitForNotifier(race_notifier, remaining, remaining + AsyncQueueSafetyGraceMs);
             race_notifier.acknowledge();
         }
+    }
 
-        # No candidate connected: collect error details, clean up all of them, and throw
-        heThrowConnectError(h3conn, h2conn, h1conn, key);
+    #! Internal: hands a synchronous happy-eyeballs race whose caller's deadline passed over to the I/O controller
+    /** No thread is started (the module does no thread control): the race's notifier is watched by an operation on
+        the async I/O controller (@ref HttpClientRaceWatchOperation), whose completion callback, on a callback worker
+        of the controller, takes one step of the race (@ref heStepBackgroundRace()) and watches the notifier again
+        until the race ends.  The race keeps the caller's claim of the key's creation (see @ref bg_races) until it
+        ends; it is counted in @ref in_flight, so that @ref closeAll() waits for it, and @ref closeAll() closes its
+        candidates, which signals the notifier, so that the race ends at once.
+    */
+    private heHandOverRace(hash<auto> url_info, string key, Http3ClientConnection h3conn, Http2ClientConnection h2conn,
+            *Http1ClientConnection h1conn, EventNotifier race_notifier, int race_deadline, int claim) {
+        {
+            AutoLock al(create_mutex);
+            bg_races{claim} = {
+                "key": key,
+                "url_info": url_info,
+                "h3conn": h3conn,
+                "h2conn": h2conn,
+                "h1conn": h1conn,
+                "race_notifier": race_notifier,
+                "race_deadline": race_deadline,
+            };
+        }
+        in_flight.inc();
+        try {
+            heWatchBackgroundRace(claim, race_notifier, race_deadline);
+        } catch (hash<ExceptionInfo> ex) {
+            # the race cannot be watched: it ends here
+            heCloseLegs(h3conn, h2conn, h1conn);
+            heEndBackgroundRace(key, claim);
+            in_flight.dec();
+            log(LoggerLevel::DEBUG, "happy eyeballs: the race for %s could not go on in the background: %s: %s", key,
+                ex.err, ex.desc);
+        }
+    }
+
+    #! Internal: watches the notifier of a race that goes on in the background until it is signaled or the race's bound
+    /** The completion callback runs on a callback worker of the controller, not on its I/O thread; it is counted for
+        the manager's owner id.  A safety timer, the race's bound plus @ref AsyncQueueSafetyGraceMs later, steps the
+        race if the controller ever fails to deliver the watch's completion (a lost completion), as the bound of the
+        queue wait guarded the thread-based race; the controller's poll operations have no bound of their own beyond
+        the operation's timeout.  Each watch has a sequence number, so that a race is stepped once per watch, by
+        whichever of the completion and the timer comes first.
+
+        @param claim the race's claim (its key in @ref bg_races)
+        @param race_notifier the race's notifier
+        @param race_deadline the race's bound on the monotonic clock in microseconds
+    */
+    private heWatchBackgroundRace(int claim, EventNotifier race_notifier, int race_deadline) {
+        int seq;
+        {
+            AutoLock al(create_mutex);
+            if (!bg_races{claim}) {
+                return;
+            }
+            seq = ++bg_races{claim}.watch_seq;
+        }
+        int wait_ms = ceilMs(race_deadline - clock_get_monotonic_us());
+        HttpClientRaceWatchOperation op(race_notifier, sub () { heStepBackgroundRace(claim, seq, False); });
+        controller.submit(<SocketPollOperationInfo>{
+            "sock": race_notifier,
+            "spop": op,
+            "owner": owner_id,
+            "to": wait_ms,
+            "has_on_complete": True,
+        });
+        int timer_id = controller.addTimerDelay(wait_ms + AsyncQueueSafetyGraceMs, sub () {
+            HttpClientRaceWatchOperation::runStep(sub () { heStepBackgroundRace(claim, seq, True); });
+        }, owner_id);
+        bool stale;
+        {
+            AutoLock al(create_mutex);
+            # the watch may have completed already
+            stale = !bg_races{claim} || bg_races{claim}.watch_seq != seq || bg_races{claim}.stepped_seq == seq;
+            if (!stale) {
+                bg_races{claim}.safety_timer = timer_id;
+            }
+        }
+        if (stale) {
+            controller.cancelTimer(timer_id);
+        }
+    }
+
+    #! Internal: takes a step of a happy-eyeballs race that goes on in the background (#6429)
+    /** Called by the completion of the race's watch (see @ref heWatchBackgroundRace()), on a callback worker of the
+        I/O controller; it does not block.  The winner is committed (the losers are closed and its protocol cached,
+        as in a normal race) and pooled for later requests, which reserve its streams as usual; when every candidate
+        settled without connecting, or the race's bound passed, heThrowConnectError() applies the cache rules of a
+        failed race and closes the candidates, and the error is logged.  Otherwise the notifier is watched again.
+        When the race ends, it releases its claim of the key's creation (if it is still its own) and its count in
+        @ref in_flight.
+
+        @param claim the race's claim (its key in @ref bg_races)
+        @param seq the sequence number of the watch whose completion (or safety timer) calls the step
+        @param from_timer @ref True if the watch's safety timer calls the step
+    */
+    private heStepBackgroundRace(int claim, int seq, bool from_timer) {
+        # Pin @c pool_lock across this method: see @ref pool_lock_pin.
+        RWLock pool_lock_pin = pool_lock;
+        *hash<auto> race;
+        *int safety_timer;
+        {
+            AutoLock al(create_mutex);
+            race = bg_races{claim};
+            # one step per watch: the completion of the watch or its safety timer, whichever comes first
+            if (!race || race.watch_seq != seq || race.stepped_seq == seq) {
+                return;
+            }
+            bg_races{claim}.stepped_seq = seq;
+            safety_timer = remove bg_races{claim}.safety_timer;
+        }
+        if (from_timer) {
+            log(LoggerLevel::WARN, "happy eyeballs: the watch of the race for %s that went on in the background did "
+                "not complete in time; stepping the race", race.key);
+        } else if (safety_timer) {
+            controller.cancelTimer(safety_timer);
+        }
+        string key = race.key;
+        Http3ClientConnection h3conn = race.h3conn;
+        Http2ClientConnection h2conn = race.h2conn;
+        *Http1ClientConnection h1conn = race.h1conn;
+        EventNotifier race_notifier = race.race_notifier;
+        int race_deadline = race.race_deadline;
+        bool ended = True;
+        on_exit {
+            if (ended) {
+                heEndBackgroundRace(key, claim);
+                in_flight.dec();
+            }
+        }
+        try {
+            race_notifier.acknowledge();
+            while (True) {
+                if (shutdown) {
+                    heCloseLegs(h3conn, h2conn, h1conn);
+                    return;
+                }
+                *HttpClientConnection w = hePickReady(h3conn, h2conn, h1conn);
+                if (w) {
+                    heCommitWinner(w, h3conn, h2conn, h1conn, key);
+                    AutoWriteLock al(pool_lock);
+                    if (shutdown) {
+                        try { w.close(); } catch () {}
+                        return;
+                    }
+                    if (!pool.hasKey(key)) {
+                        pool{key} = ();
+                    }
+                    push pool{key}, w;
+                    w.setControllerRef(controller);
+                    submitConnectionToController(key, w);
+                    log(LoggerLevel::DEBUG, "happy eyeballs: pooled %s connection %d, the winner of the race for %s "
+                        "that went on in the background", w.getProtocol(), w.getConnectionId(), key);
+                    return;
+                }
+                # as in heRunRace(): HTTP/1.1 starts at once when the server refuses HTTP/2 via ALPN
+                if (!h1conn && heH2RefusedViaAlpn(h2conn)) {
+                    h1conn = heStartH1Leg(race.url_info, key);
+                    h1conn.registerReadyNotifier(notifier: race_notifier);
+                    race_deadline = clock_get_monotonic_us() + (opts.connect_timeout + AsyncQueueSafetyGraceMs) * 1000;
+                    {
+                        AutoLock al(create_mutex);
+                        if (bg_races{claim}) {
+                            bg_races{claim}.h1conn = h1conn;
+                            bg_races{claim}.race_deadline = race_deadline;
+                        }
+                    }
+                    continue;
+                }
+                if (heSettled(h3conn) && heSettled(h2conn) && (!h1conn || heSettled(h1conn))) {
+                    break;
+                }
+                if (clock_get_monotonic_us() >= race_deadline) {
+                    log(LoggerLevel::DEBUG, "happy eyeballs: no outcome of the race for %s in time", key);
+                    break;
+                }
+                heWatchBackgroundRace(claim, race_notifier, race_deadline);
+                ended = False;
+                return;
+            }
+            heThrowConnectError(h3conn, h2conn, h1conn, key);
+        } catch (hash<ExceptionInfo> ex) {
+            heCloseLegs(h3conn, h2conn, h1conn);
+            log(LoggerLevel::DEBUG, "happy eyeballs: the race for %s that went on in the background failed: %s: %s",
+                key, ex.err, ex.desc);
+        }
+    }
+
+    #! Internal: records the HTTP/1.1 candidate of a race that goes on in the background, so that closeAll() closes it
+    private heNoteBackgroundH1Leg(int claim, Http1ClientConnection h1conn) {
+        AutoLock al(create_mutex);
+        if (bg_races{claim}) {
+            bg_races{claim}.h1conn = h1conn;
+        }
+    }
+
+    #! Internal: ends a happy-eyeballs race that went on in the background: releases its claim of the key's creation
+    /** The claim is released only if it is still the race's: a waiter can have taken the creation over
+    */
+    private heEndBackgroundRace(string key, int claim) {
+        AutoLock al(create_mutex);
+        remove bg_races{claim};
+        releaseCreationLocked(key, claim);
+    }
+
+    #! Internal: claims the creation of a connection for the key; @ref create_mutex must be held
+    /** @return the serial of the claim, which releases it (see @ref releaseCreationLocked())
+    */
+    private int claimCreationLocked(string key) {
+        int claim = ++creation_serial;
+        creating{key} = claim;
+        return claim;
+    }
+
+    #! Internal: releases a claim of the creation of a connection for the key; @ref create_mutex must be held
+    /** Only the owner of the current claim releases it: a claim that a waiter took over is not released by the
+        stalled creator that held the previous one
+    */
+    private releaseCreationLocked(string key, int claim) {
+        if (creating{key} == claim) {
+            remove creating{key};
+            create_cond.broadcast();
+        }
     }
 
     #! Acquires a connection for the given URL without ever blocking the caller
@@ -3361,8 +3773,7 @@ printf("%d connection(s) migrated\n", migrated);
         {
             AutoLock cl(create_mutex);
             if (!creating{key}) {
-                creating{key} = True;
-                race.we_set_creating = True;
+                race.creating_claim = claimCreationLocked(key);
             }
         }
         async_races{key} = race;
@@ -3739,10 +4150,9 @@ printf("%d connection(s) migrated\n", migrated);
         }
         AsyncRace race = remove async_races{key};
         heAbandonTimers(race);
-        if (race.we_set_creating) {
+        if (race.creating_claim) {
             AutoLock cl(create_mutex);
-            remove creating{key};
-            create_cond.broadcast();
+            releaseCreationLocked(key, race.creating_claim);
         }
     }
 
@@ -4526,6 +4936,52 @@ printf("%d connection(s) migrated\n", migrated);
         return True;
     }
 
+    #! Internal: returns the time left until the deadline of a connection acquisition, in milliseconds
+    /** @param deadline the deadline on the monotonic clock in microseconds
+        @param key the host:port pool key, for the error message
+
+        @return the time left, rounded up, at least 1 ms
+
+        @throw HTTPCLIENT-TIMEOUT the deadline has passed
+    */
+    private static int getAcquireWaitMs(int deadline, string key) {
+        int remaining_us = deadline - clock_get_monotonic_us();
+        if (remaining_us <= 0) {
+            throwAcquireTimeout(key, "the request's time ran out before the wait");
+        }
+        return ceilMs(remaining_us);
+    }
+
+    #! Internal: converts microseconds to milliseconds, rounded up, at least 1
+    /** Rounded up, so that a wait for the returned time does not end before a deadline that is this far away
+    */
+    private static int ceilMs(int us) {
+        return us > 0 ? (us + 999) / 1000 : 1;
+    }
+
+    #! Internal: raises the error of a connection acquisition whose deadline passed (#6429)
+    /** @param key the host:port pool key
+        @param reason what the acquisition was waiting for
+
+        @throw HTTPCLIENT-TIMEOUT always
+    */
+    private static throwAcquireTimeout(string key, string reason) {
+        throw "HTTPCLIENT-TIMEOUT", sprintf("no connection to %s was acquired within the request's time: %s", key,
+            reason);
+    }
+
+    #! Internal: closes the stale connection of a request that timed out on it, before the request is sent again
+    /** Only called for a reused connection on which the request was submitted, so the connection was ready
+
+        @param conn the connection of the request that timed out
+    */
+    private static closeTimedOutConnection(HttpClientConnection conn) {
+        try {
+            conn.close();
+        } catch () {
+        }
+    }
+
     #! Internal: checks if a connection can be evicted synchronously at checkout
     /** Draining connections must not accept new streams.  Once they have no
         active streams or pending stream reservations, keeping them in the pool
@@ -4599,7 +5055,7 @@ printf("%d connection(s) migrated\n", migrated);
             if (!pool.hasKey(key)) {
                 return;
             }
-            date now = now_us();
+            int now = clock_get_monotonic_us();
             list<HttpClientConnection> live = ();
             foreach HttpClientConnection conn in (pool{key}) {
                 # Evict only definitively unavailable connections — not those
@@ -4643,7 +5099,7 @@ printf("%d connection(s) migrated\n", migrated);
         if (protocol == "h1") {
             # stamp the fallback so resolveProtocol() can re-probe H3 + H2 after
             # H1_REPROBE_INTERVAL instead of pinning the host to HTTP/1.1 forever
-            h1_probe_times{key} = now_us();
+            h1_probe_times{key} = clock_get_monotonic_us();
         } else {
             remove h1_probe_times{key};
         }
@@ -4865,6 +5321,43 @@ class CookieExtractingFuture inherits Future<auto> {
 
     bool cancel() {
         return real_future.cancel();
+    }
+}
+
+#! Watches the notifier of a happy-eyeballs race that went on in the background, and steps the race on completion
+/** The completion is delivered on a callback worker of the async I/O controller (not on its I/O thread), where the
+    race's step runs; see @ref HttpClientConnectionManager::heHandOverRace().  The step is a closure of the manager,
+    which does not keep the manager alive.
+*/
+class HttpClientRaceWatchOperation inherits AsyncSocketIo::NotifierPollOperation {
+    private {
+        #! the step of the race, called on completion
+        code<nothing()> step;
+    }
+
+    constructor(EventNotifier notifier, code<nothing()> step) : AsyncSocketIo::NotifierPollOperation(notifier) {
+        self.step = step;
+    }
+
+    #! Steps the race, whatever the outcome of the watch (signaled, timed out or canceled)
+    nothing onComplete(hash<SocketPollResultInfo> result) {
+        runStep(step);
+    }
+
+    #! Runs a step of a race: a call on a manager that was deleted (its closeAll() ended the race) is ignored
+    /** Any other exception is raised to the controller's callback dispatcher, which reports it through the
+        controller's logger, or on stderr without one (see @ref Qore::AsyncIoController), whether or not the manager
+        still exists
+    */
+    static runStep(code<nothing()> step) {
+        try {
+            step();
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "OBJECT-ALREADY-DELETED") {
+                return;
+            }
+            rethrow;
+        }
     }
 }
 

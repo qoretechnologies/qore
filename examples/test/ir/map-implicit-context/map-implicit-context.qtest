@@ -54,11 +54,11 @@ class MapImplicitContextTest inherits QUnit::Test {
             "layout_select_and: size 2; released h1; released h2; after",
         );
 
-        #! parts of the chain line of the AST interpreter: a body's chain receiver is released when the next
-        #! element's is created, also when the body needs the implicit argument list
+        #! parts of the chain line of the AST interpreter: a body's chain receiver is released at the end of its
+        #! element, also when the body needs the implicit argument list (qore#6288)
         const AstChainParts = (
-            "new ma; new mb; del ma; new mc; del mb; ctx ul [\"ma\", \"mb\", \"mc\"]; del mc",
-            "new ma; new mb; del ma; new mc; del mb; extract [\"ma0\", \"mb0\", \"mc0\"]; del mc",
+            "new ma; del ma; new mb; del mb; new mc; del mc; ctx ul [\"ma\", \"mb\", \"mc\"]",
+            "new ma; del ma; new mb; del mb; new mc; del mc; extract [\"ma0\", \"mb0\", \"mc0\"]",
             "decl [\"null\", \"null\", \"null\"]",
             "single $# [[0, null], [0, null], [0, null]]",
         );

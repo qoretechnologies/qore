@@ -79,6 +79,10 @@ class BCAList;
 class QoreOperatorNode;
 class BarewordNode;
 class QoreFunction;
+
+//! Returns true if a variant with the given number of parameters can take a call with the given number of arguments
+//! at run time under strict arguments: it has no more arguments than parameters, or takes extra arguments (qore#6152)
+DLLLOCAL bool qore_variant_takes_call_arity(unsigned num_args, unsigned nparams, bool uses_extra_args);
 class qore_class_private;
 class qore_ns_private;
 class QoreClosureBase;
@@ -1900,6 +1904,40 @@ public:
         return source_qf;
     }
 
+    //! Recompiles the variant as UserVariantBase::attemptJITRecompilation() does after its profiled guards have
+    //! deoptimized, without the deoptimizations
+    /** The function is compiled alone, not in a batch, so its recursive calls are made with the native self-recursive
+        call helper.  For tests only (dbg_jit_recompile_native_code(), qore#6317).
+
+        @return true if native code is installed after the recompilation
+    */
+    DLLLOCAL bool dbgRecompileNativeCode() const {
+        if (!cached_ir.load(std::memory_order_acquire)) {
+            return false;
+        }
+        int expected = jit_recompile_state.load(std::memory_order_acquire);
+        if (expected == 1 || !jit_recompile_state.compare_exchange_strong(expected, 1)) {
+            return false;
+        }
+        attemptJITRecompilation();
+        return hasCachedFunction();
+    }
+
+    //! Removes the installed native code of the variant without recompiling it
+    /** As UserVariantBase::attemptJITRecompilation() removes it while it recompiles the variant; the variant runs on
+        the IR tier until it is compiled again.  For tests only (dbg_jit_drop_native_code(), qore#6317).
+
+        @return true if native code was installed
+    */
+    DLLLOCAL bool dbgDropNativeCode() const {
+        bool had = hasCachedFunction();
+        cached_jit_fn.store(nullptr, std::memory_order_release);
+        if (current_tier.load(std::memory_order_acquire) == TIER_JIT) {
+            current_tier.store(TIER_IR, std::memory_order_release);
+        }
+        return had;
+    }
+
     DLLLOCAL UserSignature* getUserSignature() const {
         return const_cast<UserSignature*>(&signature);
     }
@@ -2550,6 +2588,14 @@ public:
     */
     DLLLOCAL bool hasInheritedVariants() const;
 
+    //! Returns true if the inheritance list of the method has a method of a generic class
+    /** The method of a class without type parameters that declares a method of the same name as one of a generic
+        parent class has the variants of the generic class's method too (qore#6448)
+    */
+    DLLLOCAL bool hasGenericClassAncestor() const {
+        return has_generic_class_ancestor;
+    }
+
     //! Returns true if a call of the function can resolve to its single variant only (no overloads, no inherited
     //! variants); inline for the fast call paths, as functions and most methods have only themselves in the
     //! inheritance list
@@ -2594,6 +2640,7 @@ public:
 
     DLLLOCAL void addAncestor(QoreFunction* ancestor, ClassAccess access) {
         ilist.push_back(INode(ancestor, access));
+        noteAncestor(*ancestor);
     }
 
     DLLLOCAL void addNewAncestor(QoreFunction* ancestor, ClassAccess access) {
@@ -2601,6 +2648,7 @@ public:
             if ((*i).func == ancestor)
                 return;
         ilist.push_back(INode(ancestor, access));
+        noteAncestor(*ancestor);
     }
 
     // resolves all types in signatures and return types in pending variants; called during the "parseInit" phase
@@ -3047,6 +3095,11 @@ protected:
     //! resolves the signatures of the pending variants in the thread's current parse context
     DLLLOCAL void resolvePendingSignaturesIntern();
 
+    //! records an ancestor added to the inheritance list for hasGenericClassAncestor()
+    /** out of line: the inheritance lists are built when classes are initialized, not on a call's path
+    */
+    DLLLOCAL void noteAncestor(const QoreFunction& ancestor);
+
     std::string name;
 
     // list of function variants
@@ -3076,6 +3129,8 @@ protected:
     bool check_parse : 1;
     bool has_priv : 1;                   // has at least 1 private variant
     bool all_priv : 1;                   // all variants are private
+    //! the inheritance list has a method of a generic class; see hasGenericClassAncestor()
+    bool has_generic_class_ancestor = false;
 
     const QoreTypeInfo* nn_uniqueReturnType = nullptr;
 
@@ -3321,6 +3376,7 @@ public:
         for (; i != e; ++i) {
             ilist.push_back(*i);
         }
+        has_generic_class_ancestor = old.has_generic_class_ancestor;
     }
 
     DLLLOCAL void resolveCopy() {

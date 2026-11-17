@@ -1,0 +1,76 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# a small module with a section of every kind for aot-section-bounds.qtest (qore#6265): namespaces, classes with
+# members, static members, constants, base classes and a constructor with base class arguments, a hashdecl, an enum,
+# a typedef, global variables, constants, functions and methods with default arguments
+%modern
+
+module AotSectionBoundsMod {
+    version = "1.0";
+    desc = "test module with a section of every kind";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+public namespace AotSectionBoundsMod {
+    public namespace Inner {
+        public const Answer = 42;
+        public our int counter;
+        public int sub twice(int v = 2) {
+            return v * 2;
+        }
+    }
+
+    public hashdecl Point {
+        int x = 1;
+        int y = 2;
+    }
+
+    public enum Color {
+        Red = 1,
+        Green = 2,
+    }
+
+    public typedef IntList = list<int>;
+
+    public class Base {
+        public {
+            int id;
+        }
+
+        constructor(int id = 1) {
+            self.id = id;
+        }
+    }
+
+    public class Shape inherits Base {
+        public {
+            string name = "shape";
+            static int count = 0;
+            const Sides = 4;
+        }
+
+        constructor(string name = "shape") : Base(name.size()) {
+            self.name = name;
+            ++count;
+        }
+
+        int area(int w = 2, int h = 3) {
+            return w * h;
+        }
+
+        static string describe(*string prefix) {
+            return (prefix ?? "") + "shape";
+        }
+    }
+
+    public string sub greet(string who = "world") {
+        return "hello " + who;
+    }
+
+    public IntList sub numbers() {
+        return (1, 2, 3);
+    }
+}

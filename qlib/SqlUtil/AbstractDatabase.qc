@@ -227,9 +227,33 @@ public class AbstractDatabase inherits AbstractSqlUtilBase {
             "procedures": Type::Hash,
             "procedure_map": Type::Hash,
 
-            #"views": Type::Hash,
-            #"view_map": Type::Hash,
+            # views (issue #1427); see ViewDescriptionOptions
+            "views": Type::Hash,
+            "view_map": Type::Hash,
         );
+
+        #! generic view description keys
+        /** A view in the \c "views" key of a @ref schema_desc_hash "schema description hash" is described by the
+            source of its query (a string) or by a hash with the following keys:
+            - \c src: (@ref string_type) the source of the query of the view; required unless \c drop is
+              @ref True "True"
+            - \c comment: (@ref string_type) the comment of the view, on databases whose driver supports view comments
+              (see @ref SqlUtil::AbstractDatabase::supportsViewComments() "supportsViewComments()"); it is ignored on
+              others
+            - \c drop: (\c bool_type) if @ref True "True", the view is dropped if it exists
+
+            Other keys of a view description hash, such as the attributes of a view in the description that
+            SchemaReverse gave for a view before SqlUtil 3.11.0, are ignored.
+
+            @see @ref schema_views
+
+            @since SqlUtil 3.11.0
+        */
+        const hash<auto> ViewDescriptionOptions = {
+            "src": Type::String,
+            "comment": Type::String,
+            "drop": Type::Boolean,
+        };
 
         #! default generic sequence description keys
         /** The following keys can be set in sequence description hashes:
@@ -576,6 +600,10 @@ list l = db.getAlignSql(schema_hash);
         tl = alignCodeUnlocked("procedure", schema_hash, \getProcedure(), \makeProcedure(), opt, Type::String);
         if (tl) l += tl;
 
+        # issue #1427: views, after the tables and the code that they can use
+        tl = alignViewsUnlocked(schema_hash, opt);
+        if (tl) l += tl;
+
         # call driver-specific align schema sql function (end)
         tl = getAlignSqlImpl(schema_hash, opt);
         if (tl) l += tl;
@@ -638,6 +666,15 @@ list l = db.getDropSchemaSql(schema_hash);
         # call driver-specific align schema sql function (start)
         list tl = getDropSchemaSqlImpl(schema_hash, opt + ("start": True));
         if (tl) l += tl;
+
+        # issue #1427: drop views first, as they can use the tables and the code
+        AbstractDatabase::checkDriverOptions(\schema_hash.views, drv);
+        foreach string name in (schema_hash.views.keyIterator()) {
+            *AbstractView v = getView(name);
+            if (v) {
+                l += AbstractDatabase::doCallback(opt, v.getDropSql(opt), AC_Drop, "view", name);
+            }
+        }
 
         # now process DB procedures
         AbstractDatabase::checkDriverOptions(\schema_hash.procedures, drv);
@@ -704,6 +741,161 @@ list l = db.getDropSchemaSql(schema_hash);
         }
 
         return l;
+    }
+
+    #! Returns the SQL that aligns the views of a schema description
+    /** Views in \c view_map are renamed; a view that does not exist is created; a view whose query differs, as the
+        database normalizes it (see viewSourceEqualImpl()), is dropped and created again; a view described with
+        \c drop is dropped if it exists; the comment of a view is set, changed or removed on databases whose driver
+        supports view comments
+
+        @since SqlUtil 3.11.0
+    */
+    private list<auto> alignViewsUnlocked(hash<auto> schema_hash, *hash<auto> opt) {
+        list<auto> l = ();
+        list<string> drv = getDriverOptionKeys();
+        hash<string, AbstractView> view_cache;
+
+        # rename views
+        AbstractDatabase::checkDriverOptions(\schema_hash.view_map, drv);
+        foreach hash<auto> i in (schema_hash.view_map.pairIterator()) {
+            if (i.value.typeCode() != NT_STRING) {
+                throw "SCHEMA-DESCRIPTION-ERROR", sprintf("view_map %y value is not a string in the schema "
+                    "description hash; got type %y instead (%y)", i.key, i.value.type(), i.value);
+            }
+            *AbstractView v = getView(i.key);
+            if (v && !getView(i.value)) {
+                l += AbstractDatabase::doCallback(opt, v.getRenameSql(i.value, opt), AC_Rename, "view", i.key,
+                    NOTHING, i.value);
+                v.name = i.value;
+                view_cache{i.value} = v;
+            }
+        }
+
+        AbstractDatabase::checkDriverOptions(\schema_hash.views, drv);
+        foreach hash<auto> i in (schema_hash.views.pairIterator()) {
+            string name = i.key;
+            hash<auto> vh;
+            switch (i.value.typeCode()) {
+                case NT_STRING: vh.src = i.value; break;
+                # the other keys, such as the attributes of a view in the description that SchemaReverse gave for a
+                # view before SqlUtil 3.11.0 (ex: "updatable"), are ignored
+                case NT_HASH: vh = i.value{keys ViewDescriptionOptions}; break;
+                default:
+                    throw "VIEW-DESCRIPTION-ERROR", sprintf("view %y: expecting a string query or a view description "
+                        "hash; got type %y instead", name, i.value.type());
+            }
+            validateOptionsIntern("VIEW-DESCRIPTION-ERROR", ViewDescriptionOptions, \vh, name);
+
+            *AbstractView v = view_cache{name} ?? getView(name);
+
+            if (vh.drop) {
+                if (v) {
+                    l += AbstractDatabase::doCallback(opt, v.getDropSql(opt), AC_Drop, "view", name);
+                }
+                continue;
+            }
+            if (!vh.src.val()) {
+                throw "VIEW-DESCRIPTION-ERROR", sprintf("view %y: the description has no \"src\" key with the query "
+                    "of the view", name);
+            }
+
+            *string comment = supportsViewComments() && vh.comment.val() ? vh.comment : NOTHING;
+            AbstractView tmpl = makeViewImpl(name, trim(vh.src));
+            if (!v) {
+                l += AbstractDatabase::doCallback(opt, tmpl.getCreateSql(opt), AC_Create, "view", name);
+                if (comment) {
+                    l += AbstractDatabase::doCallback(opt, getViewCommentSqlImpl(tmpl, comment, NOTHING),
+                        AC_Add, "view comment", name);
+                }
+                continue;
+            }
+
+            bool recreated;
+            if (!viewSourceEqualImpl(v, tmpl)) {
+                l += AbstractDatabase::doCallback(opt, v.getDropSql(opt), AC_Drop, "view", name);
+                l += AbstractDatabase::doCallback(opt, tmpl.getCreateSql(opt), AC_Create, "view", name);
+                recreated = True;
+            } else {
+                AbstractDatabase::doOkCallback(opt, AC_Unchanged, "view", name);
+            }
+
+            if (supportsViewComments()) {
+                # a view created again has no comment
+                *string live_comment = recreated ? NOTHING : (v.comment.val() ? v.comment : NOTHING);
+                if ((comment ?? "") != (live_comment ?? "")) {
+                    l += AbstractDatabase::doCallback(opt, getViewCommentSqlImpl(tmpl, comment, live_comment),
+                        AC_Modify, "view comment", name);
+                }
+            }
+        }
+
+        return l;
+    }
+
+    #! Returns @ref True if the driver supports view comments
+    /** The comment of a view of a @ref schema_desc_hash "schema description" is created and aligned, and given in
+        @ref SqlUtil::AbstractView::comment "AbstractView::comment", only on a database whose driver supports view
+        comments; the default implementation returns @ref False
+
+        @since SqlUtil 3.11.0
+    */
+    bool supportsViewComments() {
+        return False;
+    }
+
+    #! Returns a view object for a view of a schema description, made from its query
+    /** @param name the name of the view
+        @param src the source of the query of the view
+
+        @return the view object; the default implementation raises an exception
+
+        @throw VIEW-ERROR the driver does not support views in schema descriptions
+
+        @since SqlUtil 3.11.0
+    */
+    private AbstractView makeViewImpl(string name, string src) {
+        throw "VIEW-ERROR", sprintf("the %y driver does not support views in schema descriptions",
+            ds.getDriverName());
+    }
+
+    #! Returns @ref True if the query of a view in the database is the query of a view of a schema description
+    /** The default implementation compares the queries with their whitespace collapsed, without a trailing
+        semicolon, for databases that keep the query of a view as it is given; a driver whose database keeps it in
+        another form overrides it to compare them as the database normalizes them
+
+        @param live the view in the database
+        @param tmpl the view of the schema description
+
+        @since SqlUtil 3.11.0
+    */
+    private bool viewSourceEqualImpl(AbstractView live, AbstractView tmpl) {
+        return AbstractDatabase::normalizeViewSource(live.src) == AbstractDatabase::normalizeViewSource(tmpl.src);
+    }
+
+    #! Returns the query of a view with its whitespace collapsed, trimmed and without a trailing semicolon
+    /** @since SqlUtil 3.11.0
+    */
+    static string normalizeViewSource(string src) {
+        src =~ s/\s+/ /g;
+        trim src;
+        src =~ s/\s*;$//;
+        return src;
+    }
+
+    #! Returns the SQL that sets, changes or removes the comment of a view
+    /** @param view the view
+        @param comment the new comment; @ref nothing removes the comment
+        @param old_comment the comment of the view in the database, if any
+
+        @return the SQL statements
+
+        @throw COMMENT-ERROR the driver does not support view comments
+
+        @since SqlUtil 3.11.0
+    */
+    private softlist<string> getViewCommentSqlImpl(AbstractView view, *string comment, *string old_comment) {
+        throw "COMMENT-ERROR", sprintf("the %y driver does not support view comments", ds.getDriverName());
     }
 
     private list alignCodeUnlocked(string type, hash schema_hash, code get, code make, *hash<auto> opt,

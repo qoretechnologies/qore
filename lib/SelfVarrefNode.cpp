@@ -118,6 +118,8 @@ int SelfVarrefNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_contex
             err = -1;
         }
         returnTypeInfo = parse_context.typeInfo;
+        // a member used in its own initialization expression has no value yet (qore#526)
+        QoreParseInitializerTarget::parseUse(parse_get_class(), str, loc);
     }
     return err;
 }

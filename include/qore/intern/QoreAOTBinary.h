@@ -550,6 +550,16 @@ constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 //!        of them refuses the kinds
 //!      - an optional TIME_ZONE section (34) records the time zone that the code sets with %set-time-zone and whether
 //!        its directive follows the header of a module (qore#6270)
+//! v42 (batch AA; one format version for the format changes of the batch, one line each):
+//!      - the serialized IR of an LValuePath instruction has a u8 after its ternary operator: 1 if the value of the
+//!        operation is used (ref_rv), 0 if not, so that an unused post increment or decrement copies no old value and
+//!        an unused remove or delete releases its value in the operation in the IR rebuilt from the image (debug IR,
+//!        closure bodies without native code); an earlier image has none, and its instructions use their values, as
+//!        before (qore#6328)
+//!      - top-level code whose statements have different parse options sets the options of each statement where they
+//!        change with a SetCodeParseOptions instruction (QoreIROpcode::SetCodeParseOptions, 439: the options as four
+//!        32-bit ConstInt words), whose native code calls qore_rt_set_code_parse_options(); the AOT runtime identity
+//!        changes with the runtime entry (qore#6293)
 constexpr uint16_t QORE_AOT_BINARY_MIN_VERSION = 9;
 //! First format version whose function variant flags record each variant's public flag (see v25 above).
 constexpr uint16_t QORE_AOT_VARIANT_PUBLIC_VERSION = 25;
@@ -604,10 +614,17 @@ constexpr uint16_t QORE_AOT_HANDLER_RETURN_VERSION = 39;
     which readers of this format ignore), which a function with more than 255 of them overflowed (#6127).
 */
 constexpr uint16_t QORE_AOT_SHARED_HANDLER_VERSION = 41;
+//! First format version whose serialized LValuePath instructions record whether their value is used (see v42 above)
+constexpr uint16_t QORE_AOT_LVPATH_REF_RV_VERSION = 42;
+//! First format version whose top-level code can set the parse options of its statements (see v42 above)
+constexpr uint16_t QORE_AOT_CODE_PARSE_OPTIONS_VERSION = 42;
 //! The current format version: the newest version of the history above, which is the newest feature version above
 //! when a reader branches on it (a merge with another format change takes the next version after the newest, here and
 //! in the history above)
-constexpr uint16_t QORE_AOT_BINARY_VERSION = QORE_AOT_SHARED_HANDLER_VERSION;
+constexpr uint16_t QORE_AOT_BINARY_VERSION = QORE_AOT_CODE_PARSE_OPTIONS_VERSION;
+static_assert(QORE_AOT_LVPATH_REF_RV_VERSION == QORE_AOT_BINARY_VERSION
+    && QORE_AOT_CODE_PARSE_OPTIONS_VERSION == QORE_AOT_BINARY_VERSION,
+    "the format changes of batch AA share one format version (v42)");
 //! First format version whose serialized IR functions record their handler-own local slots (see v23 above).
 constexpr uint16_t QORE_AOT_HANDLER_OWN_LOCALS_VERSION = 23;
 //! First format version whose class records have a class-flags byte (see v22 above).
@@ -1560,10 +1577,82 @@ public:
     bool finalize(const QoreAOTBinaryHeader& header, std::vector<uint8_t>& output);
 };
 
+//! The end of the section that the code of the thread reads, and whether a read went past it (qore#6265)
+/** See QoreAOTSectionBounds
+*/
+struct QoreAOTReadBounds {
+    //! the start of the section that is read, or nullptr if no section is read
+    const uint8_t* start = nullptr;
+    //! the end of the section that is read, or nullptr if no section is read
+    const uint8_t* end = nullptr;
+    //! true if a read of the section went past its end
+    bool overrun = false;
+};
+
+//! The bounds of the section that the code of the current thread reads (see QoreAOTSectionBounds)
+/** An inline variable, as the readers are used by libqore and by the tools that include this header (qcc)
+*/
+DLLLOCAL inline thread_local QoreAOTReadBounds qore_aot_read_bounds;
+
+//! Bounds the reads of a section of an AOT binary while it exists (qore#6265)
+/** While an object of this class exists, the reads of QoreAOTBinaryReader (readU8() ... readF64(), readStringRef())
+    in the current thread are checked against the end of the section: a read that does not fit returns 0, leaves the
+    read pointer at the end of the section and marks the read as overrun (overrun()), which the reader of the section
+    reports as an error.  A malformed or truncated binary is therefore never read out of the section.  The bounds of
+    the enclosing section are restored when the object is destroyed, so a reader can bound a part of its section.
+
+    A reader also checks a count that it reads against the bytes that are left (fits()) before it allocates for it.
+*/
+class QoreAOTSectionBounds {
+public:
+    //! Bounds the reads to the \a size bytes at \a ptr
+    DLLLOCAL QoreAOTSectionBounds(const uint8_t* ptr, uint32_t size) : saved(qore_aot_read_bounds) {
+        qore_aot_read_bounds.start = ptr;
+        qore_aot_read_bounds.end = ptr + size;
+        qore_aot_read_bounds.overrun = false;
+    }
+
+    //! Restores the bounds of the enclosing section
+    DLLLOCAL ~QoreAOTSectionBounds() {
+        qore_aot_read_bounds = saved;
+    }
+
+    QoreAOTSectionBounds(const QoreAOTSectionBounds&) = delete;
+    QoreAOTSectionBounds& operator=(const QoreAOTSectionBounds&) = delete;
+
+    //! Returns true if a read went past the end of the section
+    DLLLOCAL bool overrun() const {
+        return qore_aot_read_bounds.overrun;
+    }
+
+    //! Returns the end of the section
+    DLLLOCAL const uint8_t* end() const {
+        return qore_aot_read_bounds.end;
+    }
+
+    //! Returns the number of bytes that are left in the section from \a ptr
+    DLLLOCAL size_t remaining(const uint8_t* ptr) const {
+        const uint8_t* e = qore_aot_read_bounds.end;
+        return ptr < e ? static_cast<size_t>(e - ptr) : 0;
+    }
+
+    //! Returns true if \a count records of at least \a min_size bytes each fit in the rest of the section
+    /** A reader checks a count read from the binary with it before it allocates for the count
+    */
+    DLLLOCAL bool fits(uint64_t count, size_t min_size, const uint8_t* ptr) const {
+        return count <= remaining(ptr) / (min_size ? min_size : 1);
+    }
+
+private:
+    QoreAOTReadBounds saved;
+};
+
 //! Binary format reader for AOT metadata
 /** Reader instances are confined to one metadata deserialization session and
     are not thread-safe. Sectioned metadata populates lazy decompression buffers
     from getSectionData().
+
+    The reads of a section are bounded by QoreAOTSectionBounds (qore#6265).
 */
 class QoreAOTBinaryReader {
     const uint8_t* data = nullptr;
@@ -1740,13 +1829,34 @@ public:
         return getString(header.label_offset);
     }
 
+    //! Returns true if \a n bytes at \a ptr are in the section that is read, if any (see QoreAOTSectionBounds)
+    /** If they are not, the read pointer is set to the end of the section and the read is marked as overrun
+    */
+    static bool readFits(const uint8_t*& ptr, size_t n) {
+        const uint8_t* end = qore_aot_read_bounds.end;
+        // a read of another buffer while a section is bounded is a reader that sets no bounds of its own
+        assert(!end || ptr >= qore_aot_read_bounds.start);
+        if (end && (ptr > end || static_cast<size_t>(end - ptr) < n)) {
+            qore_aot_read_bounds.overrun = true;
+            ptr = end;
+            return false;
+        }
+        return true;
+    }
+
     //! Read an unsigned 8-bit integer from a data pointer
     static uint8_t readU8(const uint8_t*& ptr) {
+        if (!readFits(ptr, 1)) {
+            return 0;
+        }
         return *ptr++;
     }
 
     //! Read an unsigned 16-bit integer (little-endian) from a data pointer
     static uint16_t readU16(const uint8_t*& ptr) {
+        if (!readFits(ptr, 2)) {
+            return 0;
+        }
         uint16_t v = static_cast<uint16_t>(ptr[0])
                    | (static_cast<uint16_t>(ptr[1]) << 8);
         ptr += 2;
@@ -1755,6 +1865,9 @@ public:
 
     //! Read an unsigned 32-bit integer (little-endian) from a data pointer
     static uint32_t readU32(const uint8_t*& ptr) {
+        if (!readFits(ptr, 4)) {
+            return 0;
+        }
         uint32_t v = static_cast<uint32_t>(ptr[0])
                    | (static_cast<uint32_t>(ptr[1]) << 8)
                    | (static_cast<uint32_t>(ptr[2]) << 16)
@@ -1765,6 +1878,9 @@ public:
 
     //! Read an unsigned 64-bit integer (little-endian) from a data pointer
     static uint64_t readU64(const uint8_t*& ptr) {
+        if (!readFits(ptr, 8)) {
+            return 0;
+        }
         uint64_t v = 0;
         for (int i = 0; i < 8; ++i) {
             v |= static_cast<uint64_t>(ptr[i]) << (i * 8);
@@ -1775,6 +1891,9 @@ public:
 
     //! Read a signed 64-bit integer (little-endian) from a data pointer
     static int64_t readI64(const uint8_t*& ptr) {
+        if (!readFits(ptr, 8)) {
+            return 0;
+        }
         uint64_t uv = 0;
         for (int i = 0; i < 8; ++i) {
             uv |= static_cast<uint64_t>(ptr[i]) << (i * 8);
@@ -1787,6 +1906,9 @@ public:
 
     //! Read a 64-bit float (little-endian, IEEE 754) from a data pointer
     static double readF64(const uint8_t*& ptr) {
+        if (!readFits(ptr, 8)) {
+            return 0;
+        }
         uint64_t bits = 0;
         for (int i = 0; i < 8; ++i) {
             bits |= static_cast<uint64_t>(ptr[i]) << (i * 8);
@@ -1891,6 +2013,26 @@ DLLLOCAL const QoreProgramLocation* qore_aot_read_source_location(const QoreAOTB
 */
 static inline int qore_aot_valid_line(int line) {
     return line >= -1 ? line : 0;
+}
+
+//! Returns a source line offset read from a blob, or 0 if it is out of the range of a program location (qore#6265)
+static inline int qore_aot_valid_source_offset(int64_t offset) {
+    return offset >= 0 && offset <= 0xffff ? static_cast<int>(offset) : 0;
+}
+
+//! Returns true and the constructor argument of a QoreImplicitArgumentNode for an implicit argument offset read from a
+//! blob (-1 for all the arguments, otherwise the index of the argument), false if it is invalid (qore#6265)
+static inline bool qore_aot_implicit_arg_ctor_offset(int64_t offset, int& ctor_offset) {
+    if (offset < -1 || offset >= INT_MAX) {
+        return false;
+    }
+    ctor_offset = offset >= 0 ? static_cast<int>(offset + 1) : -1;
+    return true;
+}
+
+//! Returns true if a context stack offset read from a blob is valid (qore#6265)
+static inline bool qore_aot_valid_context_stack_offset(int64_t offset) {
+    return offset >= 0 && offset <= INT_MAX;
 }
 
 //! Returns the serialized size in bytes of a single source line number in the given blob

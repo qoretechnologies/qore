@@ -173,6 +173,13 @@ public:
 
         finalized = true;
 
+        // a borrowed value (the self of a method frame, see instantiateSelf()) is released as uninstantiateSelf()
+        // releases it, without a dereference: a frame is finalized without being unwound when its thread does not
+        // exist any more, as a thread of the parent in a child process created with fork() (issue #6443)
+        if (val.static_assignment) {
+            val.unassignIgnore();
+            return QoreValue();
+        }
         return val.removeValue(true);
     }
 };
@@ -706,6 +713,7 @@ public:
             decl_deferred_depth(old.decl_deferred_depth), parse_assign_seq(old.parse_assign_seq),
             parse_clear_seq(old.parse_clear_seq), closure_use(old.closure_use),
             parse_assigned(old.parse_assigned), parse_may_be_assigned(old.parse_may_be_assigned), is_self(old.is_self), is_top_level(old.is_top_level),
+            top_level_committed(old.top_level_committed),
             is_auto_type(old.is_auto_type), no_narrowing(old.no_narrowing), read_only(old.read_only),
             weak_assigned(old.weak_assigned), ever_deleted(old.ever_deleted),
             typeInfo(old.typeInfo), refTypeInfo(old.refTypeInfo),
@@ -1250,6 +1258,16 @@ public:
         is_top_level = true;
     }
 
+    //! marks a top-level local variable of a parse that is being committed (issue #6462)
+    DLLLOCAL void setTopLevelCommitted() {
+        top_level_committed = true;
+    }
+
+    //! returns true if the variable is a top-level local variable of a committed parse, whose storage cannot change
+    DLLLOCAL bool isTopLevelCommitted() const {
+        return top_level_committed;
+    }
+
     DLLLOCAL bool isTopLevel() const {
         return is_top_level;
     }
@@ -1398,6 +1416,9 @@ private:
         parse_assigned_final = false,
         is_self = false,
         is_top_level = false,
+        //! a top-level local variable of a parse that has been committed: threads may have instantiated it, so its
+        //! storage (closure_use) cannot change any more (issue #6462)
+        top_level_committed = false,
         is_auto_type = false,       // true if declared type is an auto type (hash<auto>, list<auto>, etc.)
         no_narrowing = false,       // true if declared with auto! to disable type narrowing
         read_only = false,

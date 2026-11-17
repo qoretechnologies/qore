@@ -1,0 +1,126 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes, with an execution mode or with AST-only code
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+%requires ../../TestInterpreter.qm
+%exec-class OutOfLineMethodStrongEncapsulationTest
+
+#! issue #6384: strong encapsulation refuses an out-of-line method definition in a namespace block as at the top level
+/** \c %strong-encapsulation, which \c %modern sets, refused <tt>int NS::C::m() {}</tt> at the top level but accepted
+    <tt>namespace NS { class C {} int C::m() {} }</tt>.  Both forms are now refused, in every execution mode and by
+    qcc; without strong encapsulation both are accepted (by the AST interpreter, the only mode for such code).
+*/
+class OutOfLineMethodStrongEncapsulationTest inherits QUnit::Test {
+    private {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        TmpDir tmp("outofline-method-strong-encapsulation-");
+
+        #! the error of strong encapsulation
+        const Err = "illegal out of line method definition";
+
+        #! the forms of an out-of-line method definition, without parse directives
+        const Forms = {
+            "namespace": "namespace NS {\n    class C {}\n    int C::m() { return 1; }\n}\n",
+            "top-level": "namespace NS {\n    class C {}\n}\nint NS::C::m() { return 1; }\n",
+            # a class in a nested namespace, named relative to the namespace block (issue #6340)
+            "nested": "namespace NS {\n    namespace I {\n        class C {}\n    }\n"
+                "    int I::C::m() { return 1; }\n}\n",
+            # the other forms of an out-of-line method in a namespace block: static, generic, a constructor
+            "static": "namespace NS {\n    class C {}\n    static int C::m() { return 1; }\n}\n",
+            "generic": "namespace NS {\n    class C {}\n    T C::g<T>(T v) { return v; }\n"
+                "    int C::m() { return g(1); }\n}\n",
+            "constructor": "namespace NS {\n    class C { public { int x; } int m() { return x; } }\n"
+                "    C::constructor() { x = 1; }\n}\n",
+        };
+
+        #! the class of each form
+        const Classes = {
+            "namespace": "NS::C",
+            "top-level": "NS::C",
+            "nested": "NS::I::C",
+            "static": "NS::C",
+            "generic": "NS::C",
+            "constructor": "NS::C",
+        };
+    }
+
+    constructor() : QUnit::Test("OutOfLineMethodStrongEncapsulationTest", "1.0", \ARGV) {
+        addTestCase("refused with %modern in every execution mode", \testModern());
+        addTestCase("refused with %modern by qcc", \testQcc());
+        addTestCase("refused with %strong-encapsulation", \testStrong());
+        addTestCase("accepted without strong encapsulation", \testWeak());
+        set_return_value(main());
+    }
+
+    private testModern() {
+        foreach hash<auto> i in (Forms.pairIterator()) {
+            string path = writeScript("modern-" + i.key, "%modern\n" + i.value);
+            foreach string mode in (ExecModeHarness::ExecModes) {
+                hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf(
+                    "%s --exec-mode=%s %s", shellQuote(qore_bin), mode, shellQuote(path)));
+                ExecModeHarness::check_native(r, ExecModeHarness::NativeCheck::None);
+                checkRefused(sprintf("%s: %s", i.key, mode), r.rc, r.out);
+            }
+        }
+    }
+
+    private testQcc() {
+        string qcc_bin = TestInterpreter::qcc_compiler() ?? "qcc";
+        foreach hash<auto> i in (Forms.pairIterator()) {
+            string path = writeScript("qcc-" + i.key, "%modern\n" + i.value);
+            string exe = tmp.path + "/qcc-" + i.key;
+            int rc;
+            string out = backquote(sprintf("%s -o %s %s 2>&1", shellQuote(qcc_bin), shellQuote(exe),
+                shellQuote(path)), \rc);
+            checkRefused("qcc: " + i.key, rc, out);
+            assertFalse(is_file(exe), "qcc: " + i.key + ": no executable");
+        }
+    }
+
+    private testStrong() {
+        foreach hash<auto> i in (Forms.pairIterator()) {
+            string path = writeScript("strong-" + i.key, "%strong-encapsulation\n" + i.value);
+            int rc;
+            string out = backquote(sprintf("%s %s 2>&1", shellQuote(qore_bin), shellQuote(path)), \rc);
+            checkRefused("strong: " + i.key, rc, out);
+        }
+    }
+
+    private testWeak() {
+        foreach hash<auto> i in (Forms.pairIterator()) {
+            # %new-style, which allows bare references, does not set strong encapsulation
+            string path = writeScript("weak-" + i.key, "%new-style\n" + i.value
+                + sprintf("printf(\"%%y\\n\", (new %s()).m());\n", Classes{i.key}));
+            int rc;
+            string out = backquote(sprintf("%s %s 2>&1", shellQuote(qore_bin), shellQuote(path)), \rc);
+            assertEq(0, rc, sprintf("weak: %s: exit status: %s", i.key, out));
+            assertEq("1\n", out, "weak: " + i.key);
+        }
+    }
+
+    #! checks that the script was refused for strong encapsulation, without a crash
+    private checkRefused(string label, int rc, string out) {
+        # a shell reports a child killed by a signal with an exit status of 128 + the signal number
+        assertTrue(rc < 128, sprintf("%s: exit status %d (not a crash): %s", label, rc, out));
+        assertNeq(0, rc, sprintf("%s: exit status: %s", label, out));
+        assertTrue(out.find(Err) >= 0, sprintf("%s: parse error: %s", label, out));
+    }
+
+    private string writeScript(string name, string src) {
+        string path = sprintf("%s/%s.q", tmp.path, name);
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(src);
+        f.close();
+        return path;
+    }
+
+    private static string shellQuote(string value) {
+        return "'" + replace(value, "'", "'\\''") + "'";
+    }
+}

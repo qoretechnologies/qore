@@ -1445,6 +1445,13 @@ private:
     const char* bytes;
     size_t size;
     size_t matched = 0;
+    //! The KMP failure table of the pattern, or nullptr when it is all 0 (issue #6325)
+    /** fail[i] is the length of the longest proper prefix of bytes[0..i] that is also a suffix of it: after a
+        mismatch with \c matched bytes matched, the match falls back to fail[matched - 1] bytes and the same byte is
+        compared again, so that a pattern whose start occurs again in it (\c "\r\n.\r\n", \c "\r\n\r\n") is found
+        at its first occurrence.  A pattern with no such prefix (most patterns) needs no table: the fallback is 0.
+    */
+    std::unique_ptr<size_t[]> fail;
 
     DLLLOCAL int doRecv(ExceptionSink* xsink);
 };

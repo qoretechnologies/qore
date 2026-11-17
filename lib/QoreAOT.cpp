@@ -1205,6 +1205,7 @@ static void collectEmbeddedUserModules(std::unordered_set<std::string>& local_mo
 #include <llvm/Config/llvm-config.h>
 #include <llvm/Target/TargetMachine.h>
 #include <llvm/Target/TargetOptions.h>
+#include "qore/intern/QoreIRFrameCheck.h"
 #include <llvm/TargetParser/Host.h>
 #include <llvm/TargetParser/Triple.h>
 #include <llvm/Support/MemoryBuffer.h>
@@ -18054,7 +18055,9 @@ static bool defineAOTClosureNativeDispatch(llvm::LLVMContext& ctx,
     unsigned param_offset = guarded ? 2 : 0;
     unsigned num_params = static_cast<unsigned>(param_kinds.size());
     unsigned num_captures = static_cast<unsigned>(capture_kinds.size());
-    if (dispatch->arg_size() != param_offset + num_params + num_captures + 2) {
+    // the parameters, the captured values, the cleanup slots of the arguments that the caller gives to the call or
+    // null, the AOT context and the exception sink
+    if (dispatch->arg_size() != param_offset + num_params + num_captures + 3) {
         return fail("the declared dispatch function has another number of arguments");
     }
     if (guarded && return_kind != BatchCalleeReturnKind::Boxed) {
@@ -18074,10 +18077,12 @@ static bool defineAOTClosureNativeDispatch(llvm::LLVMContext& ctx,
         llvm::FunctionType::get(i64_ty, {llvm::Type::getDoubleTy(ctx)}, false));
     llvm::Value* guarded_ref = guarded ? dispatch->getArg(0) : nullptr;
     llvm::Value* guarded_identity = guarded ? dispatch->getArg(1) : nullptr;
-    llvm::Value* aot_ctx = dispatch->getArg(
+    llvm::Value* arg_cleanups = dispatch->getArg(
         param_offset + num_params + num_captures);
-    llvm::Value* xsink = dispatch->getArg(
+    llvm::Value* aot_ctx = dispatch->getArg(
         param_offset + num_params + num_captures + 1);
+    llvm::Value* xsink = dispatch->getArg(
+        param_offset + num_params + num_captures + 2);
     dispatch->setLinkage(llvm::GlobalValue::InternalLinkage);
     dispatch->addFnAttr(llvm::Attribute::InlineHint);
     llvm::BasicBlock* entry = llvm::BasicBlock::Create(ctx, "entry", dispatch);
@@ -18165,6 +18170,20 @@ static bool defineAOTClosureNativeDispatch(llvm::LLVMContext& ctx,
         builder.CreateCall(module.getOrInsertFunction("qore_rt_push_native_closure_call_frame",
             llvm::FunctionType::get(llvm::Type::getVoidTy(ctx), {ptr_ty}, false)), {frame_storage});
         llvm::Value* fast_result = builder.CreateCall(fast_fn, fast_args);
+        {
+            // the arguments that the caller gave to the call are released in the closure's frame, as the AST
+            // interpreter's call releases them (issue #6063); a caller that gives none passes null, which a call
+            // that the dispatch is inlined into folds away
+            llvm::BasicBlock* clear_bb = llvm::BasicBlock::Create(ctx, "clear_given_args", dispatch);
+            llvm::BasicBlock* pop_bb = llvm::BasicBlock::Create(ctx, "pop_frame", dispatch);
+            builder.CreateCondBr(builder.CreateIsNotNull(arg_cleanups), clear_bb, pop_bb);
+            builder.SetInsertPoint(clear_bb);
+            builder.CreateCall(module.getOrInsertFunction("qore_rt_clear_given_arg_cleanups",
+                llvm::FunctionType::get(llvm::Type::getVoidTy(ctx), {ptr_ty, i32_ty, ptr_ty}, false)),
+                {arg_cleanups, llvm::ConstantInt::get(i32_ty, num_params), xsink});
+            builder.CreateBr(pop_bb);
+            builder.SetInsertPoint(pop_bb);
+        }
         builder.CreateCall(module.getOrInsertFunction("qore_rt_pop_native_call_frame",
             llvm::FunctionType::get(llvm::Type::getVoidTy(ctx), {ptr_ty}, false)), {frame_storage});
         // a boxed ABI over a fast body with a native result (a guarded dispatch, or a call site that was lowered
@@ -18227,19 +18246,23 @@ static bool defineAOTClosureNativeDispatch(llvm::LLVMContext& ctx,
 
     llvm::Value* boxed_result = nullptr;
     if (guarded) {
-        auto fallback = module.getOrInsertFunction("qore_rt_call_closure_fast",
+        // with the cleanup slots of the arguments given to the call, if any (with none, the helper is
+        // qore_rt_call_closure_fast())
+        auto fallback = module.getOrInsertFunction("qore_rt_call_closure_fast_consume_args",
             llvm::FunctionType::get(i64_ty,
-                {i64_ty, ptr_ty, i32_ty, ptr_ty}, false));
+                {i64_ty, ptr_ty, ptr_ty, i32_ty, ptr_ty}, false));
         boxed_result = builder.CreateCall(fallback,
-            {guarded_ref, args_array,
+            {guarded_ref, args_array, arg_cleanups,
                 llvm::ConstantInt::get(i32_ty, num_params), xsink});
     } else {
+        // with the cleanup slots of the arguments given to the call, if any (with none, the helper is
+        // qore_rt_call_immediate_closure_aot())
         auto fallback = module.getOrInsertFunction(
-            "qore_rt_call_immediate_closure_aot",
+            "qore_rt_call_immediate_closure_aot_consume_args",
             llvm::FunctionType::get(i64_ty,
-                {ptr_ty, i32_ty, ptr_ty, i32_ty, ptr_ty}, false));
+                {ptr_ty, i32_ty, ptr_ty, ptr_ty, i32_ty, ptr_ty}, false));
         boxed_result = builder.CreateCall(fallback,
-            {aot_ctx, llvm::ConstantInt::get(i32_ty, expr_index), args_array,
+            {aot_ctx, llvm::ConstantInt::get(i32_ty, expr_index), args_array, arg_cleanups,
              llvm::ConstantInt::get(i32_ty, num_params), xsink});
     }
     auto decref = module.getOrInsertFunction("qore_rt_decref",
@@ -22364,8 +22387,8 @@ static int aotSystem(const std::string& cmd) {
 // (Phase 3) can reuse it per-partition on its own thread/TargetMachine. The caller owns
 // `tm` and any cleanup of `out_o` on failure. The BackendCodegen TimeTraceScope wraps the
 // bulk of compile time (SelectionDAG + MachineInstr passes + RegAlloc + asm emission).
-static bool codegenModuleToObject(llvm::Module& m, llvm::TargetMachine* tm,
-        const std::string& out_o, std::string& error, bool debug_opt = false) {
+static bool codegenModuleToObjectOnce(llvm::Module& m, llvm::TargetMachine* tm,
+        const std::string& out_o, std::string& error, bool debug_opt) {
     std::error_code EC;
     llvm::raw_fd_ostream dest(out_o, EC, llvm::sys::fs::OF_None);
     if (EC) {
@@ -22406,6 +22429,15 @@ static bool codegenModuleToObject(llvm::Module& m, llvm::TargetMachine* tm,
         return false;
     }
     return true;  // `dest` closes at scope end -> all bytes on disk
+}
+
+// a function whose frame is larger than the stack guard allows gets a thunk that checks the stack for its frame (see
+// QoreIRFrameCheck, qore#6414)
+static bool codegenModuleToObject(llvm::Module& m, llvm::TargetMachine* tm,
+        const std::string& out_o, std::string& error, bool debug_opt = false) {
+    return QoreIRFrameCheck::emit(m, [&](llvm::Module& mod, std::string& err) {
+        return codegenModuleToObjectOnce(mod, tm, out_o, err, debug_opt);
+    }, error);
 }
 
 static bool shellSingleQuote(const std::string& value, std::string& quoted) {
@@ -27023,8 +27055,8 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
         if (!xsink.isException()) {
             qpgm->parseCommit(&xsink, &wsink, QP_WARN_DEFAULT);
         }
-        // the module's parse options are checked as they are at the end of its source; closing the module context
-        // restores the options it was opened with
+        // the module's parse options are checked as they are at the end of its source; the module header's
+        // restrictions ended with the header, and closing the module context leaves the options as they are
         parsed_po = qpgm->getParseOptions();
 
         // Capture init closure before mod_ctx destroys it
@@ -29160,7 +29192,9 @@ struct QoreAOTSiblingPreload {
 namespace {
 struct AOTBatchParseOptionGuard {
     explicit AOTBatchParseOptionGuard(QoreProgram& pgm)
-            : pgm(pgm), old(pgm.getParseOptions()) {
+            : pgm(pgm), old(qore_program_private::getSharedParseOptions(pgm)) {
+        // the guard replaces the options of the whole Program, between parses: no scoped options are in effect
+        assert(!qore_program_private::hasParseOverlay(pgm));
     }
     ~AOTBatchParseOptionGuard() {
         qore_program_private::forceReplaceParseOptions(pgm, old);
@@ -29183,10 +29217,12 @@ static int applyAOTSourceModernDefault(QoreProgram& pgm, const std::string& cano
     // the check and the change are atomic (issue #6078)
     std::lock_guard<std::recursive_mutex> lg(qore_program_private::getParseOptionsWriteLock(pgm));
     // %modern cannot be set while a compatibility option that it does not allow is in effect (issue #5682)
-    if (qore_program_private::checkModernSourceDefault(pgm.getParseOptions(), canon.c_str(), xsink)) {
+    assert(!qore_program_private::hasParseOverlay(pgm));
+    QoreParseOptions current = qore_program_private::getSharedParseOptions(pgm);
+    if (qore_program_private::checkModernSourceDefault(current, canon.c_str(), xsink)) {
         return -1;
     }
-    qore_program_private::forceReplaceParseOptions(pgm, pgm.getParseOptions() | QoreParseOptions(PO_MODERN));
+    qore_program_private::forceReplaceParseOptions(pgm, current | QoreParseOptions(PO_MODERN));
     return 0;
 }
 

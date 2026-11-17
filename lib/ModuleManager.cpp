@@ -1709,7 +1709,7 @@ int QoreModuleDefContext::setDomains(const QoreProgramLocation* loc, QoreValue v
 
     // a module from the process-wide module path (library code) does not inherit these restrictions from the
     // Program loading it; the declaration is recorded in any case so that an AOT image of the module has it
-    dom_removed |= applyDomains(dom);
+    applyDomains(dom);
     return 0;
 }
 
@@ -1722,9 +1722,9 @@ int64 QoreUserModuleDefContextHelper::applyDomains(int64 dom) {
     int64 removed = qore_program_private::setModuleOwnDomains(*pgm->pgm, dom, qore_module_load_is_trusted());
     // the module header's own restrictions (MOD_HEADER_PO), which the module sets for its header code, do not
     // restrict the declared domains: the header's init and del closures may use them, unless they are inherited
-    int64 header_only = dom & static_cast<int64>(MOD_HEADER_PO) & ~po.getLo();
-    if (header_only) {
-        pgm->pwo.parse_options &= ~QoreParseOptions(header_only);
+    int64 header_only = dom & header_po.getLo();
+    if (header_only && header_frame.isLinked()) {
+        header_frame.add &= ~QoreParseOptions(header_only);
     }
     return removed;
 }
@@ -1833,7 +1833,7 @@ QoreModuleContextHelper::~QoreModuleContextHelper() {
 QoreUserModuleDefContextHelper::QoreUserModuleDefContextHelper(const char* name, const char* path, QoreProgram* p,
         ExceptionSink& xs, QoreModuleRecordLock rlock)
         : mod_name(name), old_name(set_module_context_name(name)), old_path(set_module_context_path(path)),
-        pgm(qore_program_private::get(*p)), po(0), xsink(xs), dup(false), rlock(rlock) {
+        pgm(qore_program_private::get(*p)), xsink(xs), dup(false), rlock(rlock) {
     try {
         if (rlock == QMRL_HELD) {
             QMM.getUserModuleRegistration(name, saved_reg);
@@ -1904,21 +1904,27 @@ void QoreUserModuleDefContextHelper::setNameInit(const char* name) {
     assert(vmap.find("name") == vmap.end());
     vmap["name"] = name;
 
-    assert(!po);
+    assert(!header_frame.isLinked());
 
-    {
-        // the options saved are the ones that the header's restrictions are added to (issue #6078)
-        std::lock_guard<std::recursive_mutex> lg(pgm->pwo.parse_options.writeLock());
-        po = pgm->pwo.parse_options;
-        pgm->pwo.parse_options |= MOD_HEADER_PO;
-    }
+    // the header's restrictions are scoped options of the parsing thread, which end with the header: the module's
+    // other code and other threads do not have them (issue #6207)
+    header_po = pgm->linkModuleHeaderFrame(header_frame, QoreParseOptions(MOD_HEADER_PO));
     // the header's own restrictions do not apply to the functional domains declared on user code
-    qore_program_private::setModuleHeaderDomains(*pgm->pgm, static_cast<int64>(MOD_HEADER_PO) & ~po.getLo());
+    qore_program_private::setModuleHeaderDomains(*pgm->pgm, header_po.getLo());
+#ifdef DEBUG
+    qore_dbg_parse_scope_begin(pgm->pgm, "header");
+#endif
 }
 
 void QoreUserModuleDefContextHelper::close() {
-    // the options in effect before the module header, without the restrictions that the header removed (domains)
-    pgm->pwo.parse_options = po & ~QoreParseOptions(dom_removed);
+    // the header's restrictions end; the restrictions that the header removed (domains) were removed from the
+    // Program's own options when they were declared
+    if (header_frame.isLinked()) {
+        header_frame.unlink();
+#ifdef DEBUG
+        qore_dbg_parse_scope_end(pgm->pgm, "header");
+#endif
+    }
     // a %set-time-zone directive after the header is checked against these options (qore#6270)
     pgm->module_header_closed = true;
     // mod_header_dom stays set: the header's closures are parse-initialized after the header with the options that
@@ -2230,8 +2236,6 @@ QoreUserModule::~QoreUserModule() {
 }
 
 void QoreUserModule::addToProgramImpl(QoreProgram* tpgm, ExceptionSink& xsink) const {
-    //printd(5, "QoreUserModule::addToProgramImpl() mod '%s': tpgm %p po: %p pgm dom: %p\n", name.c_str(), tpgm,
-    //    tpgm->getParseOptions(), qore_program_private::getDomain(*pgm));
     // a module that another Program has loaded is not checked against the restrictions of the Program importing it:
     // it is a capability that the host gave the Program, and its code runs with the restrictions of its callers as
     // well as its own; only the first load is checked (see QoreModuleManager::loadSeparatedModule())
@@ -3437,6 +3441,12 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
 
     //printd(5, "QoreModuleManager::loadModuleIntern() this: %p name: %s not found\n", this, name);
 
+    // a blacklisted module is refused before any of its forms is looked for: none of them is loaded, and a binary
+    // module that is refused does not fall back to its source
+    if (checkBlacklist(xsink, name)) {
+        return nullptr;
+    }
+
     // see if we are loading a user module from an explicit source
     if (src) {
         QoreString modulePath;
@@ -4163,10 +4173,14 @@ QoreParseOptions qore_get_inherited_module_parse_options(const QoreParseOptions&
     @param added if not nullptr, receives the restrictions that the mask adds and that are not inherited
 */
 static QoreParseOptions get_masked_module_parse_options(QoreProgram* p, const QoreParseOptions& exclude,
-        const QoreModuleParseOptionMask& mask, QoreParseOptions* added = nullptr) {
+        const QoreModuleParseOptionMask& mask, QoreParseOptions* added = nullptr, const QoreProgram* target = nullptr) {
     QoreParseOptions inherited;
     if (p) {
-        QoreParseOptions parent_po = p->getParseOptions();
+        // the options that replace the Program's own options of \a target are computed from its own options, not
+        // from the scoped options of a parse of it in this thread (issue #6207)
+        QoreParseOptions parent_po = p == target
+            ? qore_program_private::getSharedParseOptions(*p)
+            : p->getParseOptions();
         // PO_ENABLE_DEBUG is not propagated automatically: only from a parent that may control the process
         inherited = get_inherited_module_parse_options(parent_po, exclude | PO_ENABLE_DEBUG);
         if ((parent_po & PO_ENABLE_DEBUG) && !(parent_po & PO_NO_PROCESS_CONTROL)) {
@@ -4216,6 +4230,12 @@ QoreAbstractModule* QoreModuleManager::loadSeparatedModule(ExceptionSink& xsink,
     printd(5, "QoreModuleManager::loadSeparatedModule() path: %s, feature: %s, pgm: %p, reexport: %d, mpgm: %p, "
         "path_pgm: %p, load_opt: %d warning_mask: %d\n", path, feature, pgm, reexport, mpgm, path_pgm,
         load_opt, warning_mask);
+
+    // checked as by the other module loaders, before anything is read
+    if (checkBlacklist(xsink, feature)) {
+        return nullptr;
+    }
+
     if (module_load_check(feature)) {
         xsink.raiseException("LOAD-MODULE-ERROR", "cannot load user module '%s'; recursive module dependency "
             "detected", feature);
@@ -4270,7 +4290,7 @@ QoreAbstractModule* QoreModuleManager::loadSeparatedModule(ExceptionSink& xsink,
     // the restrictions that the mask adds and that the module would not have without it
     QoreParseOptions mask_added;
     QoreParseOptions parseOptions = USER_MOD_PO
-        | get_masked_module_parse_options(p, PO_REQUIRE_TYPES | PO_NO_GLOBAL_VARS, load_mask, &mask_added);
+        | get_masked_module_parse_options(p, PO_REQUIRE_TYPES | PO_NO_GLOBAL_VARS, load_mask, &mask_added, mpgm);
     mask_added &= ~QoreParseOptions(USER_MOD_PO);
 
     QoreString modulePath(path);
@@ -4662,8 +4682,8 @@ ChildAttachHelper::~ChildAttachHelper() {
     loaded by \c %%requires, which has no warning sink separate from its exception sink (raising the warning
     there would make it a parse error), the warning is a parse warning of the code with the directive.
 
-    A skipped child (\c MODULE-CHILD-SKIPPED) reflects a deliberate restriction in the container Program and is
-    only reported when warnings are enabled.
+    A skipped child (\c MODULE-CHILD-SKIPPED) reflects a deliberate restriction (the child is blacklisted, or the
+    container Program cannot load modules) and is only reported when warnings are enabled.
 */
 static void qore_report_child_module_not_attached(ExceptionSink& xsink, ExceptionSink& wsink,
         int warning_mask, const char* mod_name, const ChildModuleInfo& c) {
@@ -4764,6 +4784,21 @@ int QoreModuleManager::attachChildModules(QoreAbstractModule& mi, ExceptionSink&
         // diagnostic.  The recorded failure stays visible in the module hash
         if (c.status == CMS_ATTACHED || c.status == CMS_ABSENT || c.status == CMS_FAILED) {
             continue;
+        }
+
+        // a blacklisted child is excluded on purpose, whether or not it is installed: it is skipped, not loaded,
+        // and as a module cannot be removed from the blacklist, the skip is final and reported once
+        {
+            bl_map_t::const_iterator bi = mod_blacklist.find(c.name);
+            if (bi != mod_blacklist.end()) {
+                QoreStringMaker reason("module '%s' was blacklisted %s", c.name.c_str(), bi->second.c_str());
+                if (c.status != CMS_SKIPPED || c.desc != reason.c_str()) {
+                    c.status = CMS_SKIPPED;
+                    c.desc = reason.c_str();
+                    qore_report_child_module_not_attached(xsink, wsink, warning_mask, mi.getName(), c);
+                }
+                continue;
+            }
         }
 
         if (no_modules) {
@@ -5048,7 +5083,8 @@ int QoreModuleManager::addModuleParseOptionMask(const char* name, const QoreModu
     QoreParseOptions masked;
     if (mpgm && !mask.empty()) {
         wl = std::unique_lock<std::recursive_mutex>(qore_program_private::getParseOptionsWriteLock(*mpgm));
-        QoreParseOptions current = mpgm->getParseOptions();
+        // the module's own options, which the mask replaces (issue #6207)
+        QoreParseOptions current = qore_program_private::getSharedParseOptions(*mpgm);
         masked = mask.apply(current);
         if (qore_program_private_base::isModern(masked)
                 && (masked & qore_program_private_base::modernIncompatibleOptions())) {
@@ -5224,6 +5260,17 @@ int QoreModuleManager::addModuleToBlacklist(const char* name, const char* msg) {
     if (mi) {
         return -1;
     }
+    // a module whose load is in progress cannot be blacklisted either: every loader checks the blacklist before it
+    // reserves the module's feature name in module_load_map with the mutex held, and then releases the mutex while
+    // the module is parsed and initialized, so a module blacklisted then would still be loaded and registered.  A
+    // terminal entry (loaded or failed) that is only kept for the threads waiting on it is not a load in progress:
+    // a loaded module is found above, and a module that failed to load can be blacklisted
+    {
+        module_load_map_t::const_iterator li = module_load_map.find(name);
+        if (li != module_load_map.end() && li->second.state == MLS_INITIALIZING) {
+            return -1;
+        }
+    }
 
     // check if it's been blacklisted
     auto i = mod_blacklist.lower_bound(name);
@@ -5310,7 +5357,7 @@ QoreAbstractModule* QoreModuleManager::loadUserModuleFromPath(ExceptionSink& xsi
     // the restrictions that the mask adds and that the module would not have without it
     QoreParseOptions mask_added;
     QoreParseOptions po = USER_MOD_PO
-        | get_masked_module_parse_options(p, PO_REQUIRE_TYPES | PO_NO_GLOBAL_VARS, load_mask, &mask_added);
+        | get_masked_module_parse_options(p, PO_REQUIRE_TYPES | PO_NO_GLOBAL_VARS, load_mask, &mask_added, mpgm);
     mask_added &= ~QoreParseOptions(USER_MOD_PO);
 
     const char* td = p ? p->parseGetScriptDir() : nullptr;
@@ -5454,7 +5501,8 @@ QoreAbstractModule* QoreModuleManager::loadUserModuleFromSource(ExceptionSink& x
     const QoreModuleParseOptionMask load_mask = getLoadParseOptionMask();
     // the restrictions that the mask adds and that the module would not have without it
     QoreParseOptions mask_added;
-    QoreParseOptions po = USER_MOD_PO | get_masked_module_parse_options(p, PO_REQUIRE_TYPES, load_mask, &mask_added);
+    QoreParseOptions po = USER_MOD_PO
+        | get_masked_module_parse_options(p, PO_REQUIRE_TYPES, load_mask, &mask_added, mpgm);
     mask_added &= ~QoreParseOptions(USER_MOD_PO);
 
     if (mpgm) {
