@@ -17440,6 +17440,14 @@ static QoreValue f_dbg_socket_is_nonblocking(const QoreListNode* params, Runtime
 #endif
 }
 
+//! Debug-only: returns the number of steps taken walking class hierarchies and member lists at parse time
+/** Tests use this to check that the work of parsing a deep class hierarchy grows with the square of its depth, not
+    faster, without measuring time (issue #6106)
+ */
+static QoreValue f_dbg_class_hierarchy_steps(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    return qore_class_hierarchy_steps.load(std::memory_order_relaxed);
+}
+
 //! Debug-only: holds the stream queue registrations of HTTP/2 client connections pending, or applies them again
 /** Tests use this to make data arrive on an HTTP/2 client stream whose queue registration has not been applied yet
     by the I/O thread, deterministically.  A test must stop holding them (also when it fails).
@@ -24378,6 +24386,8 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_async_io_pause_after_step_result", f_dbg_async_io_pause_after_step_result,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolTypeInfo, 1,
         boolTypeInfo, QORE_PARAM_NO_ARG, "pause");
+    qns.addBuiltinVariant("dbg_class_hierarchy_steps", f_dbg_class_hierarchy_steps, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_h2_client_hold_stream_registrations", f_dbg_h2_client_hold_stream_registrations,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
         boolTypeInfo, QORE_PARAM_NO_ARG, "hold");

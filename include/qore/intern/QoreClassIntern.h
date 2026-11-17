@@ -60,6 +60,17 @@
 #include <vector>
 
 #define OTF_USER    CT_USER
+
+#ifdef DEBUG
+//! debug builds: the number of steps taken walking class hierarchies and member lists at parse time
+/** Counts the steps whose number grew faster than the square of the depth of a deep hierarchy before issue #6106;
+    read by the dbg_class_hierarchy_steps() test hook
+*/
+DLLLOCAL extern std::atomic<int64> qore_class_hierarchy_steps;
+#define QORE_CLASS_HIERARCHY_STEP() qore_class_hierarchy_steps.fetch_add(1, std::memory_order_relaxed)
+#else
+#define QORE_CLASS_HIERARCHY_STEP()
+#endif
 #define OTF_BUILTIN CT_BUILTIN
 
 // cannot use vector_map here for performance reasons with method lookups
@@ -1961,12 +1972,13 @@ public:
         // the index is only used when it has an entry for each member: it is updated when a member is added, and
         // the list could be changed directly
         if (!index.empty() && index.size() == member_list.size()) {
+            QORE_CLASS_HIERARCHY_STEP();
             typename index_t::const_iterator i = index.find(name);
             return i == index.end() ? nullptr : i->second;
         }
         typename member_list_t::const_iterator i =
             std::find_if(member_list.begin(), member_list.end(), [name](const member_list_element_t& e)
-                -> bool {return !strcmp(e.first, name); });
+                -> bool {QORE_CLASS_HIERARCHY_STEP(); return !strcmp(e.first, name); });
         return i == member_list.end() ? nullptr : i->second;
     }
 

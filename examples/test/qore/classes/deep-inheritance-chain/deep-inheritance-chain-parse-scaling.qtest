@@ -9,21 +9,22 @@
 
 %exec-class DeepInheritanceChainParseScalingTest
 
-#! Test for issue #6106: the time to parse a chain of classes grows about quadratically with its length
+#! Test for issue #6106: the work of parsing a chain of classes grows about quadratically with its length
 /** Each class of a chain walked the whole hierarchy again for each of its ancestors to add them to its list of base
     classes, and initialized the hierarchy of each ancestor again, adding the ancestors of their methods again: the
-    parse time grew about with the fourth power of the length of the chain (a chain four times as long took about 200
-    times as long to parse).  This test parses chains of Short and of Long classes and checks that the longer one
-    does not take more than MaxRatio times as long, a bound above the ratio of the squares of the lengths (each class
-    still has a list of all of its ancestors) and far below the ratio of the fourth powers.  The best time
-    of several parses is taken for each length, so that the load of the machine does not decide the result.
+    parse time grew about with the fourth power of the length of the chain.  This test parses chains of Short and of
+    Long classes and compares the number of steps taken walking class hierarchies and member lists while parsing
+    them, which a debug build counts (dbg_class_hierarchy_steps()): the longer chain must not take more than MaxRatio
+    times as many steps, a bound above the ratio of the squares of the lengths (each class still has a list of all of
+    its ancestors and of their members) and below the ratio of their cubes.  The parse times are only printed (with
+    -v); the test is skipped in a build without the counter.
 */
 class DeepInheritanceChainParseScalingTest inherits QUnit::Test {
     public {
         const Short = 150;
         const Long = 600;
-        const Runs = 3;
-        const MaxRatio = 40.0;
+        #! the ratio of the squares of the lengths is 16, of their cubes 64
+        const MaxRatio = 32.0;
     }
 
     constructor() : QUnit::Test("deep inheritance chain parse scaling", "1.0", \ARGV) {
@@ -41,35 +42,44 @@ class DeepInheritanceChainParseScalingTest inherits QUnit::Test {
     }
 
     private checkScaling(code source) {
-        # the best of several parses of each length; one parse of each first, so that nothing is set up in a timed one
-        parse(source(Short));
-        float short_time = bestTime(source, Short);
-        float long_time = bestTime(source, Long);
-        float ratio = long_time / short_time;
+        *int start = steps();
+        if (!exists start) {
+            testSkip("a debug build is required for dbg_class_hierarchy_steps()");
+        }
+        hash<auto> short_parse = parse(source(Short));
+        hash<auto> long_parse = parse(source(Long));
+        float ratio = long_parse.steps.toFloat() / short_parse.steps;
         if (m_options.verbose) {
-            printf("%d classes: %.4fs, %d classes: %.4fs, ratio: %.1f\n", Short, short_time, Long, long_time, ratio);
+            printf("%d classes: %d steps (%.4fs), %d classes: %d steps (%.4fs), ratio: %.1f\n", Short,
+                short_parse.steps, short_parse.time, Long, long_parse.steps, long_parse.time, ratio);
         }
-        assertTrue(ratio < MaxRatio, sprintf("parsing %d classes took %.1f times as long as parsing %d classes "
-            "(%.4fs and %.4fs); the bound is %.1f", Long, ratio, Short, long_time, short_time, MaxRatio));
+        assertTrue(ratio < MaxRatio, sprintf("parsing %d classes took %.1f times as many steps as parsing %d "
+            "classes (%d and %d); the bound is %.1f", Long, ratio, Short, long_parse.steps, short_parse.steps,
+            MaxRatio));
     }
 
-    private float bestTime(code source, int n) {
-        string src = source(n);
-        float best;
-        for (int i = 0; i < Runs; ++i) {
-            date start = now_us();
-            parse(src);
-            float t = (now_us() - start).durationSecondsFloat();
-            if (!exists best || t < best) {
-                best = t;
+    #! returns the number of steps counted so far, or nothing if the build does not count them
+    private static *int steps() {
+        try {
+            return call_function("dbg_class_hierarchy_steps");
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "NO-FUNCTION" || ex.err == "UNDEFINED-FUNCTION-CALL") {
+                return;
             }
+            rethrow;
         }
-        return best;
     }
 
-    private static parse(string src) {
+    #! parses the source and returns the steps that it took and its time
+    private static hash<auto> parse(string src) {
         Program pgm(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS | PO_STRONG_ENCAPSULATION);
+        int start = steps();
+        date start_time = now_us();
         pgm.parse(src, "chain");
+        return {
+            "steps": steps() - start,
+            "time": (now_us() - start_time).durationSecondsFloat(),
+        };
     }
 
     #! each class calls its base class constructor, declares a member and overrides a method
