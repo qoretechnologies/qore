@@ -3699,7 +3699,17 @@ block:
 
 statement_or_block:
     statement
-    { $$ = new StatementBlock(@1.first_line, @1.last_line, $1); $$->native_parse_info = @1.native_parse_info; }
+    {
+        // an on_exit, on_success or on_error statement runs when its block ends, so it must be a statement of a
+        // block in braces, not the body of another statement, whose scope would be unclear (issue #240)
+        if (dynamic_cast<OnBlockExitStatement*>($1)) {
+            parse_error(*qore_program_private::get(*getProgram())->getLocation(@1.first_line, @1.last_line,
+                @1.first_col, @1.last_col), "an on_exit, on_success or on_error statement must be a statement of a "
+                "block in braces, as it runs when that block ends; it cannot be the body of another statement (an "
+                "if, else, loop, try, catch, context or on_* statement); put it in braces ({ on_exit ...; })");
+        }
+        $$ = new StatementBlock(@1.first_line, @1.last_line, $1); $$->native_parse_info = @1.native_parse_info;
+    }
     |
     block
     { $$ = $1; }

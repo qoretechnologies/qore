@@ -101,6 +101,13 @@
     @endparblock
 
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
+    @par on_exit, on_success and on_error Must Be Statements of a Block
+    An \c on_exit, \c on_success or \c on_error statement that is the body of another statement without braces (an
+    \c if or \c else, a loop, a \c try or \c catch, a context statement, or another \c on_exit, \c on_success or
+    \c on_error statement:
+    <tt>if (x) on_success f();</tt>, <tt>on_exit on_exit f();</tt>) is a parse error, as its scope was unclear; put it
+    in braces (see @ref on_block_exit_in_block "on_exit statements"; issue #240).
+
     @par A Keyword After a Dot and White Space Is a Member Name
     A keyword after the @ref dot_operator ". operator" and white space is a member or method name, as it is without
     the white space, so an operator keyword there is no longer an operator: <tt>h . keys h2</tt>, which was
