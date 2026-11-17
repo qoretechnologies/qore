@@ -189,7 +189,7 @@ protected:
 
 private:
     //! Returns the poll operation with a new reference taken under @c attempts_mu_, or nullptr if there is none
-    DLLLOCAL Http3ClientPollOperationPriv* getReferencedPollOp();
+    DLLLOCAL Http3ClientPollOperationPriv* getReferencedPollOp() const;
 
     //! @name QoreObject refs — standalone C++ lifecycle, NOT DGC-visible
     /** @c sock_obj and @c poll_op_obj hold strong refs on the socket /
@@ -216,25 +216,26 @@ private:
              when a different attempt wins the happy-eyeballs race.  The
              reassignment is performed under @c attempts_mu_.
 
-        Readers (submitRequest, pushSendData, etc.) gate their access
-        through the base-class @c isReady() state transition: none of
-        them dereference these pointers unless @c isReady() returns true.
-        @ref onConnectionReady is called AFTER the member reassignment,
-        and @c onConnectionReady publishes the state change with release
-        ordering.  Readers see @c isReady()==true with acquire ordering,
-        producing the happens-before edge that makes the pointer write
-        visible without per-member atomics.
+        Readers of the socket members that have found the connection ready
+        see the winner's tuple: @ref onConnectionReady is called AFTER the
+        member reassignment and publishes the state change with release
+        ordering, and @c isReady() reads it with acquire ordering.
 
         Every write of these members is made under @c attempts_mu_: the
         publication in @ref buildAndSubmit, the reassignment in
         @ref onInnerHandshakeReady, the nulling in @ref onInnerHandshakeFailed
         and @ref closeConnection (racing branch), and the release in the
         destructor.  While the attempts race, the members alias the primary
-        attempt, whose teardown can release its poll operation at any time; a
-        reader that is not gated by @c isReady() (getReferencedErrorInfo(),
-        getActiveStreamCount()) therefore takes the poll operation with a
-        reference of its own under @c attempts_mu_ (getReferencedPollOp()) and
-        uses it after the lock is released.
+        attempt, whose teardown can release its poll operation at any time;
+        every reader of @c poll_op_priv (the submit methods, pushSendData(),
+        setTrailers(), cancelRequest(), getReferencedErrorInfo(),
+        getActiveStreamCount() and closeConnection()) therefore takes the poll
+        operation with a reference of its own under @c attempts_mu_
+        (getReferencedPollOp()) and uses it after the lock is released.  The
+        socket members (@c sock_priv, @c sock_obj) are read without the lock
+        only by methods that have found the connection ready (a stream was
+        submitted on it): the winner's members then stay set until the
+        destructor.
 
         @{
     */
@@ -366,7 +367,7 @@ private:
     //! main thread + I/O thread keeps the Attempt alive until both
     //! drop their refs.
     std::vector<std::shared_ptr<Attempt>> attempts_;
-    std::mutex attempts_mu_;
+    mutable std::mutex attempts_mu_;
     //! Index of the winning attempt in @c attempts_; -1 while racing.
     /** Written under @c attempts_mu_; read under the same or during
         committed-state method calls where the connection is already

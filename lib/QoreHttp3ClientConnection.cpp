@@ -799,12 +799,11 @@ int Http3ClientConnection::getActiveStreamCount() const {
     // while the connection attempts race, the poll operation is the primary attempt's, which their teardown can
     // release at any time: it is taken with a reference of its own
     ExceptionSink xsink;
-    ReferenceHolder<Http3ClientPollOperationPriv> op(const_cast<Http3ClientConnection*>(this)->getReferencedPollOp(),
-        &xsink);
+    ReferenceHolder<Http3ClientPollOperationPriv> op(getReferencedPollOp(), &xsink);
     return op ? op->getActiveStreamCount() : 0;
 }
 
-Http3ClientPollOperationPriv* Http3ClientConnection::getReferencedPollOp() {
+Http3ClientPollOperationPriv* Http3ClientConnection::getReferencedPollOp() const {
     std::lock_guard<std::mutex> lk(attempts_mu_);
     if (poll_op_priv) {
         poll_op_priv->ref();
@@ -816,12 +815,15 @@ QoreHashNode* Http3ClientConnection::submitRequest(const char* method, const cha
         const QoreHashNode* headers, const void* body, size_t body_len,
         ExceptionSink* xsink, HttpClientEventSink* event_sink) {
     MethodGuard g(this);
+    // the poll operation is taken with a reference of its own under attempts_mu_: until the connection is ready, it
+    // is the primary connection attempt's, which the attempts' teardown can release at any time
+    ReferenceHolder<Http3ClientPollOperationPriv> op_ref(getReferencedPollOp(), xsink);
     if (!g.acquired()) {
         xsink->raiseException("HTTPCLIENT-STATE-ERROR",
             "cannot submit request: connection has been closed");
         return nullptr;
     }
-    if (!poll_op_priv || isClosed()) {
+    if (!op_ref || isClosed()) {
         raiseClosedSubmitError("cannot submit request: connection is closed",
             xsink);
         return nullptr;
@@ -852,7 +854,7 @@ QoreHashNode* Http3ClientConnection::submitRequest(const char* method, const cha
     // the events of this request are reported to the sink of the client that issued it
     action->setEventSink(event_sink);
 
-    int64_t stream_id = poll_op_priv->submitRequest(method, path, headers,
+    int64_t stream_id = op_ref->submitRequest(method, path, headers,
         body, body_len, /* streaming */ false, action,
         max_concurrent_streams_, xsink);
     if (*xsink || stream_id < 0) {
@@ -875,13 +877,16 @@ int64_t Http3ClientConnection::submitRequestWithAction(const char* method, const
         const QoreHashNode* headers, const void* body, size_t body_len,
         AbstractAsyncAction* action, ExceptionSink* xsink) {
     MethodGuard g(this);
+    // the poll operation is taken with a reference of its own under attempts_mu_: until the connection is ready, it
+    // is the primary connection attempt's, which the attempts' teardown can release at any time
+    ReferenceHolder<Http3ClientPollOperationPriv> op_ref(getReferencedPollOp(), xsink);
     if (!g.acquired()) {
         action->deref(xsink);
         xsink->raiseException("HTTPCLIENT-STATE-ERROR",
             "cannot submit request: connection has been closed");
         return -1;
     }
-    if (!poll_op_priv || isClosed()) {
+    if (!op_ref || isClosed()) {
         action->deref(xsink);
         raiseClosedSubmitError("cannot submit request: connection is closed",
             xsink);
@@ -894,7 +899,7 @@ int64_t Http3ClientConnection::submitRequestWithAction(const char* method, const
         return -1;
     }
 
-    int64_t stream_id = poll_op_priv->submitRequest(method, path, headers,
+    int64_t stream_id = op_ref->submitRequest(method, path, headers,
         body, body_len, /* streaming */ false, action,
         max_concurrent_streams_, xsink);
     if (*xsink || stream_id < 0) {
@@ -913,12 +918,15 @@ int64_t Http3ClientConnection::submitRequestStreaming(const char* method, const 
         const QoreHashNode* headers, const void* body, size_t body_len,
         QoreChannel*& channel_out, ExceptionSink* xsink, HttpClientEventSink* event_sink) {
     MethodGuard g(this);
+    // the poll operation is taken with a reference of its own under attempts_mu_: until the connection is ready, it
+    // is the primary connection attempt's, which the attempts' teardown can release at any time
+    ReferenceHolder<Http3ClientPollOperationPriv> op_ref(getReferencedPollOp(), xsink);
     if (!g.acquired()) {
         xsink->raiseException("HTTPCLIENT-STATE-ERROR",
             "cannot submit streaming request: connection has been closed");
         return -1;
     }
-    if (!poll_op_priv || isClosed()) {
+    if (!op_ref || isClosed()) {
         raiseClosedSubmitError(
             "cannot submit streaming request: connection is closed", xsink);
         return -1;
@@ -941,7 +949,7 @@ int64_t Http3ClientConnection::submitRequestStreaming(const char* method, const 
     // one-shot body and only streams the response, so HEADERS must carry
     // END_STREAM (via nghttp3 with drp=nullptr) when the body is empty —
     // otherwise the server waits for body data that never arrives.
-    int64_t stream_id = poll_op_priv->submitRequest(method, path, headers,
+    int64_t stream_id = op_ref->submitRequest(method, path, headers,
         body, body_len, /* streaming */ false, action,
         max_concurrent_streams_, xsink);
     if (*xsink || stream_id < 0) {
@@ -962,13 +970,16 @@ QoreHashNode* Http3ClientConnection::submitRequestStreamingSend(const char* meth
         const char* path, const QoreHashNode* headers, bool streaming_recv,
         QoreChannel*& channel_out, ExceptionSink* xsink, HttpClientEventSink* event_sink) {
     MethodGuard g(this);
+    // the poll operation is taken with a reference of its own under attempts_mu_: until the connection is ready, it
+    // is the primary connection attempt's, which the attempts' teardown can release at any time
+    ReferenceHolder<Http3ClientPollOperationPriv> op_ref(getReferencedPollOp(), xsink);
     if (!g.acquired()) {
         releaseStreamReservation(true);
         xsink->raiseException("HTTPCLIENT-STATE-ERROR",
             "cannot submit streaming send request: connection has been closed");
         return nullptr;
     }
-    if (!poll_op_priv || isClosed()) {
+    if (!op_ref || isClosed()) {
         releaseStreamReservation(true);
         raiseClosedSubmitError(
             "cannot submit streaming send request: connection is closed",
@@ -1017,7 +1028,7 @@ QoreHashNode* Http3ClientConnection::submitRequestStreamingSend(const char* meth
     action->setEventSink(event_sink);
 
     // Submit with streaming=true (no END_STREAM — bidirectional streaming)
-    int64_t stream_id = poll_op_priv->submitRequest(method, path, headers,
+    int64_t stream_id = op_ref->submitRequest(method, path, headers,
         nullptr, 0, /* streaming */ true, action,
         max_concurrent_streams_, xsink);
     if (*xsink || stream_id < 0) {
@@ -1056,12 +1067,15 @@ QoreHashNode* Http3ClientConnection::submitRequestStreamingSend(const char* meth
 
 void Http3ClientConnection::pushSendData(const void* data, size_t len, ExceptionSink* xsink) {
     MethodGuard g(this);
+    // the poll operation is taken with a reference of its own under attempts_mu_: until the connection is ready, it
+    // is the primary connection attempt's, which the attempts' teardown can release at any time
+    ReferenceHolder<Http3ClientPollOperationPriv> op_ref(getReferencedPollOp(), xsink);
     if (!g.acquired()) {
         xsink->raiseException("HTTPCLIENT-STATE-ERROR",
             "cannot push data: connection has been closed");
         return;
     }
-    if (!poll_op_priv) {
+    if (!op_ref) {
         xsink->raiseException("HTTPCLIENT-STATE-ERROR",
             "cannot push data: connection has no poll operation");
         return;
@@ -1071,7 +1085,7 @@ void Http3ClientConnection::pushSendData(const void* data, size_t len, Exception
             "cannot push data: no streaming send in progress");
         return;
     }
-    if (!poll_op_priv->isReady()) {
+    if (!op_ref->isReady()) {
         xsink->raiseException("HTTPCLIENT-STATE-ERROR",
             "cannot push data: connection is not ready");
         return;
@@ -1096,12 +1110,15 @@ void Http3ClientConnection::pushSendData(const void* data, size_t len, Exception
 
 void Http3ClientConnection::setTrailers(const QoreHashNode* trailers, ExceptionSink* xsink) {
     MethodGuard g(this);
+    // the poll operation is taken with a reference of its own under attempts_mu_: until the connection is ready, it
+    // is the primary connection attempt's, which the attempts' teardown can release at any time
+    ReferenceHolder<Http3ClientPollOperationPriv> op_ref(getReferencedPollOp(), xsink);
     if (!g.acquired()) {
         xsink->raiseException("HTTPCLIENT-STATE-ERROR",
             "cannot set trailers: connection has been closed");
         return;
     }
-    if (!poll_op_priv) {
+    if (!op_ref) {
         xsink->raiseException("HTTPCLIENT-STATE-ERROR",
             "cannot set trailers: connection has no poll operation");
         return;
@@ -1123,7 +1140,10 @@ void Http3ClientConnection::setTrailers(const QoreHashNode* trailers, ExceptionS
 
 bool Http3ClientConnection::cancelRequest(int64_t stream_id, ExceptionSink* xsink) {
     MethodGuard g(this);
-    if (!g.acquired() || !poll_op_priv) {
+    // the poll operation is taken with a reference of its own under attempts_mu_: until the connection is ready, it
+    // is the primary connection attempt's, which the attempts' teardown can release at any time
+    ReferenceHolder<Http3ClientPollOperationPriv> op_ref(getReferencedPollOp(), xsink);
+    if (!g.acquired() || !op_ref) {
         // Already closing: the poll op settles every pending stream on the
         // way out, so there is nothing left to abandon here.
         return false;
@@ -1131,13 +1151,13 @@ bool Http3ClientConnection::cancelRequest(int64_t stream_id, ExceptionSink* xsin
     // Settle the request's completion action first.  A stream that already
     // completed reports false and is left alone — the connection stays in
     // the pool untouched.
-    if (!poll_op_priv->cancelStream(stream_id, xsink)) {
+    if (!op_ref->cancelStream(stream_id, xsink)) {
         return false;
     }
     // Then cancel the stream on the wire.  HTTP/3 multiplexes over QUIC, so
     // only this stream ends: concurrent streams on the same connection are
     // unaffected and the connection stays poolable.
-    int64_t session_id = poll_op_priv->getSessionId();
+    int64_t session_id = op_ref->getSessionId();
     if (session_id && sock_priv) {
         sock_priv->cancelQuicStream(session_id, stream_id, xsink);
     }
@@ -1175,6 +1195,10 @@ void Http3ClientConnection::closeConnection(ExceptionSink* xsink) {
     // dropping into the clear loop so the post-loop path skips the
     // dangling-pointer branch.
     std::vector<std::shared_ptr<Attempt>> to_clear;
+    // the committed winner's poll operation and socket, read under the lock (nullptr if no winner was committed)
+    ReferenceHolder<Http3ClientPollOperationPriv> op(xsink);
+    QoreSocketObject* sock = nullptr;
+    bool submitted;
     {
         std::lock_guard<std::mutex> lk(attempts_mu_);
         if (!attempts_.empty()) {
@@ -1188,6 +1212,13 @@ void Http3ClientConnection::closeConnection(ExceptionSink* xsink) {
             sock_obj = nullptr;
             submitted_to_controller = false;
         }
+        if (poll_op_priv) {
+            poll_op_priv->ref();
+            op = poll_op_priv;
+        }
+        sock = sock_priv;
+        submitted = submitted_to_controller;
+        submitted_to_controller = false;
     }
     for (auto& a : to_clear) {
         if (a) {
@@ -1195,7 +1226,7 @@ void Http3ClientConnection::closeConnection(ExceptionSink* xsink) {
         }
     }
 
-    if (!poll_op_priv) {
+    if (!op) {
         // Either we never committed a winner (all attempts already torn
         // down above) or closeConnection was called twice — transition
         // the base-class state to CLOSED so waiters see the error.
@@ -1205,7 +1236,7 @@ void Http3ClientConnection::closeConnection(ExceptionSink* xsink) {
 
     // Disarm the raw connection_priv back-pointer BEFORE cancel — same
     // pattern as Http1/Http2ClientConnection::closeConnection.
-    poll_op_priv->disarmConnectionPriv();
+    op->disarmConnectionPriv();
 
     // Cancel and close the op in the global AsyncIoController — this
     // synchronously waits until the I/O thread stops processing the
@@ -1219,7 +1250,7 @@ void Http3ClientConnection::closeConnection(ExceptionSink* xsink) {
     // the cancel based on isClosed(), the poll op remains in the I/O
     // controller's cache with a stale connection_priv pointer — the I/O
     // thread would access freed memory when it later processes the entry.
-    if (submitted_to_controller && sock_priv) {
+    if (submitted && sock) {
         ExceptionSink cancel_xsink;
         ReferenceHolder<QoreObject> ctl_obj_holder(
             qore_get_async_io_controller_obj(&cancel_xsink), &cancel_xsink);
@@ -1230,14 +1261,13 @@ void Http3ClientConnection::closeConnection(ExceptionSink* xsink) {
                         CID_ASYNCIOCONTROLLER, &cancel_xsink)),
                 &cancel_xsink);
             if (ctl_priv_holder) {
-                ctl_priv_holder->cancelAndClose(sock_priv, &cancel_xsink);
+                ctl_priv_holder->cancelAndClose(sock, &cancel_xsink);
             }
         }
         cancel_xsink.clear();
-        submitted_to_controller = false;
     } else if (!isClosed()) {
         // Not submitted to the I/O controller — abort directly.
-        poll_op_priv->abort(xsink);
+        op->abort(xsink);
     }
 
     setClosed();

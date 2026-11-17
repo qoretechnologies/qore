@@ -117,7 +117,9 @@ private:
     //! The inner poll operation and its object, taken with references of their own for one use
     /** Taken under @ref inner_lock; cleanup() releases the operation's references while other threads can use it
         (the thread driving the operation, or a thread reading its state or aborting it), which keep it until they are
-        done
+        done.  The last references of the inner operation and its object can therefore be released by the thread that
+        holds the InnerRef (for example the I/O thread that drives the operation), and their teardown then runs on
+        that thread
     */
     class InnerRef {
     public:
@@ -204,7 +206,7 @@ private:
     //! Validates the HTTP response and sets goal_reached or error
     /** @param out the response output, held by the caller
     */
-    DLLLOCAL void validateResponse(const QoreHashNode* output, ExceptionSink* xsink);
+    DLLLOCAL void validateResponse(const QoreHashNode* out, ExceptionSink* xsink);
 
     //! Sets error state with the configured error code
     DLLLOCAL void setError(const char* desc, ExceptionSink* xsink);

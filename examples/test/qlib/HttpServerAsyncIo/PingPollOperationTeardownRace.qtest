@@ -133,16 +133,15 @@ class PingPollOperationTeardownRaceTest inherits QUnit::Test {
             } catch (hash<ExceptionInfo> ex) {
                 user_ex = ex;
             }
-            # a thread that did not reach the hold point does not leave the test thread waiting for it
-            if (reached.getCount()) {
-                reached.dec();
-            }
         }();
         started = True;
 
+        # only the hold point decrements the Counter: a thread that does not reach it fails the test here
         if (reached.waitForZero(HoldWait)) {
-            throw "TEST-ERROR", "the thread did not take the inner operation";
+            throw "TEST-ERROR", sprintf("the thread did not reach the hold point with the inner operation%s",
+                user_ex ? sprintf(": %s: %s", user_ex.err, user_ex.desc) : "");
         }
+        assertEq(0, reached.getCount(), "the thread reached the hold point");
         assertEq(1, release.getCount(), "the thread is held with the inner operation");
         # the destruction releases the inner operation of the ping operation
         delete op;
