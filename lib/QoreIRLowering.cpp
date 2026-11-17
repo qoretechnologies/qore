@@ -2137,13 +2137,14 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
                     error = "IR builder failed to create the exception cleanup block of an if statement's locals";
                     return false;
                 }
-                exception_stack.push_back(if_lvar_exception_cleanup_block);
+                // a catch block in the branches whose statement raises is left at the cleanup (qore#6472)
+                pushExceptionAnchor(if_lvar_exception_cleanup_block);
             }
         }
         // pops the compile-time state pushed for the condition's locals on a lowering failure
         auto abandon_if_lvars = [&]() {
             if (if_lvar_exception_cleanup_block) {
-                exception_stack.pop_back();
+                popExceptionAnchor();
             }
             if (if_lvars) {
                 cleanup_stack.pop_back();
@@ -2205,7 +2206,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         builder.setBlock(merge_block);
         if (if_lvars) {
             if (if_lvar_exception_cleanup_block) {
-                exception_stack.pop_back();
+                popExceptionAnchor();
             }
             // released in reverse order, after the branch's own locals, as in AST mode
             for (int i = static_cast<int>(if_lvars->size()) - 1; i >= 0; --i) {
@@ -2221,6 +2222,8 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
                 QoreIRBasicBlock* after_block = builder.getBlock();
                 builder.getFunction()->moveBlockToEnd(if_lvar_exception_cleanup_block);
                 builder.setBlock(if_lvar_exception_cleanup_block);
+                // a catch block in the branches whose statement raised the exception is left first (qore#6472)
+                emitAnchorCatchLeave(if_lvar_exception_cleanup_block, if_stmt->loc);
                 for (int i = static_cast<int>(if_lvars->size()) - 1; i >= 0; --i) {
                     auto* ui = builder.createUninstantiateLocal(if_lvars->lv[i], if_stmt->loc);
                     ui->is_block_exit = true;
@@ -2718,7 +2721,8 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             // Push exception handler for body instructions
             QoreIRBasicBlock* prev_guard_override = guard_exception_target_override;
             guard_exception_target_override = catch_block;
-            exception_stack.push_back(catch_block);
+            // a catch block in the body whose statement raises is left at the catch block (qore#6472)
+            pushExceptionAnchor(catch_block);
             size_t try_scope_depth = scope_stack.size() - 1;  // depth before try scope
             exception_scope_depth_stack.push_back(try_scope_depth);
 
@@ -2770,7 +2774,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
                 }
                 flow_stack.pop_back();
                 cleanup_stack.pop_back();  // RefForeachRecord
-                exception_stack.pop_back();
+                popExceptionAnchor();
                 exception_scope_depth_stack.pop_back();
                 guard_exception_target_override = prev_guard_override;
                 scope_stack.pop_back();
@@ -2794,10 +2798,10 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
                 if (!lowerStatementBlock(body, error)) {
                     virtual_implicit = saved_implicit;
                     --loop_depth;
-                    exception_stack.pop_back();  // element exception block
+                    popExceptionAnchor();  // element exception block
                     flow_stack.pop_back();
                     cleanup_stack.pop_back();  // RefForeachRecord
-                    exception_stack.pop_back();
+                    popExceptionAnchor();
                     exception_scope_depth_stack.pop_back();
                     guard_exception_target_override = prev_guard_override;
                     scope_stack.pop_back();
@@ -2808,7 +2812,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
                 --loop_depth;
             }
             virtual_implicit = saved_implicit;
-            exception_stack.pop_back();  // element exception block
+            popExceptionAnchor();  // element exception block
             guard_exception_target_override = catch_block;
             emitForeachElementExceptionRestore(element_exception_block, element_exception_next, old_element,
                 stmt->loc);
@@ -2827,7 +2831,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             builder.createPopImplicitElement(old_element, stmt->loc);
             QoreIRValue modified = lowerExpression(var_expr, error);
             if (!modified.isValid()) {
-                exception_stack.pop_back();
+                popExceptionAnchor();
                 exception_scope_depth_stack.pop_back();
                 guard_exception_target_override = prev_guard_override;
                 scope_stack.pop_back();
@@ -2851,7 +2855,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             index_phi->operands.push_back(next_index);
 
             // Pop exception handler
-            exception_stack.pop_back();
+            popExceptionAnchor();
             exception_scope_depth_stack.pop_back();
             guard_exception_target_override = prev_guard_override;
 
@@ -2890,6 +2894,8 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             // Catch: landing pad, cleanup without write-back, rethrow to outer handler
             builder.setBlock(catch_block);
             builder.createLandingPad(try_scope_depth, try_scope_id, stmt->loc);
+            // a catch block in the body whose statement raised the exception is left first (qore#6472)
+            emitAnchorCatchLeave(catch_block, stmt->loc);
             builder.createRefForeachCleanup(state, stmt->loc);
             // the loop variables are released before the exception leaves the statement, as the AST interpreter's
             // foreach statement releases them when it unwinds, before the handlers of the enclosing blocks run; a
@@ -3170,7 +3176,8 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
                 cleanup_stack.resize(cleanup_stack.size() - 1 - foreach_source_entries);
                 return false;
             }
-            exception_stack.push_back(foreach_exception_cleanup_block);
+            // a catch block in the body whose statement raises is left at the cleanup (qore#6472)
+            pushExceptionAnchor(foreach_exception_cleanup_block);
             // an exception that the iterator's next() raises releases the element of the previous iteration, the
             // iterator, the list and the loop variables first too, as the AST's foreach statement does (qore#5655)
             if (foreach_next_inst) {
@@ -3186,7 +3193,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         if (element_exception_next && !element_exception_block) {
             cleanup_stack.resize(cleanup_stack.size() - 1 - foreach_source_entries);
             if (foreach_exception_cleanup_block) {
-                exception_stack.pop_back();
+                popExceptionAnchor();
             }
             return false;
         }
@@ -3251,10 +3258,10 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
                 flow_stack.pop_back();
                 cleanup_stack.resize(cleanup_stack.size() - 1 - foreach_source_entries);  // ForeachElement, source
                 if (element_exception_block) {
-                    exception_stack.pop_back();
+                    popExceptionAnchor();
                 }
                 if (foreach_exception_cleanup_block) {
-                    exception_stack.pop_back();
+                    popExceptionAnchor();
                 }
                 return false;
             }
@@ -3264,12 +3271,12 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         flow_stack.pop_back();
         cleanup_stack.resize(cleanup_stack.size() - 1 - foreach_source_entries);  // ForeachElement, source
         if (element_exception_block) {
-            exception_stack.pop_back();
+            popExceptionAnchor();
             emitForeachElementExceptionRestore(element_exception_block, element_exception_next, old_element,
                 stmt->loc);
         }
         if (foreach_exception_cleanup_block) {
-            exception_stack.pop_back();
+            popExceptionAnchor();
         }
 
         bool elide_implicit_element = analyze_implicit_element
@@ -3579,7 +3586,8 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         // Install exception handler override for the body.
         QoreIRBasicBlock* prev_guard_override = guard_exception_target_override;
         guard_exception_target_override = catch_block;
-        exception_stack.push_back(catch_block);
+        // a catch block in the body whose statement raises is left at the catch block (qore#6472)
+        pushExceptionAnchor(catch_block);
         size_t try_scope_depth = scope_stack.size() - 1;
         exception_scope_depth_stack.push_back(try_scope_depth);
 
@@ -3618,7 +3626,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         if (!lowerStatementBlock(code, error)) {
             --loop_depth;
             flow_stack.pop_back();
-            exception_stack.pop_back();
+            popExceptionAnchor();
             exception_scope_depth_stack.pop_back();
             guard_exception_target_override = prev_guard_override;
             scope_stack.pop_back();
@@ -3651,7 +3659,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         index_phi->operands.push_back(next_index);
 
         // Pop exception handler.
-        exception_stack.pop_back();
+        popExceptionAnchor();
         exception_scope_depth_stack.pop_back();
         guard_exception_target_override = prev_guard_override;
 
@@ -3676,6 +3684,8 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         // Catch: landingpad, destroy, rethrow.
         builder.setBlock(catch_block);
         builder.createLandingPad(try_scope_depth, try_scope_id, stmt->loc);
+        // a catch block in the body whose statement raised the exception is left first (qore#6472)
+        emitAnchorCatchLeave(catch_block, stmt->loc);
         builder.createContextDestroy(state, stmt->loc);
         {
             QoreIRBasicBlock* outer_handler = exception_stack.empty()
@@ -4346,17 +4356,18 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         }
         // a catch block without an exit block whose statements' exceptions go to the exception path of an enclosing
         // block is left there, before that block's handlers and locals (see lowerStatementBlock())
-        // the exception target after any blocks that only forward the exception (qore#6432)
-        QoreIRBasicBlock* catch_exception_target = getCurrentExceptionTarget();
-        for (auto i = exception_forwarding_blocks.find(catch_exception_target); i != exception_forwarding_blocks.end();
-                i = exception_forwarding_blocks.find(catch_exception_target)) {
-            catch_exception_target = i->second;
-        }
-        if (!catch_exit_block && try_stmt->getCatchBlock() && !anchor_catch_stack.empty()
-                && catch_exception_target == anchor_catch_stack.back().anchor) {
-            anchor_catch_stack.back().any = true;
-            if (catch_var) {
-                anchor_catch_stack.back().vars.push_back(catch_var);
+        // the anchor is the innermost one, except in a handler lowered inline at an exit, which runs with the exception
+        // target of the block that declares it, below the anchors of the statements that the exit leaves (qore#6472)
+        if (!catch_exit_block && try_stmt->getCatchBlock()) {
+            QoreIRBasicBlock* catch_exception_target = getCurrentExceptionTarget();
+            for (auto i = anchor_catch_stack.rbegin(), e = anchor_catch_stack.rend(); i != e; ++i) {
+                if (i->anchor == catch_exception_target) {
+                    i->any = true;
+                    if (catch_var) {
+                        i->vars.push_back(catch_var);
+                    }
+                    break;
+                }
             }
         }
         // the statements of the catch block are marked for the debugger's exception events (#5816)
@@ -4404,15 +4415,8 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             QoreIRBasicBlock* after_block = builder.getBlock();
             builder.getFunction()->moveBlockToEnd(catch_exit_block);
             builder.setBlock(catch_exit_block);
-            if (exit_catches.any) {
-                // a nested catch block without an exit block whose statement raised the exception is left first
-                for (LocalVar* var : exit_catches.vars) {
-                    auto* ui = builder.createUninstantiateLocal(var, stmt->loc);
-                    ui->is_block_exit = true;
-                }
-                QoreIRInstruction* close = builder.createCatchCleanup(stmt->loc);
-                builder.getFunction()->catch_exit_depths[close] = static_cast<uint32_t>(exit_catches.catch_depth);
-            }
+            // a nested catch block without an exit block whose statement raised the exception is left first
+            emitCatchLeave(exit_catches, stmt->loc);
             if (catch_var) {
                 auto* ui = builder.createUninstantiateLocal(catch_var, stmt->loc);
                 ui->is_block_exit = true;
@@ -5013,19 +5017,11 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
         if (builder.getFunction()->source_dpgm_addr || builder.getFunction()->emit_debug_statements) {
             builder.createDebugBlockUnwind(debug_nest_depth, block->loc);
         }
-        if (anchor_catches.any) {
-            // a catch block without an exit block whose statement raised the exception (a call, or a thread_exit)
-            // is left first, before the handlers and the locals of this block, as the AST interpreter leaves it:
-            // its catch variable is released, which does nothing if the catch block did not run or was left
-            // already, and the catch blocks of the frame opened in this block that are still open are closed
-            // (#5968)
-            for (LocalVar* var : anchor_catches.vars) {
-                auto* ui = builder.createUninstantiateLocal(var, block->loc);
-                ui->is_block_exit = true;
-            }
-            QoreIRInstruction* close = builder.createCatchCleanup(block->loc);
-            builder.getFunction()->catch_exit_depths[close] = static_cast<uint32_t>(anchor_catches.catch_depth);
-        }
+        // a catch block without an exit block whose statement raised the exception (a call, or a thread_exit) is
+        // left first, before the handlers and the locals of this block, as the AST interpreter leaves it: its catch
+        // variable is released, which does nothing if the catch block did not run or was left already, and the
+        // catch blocks of the frame opened in this block that are still open are closed (#5968)
+        emitCatchLeave(anchor_catches, block->loc);
         if (has_on_block_exit) {
             // Exception unwinds through this synthetic block instead of the
             // try LandingPad, so fire this lexical scope's on_exit/on_error
@@ -23957,12 +23953,14 @@ bool QoreIRLowering::lowerForeachLazyPipelineFused(const ForEachStatement* forea
         }
     }
     // keeps a cleanup block on the exception stack while the code that it covers is lowered, on every path
+    // (a catch block in the body whose statement raises is left at the cleanup block: see pushExceptionAnchor(),
+    // qore#6472)
     class FusedForeachExceptionTargetScope {
     public:
-        FusedForeachExceptionTargetScope(std::vector<QoreIRBasicBlock*>& stack, QoreIRBasicBlock* target)
-                : stack(stack), active(target != nullptr) {
+        FusedForeachExceptionTargetScope(QoreIRLowering& lowering, QoreIRBasicBlock* target)
+                : lowering(lowering), active(target != nullptr) {
             if (active) {
-                stack.push_back(target);
+                lowering.pushExceptionAnchor(target);
             }
         }
         ~FusedForeachExceptionTargetScope() {
@@ -23970,7 +23968,7 @@ bool QoreIRLowering::lowerForeachLazyPipelineFused(const ForEachStatement* forea
         }
         void end() {
             if (active) {
-                stack.pop_back();
+                lowering.popExceptionAnchor();
                 active = false;
             }
         }
@@ -23978,9 +23976,9 @@ bool QoreIRLowering::lowerForeachLazyPipelineFused(const ForEachStatement* forea
         FusedForeachExceptionTargetScope& operator=(const FusedForeachExceptionTargetScope&) = delete;
 
     private:
-        std::vector<QoreIRBasicBlock*>& stack;
+        QoreIRLowering& lowering;
         bool active;
-    } foreach_pre_element_target_scope(exception_stack, foreach_pre_element_cleanup_block);
+    } foreach_pre_element_target_scope(*this, foreach_pre_element_cleanup_block);
 
     auto lower_predicate = [&](const QoreValue* pred, const QoreProgramLocation* pred_loc, QoreIRValue element_val,
             QoreIRValue index_val) -> QoreIRValue {
@@ -24159,8 +24157,7 @@ bool QoreIRLowering::lowerForeachLazyPipelineFused(const ForEachStatement* forea
     QoreIRValue element_val = next_inst->result;
 
     // the iteration's cleanup covers the stages and the body (see above)
-    FusedForeachExceptionTargetScope foreach_exception_target_scope(exception_stack,
-        foreach_exception_cleanup_block);
+    FusedForeachExceptionTargetScope foreach_exception_target_scope(*this, foreach_exception_cleanup_block);
 
     builder.setBlock(body_block);
     // the AST interpreter's functional map iterator releases its input (the element, or the value of the stage
@@ -24397,7 +24394,7 @@ bool QoreIRLowering::lowerForeachLazyPipelineFused(const ForEachStatement* forea
             virtual_implicit = saved_implicit;
             --loop_depth;
             if (element_exception_block) {
-                exception_stack.pop_back();
+                popExceptionAnchor();
             }
             flow_stack.pop_back();
             cleanup_stack.resize(cleanup_stack.size() - foreach_source_entries);
@@ -24407,7 +24404,7 @@ bool QoreIRLowering::lowerForeachLazyPipelineFused(const ForEachStatement* forea
     }
     virtual_implicit = saved_implicit;
     if (element_exception_block) {
-        exception_stack.pop_back();
+        popExceptionAnchor();
         emitForeachElementExceptionRestore(element_exception_block, element_exception_next, old_element, loc);
     }
     flow_stack.pop_back();
@@ -24530,11 +24527,46 @@ QoreIRBasicBlock* QoreIRLowering::beginForeachElementExceptionRestore(QoreIRBasi
         error = "IR builder failed to create the foreach element exception block";
         return nullptr;
     }
-    exception_stack.push_back(block);
-    // the block forwards the exception: a catch block in the body whose exceptions go to it is left at the exception
-    // path of the block that the forwarded exception reaches (qore#6432)
-    exception_forwarding_blocks[block] = next;
+    pushExceptionAnchor(block);
     return block;
+}
+
+void QoreIRLowering::pushExceptionAnchor(QoreIRBasicBlock* block) {
+    exception_stack.push_back(block);
+    anchor_catch_stack.push_back({block, catch_cleanup_depth, {}, false});
+}
+
+void QoreIRLowering::popExceptionAnchor() {
+    assert(!exception_stack.empty() && !anchor_catch_stack.empty()
+        && anchor_catch_stack.back().anchor == exception_stack.back());
+    exception_stack.pop_back();
+    AnchorCatchInfo catches = std::move(anchor_catch_stack.back());
+    anchor_catch_stack.pop_back();
+    if (catches.any) {
+        const QoreIRBasicBlock* block = catches.anchor;
+        exception_block_catches[block] = std::move(catches);
+    }
+}
+
+void QoreIRLowering::emitAnchorCatchLeave(const QoreIRBasicBlock* block, const QoreProgramLocation* loc) {
+    auto i = exception_block_catches.find(block);
+    if (i == exception_block_catches.end()) {
+        return;
+    }
+    emitCatchLeave(i->second, loc);
+    exception_block_catches.erase(i);
+}
+
+void QoreIRLowering::emitCatchLeave(const AnchorCatchInfo& catches, const QoreProgramLocation* loc) {
+    if (!catches.any) {
+        return;
+    }
+    for (LocalVar* var : catches.vars) {
+        auto* ui = builder.createUninstantiateLocal(var, loc);
+        ui->is_block_exit = true;
+    }
+    QoreIRInstruction* close = builder.createCatchCleanup(loc);
+    builder.getFunction()->catch_exit_depths[close] = static_cast<uint32_t>(catches.catch_depth);
 }
 
 void QoreIRLowering::emitForeachElementExceptionRestore(QoreIRBasicBlock* block, QoreIRBasicBlock* next,
@@ -24543,6 +24575,8 @@ void QoreIRLowering::emitForeachElementExceptionRestore(QoreIRBasicBlock* block,
     // after the body's blocks, so that native code has seen the PushImplicitElement that the restoration uses
     builder.getFunction()->moveBlockToEnd(block);
     builder.setBlock(block);
+    // a catch block in the body whose statement raised the exception is left first (qore#6472)
+    emitAnchorCatchLeave(block, loc);
     // the exception stays raised
     builder.createPopImplicitElement(old_element, loc);
     auto* check_inst = builder.createCheckException(loc);
@@ -24557,6 +24591,8 @@ void QoreIRLowering::emitForeachExceptionCleanup(QoreIRBasicBlock* cleanup_block
     QoreIRBasicBlock* after_block = builder.getBlock();
     builder.getFunction()->moveBlockToEnd(cleanup_block);
     builder.setBlock(cleanup_block);
+    // a catch block in the body whose statement raised the exception is left first (qore#6472)
+    emitAnchorCatchLeave(cleanup_block, loc);
     // the exception that the block handles stays raised: the releases below add any exception that a destructor
     // raises, and the handler then gets them all, as the AST interpreter's foreach statement unwinds
     if (element.isValid()) {
