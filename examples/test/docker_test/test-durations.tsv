@@ -368,10 +368,13 @@ examples/test/ir/JITAggregateReturnProjection.qtest	2.0	2.0	-	-	-	-	-	-	3.0	2.0
 examples/test/ir/JITBatchDebugDiagnostics.qtest	0.0	1.0	-	0.0	1.0	-	-	1.0	0.0	1.0
 examples/test/ir/JITFinalizeCancellation.qtest	23.0	12.0	-	-	-	0.0	-	-	19.0	12.0
 examples/test/ir/JITLargeBodyCleanup.qtest	30.0	47.0	-	-	-	-	-	-	38.0	37.0
-examples/test/ir/JITLargeFunctionBlocks-1.qtest	50.0	36.0	-	-	-	23.0	-	-	56.0	37.0
+examples/test/ir/JITLargeFunctionBlocks-1.qtest	23.9	17.2	-	-	-	11.0	-	-	26.8	17.7
 examples/test/ir/JITLargeFunctionBlocks-2.qtest	31.0	10.0	-	-	-	8.0	-	-	16.0	11.0
-examples/test/ir/JITLargeFunctionBlocks-3.qtest	150.0	116.0	-	-	-	98.0	-	-	85.0	357.0
-examples/test/ir/JITLargeFunctionBlocks-4.qtest	94.0	55.0	-	-	-	101.0	-	-	72.0	60.0
+examples/test/ir/JITLargeFunctionBlocks-3.qtest	15.2	10.7	-	-	-	12.4	-	-	9.8	26.1
+examples/test/ir/JITLargeFunctionBlocks-4.qtest	15.2	10.7	-	-	-	12.4	-	-	9.8	26.1
+examples/test/ir/JITLargeFunctionBlocks-5.qtest	15.2	10.7	-	-	-	12.4	-	-	9.8	26.1
+examples/test/ir/JITLargeFunctionBlocks-6.qtest	15.2	10.7	-	-	-	12.4	-	-	9.8	26.1
+examples/test/ir/JITLargeFunctionBlocks-7.qtest	26.1	18.8	-	-	-	12.0	-	-	29.2	19.3
 examples/test/ir/JITReloadChainFlush.qtest	259.0	86.0	-	-	-	46.0	-	-	146.0	78.0
 examples/test/ir/JITSmoke.qtest	133.0	83.0	-	-	-	-	-	-	68.0	78.0
 examples/test/ir/JITSmoke_49d3.qtest	7.0	7.0	-	-	-	6.0	-	-	8.0	5.0
