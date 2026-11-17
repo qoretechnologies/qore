@@ -2172,7 +2172,7 @@ string get_global_http2_mode() {
     @ref requires "%requires", through another module that requires it, or with load_module()); the load raises a
     \c LOAD-MODULE-ERROR exception with \a message.  An AOT module that is refused is not replaced by its source.  A
     blacklisted @ref user_module_children "child module" is not attached, and is reported as skipped.  A module that
-    is already loaded cannot be blacklisted.
+    is already loaded, or whose load is in progress (in any thread), cannot be blacklisted.
 
     @since %Qore 2.1
 */
