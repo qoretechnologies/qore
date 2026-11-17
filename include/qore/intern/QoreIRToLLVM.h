@@ -126,7 +126,8 @@ public:
     //! Control immediate-closure dispatch lowering in AOT mode.
     /** Init-function compilation does not emit native closure bodies, so its
         lowerers must use the generic runtime helper instead of declaring a
-        dispatch symbol that will not be defined. */
+        dispatch symbol that will not be defined: neither the direct fast entry
+        nor the native closure call ABI (qore#6336). */
     void setAOTDirectClosureFastEntry(bool v) {
         aot_direct_closure_fast_entry = v;
     }
