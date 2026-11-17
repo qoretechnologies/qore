@@ -246,7 +246,7 @@ QoreHashNode* WebSocketClientPollOperationPriv::continuePoll(ExceptionSink* xsin
         int64 elapsed = monotonicMs() - last_recv_activity_ms;
         if (elapsed >= idle_timeout_ms) {
             closed_on_idle = true;
-            close_cause = "idle-timeout";
+            close_cause.store("idle-timeout", std::memory_order_release);
             queueSendClose(WSCC_GoingAway, "idle timeout", xsink);
             if (*xsink) {
                 return nullptr;

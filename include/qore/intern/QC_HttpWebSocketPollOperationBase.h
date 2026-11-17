@@ -221,10 +221,8 @@ public:
         return send_queue ? send_queue->size() : 0;
     }
 
-    //! Returns the WebSocket close reason
-    DLLLOCAL const char* getCloseReason() const {
-        return close_reason.c_str();
-    }
+    //! Returns the WebSocket close reason; can be called from any thread (reads under @ref error_lock)
+    DLLLOCAL std::string getCloseReason() const;
 
     //! Returns the current state as a string
     DLLLOCAL const char* getWsState() const {
@@ -442,6 +440,9 @@ private:
     /** After a protocol error of the client, the connection is reported closed with it, also when the client closes
         the connection before the server's close frame is written (issue #5878)
     */
+    //! Sets the close reason; the caller holds @ref m
+    DLLLOCAL void setCloseReason(const char* reason);
+
     DLLLOCAL void setConnectionLost() {
         if (protocol_failed) {
             setClosed(WSCC_ProtocolError, protocol_reason.c_str());
@@ -475,6 +476,9 @@ private:
     //! The close code: the client's once its close frame has arrived
     std::atomic<uint16_t> close_code {1000};
     //! The close reason: the client's once its close frame has arrived
+    /** Written by threads that hold @ref m, with @ref error_lock held too (setCloseReason()); read with either lock
+        held: other threads read it under @ref error_lock (getCloseReason(), getOutput())
+    */
     std::string close_reason;
     bool close_sent = false;                //!< true once our close frame was queued
     bool close_received = false;            //!< true once the client's close frame arrived
@@ -489,7 +493,8 @@ private:
     int64 close_deadline_us = 0;
     size_t max_frame_size = WS_DEFAULT_MAX_FRAME_SIZE;
 
-    //! Protects @ref error_info, which the thread driving the operation records and any thread reads
+    //! Protects @ref error_info and @ref close_reason, which the thread driving the operation records and any thread
+    //! reads
     /** A leaf lock: no other lock is taken and no Qore code runs while it is held
     */
     mutable QoreThreadLock error_lock;

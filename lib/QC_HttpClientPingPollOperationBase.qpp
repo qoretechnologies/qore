@@ -95,16 +95,18 @@ void HttpClientPingPollOperationPriv::cleanup(ExceptionSink* xsink) {
         inner_obj->deref(xsink);
         inner_obj = nullptr;
     }
-    if (output) {
-        output->deref(xsink);
-        output = nullptr;
-    }
-    // the recorded error is taken under the lock that its readers hold, and released after it
+    // the output and the recorded error are taken under the lock that their readers hold, and released after it
+    QoreHashNode* old_output;
     QoreHashNode* old_error_info;
     {
         AutoLocker al(error_lock);
+        old_output = output;
+        output = nullptr;
         old_error_info = error_info;
         error_info = nullptr;
+    }
+    if (old_output) {
+        old_output->deref(xsink);
     }
     if (old_error_info) {
         old_error_info->deref(xsink);
@@ -112,7 +114,7 @@ void HttpClientPingPollOperationPriv::cleanup(ExceptionSink* xsink) {
 }
 
 QoreHashNode* HttpClientPingPollOperationPriv::continuePoll(ExceptionSink* xsink) {
-    if (completed || closed) {
+    if (completed.load(std::memory_order_acquire) || closed.load(std::memory_order_acquire)) {
         return nullptr;
     }
 
@@ -141,16 +143,34 @@ QoreHashNode* HttpClientPingPollOperationPriv::continuePoll(ExceptionSink* xsink
 
     // Extract the inner op's output and validate the response
     ValueHolder out(inner_op->getOutput(), xsink);
+    // the output is complete before it is stored; other threads read it under error_lock (getOutput())
+    ReferenceHolder<QoreHashNode> new_output(xsink);
     if (out->getType() == NT_HASH) {
-        output = out->get<QoreHashNode>()->hashRefSelf();
+        new_output = out->get<QoreHashNode>()->hashRefSelf();
     } else if (!out->isNullOrNothing()) {
         // Wrap non-hash output
-        output = new QoreHashNode(autoTypeInfo);
-        output->setKeyValue("output", out.release(), xsink);
+        new_output = new QoreHashNode(autoTypeInfo);
+        new_output->setKeyValue("output", out.release(), xsink);
+    }
+    if (new_output) {
+        QoreHashNode* old_output;
+        {
+            AutoLocker al(error_lock);
+#ifdef DEBUG
+            // a test holds the thread here, in the critical section, to read the output from another thread
+            qore_dbg_http_hold(QoreDbgHttpHoldPoint::ValueRecord);
+#endif
+            old_output = output;
+            output = new_output.release();
+        }
+        if (old_output) {
+            old_output->deref(xsink);
+        }
     }
 
+    // the output is read below without the lock: this thread stored it, and only this thread changes it
     validateResponse(xsink);
-    completed = true;
+    completed.store(true, std::memory_order_release);
     return nullptr;
 }
 
@@ -268,12 +288,12 @@ void HttpClientPingPollOperationPriv::validateResponse(ExceptionSink* xsink) {
     }
 
     // All validation passed
-    goal_reached = true;
+    goal_reached.store(true, std::memory_order_release);
 }
 
 void HttpClientPingPollOperationPriv::setError(const char* desc, ExceptionSink* xsink) {
-    completed = true;
-    closed = true;
+    completed.store(true, std::memory_order_release);
+    closed.store(true, std::memory_order_release);
     // the hash is complete before it is recorded
     ReferenceHolder<QoreHashNode> info(new QoreHashNode(autoTypeInfo), xsink);
     info->setKeyValue("err", new QoreStringNode(err_code), xsink);
@@ -303,17 +323,18 @@ QoreHashNode* HttpClientPingPollOperationPriv::getErrorInfo() const {
 }
 
 void HttpClientPingPollOperationPriv::abort(ExceptionSink* xsink) {
-    if (closed) {
+    if (closed.exchange(true, std::memory_order_acq_rel)) {
         return;
     }
-    closed = true;
-    completed = true;
+    completed.store(true, std::memory_order_release);
     if (inner_op) {
         inner_op->abort(xsink);
     }
 }
 
 QoreValue HttpClientPingPollOperationPriv::getOutput() const {
+    // a read that finds the lock taken releases a thread that a test holds while it stores the output
+    QoreErrorReadLocker al(error_lock, true);
     if (output) {
         output->ref();
         return output;
@@ -322,13 +343,17 @@ QoreValue HttpClientPingPollOperationPriv::getOutput() const {
 }
 
 const char* HttpClientPingPollOperationPriv::getStateImpl() const {
-    if (closed && !goal_reached) {
+    bool reached = goal_reached.load(std::memory_order_acquire);
+    if (!reached && closed.load(std::memory_order_acquire)) {
         return "closed";
     }
-    if (goal_reached) {
+    if (reached) {
         return "complete";
     }
     if (inner_op) {
+        // getState() can be called from several threads at once: each keeps the inner state in a string of its own,
+        // which SocketPollOperationBase::getState() copies before the thread calls this again
+        static thread_local std::string inner_state;
         SimpleRefHolder<QoreStringNode> state(inner_op->getState());
         inner_state = state->c_str();
         return inner_state.c_str();

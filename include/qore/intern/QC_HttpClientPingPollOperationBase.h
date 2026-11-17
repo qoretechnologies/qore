@@ -37,6 +37,7 @@
 #include "qore/ReferenceHolder.h"
 #include "qore/QoreThreadLock.h"
 
+#include <atomic>
 #include <string>
 
 //! C++ base for HTTP client ping/verify poll operations
@@ -82,7 +83,7 @@ public:
     // --- SocketPollOperationBase overrides ---
 
     DLLLOCAL bool goalReached() const override {
-        return goal_reached;
+        return goal_reached.load(std::memory_order_acquire);
     }
 
     DLLLOCAL bool needsWorkerDispatch() const override {
@@ -95,8 +96,9 @@ public:
 
     // --- Accessors ---
 
+    //! Returns true if the operation was closed or aborted; can be called from any thread
     DLLLOCAL bool isClosed() const {
-        return closed;
+        return closed.load(std::memory_order_acquire);
     }
 
     //! Returns true if an error was recorded; can be called from any thread (reads under @ref error_lock)
@@ -121,13 +123,17 @@ private:
     QoreObject* inner_obj;
 
     //! Whether the operation has completed (success or failure)
-    bool completed = false;
+    /** The flags are set by the thread that drives the operation (or by abort()) and read by any thread: they are
+        stored with release and loaded with acquire ordering, so a thread that sees a flag set also sees what was
+        written before it
+    */
+    std::atomic<bool> completed{false};
 
     //! Whether the goal has been reached (response validated successfully)
-    bool goal_reached = false;
+    std::atomic<bool> goal_reached{false};
 
     //! Whether the operation has been closed/aborted
-    bool closed = false;
+    std::atomic<bool> closed{false};
 
     // --- Validation configuration ---
 
@@ -149,15 +155,12 @@ private:
     //! Pre-computed expected Sec-WebSocket-Accept value (empty = no WS check)
     std::string expected_ws_accept;
 
-    //! Cached state returned from the inner poll operation
-    mutable std::string inner_state;
-
     // --- Output ---
 
-    //! Response output hash (ref'd or nullptr)
+    //! Response output hash (ref'd or nullptr); stored complete under @ref error_lock, which getOutput() takes
     QoreHashNode* output = nullptr;
 
-    //! Protects @ref error_info, which the thread driving the operation records and any thread reads
+    //! Protects @ref error_info and @ref output, which the thread driving the operation records and any thread reads
     /** A leaf lock: no other lock is taken and no Qore code runs while it is held
     */
     mutable QoreThreadLock error_lock;

@@ -307,8 +307,9 @@ public:
     }
 
     //! Returns the cause tag if the client initiated the close (e.g. "idle-timeout")
-    DLLLOCAL const std::string& getCloseCause() const {
-        return close_cause;
+    //! Returns the reason tag of a close that the client started, or an empty string; can be called from any thread
+    DLLLOCAL const char* getCloseCause() const {
+        return close_cause.load(std::memory_order_acquire);
     }
 
     //! Releases all internal references
@@ -454,7 +455,9 @@ private:
     bool closed_on_idle = false;
 
     //! Reason tag for client-initiated close (e.g. "idle-timeout"), surfaced to observers
-    std::string close_cause;
+    /** A string literal: set by the thread that drives the operation and read by any thread (getCloseCause())
+    */
+    std::atomic<const char*> close_cause{""};
 
     //! Protects @ref error_info, which the thread driving the operation records and any thread reads
     /** A leaf lock: no other lock is taken and no Qore code runs while it is held

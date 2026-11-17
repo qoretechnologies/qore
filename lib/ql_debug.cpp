@@ -24118,7 +24118,9 @@ static QoreValue f_dbg_hold_child_program_create_clear(const QoreListNode* param
     client ping poll operation records its first error, holding the lock that protects it, before the error is stored;
     \c "error-read": a read of the error of one of these poll operations found that lock taken, and is about to wait
     for it (armed with the release Counter of \c "error-record" as its \a reached Counter and a release Counter of 0,
-    the read releases the thread that records the error once it is certain to wait for it)
+    the read releases the thread that records the error once it is certain to wait for it); \c "value-record" and
+    \c "value-read": the same for the output of an HTTP client ping poll operation and the close reason of a
+    WebSocket server poll operation
     @param reached decremented when a thread reaches the point
     @param release the thread waits until it reaches zero
 
@@ -24149,6 +24151,10 @@ static QoreValue f_dbg_http_hold_at(const QoreListNode* params, RuntimeConfig& r
         point = static_cast<int>(QoreDbgHttpHoldPoint::ErrorRecord);
     } else if (!strcmp(name->c_str(), "error-read")) {
         point = static_cast<int>(QoreDbgHttpHoldPoint::ErrorRead);
+    } else if (!strcmp(name->c_str(), "value-record")) {
+        point = static_cast<int>(QoreDbgHttpHoldPoint::ValueRecord);
+    } else if (!strcmp(name->c_str(), "value-read")) {
+        point = static_cast<int>(QoreDbgHttpHoldPoint::ValueRead);
     } else {
         xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_http_hold_at(): unknown point '%s'", name->c_str());
         return QoreValue();

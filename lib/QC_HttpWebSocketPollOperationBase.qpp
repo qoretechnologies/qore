@@ -400,7 +400,12 @@ QoreValue HttpWebSocketPollOperationPriv::getOutput() const {
     h->setKeyValue("sock", getReferencedSocketObject(&xsink), &xsink);
     h->setKeyValue("state", new QoreStringNode(getWsState()), &xsink);
     h->setKeyValue("close_code", static_cast<int64>(close_code), &xsink);
-    h->setKeyValue("close_reason", new QoreStringNode(close_reason), &xsink);
+    std::string reason;
+    {
+        AutoLocker al(error_lock);
+        reason = close_reason;
+    }
+    h->setKeyValue("close_reason", new QoreStringNode(reason), &xsink);
     // read under the lock that the writer holds (not with getErrorInfo(): the hold point of its debug builds is
     // for the reads of other threads)
     QoreHashNode* err;
@@ -574,7 +579,7 @@ void HttpWebSocketPollOperationPriv::handleFrame(const WsFrame& frame, Exception
                 // the same code and no reason, the server's reason is kept, so that a close for an error (for
                 // example 1009 for a message that is too big) keeps its description (issue #5861)
                 if (!(close_sent && reason.empty() && code == close_code)) {
-                    close_reason = reason;
+                    setCloseReason(reason.c_str());
                 }
                 close_code = code;
 
@@ -748,7 +753,7 @@ void HttpWebSocketPollOperationPriv::queueSendClose(uint16_t code, const char* r
     if (!close_received) {
         // a close the server starts; the echo of the client's close frame keeps the client's code and reason
         close_code = code;
-        close_reason = reason ? reason : "";
+        setCloseReason(reason ? reason : "");
     }
 
     SimpleRefHolder<BinaryNode> frame(
@@ -1000,8 +1005,29 @@ void HttpWebSocketPollOperationPriv::setClosed(uint16_t code, const char* reason
     setWsStateValue(WsState::CLOSED);
     close_code = code;
     if (reason) {
-        close_reason = reason;
+        setCloseReason(reason);
     }
+}
+
+void HttpWebSocketPollOperationPriv::setCloseReason(const char* reason) {
+    // the new reason is complete before it is stored; a reason that does not change (setClosed() with the stored
+    // reason) is not stored again
+    std::string new_reason = reason;
+    AutoLocker al(error_lock);
+    if (new_reason == close_reason) {
+        return;
+    }
+#ifdef DEBUG
+    // a test holds the thread here, in the critical section, to read the close reason from another thread
+    qore_dbg_http_hold(QoreDbgHttpHoldPoint::ValueRecord);
+#endif
+    close_reason.swap(new_reason);
+}
+
+std::string HttpWebSocketPollOperationPriv::getCloseReason() const {
+    // a read that finds the lock taken releases a thread that a test holds while it stores the close reason
+    QoreErrorReadLocker al(error_lock, true);
+    return close_reason;
 }
 
 void HttpWebSocketPollOperationPriv::cleanup(ExceptionSink* xsink) {

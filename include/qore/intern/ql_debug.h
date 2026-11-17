@@ -41,14 +41,19 @@
 
 DLLLOCAL void init_debug_functions(QoreNamespace& qns);
 
-//! Holds the lock that protects the error recorded by a poll operation, for a read of the error
+//! Holds the lock that protects the error or another value recorded by a poll operation, for a read of it
 /** In debug builds, a read that finds the lock taken calls the "error-read" hold point
-    (QoreDbgHttpHoldPoint::ErrorRead) before it waits for the lock: a test that holds the thread recording the error in
-    its critical section ("error-record") is then released only by a read that waits for it (issue #6428)
+    (QoreDbgHttpHoldPoint::ErrorRead), or "value-read" (QoreDbgHttpHoldPoint::ValueRead) for another value, before
+    it waits for the lock: a test that holds the thread recording it in its critical section ("error-record" or
+    "value-record") is then released only by a read that waits for it (issue #6428)
 */
 class QoreErrorReadLocker {
 public:
-    DLLLOCAL QoreErrorReadLocker(QoreThreadLock& lck);
+    //! takes the lock
+    /** @param lck the lock
+        @param value false for a read of the error, true for a read of another value
+    */
+    DLLLOCAL QoreErrorReadLocker(QoreThreadLock& lck, bool value = false);
 
     DLLLOCAL ~QoreErrorReadLocker() {
         lck.unlock();
@@ -296,6 +301,12 @@ enum class QoreDbgHttpHoldPoint : unsigned char {
     //! a read of the error of one of the poll operations of @ref ErrorRecord (getErrorInfo()) found the lock that
     //! protects it taken, and is about to wait for it (see QoreErrorReadLocker)
     ErrorRead,
+    //! an HTTP client ping poll operation stores its output, or a WebSocket server poll operation its close reason:
+    //! the thread holds the lock that protects the value and has not stored it yet
+    ValueRecord,
+    //! a read of a value of @ref ValueRecord found the lock that protects it taken, and is about to wait for it (see
+    //! QoreErrorReadLocker)
+    ValueRead,
     //! the number of hold points
     Count,
 };
@@ -397,10 +408,10 @@ typedef void (*qore_dbg_queue_push_locked_hook_t)(const QoreObject* self);
 DLLLOCAL extern std::atomic<qore_dbg_queue_push_locked_hook_t> qore_dbg_queue_push_locked_hook;
 #endif
 
-inline QoreErrorReadLocker::QoreErrorReadLocker(QoreThreadLock& lck) : lck(lck) {
+inline QoreErrorReadLocker::QoreErrorReadLocker(QoreThreadLock& lck, bool value) : lck(lck) {
 #ifdef DEBUG
     if (lck.trylock()) {
-        qore_dbg_http_hold(QoreDbgHttpHoldPoint::ErrorRead);
+        qore_dbg_http_hold(value ? QoreDbgHttpHoldPoint::ValueRead : QoreDbgHttpHoldPoint::ErrorRead);
         lck.lock();
     }
 #else
