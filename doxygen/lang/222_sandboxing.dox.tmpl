@@ -320,6 +320,12 @@ authenticate();
       %Program's own, which governs its code together with the sandbox that it keeps; it never removes that sandbox,
       and @ref Qore::Program::getSandboxManager() "Program::getSandboxManager()" returns only the %Program's own
       manager
+    - <b>Build shared state with a trusted build capability</b>: as a %Program that trusted code creates while it
+      runs for a sandboxed caller keeps that caller's sandbox, trusted infrastructure that builds shared state lazily
+      (a %Program that every caller then uses) for whichever caller needs it first creates it through a capability that
+      it made during trusted startup with
+      @ref Qore::SandboxManager::createTrustedBuildCall() "SandboxManager::createTrustedBuildCall()": what that builds
+      keeps no sandbox of the caller, and is governed only by the manager that the host gives it
     - <b>Give tenant code only what the tenant may do</b>: a host must not give tenant or sandboxed code a
       @ref Qore::Program "Program" object with more freedom than the tenant itself has, such as the %Program of the
       host or of another tenant, or a %Program with fewer parse-option restrictions than the tenant's own.  To give

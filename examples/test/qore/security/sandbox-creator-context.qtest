@@ -384,7 +384,9 @@ string sub wait_done() {
             assertEq("PROGRAM-INTERRUPTED", result.get());
             sm.clearInterrupt();
         }
-        # the wall time limit of the sandbox applies to a call of the child's code by trusted code
+        # the wall time limit of the sandbox applies to a call of the child's code by trusted code (the limit is set
+        # by a watcher thread, which valgrind's default scheduling can delay while the code spins: the bound only ends
+        # a run in which the limit never fires)
         {
             SandboxManager sm();
             sm.setWallTimeLimit(200);
@@ -396,7 +398,7 @@ string sub wait_done() {
             child.callFunction("export_to", host);
             Queue started();
             try {
-                host.callFunction("spin2", started, 20000);
+                host.callFunction("spin2", started, SpinBoundMs);
                 fail("the call returned instead of timing out");
             } catch (hash<ExceptionInfo> ex) {
                 assertEq("SANDBOX-TIMEOUT", ex.err);
