@@ -15262,6 +15262,20 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
 
         builder->SetInsertPoint(stack_overflow_bb);
         builder->CreateRet(getNothingReturnValue());
+
+        // a function whose frame is larger than the stack guard allows gets a thunk that checks the stack for its
+        // frame before the frame is allocated: the thunk raises the exception with the ExceptionSink argument and
+        // returns the value of this block (QoreIRFrameCheck, qore#6414)
+        if (auto* xsink_param = llvm::dyn_cast<llvm::Argument>(xsink_arg)) {
+            char kind;
+            switch (fast_entry_return_kind) {
+                case BatchCalleeReturnKind::NativeFloat: kind = 'f'; break;
+                case BatchCalleeReturnKind::NativeBool: kind = 'o'; break;
+                case BatchCalleeReturnKind::NativeInt: kind = 'i'; break;
+                default: kind = 'b'; break;
+            }
+            llvm_func->addFnAttr("qore-frame-check", std::to_string(xsink_param->getArgNo()) + ":" + kind);
+        }
     }
 
     if (invoke_cleanup_array_capacity && !func.blocks.empty()) {

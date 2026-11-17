@@ -142,6 +142,7 @@
 #ifndef QORE_JIT_RUNTIME_GIVEN_ARGS_UNIT
 static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_check_stack", reinterpret_cast<void*>(&qore_rt_check_stack) },
+    { "qore_rt_check_stack_reserve", reinterpret_cast<void*>(&qore_rt_check_stack_reserve) },
     { "qore_rt_discard_on_block_exit", reinterpret_cast<void*>(&qore_rt_discard_on_block_exit) },
     { "qore_rt_add_any", reinterpret_cast<void*>(&qore_rt_add_any) },
     { "qore_rt_sub_any", reinterpret_cast<void*>(&qore_rt_sub_any) },
@@ -763,6 +764,15 @@ extern "C" DLLEXPORT int64_t qore_rt_outline_take_return() {
 extern "C" DLLEXPORT int qore_rt_check_stack(ExceptionSink* xsink) {
 #ifdef QORE_MANAGE_STACK
     return check_stack(xsink);
+#else
+    return 0;
+#endif
+}
+
+extern "C" DLLEXPORT int qore_rt_check_stack_reserve(ExceptionSink* xsink, int64_t reserve) {
+#ifdef QORE_MANAGE_STACK
+    assert(reserve > 0);
+    return check_stack_reserve(xsink, static_cast<size_t>(reserve));
 #else
     return 0;
 #endif

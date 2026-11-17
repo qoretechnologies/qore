@@ -1205,6 +1205,7 @@ static void collectEmbeddedUserModules(std::unordered_set<std::string>& local_mo
 #include <llvm/Config/llvm-config.h>
 #include <llvm/Target/TargetMachine.h>
 #include <llvm/Target/TargetOptions.h>
+#include "qore/intern/QoreIRFrameCheck.h"
 #include <llvm/TargetParser/Host.h>
 #include <llvm/TargetParser/Triple.h>
 #include <llvm/Support/MemoryBuffer.h>
@@ -22364,8 +22365,8 @@ static int aotSystem(const std::string& cmd) {
 // (Phase 3) can reuse it per-partition on its own thread/TargetMachine. The caller owns
 // `tm` and any cleanup of `out_o` on failure. The BackendCodegen TimeTraceScope wraps the
 // bulk of compile time (SelectionDAG + MachineInstr passes + RegAlloc + asm emission).
-static bool codegenModuleToObject(llvm::Module& m, llvm::TargetMachine* tm,
-        const std::string& out_o, std::string& error, bool debug_opt = false) {
+static bool codegenModuleToObjectOnce(llvm::Module& m, llvm::TargetMachine* tm,
+        const std::string& out_o, std::string& error, bool debug_opt) {
     std::error_code EC;
     llvm::raw_fd_ostream dest(out_o, EC, llvm::sys::fs::OF_None);
     if (EC) {
@@ -22406,6 +22407,15 @@ static bool codegenModuleToObject(llvm::Module& m, llvm::TargetMachine* tm,
         return false;
     }
     return true;  // `dest` closes at scope end -> all bytes on disk
+}
+
+// a function whose frame is larger than the stack guard allows gets a thunk that checks the stack for its frame (see
+// QoreIRFrameCheck, qore#6414)
+static bool codegenModuleToObject(llvm::Module& m, llvm::TargetMachine* tm,
+        const std::string& out_o, std::string& error, bool debug_opt = false) {
+    return QoreIRFrameCheck::emit(m, [&](llvm::Module& mod, std::string& err) {
+        return codegenModuleToObjectOnce(mod, tm, out_o, err, debug_opt);
+    }, error);
 }
 
 static bool shellSingleQuote(const std::string& value, std::string& quoted) {
