@@ -537,7 +537,7 @@ string name = getName();@endcode
     - a @ref throw "throw", @ref rethrow "rethrow", @ref thread_exit "thread_exit" or \c return statement does not
       complete; nor does a block whose @ref on_exit "on_exit" or @ref on_success "on_success" code does not complete
     - a @ref try "catch" block is taken to be reached when the \c try block contains a \c throw or \c rethrow
-      statement that can run, or calls user code that is known to raise an exception; an exception raised by other
+      statement that can run, or calls user code that can raise an exception; an exception raised by other
       calls, by an \@assert statement (which @ref enable-debug "%enable-debug" enables) or by an operator is
       possible but not certain, and when an \c on_exit or @ref on_error "on_error" handler of the block that raises
       it ends the thread or the process instead, the exception is not taken to leave the block
