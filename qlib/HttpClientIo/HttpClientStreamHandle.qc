@@ -95,6 +95,12 @@ public class HttpClientStreamHandle {
         #! Request timeout
         timeout request_timeout;
 
+        #! The deadline of the whole request that the stream belongs to, if any; see @ref setRequestDeadline()
+        *date request_deadline;
+
+        #! The timeout of the whole request that the stream belongs to, for error messages
+        *timeout request_limit;
+
         #! Connect timeout configured for this stream's connection
         /** Informational: the
             @ref HttpClientIo::HttpClientConnectionManagerOptions::connect_timeout "connect_timeout option" contract is enforced by the transport
@@ -432,6 +438,30 @@ public class HttpClientStreamHandle {
         return initial_body + deferred_body;
     }
 
+    #! Sets the deadline of the whole request that the stream belongs to
+    /** A request made by @ref HttpClientConnectionManager is bounded by its timeout as a whole: the acquisition of
+        its connection, the wait for the connection to become ready, and the wait for the response share one
+        deadline (#6429).  The wait of @ref request() for the response and the waits for the connection to become
+        ready (also in @ref submitAsync() and @ref startStreaming()) end at this deadline at the latest; a timeout
+        error then states the request's timeout.  Sending data on a stream (@ref sendData()) is not bounded by it.
+
+        @param deadline the deadline of the request; @ref nothing removes it
+        @param limit the request's timeout, for error messages
+
+        @since HttpClientIo 1.0
+    */
+    setRequestDeadline(*date deadline, *timeout limit) {
+        request_deadline = deadline;
+        request_limit = limit;
+    }
+
+    #! Returns the deadline of the whole request that the stream belongs to, if any; see @ref setRequestDeadline()
+    /** @since HttpClientIo 1.0
+    */
+    *date getRequestDeadline() {
+        return request_deadline;
+    }
+
     #! Returns True if a request has been submitted on this stream
     bool isSubmitted() {
         return exists stream_id;
@@ -534,6 +564,21 @@ public class HttpClientStreamHandle {
         return request_timeout > 0 ? request_timeout : connect_timeout * 2;
     }
 
+    #! Returns the time to wait for the connection of the stream to become ready
+    /** As @ref getConnectWait(), and at most the time left until the deadline of the whole request, if any (see
+        @ref setRequestDeadline()); at least 1 ms, so that a wait whose deadline has passed returns at once
+    */
+    private timeout getReadyWait() {
+        timeout wait = getConnectWait();
+        if (request_deadline) {
+            int remaining = max(1, (request_deadline - now_us()).durationMilliseconds());
+            if (!wait || remaining < wait) {
+                wait = remaining;
+            }
+        }
+        return wait;
+    }
+
     #! Waits for the response of a request
     /** @param f the Future of the response
         @param end_time the overall deadline, if any
@@ -603,6 +648,14 @@ public class HttpClientStreamHandle {
         # 0 means no overall deadline
         timeout wait_timeout = timeout_ms ?? request_timeout;
         *date end_time = wait_timeout > 0 ? now_us() + milliseconds(wait_timeout) : NOTHING;
+        # the deadline of the whole request, if earlier, ends the waits; the error then states the request's timeout
+        # (#6429)
+        if (request_deadline && (!end_time || request_deadline < end_time)) {
+            end_time = request_deadline;
+            if (request_limit) {
+                wait_timeout = request_limit;
+            }
+        }
 
         # Wait for connection to become ready
         if (!conn.isReady()) {
@@ -720,7 +773,7 @@ public class HttpClientStreamHandle {
         # connect_timeout instead would race that identical deadline and
         # mask its diagnosable error with a generic timeout.
         if (!conn.isReady()) {
-            if (!conn.waitForReady(timeout_ms: getConnectWait())) {
+            if (!conn.waitForReady(timeout_ms: getReadyWait())) {
                 {
                     AutoLock al(lock);
                     if (state == HttpClientStreamState::Open) {
@@ -932,7 +985,7 @@ public class HttpClientStreamHandle {
         # connect_timeout instead would race that identical deadline and
         # mask its diagnosable error with a generic timeout.
         if (!conn.isReady()) {
-            if (!conn.waitForReady(timeout_ms: getConnectWait())) {
+            if (!conn.waitForReady(timeout_ms: getReadyWait())) {
                 {
                     AutoLock al(lock);
                     if (state == HttpClientStreamState::Open) {

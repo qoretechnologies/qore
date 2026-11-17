@@ -32,6 +32,9 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
 %requires Logger
+%requires Mime
+%requires HttpServerUtil
+%requires HttpServer
 %requires HttpClientIo
 
 %exec-class HttpClientIoConnectWaitTest
@@ -113,6 +116,21 @@ class ConnectWaitLog inherits Logger {
     }
 }
 
+#! Answers "/stall" once its counter is zero, and everything else at once
+class StallHandler inherits AbstractHttpRequestHandler {
+    public {
+        #! "/stall" requests wait until this counter is zero
+        Counter stall(1);
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        if (cx.raw_path == "/stall") {
+            stall.waitForZero(60s);
+        }
+        return makeResponse({"Content-Type": MimeTypeText}, 200, "ok");
+    }
+}
+
 #! A TCP listener that never accepts: the kernel completes the TCP handshake into its backlog, TLS never starts
 class SilentListener {
     private {
@@ -144,6 +162,12 @@ class HttpClientIoConnectWaitTest inherits QUnit::Test {
             \testCreationWaitBoundByRequestTimeout());
         addTestCase("acquireStream() with a timeout bounds the happy-eyeballs race",
             \testAcquireStreamTimeout());
+        addTestCase("a request that times out on a pending connection is not sent again",
+            \testNoRetryOnPendingConnection());
+        addTestCase("a request whose time ran out on a ready connection is not sent again",
+            \testNoRetryPastDeadline());
+        addTestCase("an async request whose acquisition times out is not sent again",
+            \testAsyncAcquisitionTimeoutFinal());
         set_return_value(main());
     }
 
@@ -360,6 +384,105 @@ class HttpClientIoConnectWaitTest inherits QUnit::Test {
         assertEq("HTTPCLIENT-TIMEOUT", err.err, "the acquisition times out; got " + describe(err));
         assertRegex("happy-eyeballs race", err.desc ?? "", "the race times out; got " + describe(err));
         assertEq(0, mgr.getStats().total_connections, "no connection is left in the pool");
+    }
+
+    #! A request that times out on a reused connection that never became ready is not sent again (#6429)
+    /** A stream handle holds a reservation of a pending HTTP/2 connection, and a manager request reuses it: its time
+        runs out while the connection is still connecting.  That connection is not a stale pooled connection, and the
+        request's time has run out, so the request is not sent again: one reuse, no stale-connection retry.  Before the
+        change, it was retried on the same pending connection, with a second timeout of its own (a 5 s request took
+        10 s).
+    */
+    testNoRetryOnPendingConnection() {
+        SilentListener listener();
+        on_exit listener.close();
+        string url = listener.getUrl();
+
+        ConnectWaitLog log();
+        HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{
+            "protocol": "h2",
+            "connect_timeout": 60s,
+            "request_timeout": 60s,
+            "logger": log,
+        });
+        on_exit mgr.closeAll();
+
+        HttpClientStreamHandle s1 = mgr.acquireStream(url);
+        HttpClientConnection conn = s1.getConnection();
+        on_exit s1.cancel();
+
+        *hash<ExceptionInfo> err = getError(sub () { mgr.request(url, "GET", "/", NOTHING, NOTHING, 500ms); });
+        assertEq("HTTPCLIENT-TIMEOUT", err.err, "the request times out; got " + describe(err));
+        assertEq(1, log.getMatching("reusing h2 connection " + conn.getConnectionId() + " ").size(),
+            "one attempt on the pending connection");
+        assertEq((), log.getMatching("evicting stale connection|retrying|sending (the request|it) again"),
+            "the request is not sent again");
+        assertFalse(conn.isClosed(), "the connection keeps connecting for the stream handle");
+    }
+
+    #! A request whose time runs out on a ready pooled connection is not sent again (#6429)
+    /** A pooled HTTP/1.1 connection is ready, and the server does not answer the request within its timeout.  The
+        request's time has run out, so the stale-connection retry is not started: the request raises
+        \c HTTPCLIENT-TIMEOUT stating its timeout.  Before the change, it was sent again on a new connection with a
+        timeout of its own.
+    */
+    testNoRetryPastDeadline() {
+        StallHandler handler();
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": new Logger("server", LoggerLevel::getLevelError()),
+        });
+        server.setDefaultHandler("stall", handler);
+        string url = sprintf("http://127.0.0.1:%d", server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
+            "service": 0,
+        }).port);
+        on_exit {
+            handler.stall.dec();
+            server.stop();
+        }
+
+        ConnectWaitLog log();
+        HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{
+            "protocol": "h1",
+            "connect_timeout": 60s,
+            "request_timeout": 60s,
+            "logger": log,
+        });
+        on_exit mgr.closeAll();
+
+        # the connection is pooled and ready
+        assertEq(200, mgr.request(url, "GET", "/").status_code, "the first request succeeds");
+
+        *hash<ExceptionInfo> err = getError(sub () { mgr.request(url, "GET", "/stall", NOTHING, NOTHING, 500ms); });
+        assertEq("HTTPCLIENT-TIMEOUT", err.err, "the request times out; got " + describe(err));
+        assertEq("request timed out after 500 ms", err.desc, "the error states the request's timeout");
+        assertEq((), log.getMatching("evicting stale connection|retrying|sending (the request|it) again"),
+            "the request is not sent again");
+    }
+
+    #! An async request whose acquisition the request timeout ends is not sent again, without a fallback (#6429)
+    /** With the \c request_timeout option far below the connect timeout, submitRequestAsync()'s acquisition of a
+        connection (the happy-eyeballs race) is ended by the deadline.  The \c HTTPCLIENT-TIMEOUT is final: no
+        retry, so no protocol fallback either.  Before the change, it was retried as a connection error.
+    */
+    testAsyncAcquisitionTimeoutFinal() {
+        SilentListener listener();
+        on_exit listener.close();
+        string url = listener.getUrl();
+
+        ConnectWaitLog log();
+        HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{
+            "protocol": "auto",
+            "connect_timeout": 10s,
+            "request_timeout": 500ms,
+            "logger": log,
+        });
+        on_exit mgr.closeAll();
+
+        *hash<ExceptionInfo> err = getError(sub () { mgr.submitRequestAsync(url, "GET", "/"); });
+        assertEq("HTTPCLIENT-TIMEOUT", err.err, "the submission times out; got " + describe(err));
+        assertEq(1, log.getMatching("happy eyeballs: starting H3 \\+ H2 race").size(), "one race");
+        assertEq((), log.getMatching("retrying|falling back"), "no retry and no fallback");
     }
 
     #! Returns a connection manager with the "auto" protocol whose connect timeout is far beyond the requests' ones

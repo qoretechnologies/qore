@@ -805,8 +805,9 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         @return the stream handle ready for reading
 
         @throw HTTPCLIENT-CONNECT-ERROR if the connection cannot be established
-        @throw HTTPCLIENT-TIMEOUT no connection was acquired within the \c request_timeout option, which bounds the
-        acquisition of the connection of each attempt (see @ref acquireStream())
+        @throw HTTPCLIENT-TIMEOUT the request was not started within the \c request_timeout option, which bounds the
+        acquisition of the connection and the wait for it to become ready, over all attempts; no attempt starts once
+        it has run out
 
         @note If the request times out on a pooled connection, the connection is
         evicted and the request is retried once on a fresh connection, handling
@@ -825,13 +826,23 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         int max_retries = opts.max_request_retries;
         bool timeout_retried = False;
         bool h3_close_retried = False;
+        # the request_timeout option bounds the start of the request as a whole (#6429): the acquisition of each
+        # attempt's connection and the wait for it to become ready share one deadline, and no attempt starts once it
+        # has passed; an acquisition that it ends raises HTTPCLIENT-TIMEOUT, which is final
+        *date request_deadline = opts.request_timeout > 0
+            ? now_us() + milliseconds(opts.request_timeout)
+            : NOTHING;
         while (True) {
-            # the acquisition of the connection is bounded by the request timeout, as the stream's wait for it
-            HttpClientStreamHandle stream = acquireStream(url, NOTHING, opts.request_timeout);
+            HttpClientStreamHandle stream = acquireStreamUntil(url, NOTHING, request_deadline);
+            stream.setRequestDeadline(request_deadline, opts.request_timeout);
             try {
                 stream.startStreaming(method, path, headers, body_streaming, body);
                 return stream;
             } catch (hash<ExceptionInfo> ex) {
+                # no retry starts once the request's time has run out; a deadline says nothing about the protocol
+                if (request_deadline && now_us() >= request_deadline) {
+                    rethrow;
+                }
                 # HTTP3-CONNECTION-CLOSED and HTTP3-READ-ERROR retry only ONCE:
                 # the Gmail/Google idle-close pattern needs one retry on a fresh
                 # connection, but if the fresh connection ALSO fails the server
@@ -857,9 +868,10 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
                     evictDeadConnections(url);
                     continue;
                 }
-                # Only retry timeout on reused pooled connections (stale connection)
+                # Only retry timeout on reused pooled connections (stale connection) on which the request was
+                # submitted: a connection that never became ready is not stale (#6429)
                 if (ex.err == "HTTPCLIENT-TIMEOUT"
-                        && stream.wasConnectionReused() && !timeout_retried
+                        && stream.wasConnectionReused() && stream.isSubmitted() && !timeout_retried
                         && retries < max_retries && canRetryRequest(method, stream)) {
                     timeout_retried = True;
                     ++retries;
@@ -897,8 +909,9 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         @throw HTTPCLIENT-URL-ERROR if the URL is invalid or missing a host
         @throw HTTPCLIENT-SHUTDOWN if the connection manager is shutting down
         @throw HTTPCLIENT-CAPACITY-ERROR if no connection can be acquired after retries
-        @throw HTTPCLIENT-TIMEOUT if the connection establishment times out; the acquisition of the connection of
-        each attempt is bounded by the \c request_timeout option (see @ref acquireStream())
+        @throw HTTPCLIENT-TIMEOUT if the connection establishment times out: the \c request_timeout option bounds
+        the acquisition of the connection and the wait for it to become ready, over all attempts; no attempt starts
+        once it has run out, and a timeout of the acquisition is not retried and causes no protocol fallback
         @throw HTTPCLIENT-STATE-ERROR if the stream is already in use
 
         @throw HTTPCLIENT-REQUEST-BODY-ERROR a GET request specifies a body or enables request-body streaming
@@ -917,11 +930,17 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         int retries = 0;
         int max_retries = opts.max_request_retries;
         bool h3_close_retried = False;
+        # the request_timeout option bounds the submission of the request as a whole (#6429): the acquisition of each
+        # attempt's connection and the wait for it to become ready share one deadline, and no attempt starts once it
+        # has passed; an acquisition that it ends raises HTTPCLIENT-TIMEOUT, which is final
+        *date request_deadline = opts.request_timeout > 0
+            ? now_us() + milliseconds(opts.request_timeout)
+            : NOTHING;
         while (True) {
             *HttpClientStreamHandle stream;
             try {
-                # the acquisition of the connection is bounded by the request timeout, as the stream's wait for it
-                stream = acquireStream(url, NOTHING, opts.request_timeout);
+                stream = acquireStreamUntil(url, NOTHING, request_deadline);
+                stream.setRequestDeadline(request_deadline, opts.request_timeout);
                 stream.setDecodeText(decode_text);
                 hash<auto> result = stream.submitAsync(method, path, headers, body);
                 # Wrap the Future so Set-Cookie extraction happens when
@@ -941,6 +960,12 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
                 # calls releaseReservationIfHeld() on all pre-submit failure paths
                 # (waitForReady timeout, cancel, submitAsyncImpl exception), and
                 # the destructor is a final safety net
+                # no retry starts once the request's time has run out, and an acquisition that the deadline ended is
+                # final: a deadline says nothing about the protocol, so there is no fallback either (#6429)
+                if ((request_deadline && now_us() >= request_deadline)
+                        || (ex.err == "HTTPCLIENT-TIMEOUT" && !stream)) {
+                    rethrow;
+                }
                 if (isHttp3ConnectionCloseError(ex.err)) {
                     if (!h3_close_retried && retries < max_retries
                             && canRetryRequest(method, stream, ex.err)) {
@@ -1027,11 +1052,11 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         @param path the full request path to send (must include any base path from the URL)
         @param headers request headers (optional)
         @param body request body (optional)
-        @param timeout_ms request timeout (optional; the \c request_timeout option by default): it bounds each attempt
-        of the request, including the acquisition of its connection (the happy-eyeballs race of the \c "auto"
-        protocol, and the wait for a connection that another request is creating), and, once a stream is acquired,
-        the wait for the connection to become ready and for the response; a request whose time runs out while its
-        connection is acquired raises \c HTTPCLIENT-TIMEOUT and is not sent again
+        @param timeout_ms request timeout (optional; the \c request_timeout option by default): it bounds the whole
+        request: the acquisition of its connection (the happy-eyeballs race of the \c "auto" protocol, and the wait
+        for a connection that another request is creating), the wait for the connection to become ready, the wait for
+        the response, and every attempt to send the request again; no attempt starts once it has run out, and the
+        request then raises \c HTTPCLIENT-TIMEOUT
         @param decode_text if @ref False, the response body is returned as binary data after its content encoding is
         decompressed: the octets of the resource, including any byte order mark; by default a text body is decoded to
         a string; see @ref HttpClientStreamHandle::setDecodeText()
@@ -1046,14 +1071,13 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         - \b Instant: dead connections (FIN/RST from server) are detected by the async
           I/O thread via epoll/kqueue + \c recv(MSG_PEEK) and marked as closed before
           the pool scan returns them.  No timeout needed — detection is immediate.
-        - \b Timeout: for "half-open" connections (server went silent — no FIN/RST),
-          reused pooled connections use \c connect_timeout as the request deadline instead
-          of the full \c request_timeout.  If the server doesn't respond within
-          \c connect_timeout, the connection is evicted and the request is retried once
-          on a fresh connection, also with \c connect_timeout as the deadline.  This
-          provides fast stale detection (typically 2-5s) instead of waiting the full
-          \c request_timeout (30-60s).  Timeouts on freshly created connections are not
-          retried — they indicate a genuinely slow or unreachable server.
+        - \b Inactivity: for "half-open" connections (server went silent — no FIN/RST), a
+          request on a reused pooled connection that fails on the \c io_timeout option (no data
+          received) is sent again once on a fresh connection, within the request's remaining time.
+          The request's timeout is a hard deadline: a request is never sent again once it has run
+          out, so without \c io_timeout (or \c tcp_user_timeout / TCP keepalive at the TCP level) a
+          half-open connection ends the request with \c HTTPCLIENT-TIMEOUT.  Timeouts on freshly
+          created connections, or on connections that never became ready, are not retried.
 
         @throw HTTPCLIENT-TIMEOUT if the request times out (after retry for pooled connections), also while its
         connection is acquired
@@ -1603,52 +1627,19 @@ HttpClientResponseStream stream = mgr.openStream("https://example.com/file.iso",
         hash<HttpClientResendInfo> resend();
         bool timeout_retried = False;
         bool proxy_connect_retried = False;
-        # Wall-clock fail-safe across the entire retry loop.  Without this, a
-        # bug in per-stream wait handling (incorrect deadline, non-firing
-        # future, cancel deadlock) could cause infinite hangs even when each
-        # individual f.get() call is supposed to be bounded.  We saw this
-        # empirically where a 120s request_timeout failed to fire and the
-        # calling thread parked in FutureImpl::get() for 30+ min.  The
-        # budget gives us a hard ceiling regardless of per-stream
-        # behavior — but it must be GENEROUS enough to cover the legitimate
-        # retry path (request_timeout for the first attempt + connect_timeout
-        # for each retry on a fresh connection), otherwise it will pre-empt
-        # the existing recovery path before it can fire.  We allow:
-        #   max(per_attempt * 2, per_attempt + max_retries * connect_timeout)
-        # which covers both "two full attempts" and "one attempt + one retry
-        # per max_retries with connect_timeout each" — whichever is larger.
-        int per_attempt_ms = exists timeout_ms
-            ? timeout_ms : opts.request_timeout;
-        int retry_overhead_ms = max_retries * opts.connect_timeout;
-        int total_budget_ms = per_attempt_ms * 2;
-        if (per_attempt_ms + retry_overhead_ms > total_budget_ms) {
-            total_budget_ms = per_attempt_ms + retry_overhead_ms;
-        }
-        # without a request timeout there is no overall deadline (see the io_timeout option), and no budget
-        *date budget_deadline = per_attempt_ms > 0 ? now_us() + milliseconds(total_budget_ms) : NOTHING;
+        # The request's timeout bounds the whole request (#6429): the acquisition of each attempt's connection, the
+        # wait for it to become ready, the wait for the response, and the decision to send the request again share one
+        # deadline; no attempt starts once it has passed.  Without a request timeout there is no deadline (see the
+        # io_timeout option).
+        timeout request_limit = timeout_ms ?? opts.request_timeout;
+        *date request_deadline = request_limit > 0 ? now_us() + milliseconds(request_limit) : NOTHING;
         while (True) {
             *HttpClientStreamHandle stream;
             try {
-                # Bail at the top of the loop if the wall-clock fail-safe has
-                # fired.  This is the *only* place we cap on total elapsed
-                # time — we deliberately do NOT clamp effective_timeout below
-                # because that would pre-empt the per-attempt timeout (e.g.
-                # the test pattern that expects request_timeout to fire then
-                # connect_timeout to retry on a fresh connection).
-                if (budget_deadline && now_us() >= budget_deadline) {
-                    throw "HTTPCLIENT-TIMEOUT",
-                        sprintf("total request budget of %d ms exceeded across "
-                            "%d attempt%s", total_budget_ms, resend.retries + 1,
-                            resend.retries == 0 ? "" : "s");
-                }
-
-                # the request's timeout bounds the acquisition of its connection too (#6429): the happy-eyeballs
-                # race, the wait for a connection that another request is creating; it is the timeout of this
-                # attempt (see below)
-                timeout attempt_timeout = exists timeout_ms
-                    ? timeout_ms
-                    : (timeout_retried ? opts.connect_timeout : opts.request_timeout);
-                stream = acquireStream(url, NOTHING, attempt_timeout);
+                # the acquisition of the connection is bounded by the request's deadline: the happy-eyeballs race,
+                # the wait for a connection that another request is creating
+                stream = acquireStreamUntil(url, NOTHING, request_deadline);
+                stream.setRequestDeadline(request_deadline, request_limit);
                 # Per-request timeout resolution:
                 # 1. Caller-provided timeout always wins (the caller knows best,
                 #    e.g. LLM queries with 60s timeout).
@@ -1673,10 +1664,10 @@ HttpClientResponseStream stream = mgr.openStream("https://example.com/file.iso",
                     effective_timeout = opts.connect_timeout;
                 }
                 log(LoggerLevel::DEBUG, "requestIntern %s %s: reused=%y timeout_retried=%y "
-                    "effective_timeout=%y budget_remaining=%dms",
+                    "effective_timeout=%y remaining=%dms",
                     method, path, stream.wasConnectionReused(), timeout_retried,
                     effective_timeout,
-                    budget_deadline ? (budget_deadline - now_us()).durationMilliseconds() : -1);
+                    request_deadline ? (request_deadline - now_us()).durationMilliseconds() : -1);
                 stream.setDecodeText(decode_text);
                 hash<auto> resp = stream.request(method, path, headers, body,
                     effective_timeout);
@@ -1690,6 +1681,10 @@ HttpClientResponseStream stream = mgr.openStream("https://example.com/file.iso",
                 if (getPinnedConnection()) {
                     rethrow;
                 }
+                # no retry or resend starts once the request's time has run out (#6429)
+                if (request_deadline && now_us() >= request_deadline) {
+                    rethrow;
+                }
                 # Handle HTTPCLIENT-TIMEOUT before the generic isConnectionError
                 # retry.  HTTPCLIENT-TIMEOUT is in isConnectionError() for the
                 # benefit of acquireAndStartStreaming / submitRequestAsync where
@@ -1700,9 +1695,11 @@ HttpClientResponseStream stream = mgr.openStream("https://example.com/file.iso",
                 # up to MaxRequestRetries full-timeout retries against a dead
                 # server (e.g. 3 × 10s = 30s+), when the correct behavior is:
                 # only retry once on a reused pooled connection (stale detection),
-                # never on a fresh connection (genuinely unreachable).
+                # never on a fresh connection (genuinely unreachable).  A connection that never became ready (the
+                # request was not submitted on it) is not a stale connection: other requests may be waiting for it
+                # too, and its connect is bounded by connect_timeout (#6429).
                 if (ex.err == "HTTPCLIENT-TIMEOUT") {
-                    if (stream && stream.wasConnectionReused() && !timeout_retried
+                    if (stream && stream.wasConnectionReused() && stream.isSubmitted() && !timeout_retried
                             && resend.retries < max_retries && canRetryRequest(method, stream)) {
                         timeout_retried = True;
                         ++resend.retries;
