@@ -1889,7 +1889,41 @@ int qore_class_private::enterSourceProgramForInitSlow(QoreDeclaringProgramHelper
     return -1;
 }
 
+void qore_class_private::markMultiPathAncestors() const {
+    if (!scl) {
+        return;
+    }
+    // the hierarchy is walked iteratively, each class once: a class reached again is reached through a second path
+    HierarchyWalkStack<HierarchyWalkFrame> stack;
+    qcp_set_t visited;
+    stack.push({scl, 0});
+    while (!stack.empty()) {
+        HierarchyWalkFrame& f = stack.back();
+        if (f.next == f.list->size()) {
+            stack.pop();
+            continue;
+        }
+        const BCNode& n = *(*f.list)[f.next++];
+        if (!n.sclass) {
+            continue;
+        }
+        qore_class_private* priv = n.sclass->priv;
+        if (!visited.insert(priv).second) {
+            if (!priv->multi_path.load(std::memory_order_relaxed)) {
+                priv->multi_path.store(true, std::memory_order_relaxed);
+            }
+            continue;
+        }
+        if (priv->scl) {
+            stack.push({priv->scl, 0});
+        }
+    }
+}
+
 int8_t qore_class_private::computeMemberInitCode() const {
+    // computed once for the class, when its first object is created: the base classes reached through more than one
+    // path are marked, so that the walk of the base class constructors of its objects walks each once (qore#6513)
+    markMultiPathAncestors();
     int8_t rv = 0;
     for (auto& i : member_init_list) {
         if (i.info->initIsCode()) {
@@ -2110,6 +2144,13 @@ QORE_INTERN_ALWAYS_INLINE void qore_class_private::execBaseClassConstructorImpl(
     // if there is no constructor, execute the superclass constructors directly
     if (!constructor){
         if (scl) { // execute base class constructors if any
+            // in a hierarchy with a diamond, a class can be reached through more than one path: the base classes of a
+            // class without a constructor are walked once for the object, as a class with a constructor is executed
+            // once (qore#6513); only a class marked as reached through more than one path is recorded, so that
+            // other objects cost nothing more
+            if (multi_path.load(std::memory_order_relaxed) && bceal->visitNoConstructorClass(cls->getID())) {
+                return;
+            }
             if constexpr (Lexical) scl->execConstructors({}, self, bceal, rc, xsink);
             else scl->execConstructors(self, bceal, rc, xsink);
         }
@@ -2649,6 +2690,21 @@ QORE_INTERN_ALWAYS_INLINE QoreListNode* BCEAList::findArgsImpl(LexicalSemanticPo
     loc = i->second->loc;
     if constexpr (Lexical) policy = i->second->semantic_policy;
     return i->second->args;
+}
+
+bool BCEAList::visitNoConstructorClass(qore_classid_t classid) {
+    bceamap_t::iterator i = lower_bound(classid);
+    if (i == end() || i->first != classid) {
+        BCEANode* n = new BCEANode(false);
+        n->walked = true;
+        insert(i, bceamap_t::value_type(classid, n));
+        return false;
+    }
+    if (i->second->walked) {
+        return true;
+    }
+    i->second->walked = true;
+    return false;
 }
 
 QoreListNode* BCEAList::findArgs(qore_classid_t classid, bool* aexeced, const AbstractQoreFunctionVariant*& variant, const QoreProgramLocation*& loc) {
@@ -3474,6 +3530,8 @@ bool BCList::runtimeIsPrivateMember(const char* str, bool toplevel) const {
 template <bool Lexical>
 QORE_INTERN_ALWAYS_INLINE void BCList::execConstructorsImpl(LexicalSemanticPolicy policy, QoreObject* o, BCEAList* bceal, RuntimeConfig& rc, ExceptionSink* xsink) const {
     for (auto& i : *this) {
+        // counted in debug builds only (qore#6513)
+        QORE_CLASS_HIERARCHY_WALK_STEP();
         if constexpr (Lexical) (*i).execConstructors({}, o, bceal, rc, xsink);
         else (*i).execConstructors(o, bceal, rc, xsink);
         if (*xsink)

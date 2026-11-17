@@ -70,9 +70,10 @@
 DLLLOCAL extern std::atomic<int64> qore_generic_parent_check_steps;
 #define QORE_GENERIC_PARENT_CHECK_STEP() qore_generic_parent_check_steps.fetch_add(1, std::memory_order_relaxed)
 //! the parent class edges that the walks of class hierarchies that set up a class have visited (qore#6499)
-/** BCList::findInHierarchy(), BCList::addBaseClassesToSubclass() and the walks that build the inheritance lists of
-    methods; read by the dbg_class_hierarchy_walk_steps() debug hook, so that a test can require a bound on the steps
-    independent of the timing
+/** BCList::findInHierarchy(), BCList::addBaseClassesToSubclass(), the walks that build the inheritance lists of
+    methods and the walk of the base class constructors of an object (qore#6513); read by the
+    dbg_class_hierarchy_walk_steps() debug hook, so that a test can require a bound on the steps independent of the
+    timing
 */
 DLLLOCAL extern std::atomic<int64> qore_class_hierarchy_walk_steps;
 #define QORE_CLASS_HIERARCHY_WALK_STEP() qore_class_hierarchy_walk_steps.fetch_add(1, std::memory_order_relaxed)
@@ -2668,6 +2669,8 @@ public:
    QoreListNode* args = nullptr;
    const AbstractQoreFunctionVariant* variant = nullptr;
    bool execed = false;
+   //! for a class without a constructor: its base class constructors have been walked for the object (qore#6513)
+   bool walked = false;
    LexicalSemanticPolicy semantic_policy;
 
    DLLLOCAL BCEANode(const QoreProgramLocation* loc, QoreListNode* args, const AbstractQoreFunctionVariant* variant) : loc(loc), args(args), variant(reinterpret_cast<const MethodVariant*>(variant)) {
@@ -2700,6 +2703,14 @@ protected:
 
 public:
     DLLLOCAL void deref(ExceptionSink* xsink);
+
+    //! records that the base class constructors of a class without a constructor are walked for the object
+    /** Only for a class that is reached through more than one path in a hierarchy (see
+        qore_class_private::multi_path)
+
+        @return true if they were already walked (qore#6513)
+    */
+    DLLLOCAL bool visitNoConstructorClass(qore_classid_t classid);
     // evaluates arguments, returns -1 if an exception was thrown
     DLLLOCAL int add(qore_classid_t classid, const QoreListNode* arg, const AbstractQoreFunctionVariant* variant, const QoreProgramLocation* loc, ExceptionSink* xsink);
     DLLLOCAL int add(LexicalSemanticPolicy policy, qore_classid_t classid, const QoreListNode* arg, const AbstractQoreFunctionVariant* variant, const QoreProgramLocation* loc, ExceptionSink* xsink);
@@ -3121,6 +3132,14 @@ public:
 
     //! the cached result of getMemberInitCode(): -1 if not computed for the current member initialization list
     mutable std::atomic<int8_t> member_init_code{-1};
+
+    //! true if the class is reached through more than one path in the hierarchy of a class whose objects are created
+    /** Set by markMultiPathAncestors() when the first object of such a class is created; the base classes of a class
+        without a constructor are then walked once for each object (see BCEAList::visitNoConstructorClass(),
+        qore#6513).  Once set, it is never cleared; it costs a class that is reached through one path in another
+        hierarchy only the record of the walk.
+    */
+    mutable std::atomic<bool> multi_path{false};
 
     //! true if the source Program had a sandbox manager when it released the class (see isSandboxedCode())
     /** Set with released_spgm_id, under gate.asl_lock
@@ -4543,6 +4562,11 @@ public:
 
     //! computes and caches the result of getMemberInitCode()
     DLLLOCAL int8_t computeMemberInitCode() const;
+
+    //! sets multi_path in each base class that the class's hierarchy reaches through more than one path (qore#6513)
+    /** Called once for the class, by computeMemberInitCode(), before its first object's constructors run
+    */
+    DLLLOCAL void markMultiPathAncestors() const;
 
     //! initializes the members of an object with the source Programs of their classes entered; see initMembers()
     DLLLOCAL int initMembersEntered(QoreObject& o, bool& need_scan, const QoreClassSourceProgramInfo& spgm_info,

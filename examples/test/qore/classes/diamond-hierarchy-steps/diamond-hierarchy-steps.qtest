@@ -14,7 +14,7 @@
 
 %exec-class DiamondHierarchyStepsTest
 
-#! the walks of a class hierarchy that set up a class take steps linear in its ancestors, not in its paths (qore#6499)
+#! the walks of a class hierarchy take steps polynomial in its ancestors, not in its paths (qore#6499, qore#6513)
 /** In a chain of diamonds (each level: two classes inheriting the class of the level below, and a class inheriting
     both), there are 2^depth paths from the top class to the base class.  The walks that set up a class
     (BCList::findInHierarchy(), BCList::addBaseClassesToSubclass(), the walks that build the inheritance lists of
@@ -22,11 +22,13 @@
     few dozen classes did not end.  Each walk must visit each ancestor once: the walks of a class visit at most its
     ancestors for each of its ancestors, so the steps of the walks of a whole chain are bounded by the square of the
     number of its classes times the number of its inheritance edges, and grow polynomially with the depth (about 8
-    times for twice the depth), not with 2^depth.
+    times for twice the depth), not with 2^depth.  The creation
+    of an object of such a chain walked the base classes without a constructor on every path to run the constructors
+    of their base classes (qore#6513): each must be walked once for the object, and a constructor is still run once.
 
     The steps are counted by a debug hook of the library, so that check is skipped by a library built without it; a
-    chain of depth 40 is also parsed and run in every execution mode and as a qcc-compiled executable, where the walks
-    on every path did not end.
+    chain of depth 40 is also parsed, run and an object of it created in every execution mode and as a qcc-compiled
+    executable, where the walks on every path did not end.
 */
 class DiamondHierarchyStepsTest inherits QUnit::Test {
     public {
@@ -40,6 +42,7 @@ class DiamondHierarchyStepsTest inherits QUnit::Test {
         const Expected = (
             "calls: [\"X0 1\", \"X40 s\", \"R1 1\"]",
             "listed: {::X40::s(string str): 1, ::X0::s(int i): 1, ::R1::s(bool b): 1}",
+            "constructors: [1, 1]",
         );
     }
 
@@ -55,6 +58,7 @@ class DiamondHierarchyStepsTest inherits QUnit::Test {
         qcc_bin = TestInterpreter::qcc_compiler() ?? "qcc";
 
         addTestCase("steps of the walks of diamond chains", \stepsTest());
+        addTestCase("steps of the creation of objects of diamond chains", \createStepsTest());
         addTestCase("a chain of depth 40 in every execution mode and qcc", \runTest());
         set_return_value(main());
     }
@@ -77,13 +81,17 @@ class DiamondHierarchyStepsTest inherits QUnit::Test {
         \c Rk.  \c X0 and the top class declare a static method \c s(), and so does \c R1, so that the walks that
         build the inheritance lists of methods run over the whole chain; \c X0 declares an abstract method that only
         the top class implements, so that the search for its implementation in each class runs over the chain too.
-        No object is created, as the constructor calls of the classes of such a chain still walk every path
-        (qore#6513).
+        \c X0 and \c L2 have a constructor, which counts its calls in a static variable; the other classes have none.
     */
     private static string chain(int depth) {
-        string src = "class X0 { static string s(int i) { return \"X0 \" + i; } abstract string am(); }\n";
+        string src = "class X0 { public { static int n = 0; } constructor() { ++n; } "
+            "static string s(int i) { return \"X0 \" + i; } abstract string am(); }\n";
         for (int k = 1; k <= depth; ++k) {
-            src += sprintf("class L%d inherits X%d {}\n", k, k - 1);
+            if (k == 2) {
+                src += "class L2 inherits X1 { public { static int n = 0; } constructor() { ++n; } }\n";
+            } else {
+                src += sprintf("class L%d inherits X%d {}\n", k, k - 1);
+            }
             if (k == 1) {
                 src += "class R1 inherits X0 { static string s(bool b) { return \"R1 \" + b; } }\n";
             } else {
@@ -124,6 +132,34 @@ class DiamondHierarchyStepsTest inherits QUnit::Test {
         assertTrue(counts{"20"} <= 10 * counts{"10"}, sprintf("steps by depth: %y", counts));
     }
 
+    #! creates objects of chains of increasing depth and checks that the steps of the walk of their base class
+    #! constructors are bounded by the chain's size and grow linearly with the depth
+    createStepsTest() {
+        if (!exists steps()) {
+            testSkip("the library has no class hierarchy step counter (a debug build is required)");
+        }
+        hash<string, int> counts;
+        foreach int depth in (Depths) {
+            int classes = 1 + 3 * depth;
+            int edges = 4 * depth;
+            Program p(PO_NEW_STYLE);
+            p.parse(chain(depth) + sprintf("list<int> sub make() { X%d x(); return (X0::n, L2::n); }\n", depth),
+                "chain");
+            int before = steps();
+            list<int> created = p.callFunction("make");
+            int n = steps() - before;
+            counts{depth} = n;
+            assertEq((1, 1), created, sprintf("depth %d: each constructor ran once", depth));
+            assertTrue(n > 0, sprintf("depth %d: the walk was counted", depth));
+            # each class without a constructor is walked once, and each class with one runs its base classes' once
+            assertTrue(n <= classes + edges, sprintf("depth %d: %d steps for %d classes and %d edges (at most %d)",
+                depth, n, classes, edges, classes + edges));
+        }
+        # twice the depth: about twice the steps, not 2^depth times
+        assertTrue(counts{"40"} <= 3 * counts{"20"}, sprintf("steps by depth: %y", counts));
+        assertTrue(counts{"20"} <= 3 * counts{"10"}, sprintf("steps by depth: %y", counts));
+    }
+
     #! a program with a chain of depth RunDepth runs in every execution mode and as a qcc-compiled executable
     runTest() {
         TmpDir tmp("qore-diamond-hierarchy-steps-");
@@ -140,7 +176,9 @@ class DiamondHierarchyStepsTest inherits QUnit::Test {
             + "        if (line =~ /^ +::/) { string v = trim(line); h{v} = (h{v} ?? 0) + 1; }\n"
             + "    }\n"
             + "    printf(\"listed: %y\\n\", h);\n"
-            + "}\n");
+            + "}\n"
+            + sprintf("X%d x();\n", RunDepth)
+            + "printf(\"constructors: %y\\n\", (X0::n, L2::n));\n");
         f.close();
         foreach string mode in (ExecModeHarness::ExecModes) {
             checkOutput(mode, ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s "
@@ -150,6 +188,9 @@ class DiamondHierarchyStepsTest inherits QUnit::Test {
         string out = backquote(sprintf("QORE_LIBDIR=%s LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s -o %s %s 2>&1",
             libqore_dir, libqore_dir, libqore_dir, qcc_bin, exe, file));
         assertTrue(is_file(exe), "compiled the executable: " + out);
+        if (!is_file(exe)) {
+            return;
+        }
         checkOutput("executable", ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s",
             libqore_dir, libqore_dir, exe)));
     }
