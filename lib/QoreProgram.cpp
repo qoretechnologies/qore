@@ -2145,7 +2145,7 @@ void qore_program_private_base::setParent(QoreProgram* p_pgm, const QoreParseOpt
     //    p_pgm->priv->sb.getLVList(), this, pgm, p_pgm->priv->pwo.parse_options, n_parse_options,
     //    p_pgm->priv->pwo.parse_options & PO_NO_CHILD_PO_RESTRICTIONS);
 
-    TZ = p_pgm->currentTZ();
+    TZ.store(p_pgm->currentTZ(), std::memory_order_release);
 
     setCreatorChain(*p_pgm);
 
