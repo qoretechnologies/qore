@@ -133,6 +133,16 @@ class LifecycleWsClient inherits WebSocketClient {
         int hold_tasks = 0;
         #! released by the test to let the held delivery tasks go on, in the order they started
         list<Counter> release_task = ();
+        #! signaled with the delivery mutex held each time a delivery task ends; see waitDeliveryIdle()
+        Condition delivery_ended();
+
+        #! gate the next delivery task when it starts, before the tasks held with holdDeliveryTasks() are counted
+        bool gate_next_task = False;
+        #! released by the test to let the gated delivery task go on
+        Counter release_gated_task(1);
+        #! release the gated delivery task when the next delivery is scheduled: the messages of the operation's
+        #! completion are then queued (they are published before the delivery is scheduled)
+        bool release_gate_on_schedule = False;
 
         #! hold the next automatic reconnect when it starts
         bool hold_reconnect = False;
@@ -333,6 +343,26 @@ class LifecycleWsClient inherits WebSocketClient {
     bool isDeliveryThread(int tid) {
         AutoLock al(delivery_mutex);
         return delivery_tids{tid}.toBool();
+    }
+
+    #! waits until no delivery task of the current connection is scheduled or running
+    /** A connect() returns before the delivery task that its connection's first frames scheduled has necessarily
+        run; a test that holds the connection's next delivery task waits for that one first, or the task it holds can
+        be a later one, while the earlier task delivers the messages that the test expects the held one to hold
+    */
+    waitDeliveryIdle() {
+        AutoLock al(m);
+        *WscConnection c = conn;
+        al.unlock();
+        if (!c) {
+            return;
+        }
+        AutoLock dal(delivery_mutex);
+        while (c.delivery_active) {
+            if (delivery_ended.wait(delivery_mutex, HandoffTimeout)) {
+                throw "TEST-TIMEOUT", "the delivery task of the connection did not end";
+            }
+        }
     }
 
     #! returns True if a delivery task of the current connection is scheduled or running
@@ -747,6 +777,10 @@ class LifecycleWsClient inherits WebSocketClient {
             close_answer_seen.dec();
         }
         WebSocketClient::scheduleDelivery(c);
+        if (release_gate_on_schedule) {
+            release_gate_on_schedule = False;
+            release_gated_task.dec();
+        }
     }
 
     private acquireActionUnlocked(timeout to) {
@@ -763,9 +797,21 @@ class LifecycleWsClient inherits WebSocketClient {
     }
 
     private deliverPendingMessages(WscConnection c) {
+        on_exit {
+            AutoLock al(delivery_mutex);
+            delivery_ended.broadcast();
+        }
+        # whether the task is held is decided when it starts, also for a gated task
         int n = -1;
         if (hold_tasks > 0) {
             n = release_task.size() - hold_tasks--;
+        }
+        if (gate_next_task) {
+            gate_next_task = False;
+            events.push("task-gated");
+            release_gated_task.waitForZero(HandoffTimeout);
+        }
+        if (n >= 0) {
             events.push("task-held-" + n);
             release_task[n].waitForZero(HandoffTimeout);
         }
@@ -1015,6 +1061,10 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
             addTestCase(proto + ": failed connect after the handshake", \failedConnectTest(), (proto, "handshake"));
             addTestCase(proto + ": failed connect when the async I/O starts", \failedConnectTest(), (proto, "start"));
             addTestCase(proto + ": delivery task of a closed connection starting late", \lateDeliveryTaskTest(), proto);
+            if (proto != "h1") {
+                addTestCase(proto + ": the first delivery task of a connection running after connect()",
+                    \firstDeliveryTaskTest(), proto);
+            }
             addTestCase(proto + ": delivery task of a closed connection ending during a callback",
                 \lateDeliveryTaskThreadTest(), proto);
             addTestCase(proto + ": callback disconnects and waits for the close", \callbackDisconnectWaitsForCloseTest(),
@@ -2105,6 +2155,7 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
     lateDeliveryTaskTest(string proto) {
         LifecycleCtx ctx = makeCtx(proto);
         connectChecked(ctx, proto);
+        ctx.wsc.waitDeliveryIdle();
         ctx.wsc.holdDeliveryTasks(2);
         ctx.wsc.send("one");
         assertEq("task-held-0", ctx.wsc.events.get(LifecycleWsClient::HandoffTimeout));
@@ -2120,6 +2171,34 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
         assertEq("ECHO:two", ctx.msgs.get(0ms));
         assertEq(0, ctx.msgs.size(), "only the second connection's message is delivered");
         checkCurrentConnection(ctx, 1);
+    }
+
+    #! The first delivery task of a connection, which can still be scheduled when connect() returns, delivers the
+    #! messages that arrive while it runs: the cases that hold a connection's next delivery task wait for it to end
+    #! first (issue #6476: the held task was a later one, while the first one delivered the message that the test
+    #! expected the held one to hold)
+    firstDeliveryTaskTest(string proto) {
+        LifecycleCtx ctx = makeCtx(proto);
+        ctx.wsc.gate_next_task = True;
+        connectChecked(ctx, proto);
+        # the delivery task scheduled for the frames received with the handshake runs after connect() returned
+        assertEq("task-gated", ctx.wsc.events.get(LifecycleWsClient::HandoffTimeout));
+        assertTrue(ctx.wsc.deliveryActive(), "the connection's first delivery task is still running");
+        # it is released once the echo of the next message is queued: it delivers it, the connection being open
+        ctx.wsc.release_gate_on_schedule = True;
+        ctx.wsc.send("one");
+        assertEq("ECHO:one", ctx.msgs.get(LifecycleWsClient::HandoffTimeout));
+        ctx.wsc.waitDeliveryIdle();
+        assertFalse(ctx.wsc.deliveryActive(), "no delivery task of the connection runs");
+        # the next task held is the one that delivers the next message
+        ctx.wsc.holdDeliveryTasks(1);
+        ctx.wsc.send("two");
+        assertEq("task-held-0", ctx.wsc.events.get(LifecycleWsClient::HandoffTimeout));
+        assertEq(0, ctx.msgs.size(), "the held task holds the message");
+        ctx.wsc.release_task[0].dec();
+        assertEq("task-ended-0", ctx.wsc.events.get(LifecycleWsClient::HandoffTimeout));
+        assertEq("ECHO:two", ctx.msgs.get(LifecycleWsClient::HandoffTimeout));
+        checkCurrentConnection(ctx, 0);
     }
 
     #! A delivery task of a closed connection that ends while the new connection's task runs a callback leaves the
@@ -2140,6 +2219,7 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
         on_exit if (release_callback.getCount()) {
             release_callback.dec();
         }
+        ctx.wsc.waitDeliveryIdle();
         ctx.wsc.holdDeliveryTasks(1);
         ctx.wsc.send("one");
         assertEq("task-held-0", ctx.wsc.events.get(LifecycleWsClient::HandoffTimeout));
