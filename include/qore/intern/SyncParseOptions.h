@@ -42,6 +42,15 @@
 #include <set>
 
 //! 128-bit parse options that one thread can change while others read them (issue #6078)
+//! serializes the insertion of a new value into the value set of any SyncParseOptions object (issue #6177)
+/** A leaf lock, held only around the insertion (which allocates): it is acquired by the fork handlers before fork()
+    (rank QFLR_LEAF, see design/fork-handlers.md), so that no other thread is inside an insertion when the process is
+    copied, and a writer in the child does not insert into a set that was left in the middle of an update.  The write
+    lock of each object (writeLock()) cannot be acquired before fork(): it is held across checks, parses and module
+    loading.
+*/
+DLLLOCAL extern std::mutex qore_parse_options_values_mutex;
+
 /** The options of a Program are read on the hot paths of every thread that runs its code (the functional domain
     and restriction checks when a call enters the Program), and changed by the Program API, the parse directives,
     the module loader and the module parse option masks, possibly on other threads.  Each value is immutable once
@@ -177,6 +186,8 @@ private:
     /** Exception-safe: the options are unchanged if the value cannot be stored.
     */
     DLLLOCAL void store(const QoreParseOptions& po) {
+        // the insertion is never under way when the process is copied by fork() (issue #6177)
+        std::lock_guard<std::mutex> lg(qore_parse_options_values_mutex);
         cur.store(&*values.insert(po).first, std::memory_order_release);
     }
 };

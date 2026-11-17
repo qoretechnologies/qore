@@ -23716,6 +23716,79 @@ bool qore_dbg_http_hold_armed(QoreDbgHttpHoldPoint point) {
     return dbg_http_holds[static_cast<int>(point)].reached != nullptr;
 }
 
+namespace {
+//! the hold armed by dbg_hold_child_program_create(): the Counters are referenced
+std::mutex dbg_child_program_hold_m;
+Counter* dbg_child_program_reached = nullptr;
+Counter* dbg_child_program_release = nullptr;
+}
+
+void qore_dbg_child_program_create_hold() {
+    Counter* reached;
+    Counter* release;
+    {
+        std::lock_guard<std::mutex> l(dbg_child_program_hold_m);
+        if (!dbg_child_program_reached) {
+            return;
+        }
+        // one-shot: the hold is taken over by this thread
+        reached = dbg_child_program_reached;
+        release = dbg_child_program_release;
+        dbg_child_program_reached = dbg_child_program_release = nullptr;
+    }
+    ExceptionSink xsink;
+    reached->dec(&xsink);
+    // a hang guard only: the test releases the hold
+    release->waitForZero(&xsink, 60000);
+    reached->deref(&xsink);
+    release->deref(&xsink);
+    xsink.clear();
+}
+
+//! holds the next creation of a child Program after its options were checked and before it is created (one-shot)
+/** @param reached decremented when a thread reaches the hold
+    @param release the thread waits until it reaches zero
+
+    @throw DBG-ARGUMENT-ERROR the hold is already armed
+*/
+static QoreValue f_dbg_hold_child_program_create(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    ReferenceHolder<Counter> reached(get_counter_arg(params, 0, xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    ReferenceHolder<Counter> release(get_counter_arg(params, 1, xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    std::lock_guard<std::mutex> l(dbg_child_program_hold_m);
+    if (dbg_child_program_reached) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_hold_child_program_create() is already armed");
+        return QoreValue();
+    }
+    dbg_child_program_reached = reached.release();
+    dbg_child_program_release = release.release();
+    return QoreValue();
+}
+
+//! disarms dbg_hold_child_program_create() if no creation reached it
+static QoreValue f_dbg_hold_child_program_create_clear(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    Counter* reached;
+    Counter* release;
+    {
+        std::lock_guard<std::mutex> l(dbg_child_program_hold_m);
+        reached = dbg_child_program_reached;
+        release = dbg_child_program_release;
+        dbg_child_program_reached = dbg_child_program_release = nullptr;
+    }
+    if (reached) {
+        reached->deref(xsink);
+        release->deref(xsink);
+    }
+    return QoreValue();
+}
+
 //! holds the next HTTP client thread that reaches the given point until \a release reaches zero (one-shot)
 /** @param point \c "submit": HTTPClient::startPollSendRecv() has checked out its connection and is about to submit
     the request; \c "close": an HTTP/1 or HTTP/2 client connection that is being closed has been invalidated (new
@@ -25125,6 +25198,11 @@ void init_debug_functions(QoreNamespace& qns) {
         QDOM_DEBUG_HOOK, boolTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
     qns.addBuiltinVariant("dbg_run_in_foreign_thread", f_dbg_run_in_foreign_thread, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         stringOrNothingTypeInfo, 1, codeTypeInfo, QORE_PARAM_NO_ARG, "code");
+    qns.addBuiltinVariant("dbg_hold_child_program_create", f_dbg_hold_child_program_create, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, nothingTypeInfo, 2, QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "reached",
+        QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "release");
+    qns.addBuiltinVariant("dbg_hold_child_program_create_clear", f_dbg_hold_child_program_create_clear,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo);
     qns.addBuiltinVariant("dbg_hold_source_program_call", f_dbg_hold_source_program_call, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, nothingTypeInfo, 1, QC_PROGRAM->getTypeInfo(), QORE_PARAM_NO_ARG, "pgm");
     qns.addBuiltinVariant("dbg_wait_source_program_call_held", f_dbg_wait_source_program_call_held, QCF_NO_FLAGS,
