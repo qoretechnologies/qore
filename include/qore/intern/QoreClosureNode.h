@@ -125,6 +125,9 @@ struct QoreClosureTypeContext {
     QoreTypeParamInstantiation inst;
     //! the receiver type of the creating code if it is a generic class, or nullptr
     const QoreTypeInfo* receiver_type_info = nullptr;
+    //! the declarations of the type arguments and of the receiver type, which the closure can outlive (a closure
+    //! made by generic code of one Program for a class of another; issue #6489)
+    QoreTypeDeclRefs decls;
 };
 
 class QoreClosureBase : public ResolvedCallReferenceNode {

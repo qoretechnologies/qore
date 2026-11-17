@@ -4947,6 +4947,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_create_function_call_ref_aot(QoreAOTContex
     fcr->setExplicitTypeArgs(std::move(type_args));
     // a type parameter of the generic code that creates the reference is bound to the running instantiation
     fcr->bindExplicitTypeArgs();
+    // the reference can outlive the Program of a type argument (issue #6489)
+    fcr->holdExplicitTypeArgDecls();
     return toBits(QoreValue(fcr));
 }
 

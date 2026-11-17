@@ -285,6 +285,8 @@ class ExecModeMarkerTest(unittest.TestCase):
         #   set their own --exec-mode, and in qcc
         # - deleted-program-own-generic-cycle (#6419): its checks run in child processes that set their own
         #   --exec-mode and in qcc executables
+        # - deleted-program-type-arg-holders (#6489): its checks run in child processes that set their own
+        #   --exec-mode and in qcc executables
         # - test-interpreter-options (#6250): its checks run in child interpreters started with options of their own
         # - frame-check-stack (#6124, #6414): its checks run a fixture that sets its own execution mode, in child
         #   processes and in qcc executables
@@ -306,6 +308,7 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/qore/misc/callref-object-method-program.qtest",
                                  "examples/test/qore/classes/deleted-program-types.qtest",
                                  "examples/test/qore/classes/deleted-program-own-generic-cycle.qtest",
+                                 "examples/test/qore/classes/deleted-program-type-arg-holders.qtest",
                                  "examples/test/qore/classes/method-reference-per-class.qtest",
                                  "examples/test/qore/classes/explicit-type-param-method-call.qtest",
                                  "examples/test/qore/classes/closure-default-self-ref.qtest",
