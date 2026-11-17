@@ -3128,7 +3128,19 @@ public:
         QoreParseState state;
         yylex_init_extra(&state, &lexer);
 
-        yy_scan_string(code, lexer);
+        // the rules of the parse directives end with a newline, which a directive on the last line of the code
+        // without one would not match: such code gets one at its end; other code is not changed, so that an error
+        // at its end keeps its location (issue #2740)
+        size_t code_len = strlen(code);
+        const char* last_nl = strrchr(code, '\n');
+        const char* last_line = last_nl ? last_nl + 1 : code;
+        if (*last_line == '%') {
+            std::string terminated(code, code_len);
+            terminated += '\n';
+            yy_scan_bytes(terminated.c_str(), terminated.size(), lexer);
+        } else {
+            yy_scan_string(code, lexer);
+        }
         yyset_lineno(1, lexer);
         // yyparse() will call endParsing() and restore old pgm position
         {
