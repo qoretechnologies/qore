@@ -891,6 +891,11 @@
     @ref Qore::get_http_accept_charset() "get_http_accept_charset()"); 2.2.1 took the first charset unless the value
     or an element directly after a comma began with UTF-8 or \c "*", whatever the weights (issue #6343).
 
+    @par Untrusted Character Set Names Select Only Known Encodings
+    A character set name in an HTTP header or body or in a MIME message is used only if it selects an encoding that
+    %Qore knows or a standard character set (see @ref Qore::get_known_encoding() "get_known_encoding()"); any other
+    name is ignored, and the text is read as without one; 2.2.1 registered such names as encodings (issue #6460).
+
     @subsection qore_3_0_0_new_features New Features in Qore
     @par Strict Number Parsing
     @ref parse_int(string, string, bool) "parse_int()", @ref parse_float(string, string, bool) "parse_float()" and
@@ -1035,6 +1040,9 @@
       the response encoding that an HTTP server reports for a request, the same for every HTTP version
       (<a href="https://github.com/qoretechnologies/qore/issues/6318">issue 6318</a>,
       <a href="https://github.com/qoretechnologies/qore/issues/6333">issue 6333</a>)
+    - new @ref Qore::get_known_encoding() "get_known_encoding()" returns the encoding that a character set name from
+      untrusted data selects, without registering other names
+      (<a href="https://github.com/qoretechnologies/qore/issues/6460">issue 6460</a>)
     - new @ref Qore::Socket::getQuicSSLCipherName() "Socket::getQuicSSLCipherName()" and
       @ref Qore::Socket::getQuicSSLCipherVersion() "Socket::getQuicSSLCipherVersion()" for HTTP/3 QUIC sessions
     - new @ref Qore::Socket::shutdownWrite() "Socket::shutdownWrite()" shuts down the sending side of a connection
@@ -2091,6 +2099,9 @@
       and suggests the closest parse directive, instead of "syntax error, unexpected identifier", and a directive name
       with more after it (<tt>%%requires-x</tt>) is an unknown directive, not a directive with an argument (see
       @ref unknown_parse_directives "unknown parse directives"; issue #56)
+    - character set names in HTTP headers and bodies and in MIME messages select only an encoding that %Qore knows or
+      a standard character set, so that untrusted data can no longer register encodings without limit; any other
+      name is ignored (see @ref Qore::get_known_encoding() "get_known_encoding()"; issue #6460)
     - a sleep with @ref Qore::usleep() "usleep()" or @ref Qore::sleep() "sleep()" that a signal interrupted while
       it slept with \c nanosleep() (2) slept its whole time again instead of the time that was left (issue #6364)
     - an out-of-line method definition in a namespace block resolves its class path relative to that namespace
