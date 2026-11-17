@@ -96,8 +96,8 @@
           "message": "FTP エラー発生後に再試行するまでの遅延（秒）"
         },
         "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.ZXJyb3JfZGVsYXk.desc": {
-          "source": "The number of seconds to wait before polling again after an FTP error; the error is logged at error level, and then polling continues after this delay.\n\nTransient problems such as a network interruption or a server restart are common with FTP; a low value recovers from such problems quickly, while a high value reduces the load on a server that is failing persistently.\n\n**NOTE**: files are not polled while this delay is in effect",
-          "message": "FTP エラー発生後に再ポーリングするまでの待機秒数。エラーは error レベルでログに記録され、この遅延の後にポーリングが継続されます。\n\nネットワークの中断やサーバーの再起動などの一時的な問題は FTP でよく発生します。値を小さくするとこのような問題から迅速に回復し、値を大きくすると継続的に障害が発生しているサーバーへの負荷が軽減されます。\n\n**注意**: この遅延が有効な間はファイルはポーリングされません"
+          "source": "The number of seconds to wait before polling again after an FTP error and after a refused file; the error is logged at error level, and then polling continues after this delay.\n\nTransient problems such as a network interruption or a server restart are common with FTP; a low value recovers from such problems quickly, while a high value reduces the load on a server that is failing persistently.\n\n**NOTE**: files are not polled while this delay is in effect",
+          "message": "FTP エラーの発生後およびファイルが拒否された後に再ポーリングするまでの待機秒数。エラーは error レベルでログに記録され、この遅延の後にポーリングが継続されます。\n\nネットワークの中断やサーバーの再起動などの一時的な問題は FTP でよく発生します。値を小さくするとこのような問題から迅速に回復し、値を大きくすると継続的に障害が発生しているサーバーへの負荷が軽減されます。\n\n**注意**: この遅延が有効な間はファイルはポーリングされません"
         },
         "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cmVnZXg.display_name": {
           "source": "Regular Expression Match",
