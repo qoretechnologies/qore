@@ -1,0 +1,96 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - closure default values changing the object through self in JIT and AOT code
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class ClosureDefaultSelfLvalueTest
+
+#! Tests that a closure's default argument value can change the object through self (qore#5949)
+/** The default values of a closure created in a method are evaluated before the closure's self variable is
+    instantiated: a read of self there gave the object, but an lvalue through self (ex: <tt>self.a = 20</tt>,
+    <tt>self.a += 5</tt>, <tt>remove self.h.y</tt>, <tt>self += {"a": 5}</tt>) raised \c LVALUE-ERROR in every
+    execution mode.  The worker runs in every execution mode, in the default execution mode and as a qcc-compiled
+    executable.
+*/
+class ClosureDefaultSelfLvalueTest inherits QUnit::Test {
+    public {
+        #! the output expected from the worker
+        const Expected = (
+            "assign: [20, 20]",
+            "+=: [19, 19]",
+            "pre-increment: [15, 15]",
+            "post-increment: [14, 15]",
+            "nested member: [10, {x: 10, y: 2}]",
+            "subscript: [30, 30]",
+            "list element: [7, [1, 7]]",
+            "push: [[1, 2, 3], [1, 2, 3]]",
+            "remove: [2, {x: 1}]",
+            "delete: [[null, 0], {y: 2}]",
+            "remove member: [5, null]",
+            "delete member: [[null, 0], null]",
+            "self +=: [5, 5]",
+            "self -=: [14, null]",
+            "read: [14, 14]",
+            "body: [41, 41]",
+            "two defaults: [[50, 51], 50]",
+            "argument given: [3, 14]",
+            "in method: [60, 60]",
+            "background: [20, 20]",
+        );
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+        string worker;
+    }
+
+    constructor() : QUnit::Test("ClosureDefaultSelfLvalue", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        worker = get_script_dir() + DirSep + "closure-default-self-lvalue-worker.q";
+
+        addTestCase("each execution mode", \testExecModes());
+        addTestCase("default execution mode", \testDefaultMode());
+        addTestCase("compiled executable", \testCompiled());
+
+        set_return_value(main());
+    }
+
+    testExecModes() {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            checkOutput(mode, ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s "
+                "--exec-mode=%s %s", libqore_dir, libqore_dir, qore_bin, mode, worker)));
+        }
+    }
+
+    testDefaultMode() {
+        checkOutput("default", ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s %s",
+            libqore_dir, libqore_dir, qore_bin, worker)));
+    }
+
+    testCompiled() {
+        TmpDir tmp("qore-closure-default-self-");
+        string exe = tmp.path + DirSep + "closureself";
+        string out = backquote(sprintf("QORE_LIBDIR=%s %s -o %s %s 2>&1", libqore_dir, qcc_bin, exe, worker));
+        assertTrue(is_file(exe), "compiled the executable: " + out);
+        checkOutput("executable", ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s",
+            libqore_dir, libqore_dir, exe)));
+    }
+
+    private checkOutput(string label, string out) {
+        list<string> lines = (select out.split("\n"), $1);
+        assertEq(Expected, lines, label + ": " + out);
+    }
+}

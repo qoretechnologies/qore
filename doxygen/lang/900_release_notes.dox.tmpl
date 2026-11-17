@@ -3020,6 +3020,9 @@
     - a class or hashdecl member or static class variable initialization expression that uses a top-level local
       variable no longer crashes the process when the class or hashdecl is first used in a closure and then used
       elsewhere (see @ref member_initialization and @ref hashdecl_initializer_scope; issue #6268)
+    - a reference to \c self or to a member through \c self (ex: <tt>\\self.a</tt>), and an assignment through
+      \c self (ex: <tt>self.a = 20</tt>), in a @ref closure_default_values "default value of a closure" created in a
+      method ended the process with a segmentation fault (issues #6417, #5949)
     - fixed a @ref where_clauses "where clause" key of @ref sqlutilintro "SqlUtil" that is both a column of the table
       and a column alias of the query, which gave the alias's definition in the SQL (ex:
       <tt>items.distinct items.ddt_number is not null</tt>): the column is used, as in SQL

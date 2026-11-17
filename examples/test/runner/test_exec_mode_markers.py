@@ -238,6 +238,8 @@ class ExecModeMarkerTest(unittest.TestCase):
         #   executables
         # - AOTModuleInitException (#6217): its checks run in child processes of the interpreter and of qcc
         #   executables
+        # - closure-default-self-ref (#6417, #5949): its probes run in child processes that set their own --exec-mode and
+        #   in qcc executables
         # - deleted-object-generic-variant (#6152): its probes run in child processes that set their own --exec-mode
         #   and in qcc executables
         # - deleted-object-overload (#6159): its probes run in child processes that set their own --exec-mode and in
@@ -280,6 +282,7 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/qore/classes/deleted-program-types.qtest",
                                  "examples/test/qore/classes/method-reference-per-class.qtest",
                                  "examples/test/qore/classes/explicit-type-param-method-call.qtest",
+                                 "examples/test/qore/classes/closure-default-self-ref.qtest",
                                  "examples/test/qore/classes/deleted-object-generic-variant.qtest",
                                  "examples/test/qore/classes/deleted-object-overload.qtest",
                                  "examples/test/qore/operators/empty-string-order.qtest",
