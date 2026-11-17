@@ -8280,7 +8280,20 @@ bool QoreIRToLLVM::releaseConsumedCallArgs(const QoreIRInstruction* inst, llvm::
             }
             auto release_fn = module.getOrInsertFunction("qore_rt_release_reference_read",
                     llvm::FunctionType::get(void_type, {ptr_type, i64_type, ptr_type}, false));
-            builder->CreateCall(release_fn, {ref_read_it->second, boxValue(val_it->second, id), xsink_arg});
+            // the slot holds the value only if the local held a reference when it was read (the rare case): it is
+            // tested inline, as qore_rt_release_reference_read() tests it, so that the usual case makes no call
+            llvm::Value* boxed = boxValue(val_it->second, id);
+            llvm::Value* held = builder->CreateAnd(
+                builder->CreateICmpEQ(builder->CreateLoad(i64_type, ref_read_it->second), boxed),
+                builder->CreateICmpNE(boxed, llvm::ConstantInt::get(i64_type, VAL_NOTHING)));
+            llvm::Function* release_func = builder->GetInsertBlock()->getParent();
+            llvm::BasicBlock* release_bb = llvm::BasicBlock::Create(ctx, "reference_read_release", release_func);
+            llvm::BasicBlock* released_bb = llvm::BasicBlock::Create(ctx, "reference_read_released", release_func);
+            builder->CreateCondBr(held, release_bb, released_bb, llvm::MDBuilder(ctx).createBranchWeights(1, 1000));
+            builder->SetInsertPoint(release_bb);
+            builder->CreateCall(release_fn, {ref_read_it->second, boxed, xsink_arg});
+            builder->CreateBr(released_bb);
+            builder->SetInsertPoint(released_bb);
             // a read that a later write to the local can release before its last use took a reference of its own
             // as well (overwritten_local_reads), in a cleanup slot of the value
             if (invoke_alloca_map.find(id) != invoke_alloca_map.end()) {
