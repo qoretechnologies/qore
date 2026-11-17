@@ -15114,7 +15114,8 @@ bool readInitFuncs(const QoreAOTBinaryReader& reader,
     for (uint32_t i = 0; i < count; ++i) {
         AOTInitFuncDescriptor desc;
         const char* name = reader.readStringRef(ptr);
-        if (!name) {
+        // a reference into the string pool can give an empty string (qore#6265)
+        if (!name || !*name) {
             error = "invalid init func name at index " + std::to_string(i);
             return false;
         }
@@ -17064,9 +17065,10 @@ bool QoreAOTBinaryDeserializer::deserializeNamespaces(std::string& error) {
         uint32_t depth = QoreAOTBinaryReader::readU32(ptr);
         uint16_t flags = QoreAOTBinaryReader::readU16(ptr);
         (void)depth;
-        // a string reference outside of the string pool gives no string; every namespace but the root has a name
-        if (!name && parent_idx != UINT32_MAX) {
-            error = "invalid NAMESPACES section: namespace " + std::to_string(i) + " has an invalid name reference";
+        // a string reference outside of the string pool gives no string, and one into the pool can give an empty
+        // string: every namespace but the root has a name (qore#6265)
+        if ((!name || !*name) && parent_idx != UINT32_MAX) {
+            error = "invalid NAMESPACES section: namespace " + std::to_string(i) + " has no name";
             return false;
         }
 
@@ -17200,8 +17202,9 @@ bool QoreAOTBinaryDeserializer::deserializeClasses(std::string& error) {
         if (qore_aot_section_overrun(bounds, "CLASSES", error)) {
             return false;
         }
-        if (!name) {
-            error = "invalid CLASSES section: class " + std::to_string(i) + " has an invalid name reference";
+        // a reference into the string pool can give an empty string (qore#6265)
+        if (!name || !*name) {
+            error = "invalid CLASSES section: class " + std::to_string(i) + " has no name";
             return false;
         }
         if (!path) {
@@ -18756,8 +18759,9 @@ bool QoreAOTBinaryDeserializer::deserializeHashDecls(std::string& error) {
         if (qore_aot_section_overrun(bounds, "HASHDECLS", error)) {
             return false;
         }
-        if (!name) {
-            error = "invalid HASHDECLS section: hashdecl " + std::to_string(i) + " has an invalid name reference";
+        // a reference into the string pool can give an empty string (qore#6265)
+        if (!name || !*name) {
+            error = "invalid HASHDECLS section: hashdecl " + std::to_string(i) + " has no name";
             return false;
         }
         std::vector<QoreGenericTypeParam> type_params;
@@ -18976,8 +18980,9 @@ bool QoreAOTBinaryDeserializer::deserializeEnums(std::string& error) {
         if (qore_aot_section_overrun(bounds, "ENUMS", error)) {
             return false;
         }
-        if (!name) {
-            error = "invalid ENUMS section: enum " + std::to_string(i) + " has an invalid name reference";
+        // a reference into the string pool can give an empty string (qore#6265)
+        if (!name || !*name) {
+            error = "invalid ENUMS section: enum " + std::to_string(i) + " has no name";
             return false;
         }
 
@@ -19154,7 +19159,13 @@ bool QoreAOTBinaryDeserializer::deserializeTypedefs(std::string& error) {
             return false;
         }
 
-        if (name && *name) {
+        // a typedef has a name: one without is not skipped, which would leave the references to it unresolved
+        // (qore#6265)
+        if (!name || !*name) {
+            error = "invalid TYPEDEFS section: typedef " + std::to_string(i) + " has no name";
+            return false;
+        }
+        {
             PendingTypedef pt;
             pt.name = makeDeferredStringRef(name);
             pt.type_path = makeDeferredStringRef(type_path);
@@ -19212,6 +19223,11 @@ bool QoreAOTBinaryDeserializer::registerNamespaceConstantShells(std::string& err
         bool explicit_type = reader.getHeader().version < QORE_AOT_CONST_EXPLICIT_TYPE_VERSION
             || (flags & QORE_AOT_CONST_FLAG_EXPLICIT_TYPE);
         if (qore_aot_section_overrun(bounds, "CONSTANTS", error)) {
+            return false;
+        }
+        // a reference into the string pool can give an empty string (qore#6265)
+        if (!name || !*name) {
+            error = "invalid CONSTANTS section: constant " + std::to_string(i) + " has no name";
             return false;
         }
 
@@ -20306,8 +20322,9 @@ bool QoreAOTBinaryDeserializer::deserializeMethods(std::string& error) {
                 || qore_aot_count_exceeds(bounds, num_variants, 10, ptr, "METHODS", error)) {
             return false;
         }
-        if (!method_name) {
-            error = "invalid METHODS section: method " + std::to_string(i) + " has an invalid name reference";
+        // a reference into the string pool can give an empty string (qore#6265)
+        if (!method_name || !*method_name) {
+            error = "invalid METHODS section: method " + std::to_string(i) + " has no name";
             return false;
         }
 

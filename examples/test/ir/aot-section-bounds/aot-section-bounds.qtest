@@ -34,8 +34,9 @@ hashdecl AotSection {
 /** A truncated or malformed AOT module is refused with an error, without reading out of its sections or allocating
     for a count that its data cannot hold.  The test compiles a small module with a section of every kind with qcc,
     with uncompressed metadata, and loads patched copies of it, each in a child process:
-    - hand-picked cases, in every execution mode: a namespace and an embedded source section cut short, their counts
-      set to 0xFFFFFFFF and a string pool without its terminator, which must give their errors;
+    - hand-picked cases, in every execution mode: a namespace, class, hashdecl, enum, typedef and constant whose name
+      reference gives an empty string, which must be refused; a namespace and an embedded source section cut short,
+      their counts set to 0xFFFFFFFF and a string pool without its terminator, which must give their errors;
     - the required sections cut in half, in every execution mode, which must be refused;
     - every section truncated at evenly spaced sizes (at every size for a small section), and 0xFFFFFFFF and
       0x7FFFFFFF (the largest count that a signed 32-bit integer holds) written at every offset of every section,
@@ -66,6 +67,11 @@ class AotSectionBoundsTest inherits QUnit::Test {
         const FuncSourcesSection = 13;
         #! the required sections that are cut in half: CLASSES, HASHDECLS, ENUMS, FUNCTIONS, METHODS
         const RequiredSections = (3, 4, 5, 9, 10);
+        #! the sections whose first record starts with its name reference, after the count: CLASSES, HASHDECLS,
+        #! ENUMS, TYPEDEFS, CONSTANTS
+        const NamedSections = (3, 4, 5, 6, 7);
+        #! the size of a namespace record: name and path references, parent index, depth, flags
+        const NamespaceRecordSize = 18;
         #! the sections whose counts are patched at evenly spaced offsets: SYMBOL_INDEX, DEBUG_IR
         const LargeOptionalSections = (26, 28);
         #! the most truncated sizes tested per section
@@ -290,6 +296,21 @@ class AotSectionBoundsTest inherits QUnit::Test {
         foreach int type in (RequiredSections) {
             hash<AotSection> sec = section(type);
             cases{sprintf("section %d cut in half", type)} = {"data": patch32(qmod, sec.size_pos, sec.size / 2)};
+        }
+        # a name reference to an empty string of the pool: its last byte, the terminator, which every pool has; the
+        # reference of another string can give one too, depending on the strings of the pool, which depend on the
+        # platform and on the path of the source (qore#6265)
+        int empty_ref = pool_size - 1;
+        cases."namespace without a name" = {
+            "data": patch32(qmod, ns.data_pos + 4 + NamespaceRecordSize, empty_ref),
+            "err": "has no name",
+        };
+        foreach int type in (NamedSections) {
+            hash<AotSection> sec = section(type);
+            cases{sprintf("section %d record without a name", type)} = {
+                "data": patch32(qmod, sec.data_pos + 4, empty_ref),
+                "err": "has no name",
+            };
         }
         foreach hash<auto> c in (cases.pairIterator()) {
             foreach string mode in (ExecModeHarness::ExecModes) {
