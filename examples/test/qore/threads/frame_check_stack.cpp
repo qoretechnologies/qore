@@ -20,6 +20,7 @@
 #include <string>
 #include <vector>
 #include <pthread.h>
+#include <unistd.h>
 
 namespace {
 std::string code;
@@ -104,7 +105,10 @@ int run_thread(void* (*fn)(void*)) {
         return -1;
     }
     pthread_t thread;
-    int rc = pthread_attr_setstacksize(&attr, stack_kb * 1024);
+    // the stack size is rounded up to a multiple of the page size, which macOS requires
+    size_t page = static_cast<size_t>(sysconf(_SC_PAGESIZE));
+    size_t size = (stack_kb * 1024 + page - 1) / page * page;
+    int rc = pthread_attr_setstacksize(&attr, size);
     if (!rc) {
         rc = pthread_create(&thread, &attr, fn, nullptr);
     }
