@@ -1,0 +1,83 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - the checks run in child processes of the interpreter started without an execution mode
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Util
+%requires FsUtil
+%requires json
+%requires ../../TestInterpreter.qm
+
+%exec-class IncludeFailureDiagnosticsTest
+
+#! An %include of a file that does not exist is a diagnostic of the parse (issue #6509)
+/** The failure is a parse error at the directive in every mode of the command line: --code-frames and
+    --diag-format=json report it and exit with status 2, as a normal run does.
+*/
+public class IncludeFailureDiagnosticsTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string src;
+        string src_const;
+        TmpDir tmp("qore-include-failure-");
+    }
+
+    constructor() : QUnit::Test("IncludeFailureDiagnosticsTest", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        src = tmp.path + DirSep + "include-failure.q";
+        File f();
+        f.open2(src, O_WRONLY | O_CREAT | O_TRUNC);
+        # an absolute path in the test's own directory, which is not found in an include path
+        f.write(sprintf("%%modern\n%%include %s\nint sub f() { return 1; }\n", tmp.path + DirSep + "does-not-exist.qi"));
+        f.close();
+        src_const = tmp.path + DirSep + "const-failure.q";
+        f = new File();
+        f.open2(src_const, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write("%modern\nconst X = 1 / 0;\n");
+        f.close();
+        addTestCase("--code-frames", \codeFramesTest());
+        addTestCase("--diag-format=json", \jsonTest());
+        addTestCase("normal run", \runTest());
+        addTestCase("--code-frames with an exception that is not a diagnostic", \codeFramesExceptionTest());
+        set_return_value(main());
+    }
+
+    private hash<auto> run(string opt, *string file, bool stderr = True) {
+        int rc;
+        string out = backquote(sprintf("%s %s %s%s", qore_bin, opt, file ?? src, stderr ? " 2>&1" : " 2>/dev/null"),
+            \rc);
+        return {"out": out, "status": rc};
+    }
+
+    codeFramesTest() {
+        hash<auto> r = run("--code-frames");
+        assertEq(2, r.status, r.out);
+        assertRegex("include-failure\\.q:2.*error\\[PARSE-EXCEPTION\\]: cannot include \".*does-not-exist\\.qi\"", r.out);
+    }
+
+    jsonTest() {
+        hash<auto> r = run("--diag-format=json", NOTHING, False);
+        assertEq(2, r.status, r.out);
+        list<auto> diags = parse_json(r.out);
+        assertEq(1, diags.size(), r.out);
+        assertEq(2, diags[0].startLine, r.out);
+        assertEq("PARSE-EXCEPTION", diags[0].code, r.out);
+        assertRegex("cannot include \".*does-not-exist\\.qi\"", diags[0].message, r.out);
+    }
+
+    runTest() {
+        hash<auto> r = run("");
+        assertEq(2, r.status, r.out);
+        assertRegex("PARSE-EXCEPTION.*cannot include \".*does-not-exist\\.qi\"; stat\\(\\) failed", r.out);
+    }
+
+    #! a parse that fails with an exception that is not a diagnostic of the parse shows it and exits with status 2
+    codeFramesExceptionTest() {
+        hash<auto> r = run("--code-frames", src_const);
+        assertEq(2, r.status, r.out);
+        assertRegex("DIVISION-BY-ZERO", r.out);
+    }
+}

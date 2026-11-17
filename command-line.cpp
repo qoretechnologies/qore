@@ -1791,7 +1791,13 @@ int qore_main_intern(int argc, char* argv[], int other_po) {
             }
          }
          unsigned errs = qore_render_parse_diagnostic_frames(**qpgm, src_ptr, stderr);
-         rc = errs ? 2 : 0;
+         // a parse can also fail with an exception that is not a diagnostic of the parse (ex: an exception in the
+         // initialization of a constant): the parse failed, and the exception is shown as without --code-frames when
+         // no error diagnostic stands for it (issue #6509)
+         rc = (errs || xsink.isException()) ? 2 : 0;
+         if (!errs && xsink.isException()) {
+            xsink.handleExceptions();
+         }
          // suppress the default human-readable error/warning output (frames replace it)
          xsink.clear();
          wsink.clear();

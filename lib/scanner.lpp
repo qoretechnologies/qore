@@ -2517,9 +2517,14 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[YMWDHSu])+
                                               struct stat sbuf;
                                               int rc = stat(fn, &sbuf);
                                               if (rc) {
-                                                 ExceptionSink* xsink = pgm->getParseExceptionSink();
-                                                 if (xsink)
-                                                    xsink->raiseErrnoException("PARSE-ERROR", errno, "stat() failed on include file: \"%s\"", fn);
+                                                 // a parse error at the directive, as the other errors of the
+                                                 // directive, so that it is also a diagnostic of the parse (issue
+                                                 // #6509)
+                                                 int err = errno;
+                                                 QoreString errstr;
+                                                 q_strerror(errstr, err);
+                                                 parse_error(*get_loc(yylloc), "cannot include \"%s\"; stat() failed: %s", fn,
+                                                    errstr.c_str());
                                                  BEGIN(INITIAL);
                                               } else {
                                                  //printd(5, "%s: mode=%o, s_ifmt=%o, &=%o, reg=%o comp=%s\n", fname->c_str(), sbuf.st_mode, S_IFMT, sbuf.st_mode & S_IFMT, S_IFREG, (sbuf.st_mode & S_IFMT) != S_IFREG ? "true" : "false");
