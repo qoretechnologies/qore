@@ -533,6 +533,11 @@ DLLLOCAL q_method_t qore_get_lexical_program_method(q_method_t method);
 DLLLOCAL bool needs_scan(const AbstractQoreNode* n);
 DLLLOCAL bool needs_scan(const QoreValue& v);
 
+//! returns the node that a call reference value holds and that is scanned for recursive references, or nullptr
+/** the callback of a sandbox-bound callback, or the value of a reference to a pseudo-method (issue #995)
+*/
+DLLLOCAL const AbstractQoreNode* qore_get_call_reference_scan_node(const AbstractQoreNode* n);
+
 #ifdef DEBUG
 //! the offset in microseconds that debug builds add to the system clock (q_epoch(), q_epoch_us(), q_epoch_ns()), to test
 //! code under a step of the system clock; set with dbg_set_realtime_offset(); the monotonic clock is not affected
