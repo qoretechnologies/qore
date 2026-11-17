@@ -276,6 +276,8 @@ class ExecModeMarkerTest(unittest.TestCase):
         # - deleted-program-own-generic-cycle (#6419): its checks run in child processes that set their own
         #   --exec-mode and in qcc executables
         # - test-interpreter-options (#6250): its checks run in child interpreters started with options of their own
+        # - frame-check-stack (#6124, #6414): its checks run a fixture that sets its own execution mode, in child
+        #   processes and in qcc executables
         self.assertEqual(sorted(["examples/test/ir/AOTConstantImportStale.qtest",
                                  "examples/test/ir/JITFinalizeCancellation.qtest",
                                  "examples/test/ir/AOTInitParseOptions.qtest",
@@ -298,6 +300,7 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/qore/operators/UndefinedArithmetic-3.qtest",
                                  "examples/test/qore/lists/broken-list-range-past-end.qtest",
                                  "examples/test/qore/threads/unhandled-exception-report.qtest",
+                                 "examples/test/qore/threads/frame-check-stack.qtest",
                                  "examples/test/qore/functions/float-conversion-edges.qtest",
                                  "examples/test/qore/classes/AsyncIoController/asyncio_callback_exception_stderr.qtest",
                                  "examples/test/ir/AOTModuleForeignThread.qtest",
