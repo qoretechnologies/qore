@@ -2695,11 +2695,15 @@ void qore_program_private::waitForTerminationAndClear(ExceptionSink* xsink) {
         sb.del();
         //printd(5, "QoreProgram::~QoreProgram() this: %p deleting root ns %p\n", this, RootNS);
 
-        // clear expressions
-        for (auto& i : exp_set) {
+        // clear expressions; they are deleted with the lock released, as their deletion can run code
+        q_exp_set_t exps;
+        {
+            std::lock_guard<std::mutex> el(exp_set_lock);
+            exps.swap(exp_set);
+        }
+        for (auto& i : exps) {
             delete i;
         }
-        exp_set.clear();
 
         del(xsink);
 
@@ -3006,9 +3010,13 @@ void qore_program_private::addStatement(AbstractStatement* s, const QoreNativePa
         // the Program's next commit
         qore_root_ns_private::get(*RootNS)->parseCheckDeferredAbstractNew();
 
-        assert(exp_set.find(block.get()) == exp_set.end());
         new_expression = block.get();
-        exp_set.insert(block.release());
+        {
+            // other threads delete and run the expressions of the Program while this thread parses one (qore#6493)
+            std::lock_guard<std::mutex> el(exp_set_lock);
+            assert(exp_set.find(new_expression) == exp_set.end());
+            exp_set.insert(block.release());
+        }
         return;
     }
 
@@ -3799,11 +3807,17 @@ void qore_program_private::del(ExceptionSink* xsink) {
     // and the code compiled from it, which refers to the closures that it creates (qore#5822)
     sb.delCompiledCode();
 
-    // clear expressions
-    for (auto& i : exp_set) {
-        delete i;
+    // clear expressions; they are deleted with the lock released, as their deletion can run code (qore#6493)
+    {
+        q_exp_set_t exps;
+        {
+            std::lock_guard<std::mutex> el(exp_set_lock);
+            exps.swap(exp_set);
+        }
+        for (auto& i : exps) {
+            delete i;
+        }
     }
-    exp_set.clear();
 
     // no code of this Program runs any more and its background compiles are drained: the native code that only it
     // owns is removed from the JIT (qore#5772)
