@@ -60,7 +60,7 @@ computed, before the code that follows runs.
 | operand of a change to a container: assignment to a member or element, compound assignment (`+=` ...) except to a variable of a type without references, `push`, `unshift` | `QoreMutationOperandHolder` | `lowerMutationOperand()` |
 | key or index of an lvalue | `LValueHelper::doHashObjLValue()`, `doListLValue()` | `lowerExpressionInTempScope()` |
 | expression of a `map` or the map expression of a map-select whose value is not used (each element) | `QoreScopedEvalHolder` | per-iteration `PushTempMark` / `DiscardTemps` |
-| each element's expression of a `map` or map-select whose value is used, condition of a `select` or map-select, expression of `foldl` and `foldr`, key, value and condition of a hash `map`, stage of a fused pipeline or streaming operator (the value is kept; qore#6288) | `QoreScopedEvalHolder` (`QoreStatementTempScope` for the fold expression) | `lowerExpressionInTempScope()` (`DiscardTempsKeep`), only when the expression can create a temporary besides its value |
+| each element's expression of a `map` or map-select whose value is used, condition of a `select` or map-select, expression of `foldl` and `foldr`, key, value and condition of a hash `map`, stage of a fused pipeline, condition of a streaming operator (the value is kept; qore#6288) | `QoreScopedEvalHolder` (`QoreStatementTempScope` for the fold expression) | `lowerElementExpression()`: `lowerExpressionInTempScope()` (`DiscardTempsKeep`) when the expression can create a temporary besides its value whose release can be observed (a call's value, an object-holding read of a variable that other code can change) |
 | expression of a `background` operator, in the new thread | `op_background_thread()` | the same (the thread evaluates the expression) |
 | default value of a parameter, initializer of a class member, of a static class variable and of a hashdecl member, which the callee or the code that creates the object or hash evaluates while the caller's statement runs | `QoreScopedEvalHolder` (`CodeEvaluationHelper::prepareDefaultArgs()`, `qore_class_private::initMember()`, the static variable initializer, `typed_hash_decl_private`) | evaluated without the caller's temp scope |
 
@@ -70,7 +70,14 @@ or goes on with the next element, in every execution mode, so a `map (new C($1))
 right after its `get()` call.  Before, an expression evaluated again within the same statement - the expression of a
 `map` whose value is used, of a `select`, of `foldl` - kept one temporary per expression, released when the next
 element's replaced it.  An expression that raises an exception releases the temporaries that it created before the
-exception, as any statement does.  The blocks
+exception, as any statement does.  Only an expression that can create a temporary besides its value whose release can be observed
+gets a scope of its own (`qore_expr_may_create_observable_temp()`, shared by the AST interpreter and the IR lowering): a
+call or a construction that it uses, or a value that can hold an object read from a variable that other code can
+change.  The AST operators decide it when they are initialized for parsing and again when the parse of the Program's
+code ends (`QoreElementScopeFlags`, `QoreElementScopeParseHelper`), as a reference to a local, or a closure that binds
+it, can follow the operator; the element loop reads the decision with the same load as whether the value is used, so
+an element costs nothing more.  An operator created at run time without a parse (by the AOT reader or the IR
+interpreter) gives every expression a scope.  The blocks
 that a functional operator's lowering creates for the code after its loop are laid out after the blocks of its body
 (`qore_ir_move_loop_exit_blocks()`): they hold the end of the statement, and native code, which closes a temp scope
 in the order of the blocks, otherwise left the temporaries of the body to the enclosing statement, which released

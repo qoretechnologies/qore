@@ -33,7 +33,7 @@
 #define _QORE_QOREOPERATORNODE_H
 
 
-#include <atomic>
+#include <memory>
 #include <vector>
 #include <cstdarg>
 #include <type_traits>
@@ -123,6 +123,61 @@ DLLLOCAL QoreValue copy_value_and_resolve_lvar_refs_bound_implicit(const QoreVal
 
 // type of logical operator function
 typedef bool (*op_log_func_t)(const QoreValue& l, const QoreValue& r, ExceptionSink* xsink);
+
+//! The element scope flags of a functional operator (qore#6288)
+/** A bit for each operand, by index, that the operator evaluates for each element as a statement of its own (see
+    qore_expr_may_create_observable_temp()), and ValueUsed; decided by qore_parse_decide_element_scopes() when the operator is
+    initialized for parsing, and again when the parse of the Program's code ends (QoreElementScopeParseHelper)
+*/
+class QoreElementScopeFlags {
+public:
+    //! set by a map or map/select operator whose value is used, which keeps the value of each element: the element
+    //! loop tests it with the same load as the element scope (QoreMapOperatorNode::needsReturnValue())
+    static constexpr uint8_t ValueUsed = 0x80;
+
+    //! the flags of an operator that has not been initialized for parsing, such as one that the AOT reader or the IR
+    //! interpreter creates at run time: every operand is a statement of its own, and its value is used until
+    //! QoreOperatorNode::ignoreReturnValue() is called, as for QoreOperatorNode::needsReturnValue()
+    static constexpr uint8_t All = 0xff;
+
+    DLLLOCAL uint8_t get() const {
+        return flags;
+    }
+
+    DLLLOCAL void set(uint8_t v) {
+        flags = v;
+    }
+
+private:
+    uint8_t flags = All;
+};
+
+//! decides the element scope flags of a functional operator; the argument is the operator
+typedef void (*q_element_scope_decider_t)(AbstractQoreNode* op);
+
+//! decides the element scope flags of a functional operator that has been initialized for parsing
+/** Called at the end of the operator's parse initialization: decides the flags with what the parse knows then, and,
+    while a QoreElementScopeParseHelper is active, decides them again when it ends: a reference to a local variable
+    that an operand reads, or a closure that binds it, can be parsed after the operator
+*/
+DLLLOCAL void qore_parse_decide_element_scopes(AbstractQoreNode* op, q_element_scope_decider_t decide);
+
+//! Decides the element scope flags of the functional operators initialized for parsing in its scope when it ends
+/** Active while the parse initializes the code of a Program; a helper created while another one is active does
+    nothing, so the flags are decided when the outermost one ends, after all the code has been initialized
+*/
+class QoreElementScopeParseHelper {
+public:
+    DLLLOCAL QoreElementScopeParseHelper();
+    DLLLOCAL ~QoreElementScopeParseHelper();
+
+    QoreElementScopeParseHelper(const QoreElementScopeParseHelper&) = delete;
+    QoreElementScopeParseHelper& operator=(const QoreElementScopeParseHelper&) = delete;
+
+private:
+    //! the operators to decide, each with a reference of its own; null if another helper is active
+    std::unique_ptr<std::vector<std::pair<AbstractQoreNode*, q_element_scope_decider_t>>> ops;
+};
 
 class QoreOperatorNode : public ParseNode {
 private:

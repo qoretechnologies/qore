@@ -121,6 +121,8 @@ int QoreSelectOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& pars
         if (parse_init_value(right, parse_context) && !err) {
             err = -1;
         }
+        // qore#6288: see elementScope()
+        qore_parse_decide_element_scopes(this, decideElementScopes);
         select_analysis = parse_context.analysis;
     }
 
@@ -282,7 +284,7 @@ bool QoreFunctionalSelectListOperator<StrictBoolean>::getNextImpl(ValueOptionalR
 
         // check if value can be selected
         // the temporaries of an element's condition are released at its end (qore#6288)
-        QoreScopedEvalHolder result(select->right, true, xsink);
+        QoreScopedEvalHolder result(select->right, select->elementScope(1), xsink);
         if (*xsink)
             return false;
         if (!LexicalSemanticPolicy::getAsBoolFor<StrictBoolean>(*result))
@@ -308,7 +310,7 @@ bool QoreFunctionalSelectSingleValueOperator<StrictBoolean>::getNextImpl(ValueOp
 
     // check if value can be selected
     // the temporaries of an element's condition are released at its end (qore#6288)
-        QoreScopedEvalHolder result(select->right, true, xsink);
+        QoreScopedEvalHolder result(select->right, select->elementScope(1), xsink);
     if (*xsink)
         return false;
     if (!LexicalSemanticPolicy::getAsBoolFor<StrictBoolean>(*result))
@@ -339,7 +341,7 @@ bool QoreFunctionalSelectIteratorOperator<StrictBoolean>::getNextImpl(ValueOptio
         SingleArgvContextHelper argv_helper(iv->refSelf(), xsink);
         // check if value can be selected
         // the temporaries of an element's condition are released at its end (qore#6288)
-        QoreScopedEvalHolder result(select->right, true, xsink);
+        QoreScopedEvalHolder result(select->right, select->elementScope(1), xsink);
         if (*xsink)
             return false;
         if (!LexicalSemanticPolicy::getAsBoolFor<StrictBoolean>(*result))
@@ -367,7 +369,7 @@ bool QoreFunctionalSelectOperator<StrictBoolean>::getNextImpl(ValueOptionalRefHo
         SingleArgvContextHelper argv_helper(iv->refSelf(), xsink);
         // check if value can be selected
         // the temporaries of an element's condition are released at its end (qore#6288)
-        QoreScopedEvalHolder result(select->right, true, xsink);
+        QoreScopedEvalHolder result(select->right, select->elementScope(1), xsink);
         if (*xsink)
             return false;
         if (!LexicalSemanticPolicy::getAsBoolFor<StrictBoolean>(*result))
@@ -378,4 +380,13 @@ bool QoreFunctionalSelectOperator<StrictBoolean>::getNextImpl(ValueOptionalRefHo
         break;
     }
     return false;
+}
+
+void QoreSelectOperatorNode::decideElementScopes(AbstractQoreNode* op) {
+    QoreSelectOperatorNode* self = static_cast<QoreSelectOperatorNode*>(op);
+    uint8_t v = 0;
+    if (qore_expr_may_create_observable_temp(self->right)) {
+        v |= 1u << 1;
+    }
+    self->element_scopes.set(v);
 }

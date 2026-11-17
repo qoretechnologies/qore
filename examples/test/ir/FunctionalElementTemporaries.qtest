@@ -52,6 +52,12 @@ class FunctionalElementTemporariesTest inherits QUnit::Test {
         # a destructor that raises an exception raises it at the first element
         assertRegex("get e1\nfn map raising: caught DTOR-e1\n", out);
         assertRegex("get s1\nfn select raising: caught DTOR-s1\n", out);
+        # a value read from a local that a closure parsed after the operator binds is released with its element, also
+        # in a generic function and in the closure of a constant
+        foreach string prefix in ("u", "v", "w") {
+            string seq = sprintf("get %s1\nnew %s2\n~%s1\nlate bound", prefix, prefix, prefix);
+            assertTrue(out.find(seq) >= 0, sprintf("%y in %y", seq, out));
+        }
         assertFalse(out =~ /unhandled/, out);
     }
 

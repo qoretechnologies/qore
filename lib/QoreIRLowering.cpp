@@ -933,6 +933,52 @@ static bool isSharedVar(const VarRefNode* var) {
 
 static bool qore_ir_type_may_hold_object(const QoreTypeInfo* ti, int depth = 0);
 
+//! Returns true if evaluating \a val may create a temporary besides its value whose release can be observed
+/** A value made by a call or a construction, and a value that can hold an object read from a variable that other code
+    can change while the expression runs - a global, thread-local or closure-bound variable, a local that a closure
+    uses or that a reference is taken of, a variable that holds a reference, a static class variable or a member of
+    the current object - which the AST interpreter holds as a temporary (see temporary_lifetime): its release is the
+    last one when the variable is changed, which a destructor can observe (qore#6288).  A read of another local, of
+    an element or of the implicit argument holds a reference only.
+*/
+static bool expressionMayCreateIntermediateObservableTemp(const QoreValue& val) {
+    return anyOperandMayCreateTemp(val, [](const QoreValue& operand) {
+        const AbstractQoreNode* node = operand.getInternalNode();
+        if (!node || operand.isValue()) {
+            return false;
+        }
+        if (dynamic_cast<const FunctionCallBase*>(node) || dynamic_cast<const QoreDotEvalOperatorNode*>(node)
+                || dynamic_cast<const CallReferenceCallNode*>(node)
+                || dynamic_cast<const ScopedObjectCallNode*>(node) || dynamic_cast<const NewObjectCallNode*>(node)) {
+            return true;
+        }
+        if (auto* var = dynamic_cast<const VarRefNode*>(node)) {
+            const QoreTypeInfo* ti = var->getTypeInfo();
+            return (isSharedVar(var) || QoreTypeInfo::isReference(ti)) && qore_ir_type_may_hold_object(ti);
+        }
+        if (dynamic_cast<const SelfVarrefNode*>(node) || dynamic_cast<const StaticClassVarRefNode*>(node)) {
+            return qore_ir_type_may_hold_object(getExprTypeInfo(operand));
+        }
+        return expressionMayCreateIntermediateObservableTemp(operand);
+    });
+}
+
+// documented in QoreStatementTemps.h
+bool qore_expr_may_create_observable_temp(const QoreValue& expr) {
+    const AbstractQoreNode* node = expr.getInternalNode();
+    if (node && !expr.isValue()) {
+        // the expression's own value read from such a variable is held as a temporary as well
+        if (auto* var = dynamic_cast<const VarRefNode*>(node)) {
+            const QoreTypeInfo* ti = var->getTypeInfo();
+            return (isSharedVar(var) || QoreTypeInfo::isReference(ti)) && qore_ir_type_may_hold_object(ti);
+        }
+        if (dynamic_cast<const SelfVarrefNode*>(node) || dynamic_cast<const StaticClassVarRefNode*>(node)) {
+            return qore_ir_type_may_hold_object(getExprTypeInfo(expr));
+        }
+    }
+    return expressionMayCreateIntermediateObservableTemp(expr);
+}
+
 // documented in QoreIRLowering.h
 bool QoreIRLowering::expressionReadsWeakCapableLocal(const QoreValue& expr) const {
     return anyOperandMayCreateTemp(expr, [this](const QoreValue& operand) {
@@ -8985,9 +9031,9 @@ QoreIRValue QoreIRLowering::lowerMutationOperand(const QoreValue& lvalue, const 
 // documented in QoreIRLowering.h
 QoreIRValue QoreIRLowering::lowerElementExpression(const QoreValue& expr, const QoreProgramLocation* loc,
         std::string& error) {
-    // only a temporary made by a call or a construction can be told apart by when it is released (its destructor);
-    // the others hold references only, and a scope would hide the expression's value from the loop's optimizations
-    if (!expressionMayCreateIntermediateCallTemp(expr)) {
+    // only a temporary whose release can be observed (a destructor) needs the scope; the others hold references only,
+    // and a scope would hide the expression's value from the loop's optimizations
+    if (!expressionMayCreateIntermediateObservableTemp(expr)) {
         return lowerExpression(expr, error);
     }
     return lowerExpressionInTempScope(expr, loc, error);
@@ -22632,7 +22678,7 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
         assert(root.fold_expr);
         if (fold_expr_needs_context) {
             return lowerWithImplicitArgs(accum_val, element_val, QoreIRValue(), loc, nullptr, error,
-                [&]() { return lowerExpression(*root.fold_expr, error); });
+                [&]() { return lowerElementExpression(*root.fold_expr, loc, error); });
         }
 
         VirtualImplicitContext saved = virtual_implicit;
@@ -22642,7 +22688,7 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
         virtual_implicit.active = true;
         virtual_implicit.runtime = false;
 
-        QoreIRValue fold_result = lowerExpression(*root.fold_expr, error);
+        QoreIRValue fold_result = lowerElementExpression(*root.fold_expr, loc, error);
 
         virtual_implicit = saved;
         return fold_result;
@@ -24578,7 +24624,8 @@ QoreIRValue QoreIRLowering::lowerStreamingNative(const QoreStreamingOperatorNode
         }
         return lowerWithImplicitContext(element_val, index_val, loc, stream_cleanup.get(), error,
             [&]() -> QoreIRValue {
-                QoreIRValue pred = lowerExpression(op->getPredicate(), error);
+                // the temporaries of an element's predicate are released with the element (qore#6288)
+                QoreIRValue pred = lowerElementExpression(op->getPredicate(), loc, error);
                 if (!pred.isValid()) {
                     return QoreIRValue();
                 }

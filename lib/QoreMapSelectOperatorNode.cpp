@@ -129,6 +129,8 @@ int QoreMapSelectOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& p
         {
             QoreParseContextAnalysisHelper ah(parse_context);
             parse_init_value(e[2], parse_context);
+            // qore#6288: see elementScope()
+            qore_parse_decide_element_scopes(this, decideElementScopes);
             select_analysis = parse_context.analysis;
         }
     }
@@ -199,6 +201,8 @@ int QoreMapSelectOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& p
             ? static_cast<QoreMapSelectOperatorNode*>(new QoreGenericMapSelectOperatorNode<true>(*this))
             : new QoreGenericMapSelectOperatorNode<false>(*this);
         generic_map->setParseAnalysis(parse_context.analysis);
+        // the node that runs is decided again when the parse ends, as this one would have been (qore#6288)
+        qore_parse_decide_element_scopes(generic_map, decideElementScopes);
         val = generic_map;
     }
     return err;
@@ -320,7 +324,7 @@ bool QoreFunctionalMapSelectListOperator<StrictBoolean>::getNextImpl(ValueOption
 
         // check if value can be mapped
         // the temporaries of an element's predicate are released at its end (qore#6288)
-        QoreScopedEvalHolder result(map->e[2], true, xsink);
+        QoreScopedEvalHolder result(map->e[2], map->elementScope(2), xsink);
         if (*xsink)
             return false;
         if (!LexicalSemanticPolicy::getAsBoolFor<StrictBoolean>(*result))
@@ -328,7 +332,7 @@ bool QoreFunctionalMapSelectListOperator<StrictBoolean>::getNextImpl(ValueOption
 
         // when the value of the map is not used, each element is a statement of its own, as in the other
         // execution modes
-        QoreScopedEvalHolder tval(map->e[0], true, xsink);
+        QoreScopedEvalHolder tval(map->e[0], map->elementScope(0), xsink);
         if (!*xsink && map->ref_rv) {
             tval.ensureReferencedValue();
             val.takeValueFrom(tval);
@@ -352,7 +356,7 @@ bool QoreFunctionalMapSelectSingleValueOperator<StrictBoolean>::getNextImpl(Valu
 
     // check if value can be mapped
     // the temporaries of an element's predicate are released at its end (qore#6288)
-        QoreScopedEvalHolder result(map->e[2], true, xsink);
+        QoreScopedEvalHolder result(map->e[2], map->elementScope(2), xsink);
     if (*xsink)
         return false;
     if (!LexicalSemanticPolicy::getAsBoolFor<StrictBoolean>(*result))
@@ -360,7 +364,7 @@ bool QoreFunctionalMapSelectSingleValueOperator<StrictBoolean>::getNextImpl(Valu
 
     // when the value of the map is not used, each element is a statement of its own, as in the other
         // execution modes
-        QoreScopedEvalHolder tval(map->e[0], true, xsink);
+        QoreScopedEvalHolder tval(map->e[0], map->elementScope(0), xsink);
     if (!*xsink && map->ref_rv) {
         tval.ensureReferencedValue();
         val.takeValueFrom(tval);
@@ -388,7 +392,7 @@ bool QoreFunctionalMapSelectIteratorOperator<StrictBoolean>::getNextImpl(ValueOp
 
         // check if value can be mapped
         // the temporaries of an element's predicate are released at its end (qore#6288)
-        QoreScopedEvalHolder result(map->e[2], true, xsink);
+        QoreScopedEvalHolder result(map->e[2], map->elementScope(2), xsink);
         if (*xsink)
             return false;
         if (!LexicalSemanticPolicy::getAsBoolFor<StrictBoolean>(*result))
@@ -396,7 +400,7 @@ bool QoreFunctionalMapSelectIteratorOperator<StrictBoolean>::getNextImpl(ValueOp
 
         // when the value of the map is not used, each element is a statement of its own, as in the other
         // execution modes
-        QoreScopedEvalHolder tval(map->e[0], true, xsink);
+        QoreScopedEvalHolder tval(map->e[0], map->elementScope(0), xsink);
         if (!*xsink && map->ref_rv) {
             tval.ensureReferencedValue();
             val.takeValueFrom(tval);
@@ -422,7 +426,7 @@ bool QoreFunctionalMapSelectOperator<StrictBoolean>::getNextImpl(ValueOptionalRe
 
         // check if value can be mapped
         // the temporaries of an element's predicate are released at its end (qore#6288)
-        QoreScopedEvalHolder result(map->e[2], true, xsink);
+        QoreScopedEvalHolder result(map->e[2], map->elementScope(2), xsink);
         if (*xsink)
             return false;
         if (!LexicalSemanticPolicy::getAsBoolFor<StrictBoolean>(*result))
@@ -430,7 +434,7 @@ bool QoreFunctionalMapSelectOperator<StrictBoolean>::getNextImpl(ValueOptionalRe
 
         // when the value of the map is not used, each element is a statement of its own, as in the other
         // execution modes
-        QoreScopedEvalHolder tval(map->e[0], true, xsink);
+        QoreScopedEvalHolder tval(map->e[0], map->elementScope(0), xsink);
         if (!*xsink && map->ref_rv) {
             tval.ensureReferencedValue();
             val.takeValueFrom(tval);
@@ -477,3 +481,15 @@ QoreMapSelectOperatorNode* QoreGenericMapSelectOperatorNode<StrictBoolean>::crea
 
 template class QoreGenericMapSelectOperatorNode<false>;
 template class QoreGenericMapSelectOperatorNode<true>;
+
+void QoreMapSelectOperatorNode::decideElementScopes(AbstractQoreNode* op) {
+    QoreMapSelectOperatorNode* self = static_cast<QoreMapSelectOperatorNode*>(op);
+    uint8_t v = self->needsReturnValue() ? QoreElementScopeFlags::ValueUsed : 0;
+    if (!self->needsReturnValue() || qore_expr_may_create_observable_temp(self->e[0])) {
+        v |= 1u << 0;
+    }
+    if (qore_expr_may_create_observable_temp(self->e[2])) {
+        v |= 1u << 2;
+    }
+    self->element_scopes.set(v);
+}

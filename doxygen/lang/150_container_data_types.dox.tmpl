@@ -934,7 +934,8 @@ sub test() {
         own: their temporary values are destroyed before the code that they select or that follows them runs
       - so is, for each element, every expression that a functional operator evaluates for an element: the
         expression and the condition of a \c map, a \c select and a map with a condition, the expression of
-        \c foldl and \c foldr, and the key, the value and the condition of a hash \c map: the temporary values
+        \c foldl and \c foldr, the key, the value and the condition of a hash \c map, and the condition of a
+        streaming operator such as \c first, \c any or \c takewhile: the temporary values
         of an element are destroyed when its value has been computed, before the operator goes on with the result
         or the next element (the value itself is kept), so in <tt>map (new C($1)).get(), l</tt> each object is
         destroyed right after its \c get() call

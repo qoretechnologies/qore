@@ -107,11 +107,6 @@
     restrictions of a locked child Program, and an independent Program of restricted code takes and locks that code's
     restrictions; see @ref locked_parse_options.
 
-    @par Functional Operators Destroy the Temporary Values of Each Element
-    The temporary values that a \c map, \c select, \c foldl, \c foldr or hash \c map expression creates for an
-    element are destroyed once that element's value has been computed, in every execution mode, instead of when the
-    next element replaces them; see @ref temporary_lifetime.
-
     @par A Deleted Object Keeps Its Class for Overload Selection
     A deleted object now selects a variant by its class in every execution mode, at parse time and at run time (see
     @ref overloading_deleted_objects); it matched no class type when the variant was resolved at run time, so such a
