@@ -271,6 +271,12 @@ enum class QoreDbgHttpHoldPoint : unsigned char {
     //! HttpClientConnectionBase::tryReservePendingStream() was called to reserve a stream of a Qore-level connection,
     //! before it takes the reservation lock
     ReservePending,
+    //! an HTTP/1 or HTTP/3 client poll operation records its first error: the thread holds the operation's stream
+    //! lock and has not stored the error yet
+    ErrorRecord,
+    //! an HTTP/1 or HTTP/3 client poll operation's error is about to be read (getErrorInfo()), before the operation's
+    //! stream lock is taken
+    ErrorRead,
     //! the number of hold points
     Count,
 };

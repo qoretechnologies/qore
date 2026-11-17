@@ -115,9 +115,13 @@ Http1ClientPollOperationPriv::~Http1ClientPollOperationPriv() {
 }
 
 void Http1ClientPollOperationPriv::cleanup(ExceptionSink* xsink) {
+    // the recorded error is taken under the lock that its readers hold, and released after it
+    QoreHashNode* old_error_info;
     // Clean up single stream action - reject pending Promise so Future::get() doesn't hang
     {
         AutoLocker al(stream_lock);
+        old_error_info = error_info;
+        error_info = nullptr;
         if (stream_action) {
             stream_action->executeError("HTTP1-ABORT",
                 "poll operation cleaned up before response was received", xsink);
@@ -147,9 +151,8 @@ void Http1ClientPollOperationPriv::cleanup(ExceptionSink* xsink) {
         }
     }
 
-    if (error_info) {
-        error_info->deref(xsink);
-        error_info = nullptr;
+    if (old_error_info) {
+        old_error_info->deref(xsink);
     }
     if (response_headers) {
         response_headers->deref(xsink);
@@ -3103,18 +3106,24 @@ void Http1ClientPollOperationPriv::publishError(const char* err, const char* des
 #ifdef DEBUG
             published = true;
 #endif
-            error_info = new QoreHashNode(autoTypeInfo);
-            error_info->setKeyValue("err", new QoreStringNode(err), xsink);
-            error_info->setKeyValue("desc", new QoreStringNode(desc), xsink);
+            // the hash is complete before it is recorded
+            ReferenceHolder<QoreHashNode> info(new QoreHashNode(autoTypeInfo), xsink);
+            info->setKeyValue("err", new QoreStringNode(err), xsink);
+            info->setKeyValue("desc", new QoreStringNode(desc), xsink);
             if (!arg.isNothing()) {
-                error_info->setKeyValue("arg", arg.refSelf(), xsink);
+                info->setKeyValue("arg", arg.refSelf(), xsink);
             }
             if (extra) {
                 ConstHashIterator hi(extra);
                 while (hi.next()) {
-                    error_info->setKeyValue(hi.getKey(), hi.get().refSelf(), xsink);
+                    info->setKeyValue(hi.getKey(), hi.get().refSelf(), xsink);
                 }
             }
+#ifdef DEBUG
+            // a test holds the thread here, in the critical section, to read the error from another thread
+            qore_dbg_http_hold(QoreDbgHttpHoldPoint::ErrorRecord);
+#endif
+            error_info = info.release();
         }
     }
 #ifdef DEBUG
@@ -3184,6 +3193,18 @@ void Http1ClientPollOperationPriv::drainConnectionPriv(ExceptionSink* xsink) {
     conn->setDraining();
     // released without holding stream_lock, as in closeConnectionPriv()
     conn->deref(xsink);
+}
+
+QoreHashNode* Http1ClientPollOperationPriv::getErrorInfo() const {
+#ifdef DEBUG
+    // a test releases the thread that records the error from here, before the lock is taken
+    qore_dbg_http_hold(QoreDbgHttpHoldPoint::ErrorRead);
+#endif
+    AutoLocker al(stream_lock);
+    if (error_info) {
+        error_info->ref();
+    }
+    return error_info;
 }
 
 bool Http1ClientPollOperationPriv::getStoredError(std::string& err, std::string& desc) const {

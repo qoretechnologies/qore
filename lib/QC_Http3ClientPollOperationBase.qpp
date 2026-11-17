@@ -45,6 +45,7 @@
 
 #include "qore/intern/PollStateCloseHook.h"
 #include "qore/intern/QuicPollTimeout.h"
+#include "qore/intern/ql_debug.h"
 
 // Forward declarations for QPP type references
 extern QoreClass* QC_ABSTRACTHTTPPOLLCONNECTION;
@@ -151,9 +152,13 @@ void Http3ClientPollOperationPriv::cleanup(ExceptionSink* xsink) {
     failMigrations();
     // nor a requester waiting for the server's SETTINGS
     wakeSettingsWaiters();
+    // the recorded error is taken under the lock that its readers hold, and released after it
+    QoreHashNode* old_error_info;
     // Clean up stream actions — reject pending Promises so Future::get() doesn't hang
     {
         AutoLocker al(stream_lock);
+        old_error_info = error_info;
+        error_info = nullptr;
         for (auto& [sid, action] : stream_actions) {
             if (action) {
                 action->executeError("HTTP3-ABORT",
@@ -187,9 +192,8 @@ void Http3ClientPollOperationPriv::cleanup(ExceptionSink* xsink) {
         }
     }
 
-    if (error_info) {
-        error_info->deref(xsink);
-        error_info = nullptr;
+    if (old_error_info) {
+        old_error_info->deref(xsink);
     }
     // Release the explicit reference taken in the constructor.  See the
     // constructor comment for why a raw pointer alone is unsafe — the I/O
@@ -697,12 +701,18 @@ void Http3ClientPollOperationPriv::setError(const char* err, const char* desc, E
     {
         AutoLocker al(stream_lock);
         if (!error_info) {
-            error_info = new QoreHashNode(autoTypeInfo);
-            error_info->setKeyValue("err", new QoreStringNode(err), xsink);
-            error_info->setKeyValue("desc", new QoreStringNode(desc), xsink);
+            // the hash is complete before it is recorded
+            ReferenceHolder<QoreHashNode> info(new QoreHashNode(autoTypeInfo), xsink);
+            info->setKeyValue("err", new QoreStringNode(err), xsink);
+            info->setKeyValue("desc", new QoreStringNode(desc), xsink);
             if (!arg.isNothing()) {
-                error_info->setKeyValue("arg", arg.refSelf(), xsink);
+                info->setKeyValue("arg", arg.refSelf(), xsink);
             }
+#ifdef DEBUG
+            // a test holds the thread here, in the critical section, to read the error from another thread
+            qore_dbg_http_hold(QoreDbgHttpHoldPoint::ErrorRecord);
+#endif
+            error_info = info.release();
         }
     }
     h3_state.store(H3State::CLOSED, std::memory_order_release);
@@ -1060,19 +1070,11 @@ int64_t Http3ClientPollOperationPriv::submitRequest(const char* method, const ch
         // default), surfacing as FUTURE-TIMEOUT.  Surface the closure error
         // eagerly and release the action's ref.
         if (need_cancel) {
-            std::string err_str = "HTTP3-CONNECTION-CLOSED";
-            std::string desc_str = "connection closed before request could be submitted";
-            if (error_info) {
-                QoreValue ev = error_info->getKeyValue("err");
-                QoreValue dv = error_info->getKeyValue("desc");
-                if (ev.getType() == NT_STRING) {
-                    QoreStringValueHelper ev_str(ev);
-                    err_str = ev_str->c_str();
-                }
-                if (dv.getType() == NT_STRING) {
-                    QoreStringValueHelper dv_str(dv);
-                    desc_str = dv_str->c_str();
-                }
+            std::string err_str;
+            std::string desc_str;
+            if (!getStoredError(err_str, desc_str)) {
+                err_str = "HTTP3-CONNECTION-CLOSED";
+                desc_str = "connection closed before request could be submitted";
             }
             ExceptionSink fire_xs;
             action->executeError(err_str.c_str(), desc_str.c_str(), &fire_xs);
@@ -1430,14 +1432,45 @@ void Http3ClientPollOperationPriv::setOpenState(H3State s, const char* site) {
 #endif
 }
 
+QoreHashNode* Http3ClientPollOperationPriv::getErrorInfo() const {
+#ifdef DEBUG
+    // a test releases the thread that records the error from here, before the lock is taken
+    qore_dbg_http_hold(QoreDbgHttpHoldPoint::ErrorRead);
+#endif
+    AutoLocker al(stream_lock);
+    if (error_info) {
+        error_info->ref();
+    }
+    return error_info;
+}
+
+bool Http3ClientPollOperationPriv::getStoredError(std::string& err, std::string& desc) const {
+    AutoLocker al(stream_lock);
+    if (!error_info) {
+        return false;
+    }
+    QoreValue ev = error_info->getKeyValue("err");
+    QoreValue dv = error_info->getKeyValue("desc");
+    err = ev.getType() == NT_STRING ? ev.get<const QoreStringNode>()->c_str() : "HTTP3-CONNECTION-CLOSED";
+    desc = dv.getType() == NT_STRING ? dv.get<const QoreStringNode>()->c_str()
+        : "connection closed before request could be submitted";
+    return true;
+}
+
 void Http3ClientPollOperationPriv::setSubmitError(const char* err, const char* desc) {
     {
         AutoLocker al(stream_lock);
         if (!error_info) {
             ExceptionSink xsink;
-            error_info = new QoreHashNode(autoTypeInfo);
-            error_info->setKeyValue("err", new QoreStringNode(err), &xsink);
-            error_info->setKeyValue("desc", new QoreStringNode(desc), &xsink);
+            // the hash is complete before it is recorded
+            ReferenceHolder<QoreHashNode> info(new QoreHashNode(autoTypeInfo), &xsink);
+            info->setKeyValue("err", new QoreStringNode(err), &xsink);
+            info->setKeyValue("desc", new QoreStringNode(desc), &xsink);
+#ifdef DEBUG
+            // a test holds the thread here, in the critical section, to read the error from another thread
+            qore_dbg_http_hold(QoreDbgHttpHoldPoint::ErrorRecord);
+#endif
+            error_info = info.release();
         }
         h3_state.store(H3State::CLOSED, std::memory_order_release);
         if (stream_blocked_waiters > 0) {

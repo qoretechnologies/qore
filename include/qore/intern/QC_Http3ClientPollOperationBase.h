@@ -300,12 +300,16 @@ public:
         return error_info != nullptr;
     }
 
-    DLLLOCAL QoreHashNode* getErrorInfo() const {
-        if (error_info) {
-            error_info->ref();
-        }
-        return error_info;
-    }
+    //! Returns the recorded error with a new reference, or nullptr if none was recorded; can be called from any thread
+    /** Read under @c stream_lock, which the writers (setError(), setSubmitError()) hold while they record the error,
+        so the hash is returned complete and safely published to the calling thread
+    */
+    DLLLOCAL QoreHashNode* getErrorInfo() const;
+
+    //! Returns the code and description of the recorded error; returns false if no error was recorded
+    /** Read under @c stream_lock, as getErrorInfo()
+    */
+    DLLLOCAL bool getStoredError(std::string& err, std::string& desc) const;
 
     //! Returns the number of active streams
     /** Read under @c stream_lock: every write happens under that lock, so an
@@ -322,7 +326,9 @@ public:
         return active_stream_count;
     }
 
+    //! Returns the stream limit set with setQuicStreamLimit(); read under @c stream_lock, which the setter holds
     DLLLOCAL int getQuicStreamLimit() const {
+        AutoLocker al(stream_lock);
         return quic_stream_limit;
     }
 
