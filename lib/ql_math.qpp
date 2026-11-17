@@ -159,7 +159,13 @@ float round(softfloat value, int precision = 0) [flags=PURE,NAMED_ARGS] {
   *     round(-645084.36481772n, -7);  // returns       0n
   * @endcode
   *
-  * @note a precision above 308 or below -308 is handled as 308 or -308
+  * @note the multiple of the power of 10 is found exactly for any precision, from the value of the number, which is
+  * binary: a number that is not exactly a decimal fraction (such as 2.675n, which is a little less than 2.675) is
+  * rounded from its binary value; the result is correctly rounded to the precision of the number; a
+  * result beyond the exponent range of a number is infinity (it was clamped to about 1e308)
+  *
+  * @since %Qore 3.0 the multiple is exact for any precision; it used a floating-point power of 10, which is inexact
+  * above 10^22
   *
   * @since %Qore 0.8.13 this function accepts the <b>precision</b> argument to specify the rounding precision
   */
@@ -247,7 +253,13 @@ float ceil(softfloat value, int precision = 0) [flags=TOTAL,NAMED_ARGS] {
   *
   * @see floor(number value, int precision = 0)
   *
-  * @note a precision above 308 or below -308 is handled as 308 or -308
+  * @note the multiple of the power of 10 is found exactly for any precision, from the value of the number, which is
+  * binary: a number that is not exactly a decimal fraction (such as 2.675n, which is a little less than 2.675) is
+  * rounded from its binary value; the result is correctly rounded to the precision of the number; a
+  * result beyond the exponent range of a number is infinity (it was clamped to about 1e308)
+  *
+  * @since %Qore 3.0 the multiple is exact for any precision; it used a floating-point power of 10, which is inexact
+  * above 10^22
   *
   * @since %Qore 0.8.13 this function accepts the <b>precision</b> argument to specify the rounding precision
   */
@@ -335,7 +347,13 @@ float floor(softfloat value, int precision = 0) [flags=TOTAL,NAMED_ARGS] {
   *
   * @see ceil(number value, int precision = 0)
   *
-  * @note a precision above 308 or below -308 is handled as 308 or -308
+  * @note the multiple of the power of 10 is found exactly for any precision, from the value of the number, which is
+  * binary: a number that is not exactly a decimal fraction (such as 2.675n, which is a little less than 2.675) is
+  * rounded from its binary value; the result is correctly rounded to the precision of the number; a
+  * result beyond the exponent range of a number is infinity (it was clamped to about 1e308)
+  *
+  * @since %Qore 3.0 the multiple is exact for any precision; it used a floating-point power of 10, which is inexact
+  * above 10^22
   *
   * @since %Qore 0.8.13 this function accepts the <b>precision</b> argument to specify the rounding precision
   */
