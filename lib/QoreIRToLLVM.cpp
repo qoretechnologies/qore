@@ -16163,25 +16163,9 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
 
     // Lower each block
     for (const auto& block : func.blocks) {
-        // native code takes no debugger's flow requests (emitDebugStepHook()): only the debug IR of AOT code has
-        // their paths (QoreIRFunction::hasDebugFlowPaths()), for the IR interpreter that runs it under a debugger, so
-        // they get no native code, in AOT code and in the closures of AOT code that the JIT compiles from that IR
-        // (#6201); only the step events of the IR enter them, so the code branches to none of them: if a JIT
-        // function's code did, its compilation fails, and the function stays on its tier
+        // native code takes no debugger's flow requests (emitDebugStepHook()): the blocks of their paths get no code
+        // (see below)
         if (block->debug_flow) {
-            if (llvm::BasicBlock* unused = block_map[block.get()]) {
-                if (unused->use_empty()) {
-                    unused->eraseFromParent();
-                } else if (!aot_mode) {
-                    error = "the code of IR function '" + func.name + "' branches to block '" + block->name
-                        + "' of the paths of a debugger's flow requests, which native code does not have";
-                    return false;
-                } else {
-                    llvm::IRBuilder<> ub(unused);
-                    ub.CreateUnreachable();
-                }
-                block_map[block.get()] = nullptr;
-            }
             continue;
         }
         aot_hash_string_extraction_cache.clear();
@@ -16548,6 +16532,34 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                 return false;
             }
         }
+    }
+
+    // only the debug IR of AOT code has the paths of a debugger's flow requests (QoreIRFunction::hasDebugFlowPaths()),
+    // for the IR interpreter that runs it under a debugger, so their blocks get no native code, in AOT code and in the
+    // closures of AOT code that the JIT compiles from that IR (#6201): they are erased once every block is lowered, so
+    // that a branch to one from any block, also one lowered after it, is found; only the step events of the IR enter
+    // them, so no code branches to one: if the code of a JIT function did, its compilation fails (fail closed: the
+    // function stays on its tier), and AOT code makes the block unreachable
+    for (const auto& block : func.blocks) {
+        if (!block->debug_flow) {
+            continue;
+        }
+        auto it = block_map.find(block.get());
+        llvm::BasicBlock* unused = it == block_map.end() ? nullptr : it->second;
+        if (!unused) {
+            continue;
+        }
+        if (unused->use_empty()) {
+            unused->eraseFromParent();
+        } else if (!aot_mode) {
+            error = "the code of IR function '" + func.name + "' branches to block '" + block->name
+                + "' of the paths of a debugger's flow requests, which native code does not have";
+            return false;
+        } else {
+            llvm::IRBuilder<> ub(unused);
+            ub.CreateUnreachable();
+        }
+        it->second = nullptr;
     }
 
     // PHI fixup pass: add incoming values now that all blocks are lowered

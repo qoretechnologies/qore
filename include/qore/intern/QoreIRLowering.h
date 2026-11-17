@@ -848,8 +848,9 @@ private:
         request that the step events of \a segment share (lowerDebugFlowPath()): that of a return statement without a
         value, or of a break or a continue statement to its target (findLoopJumpTarget()), or of the return if there
         is none, as with the AST interpreter.  The events of a handler's statements get no paths: the frame that runs the handler takes
-        their requests.  Only called for the step events of code with them (QoreIRFunction::source_dpgm_addr or
-        QoreIRFunction::emit_debug_statements).
+        their requests.  Only called for the step events of code with the paths (QoreIRFunction::hasDebugFlowPaths():
+        the debug IR of AOT code, QoreIRFunction::emit_debug_statements); code lowered from the parse tree has step
+        events without them (#6201).
     */
     bool setDebugFlowTargets(QoreIRDebugStatementInstruction* dbg, DebugFlowSegment& segment,
             const QoreProgramLocation* loc, std::string& error);
