@@ -1896,9 +1896,11 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
 
         # close the candidates of the synchronous races that go on in the background (#6429): closing a candidate
         # signals the race's notifier at once (setClosed() notifies the ready notifiers), so the watch of each race
-        # completes, and its step, on a callback worker, sees the shutdown and ends the race; the callback barrier
-        # and the in_flight drain below wait for it, so the drain does not depend on a race's own bound, which can
-        # be longer than its ceiling once an HTTP/1.1 candidate started.  The candidates are closed outside the lock.
+        # completes, and its step, on a callback worker, sees the shutdown and ends the race.  The in_flight drain
+        # below waits for every race to end (a step that re-submitted its watch before the shutdown was seen is
+        # waited for by the drain only, not by the callback barrier), so the drain does not depend on a race's own
+        # bound, which can be longer than its ceiling once an HTTP/1.1 candidate started.  The safety timers of the
+        # watches are cancelled.  The candidates are closed outside the lock.
         {
             list<hash<auto>> races;
             {
@@ -1906,6 +1908,9 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
                 races = (map bg_races{$1}, keys bg_races) ?? ();
             }
             foreach hash<auto> race in (races) {
+                if (race.safety_timer) {
+                    controller.cancelTimer(race.safety_timer);
+                }
                 heCloseLegs(race.h3conn, race.h2conn, race.h1conn);
             }
         }
@@ -3336,21 +3341,49 @@ printf("%d connection(s) migrated\n", migrated);
 
     #! Internal: watches the notifier of a race that goes on in the background until it is signaled or the race's bound
     /** The completion callback runs on a callback worker of the controller, not on its I/O thread; it is counted for
-        the manager's owner id, so that @ref closeAll() drains it
+        the manager's owner id.  A safety timer, the race's bound plus @ref AsyncQueueSafetyGraceMs later, steps the
+        race if the controller ever fails to deliver the watch's completion (a lost completion), as the bound of the
+        queue wait guarded the thread-based race; the controller's poll operations have no bound of their own beyond
+        the operation's timeout.  Each watch has a sequence number, so that a race is stepped once per watch, by
+        whichever of the completion and the timer comes first.
 
         @param claim the race's claim (its key in @ref bg_races)
         @param race_notifier the race's notifier
         @param race_deadline the race's bound on the monotonic clock in microseconds
     */
     private heWatchBackgroundRace(int claim, EventNotifier race_notifier, int race_deadline) {
-        HttpClientRaceWatchOperation op(race_notifier, sub () { heStepBackgroundRace(claim); });
+        int seq;
+        {
+            AutoLock al(create_mutex);
+            if (!bg_races{claim}) {
+                return;
+            }
+            seq = ++bg_races{claim}.watch_seq;
+        }
+        int wait_ms = ceilMs(race_deadline - clock_get_monotonic_us());
+        HttpClientRaceWatchOperation op(race_notifier, sub () { heStepBackgroundRace(claim, seq, False); });
         controller.submit(<SocketPollOperationInfo>{
             "sock": race_notifier,
             "spop": op,
             "owner": owner_id,
-            "to": ceilMs(race_deadline - clock_get_monotonic_us()),
+            "to": wait_ms,
             "has_on_complete": True,
         });
+        int timer_id = controller.addTimerDelay(wait_ms + AsyncQueueSafetyGraceMs, sub () {
+            HttpClientRaceWatchOperation::runStep(sub () { heStepBackgroundRace(claim, seq, True); });
+        }, owner_id);
+        bool stale;
+        {
+            AutoLock al(create_mutex);
+            # the watch may have completed already
+            stale = !bg_races{claim} || bg_races{claim}.watch_seq != seq || bg_races{claim}.stepped_seq == seq;
+            if (!stale) {
+                bg_races{claim}.safety_timer = timer_id;
+            }
+        }
+        if (stale) {
+            controller.cancelTimer(timer_id);
+        }
     }
 
     #! Internal: takes a step of a happy-eyeballs race that goes on in the background (#6429)
@@ -3363,17 +3396,29 @@ printf("%d connection(s) migrated\n", migrated);
         @ref in_flight.
 
         @param claim the race's claim (its key in @ref bg_races)
+        @param seq the sequence number of the watch whose completion (or safety timer) calls the step
+        @param from_timer @ref True if the watch's safety timer calls the step
     */
-    private heStepBackgroundRace(int claim) {
+    private heStepBackgroundRace(int claim, int seq, bool from_timer) {
         # Pin @c pool_lock across this method: see @ref pool_lock_pin.
         RWLock pool_lock_pin = pool_lock;
         *hash<auto> race;
+        *int safety_timer;
         {
             AutoLock al(create_mutex);
             race = bg_races{claim};
+            # one step per watch: the completion of the watch or its safety timer, whichever comes first
+            if (!race || race.watch_seq != seq || race.stepped_seq == seq) {
+                return;
+            }
+            bg_races{claim}.stepped_seq = seq;
+            safety_timer = remove bg_races{claim}.safety_timer;
         }
-        if (!race) {
-            return;
+        if (from_timer) {
+            log(LoggerLevel::WARN, "happy eyeballs: the watch of the race for %s that went on in the background did "
+                "not complete in time; stepping the race", race.key);
+        } else if (safety_timer) {
+            controller.cancelTimer(safety_timer);
         }
         string key = race.key;
         Http3ClientConnection h3conn = race.h3conn;
@@ -5291,10 +5336,22 @@ class HttpClientRaceWatchOperation inherits AsyncSocketIo::NotifierPollOperation
 
     #! Steps the race, whatever the outcome of the watch (signaled, timed out or canceled)
     nothing onComplete(hash<SocketPollResultInfo> result) {
+        runStep(step);
+    }
+
+    #! Runs a step of a race: a call on a manager that was deleted (its closeAll() ended the race) is ignored
+    /** Any other exception is raised to the controller's callback dispatcher, which reports it through the
+        controller's logger, or on stderr without one (see @ref Qore::AsyncIoController), whether or not the manager
+        still exists
+    */
+    static runStep(code<nothing()> step) {
         try {
             step();
         } catch (hash<ExceptionInfo> ex) {
-            # the manager is gone; its closeAll() ended the race
+            if (ex.err == "OBJECT-ALREADY-DELETED") {
+                return;
+            }
+            rethrow;
         }
     }
 }
