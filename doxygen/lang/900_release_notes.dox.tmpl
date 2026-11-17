@@ -2100,6 +2100,8 @@
       crash the process (issue #6464)
     - a channel or server-sent events completion action releases its notifier objects after its lock, so the
       destructor of a user notifier class can no longer block on the action (issue #6465)
+    - @ref httpserverintro "HttpServer" module: a server whose last reference is released while a request runs in it
+      stops without waiting for that request, so the process no longer hangs when it ends (issue #6507)
     - an absolute date literal without its day (<tt>2015-11-</tt>) is no longer read as a date with a day made of
       the text after it, which also ignored a UTC offset there (<tt>2015-11-+10</tt> is now the integer \c 1994), and
       a leap second in a date literal (<tt>2016-12-31T23:59:60Z</tt>) is a parse error that says so, also where
