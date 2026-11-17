@@ -49,6 +49,7 @@
 #include "qore/intern/ql_type.h"
 #include "qore/intern/qore_string_private.h"
 #include "qore/intern/AsyncIoControllerPriv.h"
+#include "qore/intern/QC_SocketPollOperationBase.h"
 #include "qore/intern/QoreAsyncIoLogger.h"
 #include "qore/intern/QC_Http2ClientPollOperationBase.h"
 #include "qore/intern/QC_Http1ClientPollOperationBase.h"
@@ -24272,6 +24273,50 @@ static QoreValue f_dbg_poll_op_release_program(const QoreListNode* params, Runti
     return rv;
 }
 
+//! releases the release item of a reference to the object while its Program is marked as being destroyed
+static QoreValue f_dbg_async_io_park_program_release(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    QoreObject* obj = const_cast<QoreObject*>(get_param_value(params, 0).get<const QoreObject>());
+    return AsyncIoControllerPriv::dbgParkProgramReleaseTest(obj, xsink);
+}
+
+//! deletes the object of a C++ poll operation and releases the last reference to its operation with
+//! qore_socket_poll_op_deref_off_thread(), as a reader of an HTTP connection or a scan of the garbage collector does
+/** @return a hash: \c controller_before and \c controller_after: True if the global async I/O controller existed
+    before and after the release (which must not create it)
+*/
+static QoreValue f_dbg_poll_op_release_last_off_thread(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    QoreObject* obj = const_cast<QoreObject*>(get_param_value(params, 0).get<const QoreObject>());
+    SocketPollOperationBase* op = static_cast<SocketPollOperationBase*>(
+        obj->getReferencedPrivateData(CID_SOCKETPOLLOPERATIONBASE, xsink));
+    if (!op) {
+        if (!*xsink) {
+            xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_poll_op_release_last_off_thread(): the object of class "
+                "'%s' is not a C++ poll operation", obj->getClassName());
+        }
+        return QoreValue();
+    }
+    auto exists = [] () -> bool {
+        AsyncIoControllerPriv* ctrl = qore_get_async_io_controller_if_exists();
+        if (!ctrl) {
+            return false;
+        }
+        ExceptionSink cxsink;
+        ctrl->deref(&cxsink);
+        return true;
+    };
+    bool before = exists();
+    // the object's reference is released by the deletion; this one is then the last
+    obj->doDelete(xsink);
+    qore_socket_poll_op_deref_off_thread(op);
+    bool after = exists();
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+    rv->setKeyValue("controller_before", before, xsink);
+    rv->setKeyValue("controller_after", after, xsink);
+    return rv.release();
+}
+
 //! disarms the points armed by dbg_http_hold_at() that were not reached
 static QoreValue f_dbg_http_hold_clear(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     std::lock_guard<std::mutex> l(dbg_http_hold_m);
@@ -26019,6 +26064,10 @@ void init_debug_functions(QoreNamespace& qns) {
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_poll_op_release_program", f_dbg_poll_op_release_program, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, boolTypeInfo, 1, objectTypeInfo, QORE_PARAM_NO_ARG, "op");
+    qns.addBuiltinVariant("dbg_async_io_park_program_release", f_dbg_async_io_park_program_release, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, hashTypeInfo, 1, objectTypeInfo, QORE_PARAM_NO_ARG, "obj");
+    qns.addBuiltinVariant("dbg_poll_op_release_last_off_thread", f_dbg_poll_op_release_last_off_thread,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, hashTypeInfo, 1, objectTypeInfo, QORE_PARAM_NO_ARG, "op");
     qns.addBuiltinVariant("dbg_http_concurrent_closes", f_dbg_http_concurrent_closes, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_http_stream_credit_stats", f_dbg_http_stream_credit_stats, QCF_NO_FLAGS,

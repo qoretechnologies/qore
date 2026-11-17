@@ -729,10 +729,13 @@ QoreHashNode* Http2ClientPollOperationPriv::handleReading(ExceptionSink* xsink) 
             *desc_str ? desc_str->c_str() : "HTTP/2 read error", xsink);
         poll_xsink.clear();
         op->deref(xsink);
-        // a step can return its poll info with an exception (one raised after the hash was made, such as for the
-        // socket member of an operation whose object was deleted): it is returned with the error, so that the caller
-        // releases it where it releases the poll info of a step (the async I/O controller: off its I/O thread)
-        return poll_info;
+        // the error ends the operation (no exception is raised: it is recorded above); a poll info that the step
+        // returned with its exception is released here: its socket is the operation's own socket object, which the
+        // operation references, so the release runs no destructor on the I/O thread
+        if (poll_info) {
+            poll_info->deref(xsink);
+        }
+        return nullptr;
     }
 
     // the connection is ready once the peer's SETTINGS frame, which starts its connection preface, has been

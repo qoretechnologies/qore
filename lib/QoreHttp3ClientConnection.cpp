@@ -1194,8 +1194,10 @@ void Http3ClientConnection::closeConnection(ExceptionSink* xsink) {
     // dropping into the clear loop so the post-loop path skips the
     // dangling-pointer branch.
     std::vector<std::shared_ptr<Attempt>> to_clear;
-    // the committed winner's poll operation and socket, read under the lock (nullptr if no winner was committed)
-    Http3PollOperationReaderRef op;
+    // the committed winner's poll operation and socket, read under the lock (nullptr if no winner was committed);
+    // the close is no reader: it runs outside the connection's methods (it waits for them above), so the release
+    // of the operation, which can run its cleanup, is made here
+    ReferenceHolder<Http3ClientPollOperationPriv> op(xsink);
     QoreSocketObject* sock = nullptr;
     bool submitted;
     {

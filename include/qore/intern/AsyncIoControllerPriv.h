@@ -489,6 +489,9 @@ public:
     DLLLOCAL void waitForIdle();
 
 #ifdef DEBUG
+    //! Debug-only: the number of release items parked for the given Program (see parked_program_releases)
+    DLLLOCAL size_t dbgParkedReleases(QoreProgram* pgm);
+
     //! Debug-only: waits until no item is queued or being processed, continuePoll() calls included
     /** Unlike waitForIdle(), this waits for continuePoll() calls too, which can block; it is meant for tests that
         need every operation of the controller to have run (see qore_quic_test_advance_clock())
@@ -526,7 +529,10 @@ public:
     DLLLOCAL void markProgramShuttingDown(QoreProgram* pgm, ExceptionSink* xsink);
 
     //! Remove a program from the shutting-down set
-    DLLLOCAL void clearProgramShuttingDown(QoreProgram* pgm);
+    /** Releases the release items of the Program that were parked while it was marked (see enqueue()) first, in the
+        calling thread (the one that cancels the Program's work, before the Program's threads are waited for)
+    */
+    DLLLOCAL void clearProgramShuttingDown(QoreProgram* pgm, ExceptionSink* xsink);
 
     //! Wait for in-flight callbacks belonging to a specific program to complete
     /** Unlike waitForIdle() which waits for ALL callbacks, this only waits for
@@ -612,6 +618,12 @@ private:
     bool stopping = false;                  //!< Set during shutdown
     AsyncIoControllerPriv* ctrl = nullptr;  //!< Owning controller for logging (not ref'd — controller outlives dispatcher)
     std::unordered_set<QoreProgram*> shutting_down_programs;  //!< Programs being destroyed — skip callbacks
+    //! Release items (DT_RELEASE) of Programs being destroyed, released by clearProgramShuttingDown()
+    /** Such an item can run the cleanup of a C++ poll operation, which must run neither in the thread that enqueues
+        it (an I/O thread, a thread in a method of an HTTP connection, a scan of the garbage collector) nor on a worker
+        that can run after the Program's threads were waited for, outside the Program
+    */
+    std::unordered_map<QoreProgram*, std::vector<AsyncWorkItem>> parked_program_releases;
     std::unordered_map<QoreProgram*, int> active_per_program; //!< Per-program in-flight callback count
     QoreCondition pgm_idle_cond;                //!< Signaled when a program's active count reaches zero
     //! Owners being torn down — skip callbacks; nesting depth, not a flag
@@ -1291,8 +1303,10 @@ private:
         //! True once the last state event (\c done) has been pushed; it is pushed exactly once
         bool state_end_delivered = false;
         SocketPollOperationBase* spop_base; //!< C++ poll operation (referenced, or nullptr)
-        //! True if this entry attached spop_base to the controller (see attachOp()); only such an entry detaches it
-        bool spop_attached = false;
+        //! The ID of the attachment of spop_base that this entry made (see attachOp()), or 0
+        /** Only the entry that made the current attachment detaches the operation
+        */
+        uint64_t spop_attach_id = 0;
         bool has_qore_abort;            //!< True if abort() is overridden in Qore
         bool has_qore_on_complete;      //!< True if onComplete() is overridden in Qore
         //! True once a terminal completion (goal/timeout/cancel/error) has been
@@ -2132,10 +2146,10 @@ private:
 
         @return true if the operation's Qore object was deleted: the operation is canceled instead of polled
     */
-    DLLLOCAL bool attachOp(SocketPollOperationBase* op, QoreObject* sock_obj);
+    DLLLOCAL bool attachOp(SocketPollOperationBase* op, QoreObject* sock_obj, uint64_t& attach_id);
 
     //! Records that the given C++ poll operation is no longer held in a cache of this controller
-    DLLLOCAL static void detachOp(SocketPollOperationBase* op, AsyncIoControllerPriv* ctrl);
+    DLLLOCAL static void detachOp(SocketPollOperationBase* op, uint64_t attach_id);
 
     //! Sends a CancelDeletedOp command for the given C++ poll operation to the running I/O threads
     /** @param op the operation, referenced by each command
@@ -2180,6 +2194,13 @@ public:
     */
     DLLLOCAL static int64_t dbgDispatchHeldOffIoThreadReleases(size_t count, int64_t timeout_ms,
         ExceptionSink* xsink);
+
+    //! Debug-only: dispatches the release of a reference to the given object while its Program is marked as being
+    //! destroyed, on the global controller's dispatcher, as an I/O thread can in that window (issue #6464)
+    /** @return a hash: \c parked: the release items of the Program parked after the dispatch; \c after_clear: those
+        left after the mark was cleared, which releases them in the calling thread
+    */
+    DLLLOCAL static QoreHashNode* dbgParkProgramReleaseTest(QoreObject* obj, ExceptionSink* xsink);
 
     //! Debug-only: the points after which a delivery can pause; see dbgPauseAfterDelivery()
     enum DbgPausePoint {

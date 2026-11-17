@@ -123,6 +123,10 @@ class AsyncIoDeleteSubmittedOpTest inherits QUnit::Test {
         addTestCase("deletion before the submission is processed", \deleteBeforeSubmitTest());
         addTestCase("deletion while a step runs on a callback worker", \deleteInWorkerStepTest());
         addTestCase("the release of a deleted operation runs in its Program", \releaseProgramTest());
+        addTestCase("a release in a Program's teardown waits for the thread that tears it down",
+            \programTeardownReleaseTest());
+        addTestCase("a last reference released off the thread with a controller", \releaseOffThreadTest());
+        addTestCase("a last reference released off the thread without a controller", \releaseOffThreadForkTest());
         set_return_value(main());
     }
 
@@ -290,6 +294,49 @@ class AsyncIoDeleteSubmittedOpTest inherits QUnit::Test {
         on_exit p.close();
         PollPipeline pp(p.client);
         assertTrue(call_function("dbg_poll_op_release_program", pp));
+    }
+
+    #! a release of a Program's object dispatched while the Program's work is canceled waits for that thread
+    /** The release can run the cleanup of a C++ poll operation, which must run neither in the thread that dispatches
+        it (an I/O thread, a reader of an HTTP connection, a scan of the garbage collector) nor on a worker after the
+        Program's threads were waited for: it is parked until the cancellation of the Program's work ends, which
+        releases it in its own thread
+    */
+    programTeardownReleaseTest() {
+        checkDebug();
+        Program p(PO_NEW_STYLE);
+        p.parse("class T {} T sub make() { return new T(); }", "teardown-release");
+        object o = p.callFunction("make");
+        hash<auto> r = call_function("dbg_async_io_park_program_release", o);
+        assertEq(1, r.parked, "the release is parked while the Program's work is canceled");
+        assertEq(0, r.after_clear, "the end of the cancellation released it");
+    }
+
+    #! the last reference released off the thread goes to a worker of the existing controller
+    releaseOffThreadTest() {
+        checkDebug();
+        # makes sure that the global controller exists
+        AsyncIoController::waitForProcessing(HangGuard);
+        PollPipeline pp("off-thread");
+        hash<auto> r = call_function("dbg_poll_op_release_last_off_thread", pp);
+        assertTrue(r.controller_before);
+        assertTrue(r.controller_after);
+    }
+
+    #! without a controller (in a child process created with fork()), the release creates none
+    releaseOffThreadForkTest() {
+        checkDebug();
+        if (!Option::HAVE_FORK) {
+            testSkip("fork() is not available");
+        }
+        AsyncIoController::waitForProcessing(HangGuard);
+        PollPipeline pp("off-thread-fork");
+        hash<auto> r = call_function("dbg_fork_while_handler_held", "parse_options_values", int sub () {
+            hash<auto> h = call_function("dbg_poll_op_release_last_off_thread", pp);
+            # 0: released in the child without creating a controller
+            return (h.controller_before || h.controller_after) ? 1 : 0;
+        });
+        assertEq(0, r.status, "the child released the operation without creating a controller");
     }
 
     #! deletes the object in another thread; returns True if the deletion did not end in DeleteGuard

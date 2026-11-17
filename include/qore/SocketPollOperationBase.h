@@ -250,9 +250,10 @@ protected:
     /** Call from app threads after queueing async commands (e.g., stream queue
         registrations) that the I/O thread must process.  Uses the controller's
         WakeSocket mechanism (eventfd/pipe) to interrupt poll().
-        No-op if the controller back-reference is not set.
+        No-op if the controller back-reference is not set.  Never raises an exception: a wake is only a hint, and the
+        call can be made in a step of an operation.
 
-        @param xsink exception sink
+        @param xsink exception sink (not used: no exception is raised)
         @since %Qore 3.0
     */
     DLLEXPORT void wakeIoThread(ExceptionSink* xsink);
