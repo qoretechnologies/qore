@@ -9547,6 +9547,10 @@ QoreIRValue QoreIRLowering::lowerAssignment(const QoreValue& expr, std::string& 
             error = "unsupported lvalue for native Assignment lowering";
         }
         return QoreIRValue();
+    } else if (assign->getLeft().isNothing()) {
+        // NOTHING is an lvalue for check_lvalue(): the assignment discards the value, which is evaluated, and
+        // returns NOTHING, as in the AST interpreter (issue #6480)
+        return builder.createConstNothing(assign->loc)->result;
     } else {
         error = "unsupported lvalue for assignment IR lowering";
         return QoreIRValue();
@@ -13081,7 +13085,8 @@ QoreIRValue QoreIRLowering::lowerShift(const QoreValue& expr, std::string& error
         return QoreIRValue();
     }
     QoreValue lvalue = op->getExp();
-    if (!lvalue.hasNode()) {
+    // NOTHING is an lvalue (tryEmitLValuePathOp(), issue #6480)
+    if (!lvalue.hasNode() && !lvalue.isNothing()) {
         error = "unsupported lvalue for shift IR lowering";
         return QoreIRValue();
     }
@@ -13135,7 +13140,8 @@ QoreIRValue QoreIRLowering::lowerUnshift(const QoreValue& expr, std::string& err
         return QoreIRValue();
     }
     QoreValue lvalue = op->getLeft();
-    if (!lvalue.hasNode()) {
+    // NOTHING is an lvalue (tryEmitLValuePathOp(), issue #6480)
+    if (!lvalue.hasNode() && !lvalue.isNothing()) {
         error = "unsupported lvalue for unshift IR lowering";
         return QoreIRValue();
     }
@@ -14189,6 +14195,10 @@ QoreIRValue QoreIRLowering::lowerListAssignment(const QoreValue& expr, std::stri
     // For each LHS variable, extract element from list and store
     for (size_t i = 0; i < parse_list->size(); ++i) {
         QoreValue entry = parse_list->get(i);
+        // NOTHING is an lvalue for check_lvalue(): its element is not assigned (issue #6480)
+        if (entry.isNothing()) {
+            continue;
+        }
         // Create constant index
         QoreIRValue idx = builder.createConstInt(static_cast<int64_t>(i), op->loc)->result;
         QoreIRValue element_val = builder.createExprOp(QoreIROpcode::ListAssignAny, expr,
@@ -15627,6 +15637,11 @@ QoreIRValue QoreIRLowering::tryEmitLValuePathOp(QoreIROpcode opcode, const QoreV
         const QoreIRValue* rhs, const QoreProgramLocation* loc, std::string& error,
         AssignmentMode mode, LVCompoundOp compound_op, LVUnaryOp unary_op,
         LVBinaryMutOp binary_mut_op, const QoreValue& pattern_expr, bool ref_rv) {
+    // NOTHING is an lvalue for check_lvalue(): an operator on it changes nothing and returns NOTHING, as in the AST
+    // interpreter; the caller has lowered the other operands, whose side effects remain (issue #6480)
+    if (lvalue.isNothing()) {
+        return builder.createConstNothing(loc)->result;
+    }
     std::vector<LVPathStep> lv_path;
     std::vector<QoreValue> dynamic_operands;
     // Slice lvalues (HashKeySlice / ListIndexSlice / ListRangeSlice) are lvalues only of remove and delete
