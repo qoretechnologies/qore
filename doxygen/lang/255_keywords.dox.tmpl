@@ -4,10 +4,12 @@
 
     <b>Keyword Types</b>
     |!Type|!Description
-    |Soft 1|Keywords of this type cannot be used as static variable names or constant names but can be used as function or method names if they are followed immediately by an open parenthesis (with no whitespace between the keyword and the open parenthesis), and they can be referenced as unquoted object or hash member names only if they are immediately preceded by the @ref dot_operator ". operator" (again with no whitespace between the "." and the keyword):
-    |Soft 2|Keywords of this type cannot be used as static variable names or constant names but can be used as function or method names if they are followed by an open parenthesis (whitespace is allowed between the keyword and the open parenthesis), and they can be referenced as unquoted object or hash member names if they are immediately preceded by the @ref dot_operator ". operator" (again with no whitespace between the "." and the keyword):
-    |Soft 3|Keywords of this type be referenced as unquoted object or hash member names if preceded immediately by the "." operator, however they may not be used as function or class method names or static variable names or constant names
+    |Soft 1|Keywords of this type cannot be used as static variable names or constant names but can be used as function or method names if they are followed immediately by an open parenthesis (with no whitespace between the keyword and the open parenthesis), and they can be referenced as unquoted object or hash member names only if they are preceded by the @ref dot_operator ". operator" (white space, including line breaks, is allowed between the "." and the keyword):
+    |Soft 2|Keywords of this type cannot be used as static variable names or constant names but can be used as function or method names if they are followed by an open parenthesis (whitespace is allowed between the keyword and the open parenthesis), and they can be referenced as unquoted object or hash member names if they are preceded by the @ref dot_operator ". operator" (white space, including line breaks, is allowed between the "." and the keyword):
+    |Soft 3|Keywords of this type can be referenced as unquoted object or hash member names if preceded by the "." operator (white space, including line breaks, is allowed between the "." and the keyword), however they may not be used as function or class method names or static variable names or constant names
     |Hard|Keywords of this type are reserved unconditionally; they cannot be used as identifiers in any position, including as unquoted object or hash member names after the @ref dot_operator ". operator".  A hash key that collides with a hard keyword must be written as a quoted subscript, e.g. <tt>h{"enum"}</tt>
+
+    A comment between the "." and a keyword is not allowed: the keyword is then read as the keyword.
 
     <b>Keywords</b>
     |!Keywords|!Type|!Description

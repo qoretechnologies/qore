@@ -1,0 +1,210 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%prepend-module-path "${SCRIPT_DIR}"
+%requires QUnit
+%requires SqlUtil
+%requires SchemaReverse
+%requires Schema
+%requires ./PgsqlTestIsolation.qm
+%requires ./MysqlTestIsolation.qm
+%requires ./OracleTestIsolation.qm
+
+%try-module sqlite3
+%define NoSqlite3
+%endtry
+
+%exec-class SqlUtilTableCommentsTest
+
+#! Tests the comments of tables in descriptions, creation, alignment and SchemaReverse (issue #1483)
+/** The tests run on SQLite, whose driver has no table comments, and, each in a schema or database of its own, on
+    PostgreSQL, MySQL/MariaDB and Oracle when \c QORE_DB_CONNSTR_PGSQL, \c QORE_DB_CONNSTR_MYSQL and
+    \c QORE_DB_CONNSTR_ORACLE are set (an Oracle schema of its own needs \c QORE_DB_CONNSTR_ORACLE_SYS)
+*/
+class SqlUtilTableCommentsTest inherits QUnit::Test {
+    private {
+        #! connections by driver
+        hash<string, Datasource> dsh;
+        #! why a database is skipped, by driver
+        hash<string, string> skip = {
+            "pgsql": "QORE_DB_CONNSTR_PGSQL is not set",
+            "mysql": "QORE_DB_CONNSTR_MYSQL is not set",
+            "oracle": "QORE_DB_CONNSTR_ORACLE is not set",
+        };
+    }
+
+    constructor() : Test("SqlUtilTableComments", "1.0", \ARGV) {
+        addTestCase("SQLite: table comments are ignored", \sqliteTest());
+        addTestCase("a data schema table with a comment", \dataSchemaTest());
+        addTestCase("PostgreSQL: table comments", sub () { checkDriver("pgsql"); });
+        addTestCase("MySQL: table comments", sub () { checkDriver("mysql"); });
+        addTestCase("Oracle: table comments", sub () { checkDriver("oracle"); });
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        connect("pgsql", ENV.QORE_DB_CONNSTR_PGSQL, *string sub (string connstr) {
+            PgsqlRunSchema::setup(connstr, "SqlUtilTableComments");
+            return connstr;
+        });
+        connect("mysql", ENV.QORE_DB_CONNSTR_MYSQL, *string sub (string connstr) {
+            return MysqlRunDatabase::getConnectionString(connstr, "SqlUtilTableComments");
+        });
+        connect("oracle", ENV.QORE_DB_CONNSTR_ORACLE, *string sub (string connstr) {
+            return OracleRunSchema::getConnectionString(connstr, "SqlUtilTableComments");
+        });
+    }
+
+    globalTearDown() {
+        foreach hash<auto> i in (dsh.pairIterator()) {
+            i.value.rollback();
+        }
+        remove dsh;
+        if (PgsqlRunSchema::getName()) {
+            PgsqlRunSchema::teardown();
+        }
+        MysqlRunDatabase::teardown();
+        OracleRunSchema::teardown();
+    }
+
+    #! opens the connection of a driver in the run's own schema or database, or records why it cannot be
+    private connect(string driver, *string connstr, code isolate) {
+        if (!connstr) {
+            return;
+        }
+        try {
+            Datasource ds(isolate(connstr));
+            if (ds.getDriverName() != driver) {
+                skip{driver} = sprintf("the connection uses driver %y", ds.getDriverName());
+                return;
+            }
+            ds.open();
+            dsh{driver} = ds;
+        } catch (hash<ExceptionInfo> ex) {
+            skip{driver} = sprintf("cannot connect: %s: %s", ex.err, ex.desc);
+        }
+    }
+
+    #! returns the description of the test table with the given comment
+    private static hash<auto> getDesc(*string comment) {
+        hash<auto> desc = {
+            "columns": {
+                "id": {"qore_type": "integer", "notnull": True},
+                "name": {"qore_type": "string", "size": 20, "comment": "the name"},
+            },
+            "primary_key": {"name": "pk_tcm_t", "columns": "id"},
+            "comment": comment,
+        };
+        if (!exists comment) {
+            remove desc.comment;
+        }
+        return desc;
+    }
+
+    #! aligns the table with the description, and checks that aligning it again gives no SQL
+    /** @return the SQL of the first alignment
+    */
+    private list<auto> align(Datasource ds, hash<auto> desc, string label) {
+        Database db(ds);
+        list<auto> sql = (new Table(ds, "tcm_t")).getTable().getAlignSql(db.makeTable("tcm_t", desc));
+        map ds.exec($1), sql;
+        ds.commit();
+        assertEq((), (new Table(ds, "tcm_t")).getTable().getAlignSql(db.makeTable("tcm_t", desc)), label + " again");
+        return sql;
+    }
+
+    sqliteTest() {
+%ifdef NoSqlite3
+        testSkip("no sqlite3 module");
+%endif
+        Datasource ds("sqlite3:x@:memory:");
+        on_exit ds.rollback();
+        Database db(ds);
+        AbstractTable t = db.makeTable("tcm_t", getDesc("the table"));
+        assertFalse(t.supportsTableComments());
+        # no comment is created, described or compared
+        assertNothing(t.getComment());
+        assertFalse(t.getDescriptionHash().hasKey("comment"));
+        map ds.exec($1), t.getCreateSql();
+        ds.commit();
+        assertEq((), (new Table(ds, "tcm_t")).getTable().getAlignSql(db.makeTable("tcm_t", getDesc("other"))));
+    }
+
+    dataSchemaTest() {
+        # the comment of a data schema table is kept in its table description
+        hash<auto> t = Schema::DataSchemaLoader::normalizeTable("tcm_t", getDesc("the table"));
+        assertEq("the table", t.comment);
+        assertFalse(Schema::DataSchemaLoader::normalizeTable("tcm_t", getDesc()).hasKey("comment"));
+    }
+
+    #! checks the table comments on a database
+    private checkDriver(string driver) {
+        if (!dsh{driver}) {
+            testSkip(skip{driver});
+        }
+        Datasource ds = dsh{driver};
+        on_exit {
+            ds.rollback();
+            try {
+                ds.exec("drop table tcm_t");
+                ds.commit();
+            } catch (hash<ExceptionInfo> ex) {
+                ds.rollback();
+            }
+        }
+
+        Database db(ds);
+        AbstractTable tmpl = db.makeTable("tcm_t", getDesc("the table"));
+        assertTrue(tmpl.supportsTableComments());
+        assertEq("the table", tmpl.getComment());
+        assertEq("the table", tmpl.getDescriptionHash().comment);
+
+        # create: the comment is created with the table
+        map ds.exec($1), tmpl.getCreateSql();
+        ds.commit();
+        AbstractTable t = (new Table(ds, "tcm_t")).getTable();
+        assertEq("the table", t.getComment());
+        assertEq("the table", t.getDescriptionHash().comment);
+        assertEq((), t.getAlignSql(db.makeTable("tcm_t", getDesc("the table"))));
+
+        # a changed comment, with a quote
+        list<auto> sql = align(ds, getDesc("it's the table"), "changed");
+        assertEq(1, sql.size());
+        assertEq("it's the table", (new Table(ds, "tcm_t")).getTable().getComment());
+
+        # SchemaReverse gives the comment in the description of the table
+        assertEq("it's the table", (new TableReverse(ds, "tcm_t")).toQore().comment);
+
+        # no comment: the comment is removed
+        sql = align(ds, getDesc(), "removed");
+        assertEq(1, sql.size());
+        assertNothing((new Table(ds, "tcm_t")).getTable().getComment());
+        assertFalse((new Table(ds, "tcm_t")).getTable().getDescriptionHash().hasKey("comment"));
+        assertFalse((new TableReverse(ds, "tcm_t")).toQore().hasKey("comment"));
+
+        # added again
+        sql = align(ds, getDesc("again"), "added");
+        assertEq(1, sql.size());
+        assertEq("again", (new Table(ds, "tcm_t")).getTable().getComment());
+
+        # a table created by a schema alignment gets its comment
+        ds.exec("drop table tcm_t");
+        ds.commit();
+        list<auto> schema_sql = db.getAlignSql({"tables": {"tcm_t": getDesc("by the schema")}});
+        map ds.exec($1), schema_sql;
+        ds.commit();
+        assertEq("by the schema", (new Table(ds, "tcm_t")).getTable().getComment());
+        assertEq((), db.getAlignSql({"tables": {"tcm_t": getDesc("by the schema")}}));
+
+        if (driver == "mysql") {
+            # a MySQL comment cannot have a backslash, as for column comments
+            assertThrows("VALUE-ERROR", "backslash", sub () {
+                (new Table(ds, "tcm_t")).getTable().getAlignSql(db.makeTable("tcm_t", getDesc("a\\b")));
+            });
+        }
+    }
+}

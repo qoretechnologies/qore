@@ -1,0 +1,101 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class ReparseClosureCaptureTest
+
+#! A later parse captures a top-level local variable of an earlier parse (issue #6462)
+/** The top-level local variables of a Program with PO_ALLOW_REPARSE are closure-bound from their declaration, so a
+    closure or a reference of a later parse can use them after threads have instantiated them.  A variable that a
+    Program declared without PO_ALLOW_REPARSE has been instantiated as a plain local variable: a later parse that
+    captures it or takes a reference to it is a parse error.
+*/
+public class ReparseClosureCaptureTest inherits QUnit::Test {
+    constructor() : QUnit::Test("ReparseClosureCaptureTest", "1.0", \ARGV) {
+        addTestCase("closure of a later parse", \closureTest());
+        addTestCase("reference of a later parse", \referenceTest());
+        addTestCase("closure called in another thread", \threadTest());
+        addTestCase("PO_ALLOW_REPARSE set after the declaration", \lateOptionTest());
+        set_return_value(main());
+    }
+
+    private static Program getProgram() {
+        Program p(PO_NEW_STYLE | PO_ALLOW_REPARSE | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.parse("our int r; int a = 1;", "first");
+        p.run();
+        return p;
+    }
+
+    closureTest() {
+        Program p = getProgram();
+        # the closure reads and writes the variable of the first parse, which later code sees
+        p.parse("code c = sub () { r = a; a = 5; }; c(); r += a;", "second");
+        p.run();
+        assertEq(6, p.getGlobalVariable("r"));
+        p.parse("r = a * 10;", "third");
+        p.run();
+        assertEq(50, p.getGlobalVariable("r"));
+
+        # the code of the first parse sees the value that a closure of a later parse wrote
+        p = new Program(PO_NEW_STYLE | PO_ALLOW_REPARSE | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.parse("our auto r; int a = 1; sub geta() { return a; } r = geta();", "first");
+        p.run();
+        assertEq(1, p.getGlobalVariable("r"));
+        p.parse("code c = sub () { a = 5; }; c(); r = geta();", "second");
+        p.run();
+        assertEq(5, p.getGlobalVariable("r"));
+    }
+
+    referenceTest() {
+        Program p = getProgram();
+        p.parse("sub inc(reference<int> x) { ++x; } inc(\\a); inc(\\a); r = a;", "second");
+        p.run();
+        assertEq(3, p.getGlobalVariable("r"));
+    }
+
+    threadTest() {
+        Program p = getProgram();
+        p.parse("code c = int sub () { return ++a; }; Queue q(); background sub () { q.push(c()); }(); r = q.get();",
+            "second");
+        p.run();
+        assertEq(2, p.getGlobalVariable("r"));
+    }
+
+    lateOptionTest() {
+        # the option is set after the variable was declared and instantiated
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.parse("our int r; int a = 1;", "first");
+        p.run();
+        p.setParseOptions(PO_ALLOW_REPARSE);
+        assertThrows("PARSE-EXCEPTION", "cannot be captured by a closure or referenced", \p.parse(),
+            ("code c = sub () { r = a; };", "second"));
+        assertThrows("PARSE-EXCEPTION", "cannot be captured by a closure or referenced", \p.parse(),
+            ("sub inc(reference<int> x) { ++x; } inc(\\a);", "third"));
+        # the variable can still be used directly
+        p.parse("r = a + 1;", "fourth");
+        p.run();
+        assertEq(2, p.getGlobalVariable("r"));
+
+        # the same after a later parse has run: the variable has been instantiated as a plain local variable
+        p = new Program(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.parse("our int r; int a = 1;", "first");
+        p.run();
+        p.setParseOptions(PO_ALLOW_REPARSE);
+        p.parse("int b = 2;", "second");
+        p.run();
+        assertThrows("PARSE-EXCEPTION", "cannot be captured by a closure or referenced", \p.parse(),
+            ("code c = sub () { r = a; }; c();", "third"));
+
+        # the same with %allow-reparse after the declaration
+        p = new Program(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.parse("our int r; int a = 1;\n%allow-reparse\n", "first");
+        p.run();
+        assertThrows("PARSE-EXCEPTION", "cannot be captured by a closure or referenced", \p.parse(),
+            ("code c = sub () { r = a; };", "second"));
+    }
+}

@@ -236,6 +236,16 @@ DLLLOCAL inline bool qore_mutation_operand_has_own_scope(const QoreValue& lvalue
         || QoreTypeInfo::isType(type_info, NT_NOTHING) || QoreTypeInfo::isType(type_info, NT_NULL));
 }
 
+//! Returns true if evaluating an expression can create a temporary besides its value whose release can be observed
+/** A value made by a call or a construction that the expression uses, and a value that can hold an object read from a
+    variable that other code can change while the expression runs - a global, thread-local or closure-bound variable,
+    a local that a closure uses or that a reference is taken of, a variable that holds a reference, a static class
+    variable or a member of the current object - which the AST interpreter holds as a temporary: a functional
+    operator evaluates such an expression for each element as a statement of its own (qore#6288).  The expression must
+    have been initialized for parsing.
+*/
+DLLLOCAL bool qore_expr_may_create_observable_temp(const QoreValue& expr);
+
 //! evaluates an expression, as a statement of its own if requested: its temporaries are released when it returns
 class QoreScopedEvalHolder : public ValueEvalOptimizedRefHolder {
 public:

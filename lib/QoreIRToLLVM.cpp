@@ -34,6 +34,7 @@
 #include "qore/intern/QoreIRAnalysis.h"
 #include "qore/intern/QoreIRToLLVM.h"
 #include "qore/intern/JITRuntime.h"
+#include "qore/intern/QoreException.h"
 
 #include "qore/intern/LocalVar.h"
 #include "qore/intern/QoreAOT.h"
@@ -50,7 +51,7 @@
 // Compile-time guard: forces review of LLVM lowering when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 438,
+static_assert(QORE_IR_MAX_OPCODE == 439,
     "New IR opcode added — review QoreIRToLLVM.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRInterpreter.cpp.");
 
@@ -13941,32 +13942,19 @@ void QoreIRToLLVM::finalizeFunctionUnwindLP(llvm::Module& module) {
 
 // documented in QoreIRToLLVM.h
 llvm::Value* QoreIRToLLVM::emitPendingExceptionTest() {
-    // Inline exception check as direct memory loads instead of function call
-    // ExceptionSink::priv at offset 0 -> qore_es_private*
-    // qore_es_private::head at offset 0 within priv -> QoreException*
-    // qore_es_private::thread_exit at offset 20 within priv -> bool
+    // Inline exception check as direct memory loads instead of a function call:
+    // ExceptionSink::priv at offset 0 -> qore_es_private*, whose pending byte is true while an exception or a thread
+    // exit is pending (qore#6370): one load and one compare
+    static_assert(offsetof(qore_es_private, pending) < sizeof(qore_es_private), "qore_es_private::pending");
 
     // Load priv pointer from xsink at offset 0
     auto* xsink_priv_ptr = builder->CreateLoad(ptr_type, xsink_arg, "xsink_priv_ptr");
 
-    // Load head pointer from priv at offset 0
-    auto* head_ptr = builder->CreateLoad(ptr_type, xsink_priv_ptr, "priv_head");
-
-    // Check if head != nullptr
-    auto* has_exception_head = builder->CreateICmpNE(head_ptr,
-            llvm::ConstantPointerNull::get(llvm::cast<llvm::PointerType>(ptr_type)),
-            "has_exception_head");
-
-    // Also check thread_exit at offset 20 within priv
-    // thread_exit is a bool at offset 20 in qore_es_private
-    auto* thread_exit_ptr = builder->CreateGEP(llvm::Type::getInt8Ty(ctx),
-            xsink_priv_ptr, {llvm::ConstantInt::get(i64_type, 20)}, "thread_exit_ptr");
-    auto* thread_exit_byte = builder->CreateLoad(llvm::Type::getInt8Ty(ctx), thread_exit_ptr, "thread_exit_byte");
-    auto* has_exception_thread_exit = builder->CreateICmpNE(thread_exit_byte,
-            llvm::ConstantInt::get(llvm::Type::getInt8Ty(ctx), 0), "has_thread_exit");
-
-    // Combine: exception exists if (head != nullptr) OR (thread_exit)
-    return builder->CreateOr(has_exception_head, has_exception_thread_exit, "has_exception");
+    auto* pending_ptr = builder->CreateGEP(llvm::Type::getInt8Ty(ctx), xsink_priv_ptr,
+            {llvm::ConstantInt::get(i64_type, offsetof(qore_es_private, pending))}, "pending_ptr");
+    auto* pending_byte = builder->CreateLoad(llvm::Type::getInt8Ty(ctx), pending_ptr, "pending_byte");
+    return builder->CreateICmpNE(pending_byte, llvm::ConstantInt::get(llvm::Type::getInt8Ty(ctx), 0),
+            "has_exception");
 }
 
 void QoreIRToLLVM::emitExceptionCheck(llvm::Module& module, llvm::Function* llvm_func,
@@ -27449,10 +27437,19 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 QoreValue expr_val = direct_inst->expr;
                 uint64_t expr_bits;
                 std::memcpy(&expr_bits, &expr_val, sizeof(expr_bits));
-                auto helper = module.getOrInsertFunction("qore_rt_call_with_args",
-                        llvm::FunctionType::get(i64_type, {i64_type, ptr_type, i32_type, ptr_type}, false));
-                call_result = builder->CreateCall(helper, {llvm::ConstantInt::get(i64_type, expr_bits),
-                        args_array, llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+                if (has_arg_cleanups) {
+                    // the call takes the references of the temporary arguments over (issue #6063)
+                    auto helper = module.getOrInsertFunction("qore_rt_call_with_args_consume_args",
+                            llvm::FunctionType::get(i64_type, {i64_type, ptr_type, ptr_type, i32_type, ptr_type},
+                                false));
+                    call_result = builder->CreateCall(helper, {llvm::ConstantInt::get(i64_type, expr_bits),
+                            args_array, arg_cleanups, llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+                } else {
+                    auto helper = module.getOrInsertFunction("qore_rt_call_with_args",
+                            llvm::FunctionType::get(i64_type, {i64_type, ptr_type, i32_type, ptr_type}, false));
+                    call_result = builder->CreateCall(helper, {llvm::ConstantInt::get(i64_type, expr_bits),
+                            args_array, llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+                }
             } else {
                 llvm::Value* method_ptr = builder->CreateIntToPtr(
                         llvm::ConstantInt::get(i64_type,
@@ -31756,8 +31753,14 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             capture_cleanups.push_back(capture_cleanup);
                         }
                         call_args.push_back(xsink_arg);
+                        // the temporary arguments that the call consumes are released in the closure's frame, as
+                        // the AST interpreter's call releases them (issue #6063)
+                        bool has_arg_cleanups = false;
+                        llvm::Value* arg_cleanups = buildArgCleanupArray(inst, 1, llvm_func, native_nargs,
+                            has_arg_cleanups);
                         llvm::Value* result = emitNativeCall(fast_fn, call_args, immediate_variant, module,
-                            llvm_func, "jit_native_closure_result");
+                            llvm_func, "jit_native_closure_result", has_arg_cleanups ? arg_cleanups : nullptr,
+                            native_nargs);
                         auto decref = module.getOrInsertFunction("qore_rt_decref",
                             llvm::FunctionType::get(void_type,
                                 {i64_type, ptr_type}, false));
@@ -31909,6 +31912,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                                         ? i1_type : i64_type);
                         }
                     }
+                    // the cleanup slots of the arguments given to the call, which the dispatch releases in the
+                    // closure's frame (issue #6063), or null; the AOT context; the exception sink
+                    param_types.push_back(ptr_type);
                     param_types.push_back(ptr_type);
                     param_types.push_back(ptr_type);
                     llvm::Type* dispatch_return_type = closure_return_kind
@@ -32093,6 +32099,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                                 return false;
                             }
                         }
+                    }
+                    {
+                        bool has_arg_cleanups = false;
+                        llvm::Value* arg_cleanups = buildArgCleanupArray(inst, 1, llvm_func, native_nargs,
+                            has_arg_cleanups);
+                        call_args.push_back(has_arg_cleanups ? arg_cleanups
+                            : llvm::ConstantPointerNull::get(llvm::cast<llvm::PointerType>(ptr_type)));
                     }
                     call_args.push_back(aot_ctx_arg);
                     call_args.push_back(xsink_arg);
@@ -37460,6 +37473,21 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             if (inst->exception_target) {
                 emitExceptionCheck(module, llvm_func, inst);
             }
+            return true;
+        }
+        case QoreIROpcode::SetCodeParseOptions: {
+            // the top-level code runs its statements with their own options, as the AST interpreter does (qore#6293)
+            llvm::Value* words[4];
+            for (unsigned i = 0; i < 4; ++i) {
+                llvm::Value* val = getVal(inst->operands[i].id, error);
+                if (!val) {
+                    return false;
+                }
+                words[i] = ensureIntTypeInline(val, inst->operands[i].id);
+            }
+            auto helper = module.getOrInsertFunction("qore_rt_set_code_parse_options",
+                llvm::FunctionType::get(void_type, {i64_type, i64_type, i64_type, i64_type}, false));
+            builder->CreateCall(helper, {words[0], words[1], words[2], words[3]});
             return true;
         }
         case QoreIROpcode::HandlerReturn: {

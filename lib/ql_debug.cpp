@@ -18539,6 +18539,52 @@ static QoreValue f_dbg_program_parse_file(const QoreListNode* params, RuntimeCon
     return QoreValue();
 }
 
+//! Debug-only: returns the numbers of strings and locations that the Program holds (issue #6354)
+/** \c strings and \c locations are those of parsed code, which a rollback with PO_ALLOW_REPARSE can delete;
+    \c runtime_strings and \c runtime_locations are those of code deserialized from AOT data.  DEBUG builds only.
+*/
+static QoreValue f_dbg_program_metadata(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    const QoreObject* obj = get_param_value(params, 0).get<const QoreObject>();
+    ReferenceHolder<QoreProgram> pgm(static_cast<QoreProgram*>(obj->getReferencedPrivateData(CID_PROGRAM,
+        xsink)), xsink);
+    if (!pgm) {
+        return QoreValue();
+    }
+    qore_program_private* pp = qore_program_private::get(**pgm);
+    size_t strings, locations, rt_strings, rt_locations;
+    {
+        std::lock_guard<std::recursive_mutex> lock(pp->runtime_metadata_lock);
+        strings = pp->str_vec.size();
+        locations = pp->pgmloc.size();
+        rt_strings = pp->rt_str_vec.size();
+        rt_locations = pp->rt_pgmloc.size();
+    }
+    ReferenceHolder<QoreHashNode> h(new QoreHashNode(bigIntTypeInfo), xsink);
+    h->setKeyValue("strings", static_cast<int64>(strings), xsink);
+    h->setKeyValue("locations", static_cast<int64>(locations), xsink);
+    h->setKeyValue("runtime_strings", static_cast<int64>(rt_strings), xsink);
+    h->setKeyValue("runtime_locations", static_cast<int64>(rt_locations), xsink);
+    return h.release();
+}
+
+//! Debug-only: interns a location in the Program as code deserialized from AOT data does (issue #6354)
+/** @return the file name of the location, read back from the Program's copy.  DEBUG builds only.
+*/
+static QoreValue f_dbg_program_intern_runtime_location(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    const QoreObject* obj = get_param_value(params, 0).get<const QoreObject>();
+    ReferenceHolder<QoreProgram> pgm(static_cast<QoreProgram*>(obj->getReferencedPrivateData(CID_PROGRAM,
+        xsink)), xsink);
+    if (!pgm) {
+        return QoreValue();
+    }
+    QoreStringNodeValueHelper file(get_param_value(params, 1));
+    int line = static_cast<int>(get_param_value(params, 2).getAsBigInt());
+    QoreProgramLocation tmp(file->c_str(), line, line);
+    const QoreProgramLocation* loc = qore_program_private::get(**pgm)->getRuntimeLocation(tmp, line, line);
+    return new QoreStringNode(loc->getFile());
+}
+
 //! Debug-only: stops the next parse of the Program once it has started (issue #6206)
 /** The parse (Program::parse(), Program::parsePending() or Program::parseCommit()) stops after it has been marked
     as in progress, until dbg_release_parse_start_gate() is called; dbg_wait_parse_start_gate() waits until it has
@@ -20881,6 +20927,20 @@ extern "C" uint64_t qore_rt_background_self_call_aot_throwing(const char* method
     method; a standalone executable compiled by an older qcc and linked to libqore dynamically (which no runtime
     identity check refuses) calls the old symbol with the old arguments, which must not be taken as the new ones
 */
+//! The parse-time search commits a variant with typed parameters over a variant without typed parameters only if the
+//! chosen variant can take the call at run time: module jni's array variant of a Java varargs method, called with an
+//! excess argument, must leave the call to the run-time search (variant that takes extra arguments), as before #6152
+static void ut_variant_takes_call_arity(UnitTestCounters& c) {
+    // as many arguments as parameters, or fewer
+    UT_ASSERT(c, qore_variant_takes_call_arity(1, 1, false), "one argument for one parameter");
+    UT_ASSERT(c, qore_variant_takes_call_arity(0, 1, false), "fewer arguments than parameters");
+    // excess arguments: only a variant that takes extra arguments takes the call
+    UT_ASSERT(c, !qore_variant_takes_call_arity(2, 1, false), "an excess argument for a variant without extra args");
+    UT_ASSERT(c, !qore_variant_takes_call_arity(3, 0, false), "arguments for a variant without parameters");
+    UT_ASSERT(c, qore_variant_takes_call_arity(2, 1, true), "an excess argument for a variant with extra args");
+    UT_ASSERT(c, qore_variant_takes_call_arity(255, 0, true), "many arguments for a variant with extra args");
+}
+
 static void ut_old_background_self_call_helper(UnitTestCounters& c) {
     auto is_rebuild_error = [] (ExceptionSink& xsink) -> bool {
         if (!xsink.isException()) {
@@ -20934,6 +20994,7 @@ static QoreValue f_run_debug_unit_tests(const QoreListNode* params, RuntimeConfi
     ut_callback_caller_parse_options(c, rc.getProgram());
     ut_self_call_without_method(c, rc.getProgram());
     ut_old_background_self_call_helper(c);
+    ut_variant_takes_call_arity(c);
 #ifdef DEBUG
     ut_sandbox_context_inner_program_id(c, rc.getProgram());
     ut_sandbox_context_continued_walk(c, rc.getProgram());
@@ -24802,12 +24863,17 @@ static QoreValue f_dbg_hold_child_program_create_clear(const QoreListNode* param
     for it (armed with the release Counter of \c "error-record" as its \a reached Counter and a release Counter of 0,
     the read releases the thread that records the error once it is certain to wait for it); \c "value-record" and
     \c "value-read": the same for the output of an HTTP client ping poll operation and the close reason of a
-    WebSocket server poll operation
+    WebSocket server poll operation; \c "teardown-read": a thread that uses state that another thread can release in a
+    teardown (the poll operation of an HTTP/3 client connection, read for its error, or the inner operation of an HTTP
+    client ping poll operation) has taken it, and is about to use it; \c "stream-end-dispatched": an HTTP/1.1 or
+    HTTP/3 client poll operation dispatched the end of a request's response and released the reference to the
+    request's action that the dispatch held, on the I/O thread or, for an HTTP/3 response that arrived before its
+    request was registered, on the thread that registered it (with a release Counter of 0, the point only reports it)
     @param reached decremented when a thread reaches the point
     @param release the thread waits until it reaches zero
     @param target if given, only a thread that reaches the point for this object is held: the poll operation of the
-    \c "error-record", \c "error-read", \c "value-record" and \c "value-read" points (the object is compared, not
-    referenced)
+    \c "error-record", \c "error-read", \c "value-record", \c "value-read", \c "teardown-read" and
+    \c "stream-end-dispatched" points (the object is compared, not referenced)
 
     @throw DBG-ARGUMENT-ERROR unknown point, or the point is already armed
 */
@@ -24840,6 +24906,10 @@ static QoreValue f_dbg_http_hold_at(const QoreListNode* params, RuntimeConfig& r
         point = static_cast<int>(QoreDbgHttpHoldPoint::ValueRecord);
     } else if (!strcmp(name->c_str(), "value-read")) {
         point = static_cast<int>(QoreDbgHttpHoldPoint::ValueRead);
+    } else if (!strcmp(name->c_str(), "teardown-read")) {
+        point = static_cast<int>(QoreDbgHttpHoldPoint::TeardownRead);
+    } else if (!strcmp(name->c_str(), "stream-end-dispatched")) {
+        point = static_cast<int>(QoreDbgHttpHoldPoint::StreamEndDispatched);
     } else {
         xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_http_hold_at(): unknown point '%s'", name->c_str());
         return QoreValue();
@@ -24908,6 +24978,114 @@ static QoreValue f_dbg_http_hold_clear(const QoreListNode* params, RuntimeConfig
         }
     }
     return QoreValue();
+}
+
+//! An HTTP/3 client connection's error is read while another thread tears down the connection attempt (#6453)
+/** The connection is made to a UDP port that receives the client's packets and never answers, so that its only
+    connection attempt stays in its handshake.  A thread reads the connection's error and is held with the
+    "teardown-read" hold point once it has taken the attempt's poll operation; the connection is then closed, which
+    tears the attempt down and releases its poll operation, and the reading thread is released: the poll operation that
+    it took must still be usable.
+
+    @return a hash with the unit test counts, or with a \c skip key giving the reason that the test could not run
+*/
+static QoreValue f_dbg_run_h3_connection_teardown_read_test(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    UnitTestCounters c;
+    // a UDP port that receives the client's datagrams and never answers them
+    int ufd = ::socket(AF_INET, SOCK_DGRAM, 0);
+    if (ufd < 0) {
+        ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+        rv->setKeyValue("skip", new QoreStringNodeMaker("cannot create a UDP socket: %s", strerror(errno)), xsink);
+        return rv.release();
+    }
+    ON_BLOCK_EXIT([ufd] () { ::close(ufd); });
+    sockaddr_in addr{};
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    socklen_t addr_len = sizeof(addr);
+    // ::bind() and not bind(): where namespace std is used, bind() is std::bind(), which binds nothing
+    if (::bind(ufd, reinterpret_cast<sockaddr*>(&addr), sizeof(addr))
+        || ::getsockname(ufd, reinterpret_cast<sockaddr*>(&addr), &addr_len)) {
+        ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+        rv->setKeyValue("skip", new QoreStringNodeMaker("cannot bind a UDP socket: %s", strerror(errno)), xsink);
+        return rv.release();
+    }
+    int port = ntohs(addr.sin_port);
+
+    ExceptionSink conn_xsink;
+    ReferenceHolder<Http3ClientConnection> conn(new Http3ClientConnection("127.0.0.1", port,
+        /* max_streams */ 100, &conn_xsink), &conn_xsink);
+    if (conn_xsink) {
+        QoreStringValueHelper err(conn_xsink.getExceptionErr());
+        QoreStringValueHelper desc(conn_xsink.getExceptionDesc());
+        conn_xsink.clear();
+        ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+        rv->setKeyValue("skip", new QoreStringNodeMaker("HTTP/3 connection not available: %s: %s", err->c_str(),
+            desc->c_str()), xsink);
+        return rv.release();
+    }
+    HttpClientConnectionBase* base = *conn;
+    UT_ASSERT(c, !base->isReady() && !base->isClosed(), "the connection attempt is in its handshake");
+
+    // the hold takes over one reference of each Counter; the test keeps one of its own
+    Counter* reached = new Counter(1);
+    Counter* release = new Counter(1);
+    reached->ref();
+    release->ref();
+    {
+        std::lock_guard<std::mutex> l(dbg_http_hold_m);
+        DbgHttpHold& h = dbg_http_holds[static_cast<int>(QoreDbgHttpHoldPoint::TeardownRead)];
+        if (h.reached) {
+            h.reached->deref(xsink);
+            h.release->deref(xsink);
+        }
+        h.reached = reached;
+        h.release = release;
+        h.target = base;
+    }
+
+    bool read_done = false;
+    std::thread reader([&] () {
+        QoreForeignThreadHelper fth;
+        ExceptionSink rxsink;
+        // the error of an attempt that was torn down without one is no error, or the error of its abort
+        ReferenceHolder<QoreHashNode> info(base->getReferencedErrorInfo(), &rxsink);
+        read_done = true;
+        rxsink.clear();
+    });
+
+    ExceptionSink wxsink;
+    bool held = !reached->waitForZero(&wxsink, 60000);
+    wxsink.clear();
+    UT_ASSERT(c, held, "the reading thread took the connection attempt's poll operation");
+    // the close tears the attempt down and releases its poll operation while the reading thread holds it
+    ExceptionSink close_xsink;
+    base->closeConnection(&close_xsink);
+    close_xsink.clear();
+    UT_ASSERT(c, base->isClosed(), "the connection is closed");
+    if (!held) {
+        std::lock_guard<std::mutex> l(dbg_http_hold_m);
+        DbgHttpHold& h = dbg_http_holds[static_cast<int>(QoreDbgHttpHoldPoint::TeardownRead)];
+        if (h.reached) {
+            h.reached->deref(xsink);
+            h.release->deref(xsink);
+            h = DbgHttpHold();
+        }
+    }
+    release->dec(xsink);
+    reader.join();
+    UT_ASSERT(c, read_done, "the error was read after the attempt was torn down");
+    // the error of the closed connection is read again
+    {
+        ExceptionSink rxsink;
+        ReferenceHolder<QoreHashNode> info(base->getReferencedErrorInfo(), &rxsink);
+        UT_ASSERT(c, !rxsink, "the closed connection's error is read");
+        rxsink.clear();
+    }
+    reached->deref(xsink);
+    release->deref(xsink);
+    return make_unit_test_result(c, xsink);
 }
 
 namespace {
@@ -26593,6 +26771,8 @@ void init_debug_functions(QoreNamespace& qns) {
         stringTypeInfo, QORE_PARAM_NO_ARG, "point", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "reached",
         QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "release", objectOrNothingTypeInfo, QORE_PARAM_NO_ARG,
         "target");
+    qns.addBuiltinVariant("dbg_run_h3_connection_teardown_read_test", f_dbg_run_h3_connection_teardown_read_test,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, hashTypeInfo);
     qns.addBuiltinVariant("dbg_http_hold_clear", f_dbg_http_hold_clear, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         nothingTypeInfo);
     qns.addBuiltinVariant("dbg_http_concurrent_closes", f_dbg_http_concurrent_closes, QCF_NO_FLAGS,
@@ -26673,6 +26853,11 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_program_parse_file", f_dbg_program_parse_file, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         nothingTypeInfo, 2, QC_PROGRAM->getTypeInfo(), QORE_PARAM_NO_ARG, "pgm", stringTypeInfo, QORE_PARAM_NO_ARG,
         "path");
+    qns.addBuiltinVariant("dbg_program_metadata", f_dbg_program_metadata, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        hashTypeInfo, 1, QC_PROGRAM->getTypeInfo(), QORE_PARAM_NO_ARG, "pgm");
+    qns.addBuiltinVariant("dbg_program_intern_runtime_location", f_dbg_program_intern_runtime_location, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, stringTypeInfo, 3, QC_PROGRAM->getTypeInfo(), QORE_PARAM_NO_ARG, "pgm", stringTypeInfo,
+        QORE_PARAM_NO_ARG, "file", bigIntTypeInfo, QORE_PARAM_NO_ARG, "line");
     qns.addBuiltinVariant("dbg_arm_parse_start_gate", f_dbg_arm_parse_start_gate, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         nothingTypeInfo, 2, QC_PROGRAM->getTypeInfo(), QORE_PARAM_NO_ARG, "pgm", boolTypeInfo, QORE_PARAM_NO_ARG,
         "fail");
