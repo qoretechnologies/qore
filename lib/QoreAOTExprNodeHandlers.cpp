@@ -91,7 +91,7 @@ inline double readF64(const uint8_t*& ptr, const uint8_t* end) {
 
 inline std::string readStr(const uint8_t*& ptr, const uint8_t* end) {
     uint16_t len = readU16(ptr, end);
-    if (len == 0 || ptr + len > end) {
+    if (len == 0 || end < ptr || len > static_cast<size_t>(end - ptr)) {
         if (len > 0) ptr = end;  // mark exhausted
         return {};
     }
@@ -200,7 +200,7 @@ static QoreValue read_node_EN_NUMBER(AOTExprNodeReadCtx& ctx) {
 static QoreValue read_node_EN_BINARY(AOTExprNodeReadCtx& ctx) {
     uint32_t len = readU32(ctx.ptr, ctx.end);
     SimpleRefHolder<BinaryNode> bin(new BinaryNode);
-    if (len > 0 && ctx.ptr + len <= ctx.end) {
+    if (len > 0 && ctx.end >= ctx.ptr && len <= static_cast<size_t>(ctx.end - ctx.ptr)) {
         bin->append(ctx.ptr, len);
         ctx.ptr += len;
     }

@@ -3812,7 +3812,10 @@ extern "C" DLLEXPORT int64_t qore_rt_selector_iterator_pending(void* iter_ptr) {
 
 extern "C" DLLEXPORT int64_t qore_rt_selector_iterator_feed(void* iter_ptr, int64_t flags, uint64_t first_bits,
         uint64_t second_bits, ExceptionSink* xsink) {
-    assert(iter_ptr);
+    // no iterator, as qore_rt_selector_iterator_pending() accepts (qore#6451)
+    if (!iter_ptr) {
+        return 0;
+    }
     return static_cast<QoreRtSelectorIterator*>(reinterpret_cast<FunctionalOperatorInterface*>(iter_ptr))
         ->feed(flags & static_cast<int64_t>(QoreIRListSelectorFlag::Range), fromBits(first_bits),
             fromBits(second_bits), xsink) ? 1 : 0;
@@ -20350,6 +20353,10 @@ extern "C" DLLEXPORT int64_t qore_rt_ref_foreach_size(uint64_t state_ptr) {
 extern "C" DLLEXPORT uint64_t qore_rt_ref_foreach_get_entry(uint64_t state_ptr, int64_t index,
         ExceptionSink* xsink) {
     auto* state = reinterpret_cast<RefForeachState*>(state_ptr);
+    // no state, as the other functions of the state accept (qore#6451)
+    if (!state) {
+        return toBits(QoreValue());
+    }
     QoreValue entry;
     if (state->l_tlist) {
         entry = state->l_tlist->getReferencedEntry(static_cast<size_t>(index));
@@ -20374,6 +20381,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_ref_foreach_get_entry(uint64_t state_ptr, 
 extern "C" DLLEXPORT void qore_rt_ref_foreach_record(uint64_t state_ptr, uint64_t value_bits,
         ExceptionSink* xsink) {
     auto* state = reinterpret_cast<RefForeachState*>(state_ptr);
+    // no state, as the other functions of the state accept (qore#6451)
+    if (!state) {
+        return;
+    }
     QoreValue value = fromBits(value_bits);
     if (state->l_tlist) {
         qore_list_private::pushCanonical(*state->ln.get<QoreListNode>(), value.refSelf(), nullptr);
