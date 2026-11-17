@@ -2431,17 +2431,25 @@ public:
         return 0;
     }
 
-    DLLLOCAL void del() {
+    //! leaves the Program and deletes the parameters
+    /** @return the Program if the thread was started in it, with the dependency reference of the thread, which the
+        caller releases when the thread's data has been deleted: the thread's data is deleted with the Program as the
+        thread's current Program, and the destructors that it runs read it, while the Program can be deleted by
+        another thread as soon as the thread has left it; nullptr if the thread was not started
+    */
+    DLLLOCAL QoreProgram* del() {
+        QoreProgram* rv = nullptr;
         // decrement program's thread count
         if (started) {
             qore_program_private::decThreadCount(*pgm, tid, nullptr);
             //printd(5, "BGThreadParams::del() this: %p pgm: %p\n", this, pgm);
-            pgm->depDeref();
+            rv = pgm;
         } else if (registered) {
             qore_program_private::cancelPreregistration(*pgm);
         }
 
         delete this;
+        return rv;
     }
 
     DLLLOCAL void startThread(ExceptionSink& xsink) {
@@ -8245,8 +8253,17 @@ namespace {
                 if (sandbox) {
                     sandbox->releaseSlot();
                 }
-                // dereference current Program object
-                btp->del();
+                // leaves the Program; its dependency reference keeps it allocated while the thread's data is deleted
+                // below with the Program as the thread's current Program (see BGThreadParams::del())
+                auto dep_deref = [](QoreProgram* p) { p->depDeref(); };
+                std::unique_ptr<QoreProgram, decltype(dep_deref)> dep_pgm(btp->del(), dep_deref);
+                // the thread no longer runs the Program's code, whose data another thread can delete now (the
+                // Program's teardown deletes the thread's local data in it): the destructors run by the deletion of
+                // the thread's data are not called from that code, and do not use that data
+                td->runtime_loc = &loc_builtin;
+                td->call_site_loc = nullptr;
+                td->runtime_statement = nullptr;
+                td->tlpd = nullptr;
 
                 assert(xsink.isException() || !td->active_exceptions);
 
@@ -8271,6 +8288,9 @@ namespace {
                 thread_po = QoreThreadRuntimeParseOptions();
                 sandbox_helper.reset();
                 sandbox.reset();
+                // the Program that was the thread's current Program while the destructors run by the deletion of its
+                // data ran is released last, while the thread's data exists (see BGThreadParams::del())
+                dep_pgm.reset();
 
                 // the thread has ended: it publishes FINISHED while it still holds its TID, so a thread that reuses
                 // the TID cannot publish STARTED first
