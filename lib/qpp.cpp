@@ -1499,8 +1499,8 @@ public:
         return in_block_comment || !raw_close.empty();
     }
 
-    //! a line that qpp reads itself (a doc comment, a group start or a group's namespace) ends a line comment or a
-    //! literal continued from the line before
+    //! a line that qpp reads itself in place of the C++ text (a doc comment or a group's namespace) ends a line
+    //! comment or a literal continued from the line before
     void endSplice() {
         spliced_comment = false;
         spliced_literal = 0;
@@ -8799,8 +8799,8 @@ protected:
 
             if (!str.compare(0, 13, "/** @defgroup")) {
                 checkBuf(buf);
-                // qpp reads the group
-                copied.endSplice();
+                // a line comment or a literal continued from the line before stays continued: the group's text is not
+                // written here, so the compiler joins the line after the group to it
 
                 if (groups.add(new Group(str, fp, fileName, lineNumber, ppState))) {
                     rc = -1;
