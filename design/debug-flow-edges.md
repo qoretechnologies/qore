@@ -1,7 +1,9 @@
 # Debugger flow at a step event: modeled IR edges (issues #6201, #6200 break/continue)
 
 Status: implemented on `fix/6201-ir-debug-break` (decision (A), extended by prof's decision (ii) to the return); the
-sections below are the design handover, and "Implementation" at the end lists what differs from it.
+sections below are the design handover, and "Implementation" at the end lists what differs from it.  Since decision
+L1, only the debug IR of AOT code has the paths; code lowered from the parse tree, in the IR interpreter and in JIT
+code, has none: see "Which code has paths" at the end, which takes precedence over the sections before it.
 
 All line numbers refer to develop d79a3a93fc (the `fix/6201-ir-debug-break` worktree, `~/tmp/qdbg/6201`).
 The return part of #6200 is done separately on `fix/6200-native-debug-flow` (head dc3975e3f4, worktree
@@ -534,9 +536,10 @@ the frame's exits) is gone.
   (`getScopeFlowPaths()`); otherwise a join block after the handler, where the exit goes on (one extra `Br` in debug code
   with two or more inline handlers at an exit).  Out-of-line handler: the handler frame reports the request
   (`qore_ir_set_handler_flow()`), and the ScopeExit that ran it takes the scope's paths.
-- **Runtime.** The IR interpreter branches to the path in the DebugStatement, DebugBlock and ScopeExit cases; native
-  code's step hooks return the request (`qore_rt_dbg_step()`, flow mask: bits 0-2 the paths, bits 3-5 report from a
-  handler) and branch to it; a native ScopeExit gets the request of its handlers from `qore_rt_take_scope_exit_flow()`.
+- **Runtime.** The IR interpreter branches to the path in the DebugStatement, DebugBlock and ScopeExit cases.  Native
+  code has no paths (see "Which code has paths"): its step hooks (`qore_rt_dbg_step()`,
+  `qore_rt_dbg_synthetic_block_step()`) report the events and honour an exception that the debugger raises, and
+  ignore the requests.
 - **AOT (format v41, `QORE_AOT_DEBUG_FLOW_VERSION`).** DebugStatement, DebugBlock and ScopeExit records end with a
   u8 mask and a u16 block index per path; block flag 0x10 is `debug_flow`.  AOT native code lowers no path blocks.
 
@@ -547,33 +550,15 @@ the frame's exits) is gone.
   and the flow edges.  So code with step events gets the summaries of the same code without them.  The return facts of
   the effect summaries are those of the code; `QoreIRFunctionEffectSummary::debug_flow_returns_nothing` records a path
   that returns NOTHING.
-- **Soundness of the return facts.**  AOT native code has no paths, so an AOT batch keeps the facts of the code.  The
-  JIT's native code takes the paths, and the facts are used after the call (the elided NOTHING check of a later
-  argument, the exact boxed kind of the value), where no check exists to fall back on without a check on the hot path
-  or an exit from native code in the middle of the frame.  `qore_ir_restrict_debug_flow_return_facts()` therefore
-  leaves `never_returns_nothing` and the inferred boxed return kind out of a JIT batch's callee whose path returns
-  NOTHING, unless its declared return type requires a value: its path then raises the error of a missing return
-  value, as the AST interpreter does.  A call replaced by a summary runs no code of the callee, so no request can be
-  made in it.
-  - The readers of the facts that the restriction clears: in native code of a JIT batch, `known_not_nothing_values`
-    of the result of a CallClosureDirect of an immediate closure, which lets `fastEntryArgumentKnownNotNothing()`
-    leave out the NOTHING check of an argument of a callee's fast entry; every other reader is AOT only, or reads
-    facts that the restriction does not change (the native return kinds need a declared type that rejects NOTHING).
-  - The restriction is defensive: no case found fails without it (facts_closure_caller in debugger-step-flow, an
-    immediately called closure literal and a closure whose returning on_exit handler is lowered inline in a path all
-    match AST in jit and tiered with the restriction disabled).
-  - The forwarding summaries of `qore_ir_resolve_batch_function_summaries()`, which a JIT batch computes before the
-    restriction (`boxed_return_param` and the `never_returns_nothing` that its composition sets), escape nothing:
-    they need a returned parameter that rejects NOTHING whose type is the declared return type, of the function and of
-    each callee it forwards through, so the path of each raises the error of a missing return value.
-  - `boxed_return_param` is not cleared: code generation reads it only in AOT compilation
-    (`qore_ir_fold_boxed_return_param_calls()`), whose native code has no paths.
+- **Soundness of the return facts.**  The return facts of the effect summaries are those of the code.  Only the
+  debug IR of AOT code has paths; it runs in the IR interpreter, which reads no return facts of a callee, and AOT native
+  code has no paths, so an AOT batch keeps the facts of the code.  JIT code has no paths, so a request never makes a
+  callee of a JIT batch return without a value.
 - **Size of the paths.**  Every step event has paths, so their code must grow with the function, not with the
   product of its statements and anything else:
   - the return paths share the release of the locals of the blocks at the bottom of the cleanup stack (the Lvars and
     CatchVar entries, typically the function block) and the return (`QoreIRLowering::debug_flow_return_tails`, block
-    flag `debug_flow_return_tail`, transient): each path branches to that block after the cleanups of its own blocks;
-    in native code the branch releases the path's temporaries and iterators, and the shared ReturnNothing none.
+    flag `debug_flow_return_tail`, transient): each path branches to that block after the cleanups of its own blocks.
     Before, each path uninstantiated every local of the function, and each UninstantiateLocal of a local released
     all of its coercion cleanup allocas (DeferredLocalRelease), so `exception-edge-code-size` (a local assigned in
     every case of a switch) and `JITLargeFunctionBlocks` (many locals, many statements) grew quadratically;
@@ -582,23 +567,63 @@ the frame's exits) is gone.
     their own (`QORE_IR_PATH_INLINE_HANDLER_BUDGET`, past which they run out of line): each path lowers the handlers
     that it runs inline when they can return, whose step events have paths of their own, so nested handlers that
     return (`CatchExitHandlerOrder` b5) grew exponentially (2.8 million LLVM instructions for b5);
-  - the release of a temp scope of the code by a path (DiscardTemps of a scope whose mark was open before the run of
-    path blocks) changes no lowering state of the code, and the marks and the SSA cleanups are restored after each run
-    of path blocks; a path's UninstantiateLocal leaves the cleanup allocas of a block-scoped local for the code's own
-    exit of the block;
   - only the outermost path resets the budget of the handlers lowered inline (`DebugFlowPathLowering`);
   - the requests of an event whose path is the same (a break or a continue that no loop or switch statement takes is
     a return) share its entry block (`makeDebugFlowEntries()`, `QoreIRDebugFlowTargets::targets()` gives each block
     once), and in a handler lowered inline those that end at the same block share the path and the end;
   - a path leaves a scope none of whose handlers runs at its position (its on_exit statements come later in the
-    block) as a return statement there does, without running handlers out of line; and the native code of a path
-    runs the handlers of a scope with the table-driven helpers (qore#6110) whatever the size of the function, as the
-    code that publishes and reloads each local inline is as long as the function has locals.  Before, the function
-    of `JITLargeFunctionBlocks` testHandlerBudget with 25 and 50 catch blocks was 1.79 and 1.84 times the size of the
-    same function without step events with the inline handler code (develop: 1.07 and 1.05), and its JIT compile
-    took 1.8 times as long as on develop (`DebugFlowPathCode.qtest` handlerPathSize).
+    block) as a return statement there does, without running handlers out of line.
 - **AOT outlining.**  Outlined code is AOT native code only, which takes no requests, so the outliner sets the paths
   aside while it outlines a function and puts them back with `undo()` (design/aot-function-outlining.md, decision 11);
   the debug IR, and format v41, are unchanged.
 - **IR interpreter handlers.**  A debugger attached in a call that then raises an exception gets the events of the
   handlers that the exception runs in the caller (pre-existing: `debug_active` was stale on the exception path).
+
+## Which code has paths (decision L1)
+
+Only the debug IR of AOT code has the paths of a debugger's requests (`QoreIRFunction::hasDebugFlowPaths()`, true
+with `emit_debug_statements`).  Code lowered from the parse tree gets the step events (DebugStatement, DebugBlock and
+the step hooks of native code) and breakpoints, but no paths: `QoreIRLowering` makes no `QoreIRDebugFlowTargets` for
+its DebugStatement, DebugBlock and ScopeExit instructions, and pushes no `InlineHandlerFlow`.
+
+Why:
+- a call that starts while a debugger is attached runs on the AST interpreter (`UserVariantBase::evalTiered()` with
+  `hasDebuggerAttached()`; the fast and inline call paths of the JIT runtime and of the IR interpreter refuse to run
+  then), so the IR and the native code lowered from the parse tree only run under a debugger in frames that were
+  already running when it attached, and in what those frames call directly (the callees of a JIT batch, and the
+  callees that LLVM inlined into them);
+- the paths of every step event cost about 15-19% of the JIT compile time of code with step events (all code that is
+  not parsed with `%no-debugging`), and the continue edges into a loop changed the native code of the loop's hot path;
+- new calls of AOT code under a debugger run its debug IR in the IR interpreter
+  (`UserVariantBase::materializeAOTDebugIR()`), so that IR needs the paths, and keeps them (format v41).
+
+A request at a step event of code without paths:
+| Code | Return | Break or continue |
+|---|---|---|
+| native code (JIT, tiered) | ignored: the hook returns no request | ignored |
+| IR interpreter | the frame returns without a value through the runtime unwind (`unwindForException()`), as on develop: the handlers of the blocks that it leaves run as for an exception that leaves the frame, so an exception that one raises leaves the function instead of going to a catch block of the frame; in a handler lowered inline, the function returns, also when a handler that runs after it would replace the request; in a handler that runs in a frame of its own, only the handler ends | ignored (`++ip`) |
+
+In both, the step events and breakpoints are still reported.  The callees of a JIT batch that the native code of such
+a frame calls directly run as native code too (they make no event for the callee's block on their next calls, #6289);
+the other calls that it makes start with the debugger attached and run on the AST interpreter.  The inline call paths
+of the IR interpreter refuse to run while a debugger is attached, as the fast paths of the JIT runtime do: the inline
+functions, native leaves and closures, and the inline methods and static methods
+(`executeInterpreterInlineIRMethodTarget()`, `tryExecuteInterpreterInlineIRStaticMethod()`).  In the IR interpreter, the DebugBlock and DebugStatement
+cases take the return when the instruction has no `QoreIRDebugFlowTargets` (`qore_ir_debug_flow_targets()` is null);
+an instruction with a record and no target (the body of a handler lowered inline in debug IR) still returns for every
+request.  A handler without paths never reports a request (`qore_ir_set_handler_flow()`), so the ScopeExit case gets
+none from it.
+
+Native code has no path lowering: `QoreIRToLLVM::lowerFunction()` erases the path blocks (`debug_flow`) when it lowers
+the blocks, with no PHIs predeclared for them and no PHI incomings from them, in AOT code and in the closures of AOT
+code that the JIT compiles from their debug IR; the step hooks of native code ignore the requests, so no code branches
+to a path block.  If the code of a JIT function did, its compilation fails (the function stays on its tier); AOT
+lowering makes such a block unreachable.  The IR-level machinery (the CFG edges, `QoreIRDebugFlowCursor`, the patched passes, the
+lowering of the paths and their serialization) stays for the debug IR of AOT code.
+
+Tests: `debugger-step-flow.qtest` pins how a frame running at attach takes each request in each mode, checks that the
+next call matches the AST interpreter in every mode, that the calls of each kind that such a frame makes after the
+attach take the requests, and that the code runs without being compiled again after the debugger detached;
+`DebugFlowPathCode.qtest` checks that code lowered from the parse tree has no path blocks; `AOTDebugIRFlow.qtest`
+checks the paths of the debug IR of AOT code.  User documentation: `doxygen/lang/229_debugging.dox.tmpl`
+(`debugger_running_code`).

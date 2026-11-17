@@ -89,8 +89,9 @@
       interpreter, it gets the events of its statements from its next statement on, but not of the statements that
       contain them and that started before the debugger attached, an exception in the condition of a loop gets an
       event for the last statement of its body too, and after a debugger dismisses an exception, the
-      function can end there, with no value, instead of continuing after the statement; as native code, it gets no
-      event
+      function can end there, with no value, instead of continuing after the statement; as native code, it gets the
+      step events of its statements and stops at their breakpoints; a return, a break or a continue that the debugger
+      requests in such code is not always taken (see @ref debugger_running_code)
 
     An exception that matches a @ref common_pitfalls "common pitfall" of %Qore, such as a variable that was declared
     but not assigned or a call reference to a deleted object, is shown with a hint and corrective actions: by \c qdbg
@@ -115,6 +116,32 @@
 
     A running thread can be stopped (paused), and all threads of a program can stop together when one of them stops,
     and continue together.
+
+    @subsection debugging_flow_requests Return, Break and Continue Requests
+
+    At a step event, a debugger can request a flow with the \a flow argument of
+    @ref Qore::DebugProgram::onStep() "DebugProgram::onStep()":
+    - @ref Qore::DebugFlowReturn "DebugFlowReturn": the function returns at once without a value; the statement does
+      not run, and the handlers of the blocks that the return leaves run as for a return statement
+    - @ref Qore::DebugFlowBreak "DebugFlowBreak" and @ref Qore::DebugFlowContinue "DebugFlowContinue": a break or a
+      continue statement placed before the statement; with no loop (or, for a break, switch statement) to take it,
+      the function returns without a value
+
+    A request in an @ref on_exit "on_exit", @ref on_success "on_success" or @ref on_error "on_error" handler ends the
+    handler, and the block takes the request of its last handler run.
+
+    @anchor debugger_running_code
+    Code that starts while a debugger is attached takes these requests in every execution mode: code with a parse tree
+    runs on the AST interpreter then, and AOT-compiled code runs its debug IR.  Code that was already running when the
+    debugger attached keeps running on the tier it was running on until it returns, and with the
+    @ref execution_modes "IR, JIT and tiered execution modes" it does not take every request:
+    |!Code running when the debugger attached|!Return request|!Break or continue request
+    |native code (JIT and tiered execution)|ignored|ignored
+    |the IR interpreter (IR execution, and the IR tier of tiered execution)|the frame returns without a value, and the handlers of the blocks that it leaves run as when an exception leaves the function; in a handler that runs in a frame of its own, only the handler ends|ignored
+
+    A request that is ignored lets the statement run as without the request; the step events of the code and its
+    breakpoints are still reported.  A function that such native code calls directly, as compiled together with it,
+    also runs as native code.  The next call of the function runs on the AST interpreter and takes every request.
 
     @subsection debugging_variables Variables and Expressions
 
