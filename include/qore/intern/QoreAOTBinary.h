@@ -550,6 +550,16 @@ constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 //!        of them refuses the kinds
 //!      - an optional TIME_ZONE section (34) records the time zone that the code sets with %set-time-zone and whether
 //!        its directive follows the header of a module (qore#6270)
+//! v42 (batch AA; one format version for the format changes of the batch, one line each):
+//!      - the serialized IR of an LValuePath instruction has a u8 after its ternary operator: 1 if the value of the
+//!        operation is used (ref_rv), 0 if not, so that an unused post increment or decrement copies no old value and
+//!        an unused remove or delete releases its value in the operation in the IR rebuilt from the image (debug IR,
+//!        closure bodies without native code); an earlier image has none, and its instructions use their values, as
+//!        before (qore#6328)
+//!      - top-level code whose statements have different parse options sets the options of each statement where they
+//!        change with a SetCodeParseOptions instruction (QoreIROpcode::SetCodeParseOptions, 439: the options as four
+//!        32-bit ConstInt words), whose native code calls qore_rt_set_code_parse_options(); the AOT runtime identity
+//!        changes with the runtime entry (qore#6293)
 //! v43 (batch AB; one format version for the format changes of the batch, one line each):
 //!      - the encoded metadata is followed by the XXH64 checksum (seed 0, u64 little-endian) of all of its bytes,
 //!        and the header flags have QORE_AOT_FLAG_METADATA_CHECKSUM; the reader checks it before it reads anything
@@ -608,11 +618,18 @@ constexpr uint16_t QORE_AOT_HANDLER_RETURN_VERSION = 39;
     which readers of this format ignore), which a function with more than 255 of them overflowed (#6127).
 */
 constexpr uint16_t QORE_AOT_SHARED_HANDLER_VERSION = 41;
+//! First format version whose serialized LValuePath instructions record whether their value is used (see v42 above)
+constexpr uint16_t QORE_AOT_LVPATH_REF_RV_VERSION = 42;
+//! First format version whose top-level code can set the parse options of its statements (see v42 above)
+constexpr uint16_t QORE_AOT_CODE_PARSE_OPTIONS_VERSION = 42;
+static_assert(QORE_AOT_LVPATH_REF_RV_VERSION == QORE_AOT_CODE_PARSE_OPTIONS_VERSION,
+    "the format changes of batch AA share one format version (v42)");
 //! First format version whose encoded metadata is followed by its checksum (see v43 above)
 /** The checksum is the XXH64 (seed 0) of all the bytes of the encoded metadata (compressed, if it is compressed),
     written as a u64 little-endian after them; the header flags have QORE_AOT_FLAG_METADATA_CHECKSUM.  The reader checks
     it before it reads anything else (QoreAOTBinaryReader::open()), so that metadata corrupted after qcc wrote it is
-    refused as a whole: a module whose metadata does not match is handled as a stale one (qore#6451)
+    refused as a whole: a module whose metadata does not match is not loaded, as a module whose metadata cannot be
+    read, and its source module is loaded instead when there is one (qore#6451)
 */
 constexpr uint16_t QORE_AOT_METADATA_CHECKSUM_VERSION = 43;
 //! The size of the checksum that follows the encoded metadata (see QORE_AOT_METADATA_CHECKSUM_VERSION)

@@ -1,0 +1,134 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%allow-debugger
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class DebuggerRunExitTest
+
+#! records the exit events of the debugged Programs and can replace the value
+class ExitRecorder inherits DebugProgram {
+    public {
+        list<auto> results = ();
+        auto replacement;
+        bool replace = False;
+    }
+
+    onAttach(ProgramControl pgm, reference rs, reference rts) {
+        rs = DebugRun;
+    }
+    onDetach(ProgramControl pgm, reference rs, reference rts) {
+    }
+    onStep(ProgramControl pgm, int bid, *int sid, *int bkid, reference flow, reference rs, reference rts) {
+    }
+    onFunctionEnter(ProgramControl pgm, int sid, reference rs, reference rts) {
+    }
+    onFunctionExit(ProgramControl pgm, int sid, reference result, reference rs, reference rts) {
+    }
+    onException(ProgramControl pgm, int sid, hash<auto> ex, reference dismiss, reference rs, reference rts) {
+    }
+    onExit(ProgramControl pgm, int sid, reference result, reference rs, reference rts) {
+        results += result;
+        if (replace) {
+            result = replacement;
+        }
+    }
+}
+
+#! tells the end of a program run (onRunExit()) from the end of a thread (onExit())
+class RunExitRecorder inherits ExitRecorder {
+    public {
+        list<auto> run_results = ();
+        list<int> run_tids = ();
+        list<int> exit_tids = ();
+        Queue exited();
+    }
+
+    onRunExit(ProgramControl pgm, int sid, reference result, reference rs, reference rts) {
+        run_results += result;
+        run_tids += gettid();
+        result = "run: " + result;
+    }
+    onExit(ProgramControl pgm, int sid, reference result, reference rs, reference rts) {
+        exit_tids += gettid();
+        ExitRecorder::onExit(pgm, sid, \result, \rs, \rts);
+        exited.push(True);
+    }
+}
+
+#! The debugger's exit event of Program::run() gets the value that run() returns (#3401)
+/** The exit event was raised only when a thread ended, with no value; the end of the top-level code (or of the exec
+    class) that Program::run() runs raised none.  It is now raised there with the value that run() returns: the
+    value of the top-level code's return statement, or the return value that the exec class set; the debugger can
+    replace it, as it can the value of a function's exit event.
+*/
+class DebuggerRunExitTest inherits QUnit::Test {
+    constructor() : QUnit::Test("DebuggerRunExitTest", "1.0") {
+        addTestCase("the top-level code's return value", \topLevelTest());
+        addTestCase("the debugger replaces the return value", \replaceTest());
+        addTestCase("an exec class's return value", \execClassTest());
+        addTestCase("an exception ends the top-level code", \exceptionTest());
+        addTestCase("onRunExit() tells the end of the run from the end of a thread", \runExitTest());
+        set_return_value(main());
+    }
+
+    private auto runDebugged(string code, ExitRecorder d, *string exec_class) {
+        Program pgm(PO_NEW_STYLE | PO_ALLOW_DEBUGGER);
+        pgm.parse(code, "run-exit");
+        d.addProgram(pgm.getProgram());
+        on_exit d.removeProgram(pgm.getProgram());
+        return pgm.run();
+    }
+
+    topLevelTest() {
+        ExitRecorder d();
+        assertEq(42, runDebugged("return 42;", d));
+        assertEq((42,), d.results);
+    }
+
+    replaceTest() {
+        ExitRecorder d();
+        d.replace = True;
+        d.replacement = "replaced";
+        assertEq("replaced", runDebugged("return 42;", d), "run() returns the debugger's value");
+        assertEq((42,), d.results);
+    }
+
+    execClassTest() {
+        ExitRecorder d();
+        assertEq(7, runDebugged("%exec-class Main\nclass Main {\n    constructor() {\n        set_return_value(7);\n"
+            "    }\n}\n", d));
+        assertEq((7,), d.results);
+    }
+
+    exceptionTest() {
+        ExitRecorder d();
+        d.replace = True;
+        d.replacement = 1;
+        assertThrows("ERR", \runDebugged(), ("throw \"ERR\";", d));
+        assertEq((NOTHING,), d.results, "the event gets no value");
+    }
+
+    runExitTest() {
+        RunExitRecorder d();
+        Program pgm(PO_NEW_STYLE | PO_ALLOW_DEBUGGER);
+        # a thread of the program ends with its value after the run has ended
+        pgm.parse("Counter c(1); background sub () { c.waitForZero(); return 2; }(); c.dec(); return 1;",
+            "run-exit");
+        d.addProgram(pgm.getProgram());
+        on_exit d.removeProgram(pgm.getProgram());
+        assertEq("run: 1", pgm.run());
+        assertEq((1,), d.run_results);
+        assertEq((gettid(),), d.run_tids, "the run ends in the thread that called run()");
+        # the debugger stays until the background thread has ended
+        assertTrue(d.exited.get(30s));
+        assertEq((2,), d.results, "the end of the thread is onExit()");
+        assertEq(1, d.exit_tids.size());
+        assertNeq(gettid(), d.exit_tids[0]);
+    }
+}

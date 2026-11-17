@@ -32,6 +32,7 @@
 #include <qore/Qore.h>
 
 #include "qore/intern/StatementBlock.h"
+#include "qore/intern/QoreStatementTemps.h"
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/QoreIterateOperatorNode.h"
 #include "qore/intern/qore_list_private.h"
@@ -154,6 +155,9 @@ int QoreStreamingOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& p
         }
     }
 
+    // qore#6288: see elementScope()
+    qore_parse_decide_element_scopes(this, decideElementScopes);
+
     iterator_func = dynamic_cast<FunctionalOperator*>(right.getInternalNode());
 
     switch (kind) {
@@ -271,7 +275,8 @@ QORE_INTERN_ALWAYS_INLINE QoreValue QoreStreamingOperatorNode::evalCommon(bool& 
         if (left) {
             ImplicitElementHelper eh(index);
             SingleArgvContextHelper argv_helper(iv->refSelf(), xsink);
-            ValueEvalOptimizedRefHolder predicate(left, xsink);
+            // the temporaries of an element are released when its value has been computed (qore#6288)
+            QoreScopedEvalHolder predicate(left, elementScope(0), xsink);
             if (*xsink) {
                 return QoreValue();
             }
@@ -393,7 +398,8 @@ template <bool StrictBoolean>
 bool QoreFunctionalStreamingOperator<StrictBoolean>::predicateMatches(ValueOptionalRefHolder& iv, ExceptionSink* xsink) {
     ImplicitElementHelper eh(index);
     SingleArgvContextHelper argv_helper(iv->refSelf(), xsink);
-    ValueEvalOptimizedRefHolder result(op->left, xsink);
+    // the temporaries of an element are released when its value has been computed (qore#6288)
+    QoreScopedEvalHolder result(op->left, op->elementScope(0), xsink);
     if (*xsink) {
         return false;
     }
@@ -442,4 +448,13 @@ bool QoreFunctionalStreamingOperator<StrictBoolean>::getNextImpl(ValueOptionalRe
     iv.ensureReferencedValue();
     val.takeValueFrom(iv);
     return false;
+}
+
+void QoreStreamingOperatorNode::decideElementScopes(AbstractQoreNode* op) {
+    QoreStreamingOperatorNode* self = static_cast<QoreStreamingOperatorNode*>(op);
+    uint8_t v = 0;
+    if (qore_expr_may_create_observable_temp(self->left)) {
+        v |= 1u << 0;
+    }
+    self->element_scopes.set(v);
 }

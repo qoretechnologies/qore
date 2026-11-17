@@ -85,7 +85,7 @@
 // Compile-time guard: forces review of interpreter dispatch when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 438,
+static_assert(QORE_IR_MAX_OPCODE == 439,
     "New IR opcode added — review QoreIRInterpreter.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRToLLVM.cpp.");
 #include <qore/intern/QoreJIT.h>
@@ -1929,6 +1929,17 @@ static inline QoreValue getIRValue(const IRValueSlots& values, QoreIRValue id) {
     // IR value IDs are guaranteed in-bounds.  Skip bounds check on the hot path.
     assert(id.isValid() && id.id < values.size());
     return values[id.id];
+}
+
+//! The IR interpreter's QoreIROpcode::SetCodeParseOptions (qore#6293)
+/** In a function of its own, so that the code of execute() does not grow for an instruction that only top-level code
+    whose statements have different options has
+*/
+static __attribute__((noinline, cold)) void qore_ir_set_code_parse_options(const QoreIRInstruction* inst,
+        const IRValueSlots& values) {
+    qore_rt_set_code_parse_options(getIRValue(values, inst->operands[0]).getAsBigInt(),
+        getIRValue(values, inst->operands[1]).getAsBigInt(), getIRValue(values, inst->operands[2]).getAsBigInt(),
+        getIRValue(values, inst->operands[3]).getAsBigInt());
 }
 
 static uint32_t resolvePluginOperationId(const QoreIRPluginInstruction& inst, ExceptionSink* xsink) {
@@ -17282,6 +17293,13 @@ load_local_done:
                 // no exception check otherwise: the instruction also runs on the path of an exception, which stays
                 // raised; an exception raised by a destructor is added to it, and the CheckException that follows the
                 // releases of a statement's exit, as UninstantiateLocal, branches to the handler
+                ++ip;
+                break;
+            }
+            case QoreIROpcode::SetCodeParseOptions: {
+                // the top-level code runs its statements with their own options, as the AST interpreter does
+                // (qore#6293)
+                qore_ir_set_code_parse_options(inst, values);
                 ++ip;
                 break;
             }

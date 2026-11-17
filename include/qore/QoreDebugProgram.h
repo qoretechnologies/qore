@@ -52,7 +52,10 @@ enum DebugRunStateEnum : unsigned char {
    DBG_RS_STEP = 2,
    DBG_RS_STEP_OVER = 3,
    DBG_RS_UNTIL_RETURN = 4,
-   DBG_RS_STOPPED = 5,    // last one, see assert in setRunState
+   DBG_RS_STOPPED = 5,    // last run state, see assert in setRunState
+   //! a request that a debugger can make for the thread of an event: the thread is detached and is not offered to
+   //! the debugger again (no onAttach()) until the debugger takes it back; never a run state of a thread (#3293)
+   DBG_RS_DONT_ATTACH = 6,
 };
 
 //! supports parsing and executing Qore-language code, reference counted, dynamically-allocated only
@@ -138,6 +141,14 @@ public:
     * callbacks
     */
    DLLEXPORT int breakProgramThread(QoreProgram *pgm, int tid) const;
+
+   //! offers a thread that the debugger did not want (DBG_RS_DONT_ATTACH) to the debugger again on its next entry
+   /** @return true if the thread has data in the Program (it has entered it); false if not, or if the Program is not
+       a debug target of this debugger: then nothing is done
+
+       @since %Qore 3.0
+   */
+   DLLEXPORT bool attachThread(QoreProgram* pgm, int tid) const;
 
    //! Notes that the debugger ends a program by cancelling its threads
    /** The threads of the program that end with a \c THREAD-CANCELLED exception end without reporting it as an

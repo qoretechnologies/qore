@@ -1,0 +1,80 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - native AOT IR serialization and the IR of closure bodies that qcc executables run
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: LGPL-2.1-or-later
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires ../TestInterpreter.qm
+%requires FsUtil
+%exec-class AOTLValuePathRefRvTest
+
+#! An LValuePath instruction keeps whether its value is used through the serialized IR of an AOT image (qore#6328)
+/** The serialized IR of an LValuePath instruction did not record its \c ref_rv flag, so the IR rebuilt from an image
+    (the debug IR of a function, the body of a closure without native code) used the value of every operation: an
+    unused post increment or decrement copied the old value, and an unused remove or delete returned its value to be
+    discarded.  The results did not change, so it is the native test (\c qore-aot-lvalue-path-ref-rv-test) that checks
+    the fix: it writes and reads the instructions with the serializer of the current format and reads one of the
+    earlier format, which has no flag.  The script in \c aot-lvalue-path-ref-rv/ runs such operations in closures of
+    qcc executables, from their native code and from the IR of their image, against the output of the AST interpreter,
+    so that the rebuilt instructions that do not use their values keep their results.
+*/
+class AOTLValuePathRefRvTest inherits QUnit::Test {
+    private {
+        string qore = TestInterpreter::qore_interpreter();
+        string qcc = TestInterpreter::qcc_compiler();
+        string script = get_script_dir() + "/aot-lvalue-path-ref-rv/unused-results.q";
+        string prefix;
+    }
+
+    constructor() : Test("AOT LValuePath ref_rv", "1.0", \ARGV) {
+        foreach string name in (("LD_LIBRARY_PATH", "DYLD_LIBRARY_PATH")) {
+            if (ENV{name}) {
+                prefix += name + "=" + shellQuote(ENV{name}) + " ";
+            }
+        }
+        addTestCase("the flag survives the serialization of the IR", \nativeRoundTrip());
+        addTestCase("unused results in closures of qcc executables", \compiledClosures());
+        set_return_value(main());
+    }
+
+    nativeRoundTrip() {
+        string native = ENV.QORE_AOT_LVALUE_PATH_REF_RV_TEST
+            ?? dirname(qore) + "/qore-aot-lvalue-path-ref-rv-test";
+        if (!is_file(native)) {
+            testSkip("the native AOT LValuePath ref_rv test executable is not available");
+            return;
+        }
+        int rc;
+        string output = backquote(prefix + shellQuote(native) + " 2>&1", \rc);
+        assertEq(0, rc, output);
+        assertEq("PASS: 12 AOT LValuePath ref_rv checks\n", output);
+    }
+
+    compiledClosures() {
+        int rc;
+        string expected = backquote(prefix + shellQuote(qore) + " -b --exec-mode=ast " + shellQuote(script) + " 2>&1",
+            \rc);
+        assertEq(0, rc, expected);
+        TmpDir tmp("qore-aot-lvalue-path-ref-rv-");
+        foreach string opt in (("0", "3")) {
+            string exe = sprintf("%s/unused-results-O%s", tmp.path, opt);
+            string out = backquote(sprintf("%s%s -O%s -o %s %s 2>&1", prefix, shellQuote(qcc), opt, shellQuote(exe),
+                shellQuote(script)), \rc);
+            assertEq(0, rc, sprintf("-O%s: %s", opt, out));
+            # the native closures, and the closure bodies from the IR of the image
+            foreach string env in (("", "QORE_DISABLE_AOT_NATIVE_CLOSURES=1 ")) {
+                string label = sprintf("-O%s %s", opt, env);
+                string result = backquote(sprintf("%s%s%s -b 2>&1", prefix, env, shellQuote(exe)), \rc);
+                assertEq(0, rc, label + ": " + result);
+                assertEq(expected, result, label);
+            }
+        }
+    }
+
+    private static string shellQuote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+}

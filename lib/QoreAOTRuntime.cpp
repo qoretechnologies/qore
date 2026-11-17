@@ -2813,12 +2813,11 @@ const QoreProgramLocation* qore_aot_read_source_location(const QoreAOTBinaryRead
         return nullptr;
     }
     // interned in the Program, as the locations of parsed code; the Program's runtime metadata lock protects its
-    // strings and locations, so that this can run when code is deserialized lazily
+    // strings and locations, so that this can run when code is deserialized lazily, and they are never rolled back
+    // with a failed parse, which did not add them (issue #6354)
     qore_program_private* pp = qore_program_private::get(*pgm);
-    const char* interned_file = pp->addString(file);
-    const char* interned_source = source && *source ? pp->addString(source) : nullptr;
-    QoreProgramLocation tmp(interned_file, start_line, end_line, interned_source, offset);
-    return pp->getLocation(tmp, start_line, end_line);
+    QoreProgramLocation tmp(file, start_line, end_line, source && *source ? source : nullptr, offset);
+    return pp->getRuntimeLocation(tmp, start_line, end_line);
 }
 
 // Forward declaration for use by expression registry handlers (Phase 3.2)
@@ -7001,16 +7000,17 @@ static QoreAOTContext* buildContextFromSlotMap(
                     continue;
                 }
 
-                const char* interned_file = pp->addString(loc_file);
+                // never rolled back (issue #6354)
+                const char* interned_file = pp->addRuntimeString(loc_file);
                 const char* interned_source = loc_source && *loc_source
-                    ? pp->addString(loc_source) : nullptr;
+                    ? pp->addRuntimeString(loc_source) : nullptr;
                 if (pp->findIndexedStatementForLocation(interned_file, interned_source,
                         start_line, offset)) {
                     continue;
                 }
                 QoreProgramLocation tmp(interned_file, start_line, end_line,
                     interned_source, offset);
-                const QoreProgramLocation* loc = pp->getLocation(tmp, start_line, end_line);
+                const QoreProgramLocation* loc = pp->getRuntimeLocation(tmp, start_line, end_line);
                 StatementBlock* stmt = new StatementBlock(pp, loc);
                 qore_program_private::registerStatement(pgm, stmt, true);
                 ctx->owned_debug_statements.push_back(stmt);
@@ -7308,15 +7308,15 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
     // file pointer dangles the moment deserialization returns and any later
     // exception throw reports garbage bytes for `ex.file` / callstack[*].file.
     //
-    // Intern via qore_program_private::addString() so the string lives in the
-    // program's str_vec pool for the program's lifetime, matching how the
-    // parser's addFile() already stores filenames for JIT/source-parsed code.
+    // Intern via qore_program_private::addRuntimeString() so the string lives
+    // in the program's runtime pool for the program's lifetime; it is never
+    // rolled back with a failed parse, which did not add it (issue #6354).
     int start_line = qore_aot_valid_line(qore_aot_read_line(reader, ptr));
     int end_line = qore_aot_valid_line(qore_aot_read_line(reader, ptr));
     const char* loc_file = reader.readStringRef(ptr);
     if (start_line > 0 && owner_func) {
         const char* interned_file = (loc_file && pgm)
-            ? qore_program_private::get(*pgm)->addString(loc_file)
+            ? qore_program_private::get(*pgm)->addRuntimeString(loc_file)
             : (loc_file ? loc_file : "");
         auto* loc = new QoreProgramLocation(interned_file, start_line, end_line);
         owner_func->owned_locations.push_back(loc);

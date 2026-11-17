@@ -38,6 +38,25 @@
 #include "qore/intern/FunctionalOperatorInterface.h"
 
 class QoreSelectOperatorNode : public QoreBinaryOperatorNode<>, public FunctionalOperator {
+public:
+    //! true if the operand of the given index is evaluated for each element as a statement of its own: it can create
+    //! a temporary besides its value whose release can be observed (qore#6288, qore_expr_may_create_observable_temp())
+    DLLLOCAL bool elementScope(unsigned i) const {
+        return element_scopes.get() & (1u << i);
+    }
+
+    //! returns the element scope flags: a bit for each operand, by index (see elementScope())
+    DLLLOCAL uint8_t elementScopes() const {
+        return element_scopes.get();
+    }
+
+private:
+    //! a bit for each operand, by index (see elementScope())
+    QoreElementScopeFlags element_scopes;
+
+    //! decides the element scope flags of the operator given (q_element_scope_decider_t)
+    DLLLOCAL static void decideElementScopes(AbstractQoreNode* op);
+
     template <bool> friend class QoreFunctionalSelectListOperator;
     template <bool> friend class QoreFunctionalSelectSingleValueOperator;
     template <bool> friend class QoreFunctionalSelectIteratorOperator;

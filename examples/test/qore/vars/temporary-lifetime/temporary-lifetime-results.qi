@@ -43,13 +43,13 @@ public namespace TemporaryLifetimeChecks {
         "27 return": "+local +ret state(ret)=alive ~ret on_exit ~local log(alive)",
         "28 return in try": "+local2 +ret-try state(ret-try)=alive ~ret-try ~local2 log(alive)",
         "29 map evaluating a temporary per element":
-            "+map-1 getName(map-1) +map-2 ~map-1 getName(map-2) +map-3 ~map-2 getName(map-3) "
-            "log(map-1,map-2,map-3) ~map-3",
+            "+map-1 getName(map-1) ~map-1 +map-2 getName(map-2) ~map-2 +map-3 getName(map-3) ~map-3 "
+            "log(map-1,map-2,map-3)",
         "30 map whose value is not used":
             "+map-statement-1 getName(map-statement-1) ~map-statement-1 +map-statement-2 getName(map-statement-2) "
             "~map-statement-2 +map-statement-3 getName(map-statement-3) ~map-statement-3",
         "31 foreach over map":
-            "+lazy-1 getName(lazy-1) lazy body lazy-1 +lazy-2 ~lazy-1 getName(lazy-2) lazy body lazy-2 ~lazy-2",
+            "+lazy-1 getName(lazy-1) ~lazy-1 lazy body lazy-1 +lazy-2 getName(lazy-2) ~lazy-2 lazy body lazy-2",
         "32 closure of a temporary called in the chain": "+closure log(self=closure) ~closure",
         "33 closure of a temporary passed to a call": "+closure-arg log(self=closure-arg) ~closure-arg",
         "34 closure of a temporary assigned": "+closure-assigned ~closure-assigned OBJECT-ALREADY-DELETED",
@@ -75,8 +75,8 @@ public namespace TemporaryLifetimeChecks {
             "+nested-outer +nested-inner state(nested-inner)=alive log(alive) ~nested-inner ~nested-outer",
         "46 on_exit handler": "body +on-exit state(on-exit)=alive log(alive) ~on-exit",
         "47 foreach over map with a member chain":
-            "+lazy-member-1 state(lazy-member-1)=alive lazy body alive +lazy-member-2 ~lazy-member-1 "
-            "state(lazy-member-2)=alive lazy body alive ~lazy-member-2",
+            "+lazy-member-1 state(lazy-member-1)=alive ~lazy-member-1 lazy body alive +lazy-member-2 "
+            "state(lazy-member-2)=alive ~lazy-member-2 lazy body alive",
         "48 member of self replaced by its method":
             "+member +replacement replaced log(member) ~member after the call ~replacement",
         "49 return in a foreach over a list of temporaries":
