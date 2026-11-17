@@ -371,6 +371,16 @@ class SqlUtilRecursiveQueryTest inherits QUnit::Test {
             }
             assertEq((4, 5), found, "search iterator");
             assertEq("int", i.getRecordType().lvl.getType().getName(), "iterator record type");
+            # the record type of the provider for the search options is that of the records returned
+            hash<string, AbstractDataField> drt = dp.getRecordType(opts);
+            assertEq(("id", "manager_id", "name", "lvl"), keys drt, "search record type");
+            assertEq("int", drt.lvl.getType().getName(), "search record type: depth");
+            assertEq(keys drt, keys dp.getRecordTypeWithOptions(NOTHING, opts), "search record type with options");
+            assertEq(keys drt, keys dp.getSoftRecordType(opts), "soft search record type");
+            # without the recursive search option, the record type is the table's
+            assertEq(("id", "manager_id", "name"), keys dp.getRecordType({"orderby": ("id",)}), "table record type");
+            assertEq(keys dp.getRecordType(), keys dp.getRecordType({"orderby": ("id",)}), "search options ignored");
+            assertFalse(dp.recordRequiresSearchOptions(), "the record type of the table needs no search options");
             # a plain search condition names the columns of the CTE
             found = ();
             i = dp.searchRecords({"lvl": 2}, opts);
