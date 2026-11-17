@@ -92,6 +92,10 @@ extern "C" {
 
 //! Check the current native stack guard for generated code entry points
 int qore_rt_check_stack(ExceptionSink* xsink);
+//! raises STACK-LIMIT-EXCEEDED and returns -1 if the stack of the thread cannot take \a reserve more bytes beyond its
+//! stack check: the thunk of a compiled function whose frame exceeds the stack guard checks for the frame before the
+//! frame is allocated (QoreIRFrameCheck, qore#6414)
+int qore_rt_check_stack_reserve(ExceptionSink* xsink, int64_t reserve);
 
 // --- Outlined function-body return token (design/aot-function-outlining.md) ---
 

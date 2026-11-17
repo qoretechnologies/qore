@@ -3,7 +3,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -92,12 +92,14 @@ const char *ComplexContextrefNode::getTypeName() const {
 
 // evalImpl(): return value requires a deref(xsink) if not 0
 QoreValue ComplexContextrefNode::evalImpl(bool &needs_deref, ExceptionSink *xsink) const {
-    int count = 0;
-
-    Context *cs = get_context_stack();
-    while (count != stack_offset) {
-        count++;
+    Context* cs = get_context_stack();
+    for (int count = 0; count < stack_offset && cs; ++count) {
         cs = cs->next;
+    }
+    // the offset of a node read from an AOT module is not checked against the context statements (qore#6265)
+    if (!cs) {
+        xsink->raiseException("CONTEXT-EXCEPTION", "context reference '%s' out of context", member ? member : "");
+        return QoreValue();
     }
     return cs->eval(member, xsink);
 }

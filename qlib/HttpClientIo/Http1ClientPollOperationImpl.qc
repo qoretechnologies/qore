@@ -146,8 +146,10 @@ public class Http1ClientPollOperation inherits Http1ClientPollOperationBase, Htt
         if (self.isProtocolSwitched()) {
             return;
         }
-        if (connection_ref) {
-            connection_ref.handleCompletion(result);
+        # read once: the connection's close clears the member from another thread (#6427)
+        *HttpClientConnection conn = connection_ref;
+        if (conn) {
+            conn.handleCompletion(result);
         }
     }
 

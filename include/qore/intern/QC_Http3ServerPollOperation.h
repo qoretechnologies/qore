@@ -350,20 +350,18 @@ public:
         return h3_state.load(std::memory_order_acquire) == H3State::CLOSED;
     }
 
-    DLLLOCAL bool hasError() const {
-        return error_info != nullptr;
-    }
+    //! Returns true if an error was recorded; can be called from any thread (reads @ref has_error, without a lock)
+    DLLLOCAL bool hasError() const;
 
-    DLLLOCAL QoreHashNode* getErrorInfo() const {
-        if (error_info) {
-            error_info->ref();
-        }
-        return error_info;
-    }
+    //! Returns the recorded error with a new reference, or nullptr if none was recorded; can be called from any thread
+    /** Read under @ref error_lock, which the writer holds while it stores the complete error hash, so the hash is
+        returned complete and safely published to the calling thread
+    */
+    DLLLOCAL QoreHashNode* getErrorInfo() const;
 
     DLLLOCAL bool shouldKeepAlive() const {
         H3State s = h3_state.load(std::memory_order_acquire);
-        return keep_alive && s != H3State::CLOSED && s != H3State::DRAINING && !error_info;
+        return keep_alive && s != H3State::CLOSED && s != H3State::DRAINING && !hasError();
     }
 
     //! Cleanup all referenced objects (must be called before destructor)
@@ -452,8 +450,16 @@ private:
     //! Cached completed request hash (ref'd, or nullptr)
     mutable QoreHashNode* cached_request = nullptr;
 
-    //! Error info hash (ref'd, or nullptr)
+    //! Protects @ref error_info, which the thread driving the operation records and any thread reads
+    /** A leaf lock: no other lock is taken and no Qore code runs while it is held
+    */
+    mutable QoreThreadLock error_lock;
+
+    //! Error info hash (ref'd, or nullptr); protected by @ref error_lock
     QoreHashNode* error_info = nullptr;
+    //! Set (release) when @ref error_info is stored, under the lock that protects it; read (acquire) without a lock
+    //! by hasError()
+    std::atomic<bool> has_error{false};
 
     //! Keep-alive flag (QUIC connections are persistent)
     bool keep_alive = true;

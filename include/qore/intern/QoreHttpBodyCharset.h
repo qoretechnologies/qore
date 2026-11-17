@@ -158,10 +158,12 @@ DLLLOCAL QoreHttpContentTypeInfo qore_get_http_content_type_info(const char* con
         const QoreEncoding* assumed);
 
 //! Returns the response encoding that an HTTP server reports for the Accept-Charset of a request
-/** As Socket::readHTTPHeader() reports it in its info hash (\c "accept-charset"): \c "utf8" if the value, or an
-    element of it directly after a comma (no whitespace is skipped), begins with \c "*", \c "utf8" or \c "utf-8"
-    (case-insensitive; quality values are not considered), else the value up to the first comma or semicolon,
-    trimmed; empty if that is empty, which the server reports as \c "utf8" (qore#6333)
+/** As Socket::readHTTPHeader() reports it in its info hash (\c "accept-charset"), by the rule of RFC 9110 sections
+    12.5.2 and 12.4.2 that get_http_accept_charset() documents: \c "utf8" if UTF-8, or \c "*" when UTF-8 is not
+    listed, has the highest weight of the acceptable and supported charsets, else the name of the acceptable charset
+    with the highest weight that Qore knows (by its name or an alias) and iconv converts to, as given (the first of
+    those with the same weight); empty if no charset is acceptable and supported, which the server reports as
+    \c "utf8" (qore#6333, qore#6343)
 
     @param value the \c Accept-Charset field value
 */
