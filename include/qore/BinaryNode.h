@@ -39,6 +39,8 @@
 /** this class is implemented simply as a pointer and a length indicator
  */
 class BinaryNode : public SimpleValueQoreNode {
+    friend class qore_binary_node_private;
+
 private:
     //! the capacity of the buffer: 0 = the buffer holds \c len bytes, else (4 + (code & 3)) << ((code >> 2) - 2) bytes
     /** The capacities that a code gives grow by factors of 1.14 to 1.25.  It is placed in the tail padding of the base
@@ -61,9 +63,6 @@ private:
         assert(!cap_code || (cap_code >> 2) >= 4);
         return cap_code ? (static_cast<size_t>(4 + (cap_code & 3)) << ((cap_code >> 2) - 2)) : len;
     }
-
-    //! ensures that the buffer can hold \a new_len bytes; returns 0 if OK, -1 if out of memory (the node unchanged)
-    DLLLOCAL int reserveIntern(size_t new_len);
 
 protected:
     //! frees and memory owned by the object

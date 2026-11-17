@@ -21526,7 +21526,7 @@ static void ut_datasource_connect_choosers(UnitTestCounters& c) {
         qore_ds_pool_record rec{qore_ds_make_creators(pool_setter), pool_setter};
         std::unique_ptr<Datasource> ds;
         std::thread t([&ds, &rec, drv]() {
-            ds.reset(new Datasource(drv, nullptr, rec));
+            ds.reset(qore_ds_private::createPoolConnection(drv, nullptr, rec));
             qore_ds_setter_t s = rec.setter;
             qore_ds_private::get(*ds)->setPendingParam(QDCP_DB, "db", s);
         });
