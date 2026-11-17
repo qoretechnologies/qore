@@ -183,8 +183,8 @@ class ExecModeMarkerTest(unittest.TestCase):
         # - JitTeardownAtExit-<n> (#6390): JitTeardownAtExit.qr runs in child processes that set their own --exec-mode
         # - qlib-module-domains: each module is loaded first by a restricted Program in a child process, as a loaded
         #   module is not checked again for the next Program (#5803)
-        # - qlib-all-modules-load: each qlib module is loaded by a restricted Program in a child process of its own, as
-        #   a loaded module is not checked again for the next Program (#5803)
+        # - QlibAllModulesLoad-<n>: each qlib module is loaded by a restricted Program in a child process of its own,
+        #   as a loaded module is not checked again for the next Program (#5803, #6438)
         # - nested-module-parse: the module is loaded in a child process whose module path holds it (#5803, #5938)
         # - RestSchemaModuleLazyTypes-<n>: the modules are loaded and compared in child processes
         # - WebSocketProgramEnd: the server whose Program ends with an open connection is a child process; the
@@ -349,7 +349,8 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/ir/jit-teardown-at-exit/JitTeardownAtExit-3.qtest",
                                  "examples/test/qore/functions/user-functional-domains/nested-module-parse.qtest",
                                  "examples/test/qore/functions/user-functional-domains/qlib-module-domains.qtest",
-                                 "examples/test/qore/functions/user-functional-domains/qlib-all-modules-load.qtest",
+                                 "examples/test/qore/functions/user-functional-domains/QlibAllModulesLoad-1.qtest",
+                                 "examples/test/qore/functions/user-functional-domains/QlibAllModulesLoad-2.qtest",
                                  "examples/test/qlib/HttpClientIo/ConnectionManagerTeardown.qtest",
                                  "examples/test/qlib/RestSchemaActions/RestSchemaModuleLazyTypes-1.qtest",
                                  "examples/test/qlib/RestSchemaActions/RestSchemaModuleLazyTypes-2.qtest",
