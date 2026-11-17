@@ -34,10 +34,13 @@
     - restricted code cannot give its own code the exemption of deferred module initialization
       (is_module_init_closure(), call_module_init_closure()), nor call the registration APIs; a closure that the
       module's code creates for code of another Program that runs while a deferred initialization runs (a catalog
-      change listener) does not qualify
+      change listener) does not qualify; only the code of a library module can run a qualifying closure
+      (call_module_init_closure()); the code of a module that a restricted Program loads by its path is the calling
+      code, not module code
     - restricted code cannot run the rollback closures of other module loads on its thread
-      (ImplicitModuleTransaction::savepoint(), rollback(), commit()); ImplicitModuleTransaction::loadModule() rolls
-      back only the registrations of the load that it makes, and raises its error
+      (ImplicitModuleTransaction::savepoint(), rollback(), commit()), nor load a module through DataProvider's own
+      loader; a failed module load that a lookup makes rolls back only that load's registrations
+    - restricted code cannot write the data provider index, which names the modules that lookups load
 
     Each case runs in a child process of its own, which loads the modules freshly; the modules of the cases are in a
     directory of the process-wide module path, so they are library code.  The children use only the module path of
@@ -145,7 +148,8 @@ late closure qualifies: False
 late closure run: MODULE-INIT-CLOSURE-ERROR
 late closure called: INVALID-FUNCTION-ACCESS
 init closure qualifies: True
-init closure run: 42
+init closure run: MODULE-INIT-CLOSURE-ERROR
+init closure run by its module: 42
 init closure called: INVALID-FUNCTION-ACCESS
 module function reference qualifies: False
 register lazy actions: INVALID-FUNCTION-ACCESS
@@ -163,7 +167,8 @@ kept closure qualifies: False
 kept closure run: MODULE-INIT-CLOSURE-ERROR
 kept closure called: INVALID-FUNCTION-ACCESS
 init closure qualifies: True
-init closure run: 42
+init closure run: MODULE-INIT-CLOSURE-ERROR
+init closure run by its module: 42
 ";
 
         #! the output of the case of the rollback of module loads
@@ -173,10 +178,28 @@ savepoint: INVALID-FUNCTION-ACCESS
 rollback: INVALID-FUNCTION-ACCESS
 commit: INVALID-FUNCTION-ACCESS
 file api after: True
-load: RC-INIT-ERROR: the initialization of RcFileApiFail fails after registering a file API
+lookup: null
 failed load file api: False
 file api kept: True
 trusted file api: True
+direct call: PARSE-EXCEPTION: functional domain: PROCESS_CONTROL
+transaction load: PARSE-EXCEPTION: cannot resolve call 'ImplicitModuleTransaction::loadModule()' to any reachable and callable object
+module loader: PARSE-EXCEPTION: cannot resolve call 'DataProviderModuleLoader::loadModule()' to any reachable and callable object
+";
+
+        #! the output of the case of a module that a restricted Program loads by its path
+        const ExpectedPathModule = "in-init tagged: INVALID-FUNCTION-ACCESS
+in-init closure called: INVALID-FUNCTION-ACCESS
+closure kept: True
+kept closure qualifies: False
+kept closure run: MODULE-INIT-CLOSURE-ERROR
+kept closure called: INVALID-FUNCTION-ACCESS
+";
+
+        #! the output of the case of writing the data provider index
+        const ExpectedIndexWrite = "write: INVALID-FUNCTION-ACCESS
+write by app: INVALID-FUNCTION-ACCESS
+index written: False
 direct call: PARSE-EXCEPTION: functional domain: PROCESS_CONTROL
 ";
 
@@ -218,6 +241,8 @@ direct call: PARSE-EXCEPTION: functional domain: PROCESS_CONTROL
         addTestCase("restricted code cannot roll back the registrations of other module loads", \testTransaction());
         addTestCase("restricted code gets cached tables only for its own datasource and does not fill the cache",
             \testSqlIdentity());
+        addTestCase("the code of a module loaded by its path is the calling code", \testPathModule());
+        addTestCase("restricted code cannot write the data provider index", \testIndexWrite());
 
         set_return_value(main());
     }
@@ -355,8 +380,37 @@ direct call: PARSE-EXCEPTION: functional domain: PROCESS_CONTROL
     testTransaction() {
         foreach string mode in (Modes) {
             foreach bool sandbox in ((False, True)) {
-                checkCase(ExpectedTransaction, "transaction", mode, sandbox);
+                string err;
+                string out = run("transaction", mode, sandbox, NOTHING, {"QORE_DATA_PROVIDERS": "RcProvMap"}, \err);
+                string label = sprintf("transaction: %s, sandbox: %y", mode, sandbox);
+                assertEq(ExpectedTransaction, out, label + (out != ExpectedTransaction
+                    ? "; stderr: " + err.substr(0, 4000) : ""));
+                # the error of the failed module load that the lookup made is reported
+                assertRegex("DataProvider load module \"RcFileApiFail\": .*RC-INIT-ERROR", err, label);
             }
+        }
+    }
+
+    testPathModule() {
+        # the module is loaded from a directory outside the module path, as a file under a directory of the module
+        # path is library code however it is loaded; a SandboxManager's default policy does not allow it to be read
+        string dir = tmp.path + "/by-path";
+        mkdir(dir);
+        string path = dir + "/RcPathUser.qm";
+        File f();
+        f.open2(path, O_CREAT | O_TRUNC | O_WRONLY);
+        f.write(ReadOnlyFile::readTextFile(case_dir + "/by-path/RcPathUser.qm"));
+        f.close();
+        foreach string mode in (Modes) {
+            checkCase(ExpectedPathModule, "path-module", mode, False, path);
+        }
+    }
+
+    testIndexWrite() {
+        string dir = tmp.path + "/index-write";
+        mkdir(dir);
+        foreach string mode in (Modes) {
+            checkCase(ExpectedIndexWrite, "index-write", mode, False, dir, {"QORE_PROVIDER_INDEX_DIR": dir});
         }
     }
 

@@ -1067,7 +1067,10 @@ bool is_module_init_closure(code c) [flags=RET_VALUE_ONLY] {
 }
 
 //! Runs a closure that the initialization of its library module created as deferred module initialization
-/** The closure runs as the initialization of its module does: the functional domains that the module's own code
+/** Only the code of a library module can call this function, such as a registry module that runs the deferred
+    initialization that other modules registered with it.
+
+    The closure runs as the initialization of its module does: the functional domains that the module's own code
     declares are not checked against the code that calls this function (see @ref user_module_declarations), and the threads
     that it starts do not take that code's restrictions.  Code that it calls back that is not the module's is checked
     as always.
@@ -1076,7 +1079,9 @@ bool is_module_init_closure(code c) [flags=RET_VALUE_ONLY] {
 
     @return the value that the closure returns
 
-    @throw MODULE-INIT-CLOSURE-ERROR \a c is not a closure that the initialization of its library module created
+    @throw MODULE-INIT-CLOSURE-ERROR \a c is not a closure that the initialization of its library module created,
+    or the code that calls this function is not the code of a library module (a module found in the process-wide
+    module path)
 
     @par Example:
     @code{.py}
@@ -1097,6 +1102,12 @@ auto call_module_init_closure(code c) {
     if (!cb || !cb->isModuleInit()) {
         return xsink->raiseException("MODULE-INIT-CLOSURE-ERROR", "the code given is not a closure that the "
             "initialization of its library module created");
+    }
+    // only library module code runs deferred module initialization, such as the registry that the closure was
+    // registered with; other code that gets such a closure cannot run it with the exemption (qore#6337)
+    if (!qore_program_is_library_module(getProgram())) {
+        return xsink->raiseException("MODULE-INIT-CLOSURE-ERROR", "call_module_init_closure() can only be called "
+            "by the code of a library module");
     }
     // the closure runs as the initialization of its module: the barrier of a library module's initialization, which
     // names the module's Program, so that the closures that it creates qualify too

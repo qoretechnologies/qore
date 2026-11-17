@@ -101,37 +101,6 @@ public class ImplicitModuleTransaction {
         rb.addImpl(rb_code);
     }
 
-    #! Loads a module and rolls back the registrations that its initialization made if loading it fails
-    /** The registrations of the module are kept if it is loaded; if loading it raises an exception, the rollback
-        closures added since the load started are run (all of them, even if one raises an exception) and the
-        exception of the load is raised again.  This is the only part of the API that code restricted from the
-        \c PROCESS_CONTROL domain can use: savepoint(), rollback() and commit() act on the rollback closures of other
-        loads too (qore#6337)
-
-        @param module_str the module to load, as given to @ref Qore::load_module() "load_module()"
-
-        @throw any exception raised while loading the module
-
-        @since %DataProvider 3.6
-    */
-    static loadModule(string module_str) {
-        if (!rb) {
-            rb = new ImplicitModuleTransaction();
-        }
-        int sp = rb.savepointImpl();
-        try {
-            load_module(module_str);
-            rb.commitImpl(sp);
-        } catch (hash<ExceptionInfo> ex) {
-            # the error of the load is the one raised
-            try {
-                rb.rollbackImpl(sp);
-            } catch (hash<ExceptionInfo> rex) {
-            }
-            rethrow;
-        }
-    }
-
     #! Returns the current savepoint (number of rollback closures registered so far)
     /** Call this before \c load_module() to mark the boundary between pre-existing
         rollback closures and new ones added during the module load.

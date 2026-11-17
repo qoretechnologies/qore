@@ -1605,6 +1605,12 @@ DLLLOCAL bool qore_caller_is_sandboxed();
 */
 DLLLOCAL int64 qore_caller_denied_user_domains(int64 domain);
 
+//! returns true if \a pgm is the Program of a library module (one found in the process-wide module path)
+/** Only such a module's code acts for its caller: a module that is not library code (one loaded by its path, for
+    example) has the restrictions of the Program that loaded it and is calling code (qore#6337)
+*/
+DLLLOCAL bool qore_program_is_library_module(const QoreProgram* pgm);
+
 //! Keeps the code that parses code or loads a module in another Program the caller of what runs there (issue #5659)
 /** Parsing code in a Program and loading a module into it (Program::parse(), Program::loadModule(), and their
     variants) switch the thread's current Program to the target Program with a ProgramRuntimeParseContextHelper (or

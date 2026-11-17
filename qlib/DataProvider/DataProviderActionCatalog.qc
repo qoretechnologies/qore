@@ -3353,7 +3353,7 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
     private:internal static loadGenericApiCallBuilder(hash<DataProviderAppInfo> app) {
         try {
             # any partial registrations from a failed load are rolled back
-            ImplicitModuleTransaction::loadModule(GenericApiCallBuilderModule);
+            DataProviderModuleLoader::loadModule(GenericApiCallBuilderModule);
         } catch (hash<ExceptionInfo> ex) {
             # warn loudly: a REST app will silently lack its make-api-call action otherwise
             DataProviderActionCatalog::reportInitializationFailure("action", app.name,

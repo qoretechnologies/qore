@@ -57,6 +57,13 @@ public code sub getInitClosure() {
     return State::init_closure;
 }
 
+#! Runs the closure that the module's initialization created as deferred module initialization
+/** The module's own code runs it, as a registry of deferred initializations does
+*/
+public auto sub runInitClosure() {
+    return call_module_init_closure(State::init_closure);
+}
+
 #! Returns a closure created after the module's initialization
 public code sub getLateClosure() {
     return auto sub () { return tagged(); };

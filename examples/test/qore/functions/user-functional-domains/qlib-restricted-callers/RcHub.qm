@@ -1,0 +1,33 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# RcHub.qm - test library module that holds listeners and calls them (qore#6337)
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+module RcHub {
+    version = "1.0";
+    desc = "test library module that holds listeners and calls them";
+    author = "Qore Technologies, s.r.o.";
+    license = "MIT";
+}
+
+#! The listeners
+class RcHubState {
+    public {
+        static list<code> listeners = ();
+    }
+}
+
+#! The public definitions of the test module
+public namespace RcHub {
+#! Adds a listener
+public sub hub_add(code c) {
+    RcHubState::listeners += c;
+}
+
+#! Calls every listener with the given argument
+public sub hub_fire(auto arg) {
+    map $1(arg), RcHubState::listeners;
+}
+}

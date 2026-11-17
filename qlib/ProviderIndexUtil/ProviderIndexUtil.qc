@@ -2694,7 +2694,7 @@ list<hash<auto>> actions = map ProviderIndexUtil::tryGetActionMetadata($1.app, $
         @see writeDataProviderIndexByApp()
     */
     static hash<ProviderIndexInfo> writeDataProviderIndex(*hash<DataProviderIndexInfo> h, date delta,
-            hash<auto> summary, *bool write_canonical_yaml) {
+            hash<auto> summary, *bool write_canonical_yaml) [dom=PROCESS_CONTROL] {
         *hash<string, hash<string, hash<auto>>> actioninfomap = h.actioninfomap;
         hash<auto> maps = h ? (h - ("actioninfomap", "top_actioninfomap")) : {};
         return writeDataProviderIndexByApp(maps, keys actioninfomap, *hash<string, hash<auto>> sub (string app) {
@@ -2749,7 +2749,7 @@ hash<ProviderIndexInfo> info = ProviderIndexUtil::writeDataProviderIndexByApp(ma
         @since ProviderIndexUtil 1.2
     */
     static hash<ProviderIndexInfo> writeDataProviderIndexByApp(hash<auto> maps0, *list<string> action_apps,
-            code get_app_actions, date delta, hash<auto> summary, *bool write_canonical_yaml) {
+            code get_app_actions, date delta, hash<auto> summary, *bool write_canonical_yaml) [dom=PROCESS_CONTROL] {
         # a caller's literal may be narrowed (e.g. hash<string, hash<string, string>>), and adding the altmap member
         # would throw
         hash<auto!> maps = maps0;

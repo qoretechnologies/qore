@@ -239,6 +239,7 @@ list<string> sub run(*string arg) {
     code init = getInitClosure();
     l += \"init closure qualifies: \" + sprintf(\"%y\", is_module_init_closure(init));
     l += \"init closure run: \" + attempt(auto sub () { return call_module_init_closure(init); });
+    l += \"init closure run by its module: \" + attempt(auto sub () { return runInitClosure(); });
     l += \"init closure called: \" + attempt(init);
     l += \"module function reference qualifies: \" + sprintf(\"%y\", is_module_init_closure(\\getCalls()));
     l += \"register lazy actions: \" + attempt(auto sub () {
@@ -297,12 +298,13 @@ list<string> sub run(*string arg) {
     code init = getInitClosure();
     l += \"init closure qualifies: \" + sprintf(\"%y\", is_module_init_closure(init));
     l += \"init closure run: \" + attempt(auto sub () { return call_module_init_closure(init); });
+    l += \"init closure run by its module: \" + attempt(auto sub () { return runInitClosure(); });
     return l;
 }",
     },
 
-    # the rollback of module loads: restricted code cannot run the rollback closures of other loads, and loads a
-    # module with ImplicitModuleTransaction::loadModule(), which rolls back only that load's registrations
+    # the rollback of module loads: restricted code cannot run the rollback closures of other loads on its thread;
+    # a failed module load that a lookup makes rolls back only that load's registrations
     "transaction": {
         "restricted": "%requires DataProvider
 list<string> sub run(*string arg) {
@@ -316,7 +318,7 @@ list<string> sub run(*string arg) {
         });
     }
     l += \"file api after: \" + sprintf(\"%y\", exists DataProviderActionCatalog::getAppFileApi(\"QoreTestRcFileApiApp\"));
-    l += \"load: \" + attempt_desc(auto sub () { ImplicitModuleTransaction::loadModule(\"RcFileApiFail\"); });
+    l += \"lookup: \" + attempt(auto sub () { return DataProvider::getFactory(\"qoretestrcfail\"); });
     l += \"failed load file api: \" + sprintf(\"%y\",
         exists DataProviderActionCatalog::getAppFileApi(\"QoreTestRcFailApp\"));
     l += \"file api kept: \" + sprintf(\"%y\", exists DataProviderActionCatalog::getAppFileApi(\"QoreTestRcFileApiApp\"));
@@ -333,9 +335,15 @@ list<string> sub run(*string arg) {
     return (\"trusted file api: \" + sprintf(\"%y\",
         exists DataProviderActionCatalog::getAppFileApi(\"QoreTestRcFileApiApp\")),);
 }",
-        # a direct call is refused when it is parsed
-        "restricted_parse": "%requires DataProvider
+        # direct calls are refused when they are parsed; the module loader of DataProvider is not public
+        "restricted_parse": {
+            "direct call": "%requires DataProvider
 sub t() { ImplicitModuleTransaction::rollback(0); }",
+            "transaction load": "%requires DataProvider
+sub t() { ImplicitModuleTransaction::loadModule(\"RcFileApiFail\"); }",
+            "module loader": "%requires DataProvider
+sub t() { DataProviderModuleLoader::loadModule(\"RcFileApiFail\"); }",
+        },
     },
 
     # restricted code gets a table from the SqlUtil table cache only for its own datasource, and does not fill it
@@ -422,6 +430,52 @@ list<string> sub run(*string arg) {
         "restricted_parse": "%requires SqlUtil
 sub t() { TableCache::get(\"sqlite3:@x\", \"rc_t1\"); }",
     },
+
+    # code of a module that a restricted Program loads by its path (outside the module path, given as the argument)
+    # is the calling code: it is checked when it calls
+    # code with a domain while a library module is initialized, and a closure that the library module creates for it
+    # is not deferred module initialization
+    "path-module": {
+        "restricted": "%requires RcHub
+%requires @ARG@
+list<string> sub run(*string arg) {
+    list<string> l = ();
+    RcPathUser::arm();
+    load_module(\"RcHubLib\");
+    l += RcPathUser::getLog();
+    *code kept = RcPathUser::getClosure();
+    l += \"closure kept: \" + sprintf(\"%y\", exists kept);
+    if (kept) {
+        l += \"kept closure qualifies: \" + sprintf(\"%y\", is_module_init_closure(kept));
+        l += \"kept closure run: \" + attempt(auto sub () { return call_module_init_closure(kept); });
+        l += \"kept closure called: \" + attempt(kept);
+    }
+    return l;
+}",
+    },
+
+    # restricted code cannot write the data provider index, which names the modules that lookups load
+    "index-write": {
+        "restricted": "%requires DataProvider
+%requires ProviderIndexUtil
+list<string> sub run(*string arg) {
+    list<string> l = ();
+    l += \"write: \" + attempt(auto sub () {
+        return call_static_method(\"ProviderIndexUtil::ProviderIndexUtil\", \"writeDataProviderIndex\",
+            <DataProviderIndexInfo>{\"factorymap\": {\"qoretestrcindexwrite\": \"RcFileApiFail\"}}, 0s, {});
+    });
+    l += \"write by app: \" + attempt(auto sub () {
+        return call_static_method(\"ProviderIndexUtil::ProviderIndexUtil\", \"writeDataProviderIndexByApp\",
+            {\"factorymap\": {\"qoretestrcindexwrite\": \"RcFileApiFail\"}}, (), *hash<auto> sub (string app) {},
+            0s, {});
+    });
+    l += \"index written: \" + sprintf(\"%y\", is_file(arg + \"/qore-routing-index.yaml\"));
+    return l;
+}",
+        "restricted_parse": "%requires DataProvider
+%requires ProviderIndexUtil
+sub t() { ProviderIndexUtil::writeDataProviderIndex(<DataProviderIndexInfo>{}, 0s, {}); }",
+    },
 };
 
 # prints the lines that the code of a case returns
@@ -449,7 +503,8 @@ if (c.restricted) {
     }
     rp.setExecMode(Modes{mode});
     try {
-        rp.parse(Common + c.restricted + (c.restricted_post ?? ""), "restricted");
+        # "@ARG@" in the restricted code is the case argument
+        rp.parse(replace(Common + c.restricted + (c.restricted_post ?? ""), "@ARG@", arg ?? ""), "restricted");
     } catch (hash<ExceptionInfo> ex) {
         printf("parse: %s: %s\n", ex.err, ex.desc);
         exit(1);
@@ -479,17 +534,21 @@ if (c.restricted_post) {
     print_lines(rp.callFunction("run_post", arg));
 }
 
-if (c.restricted_parse) {
+# the code that a restricted Program cannot parse: one string, or a hash of labels and code
+hash<string, string> parse_cases = c.restricted_parse.typeCode() == NT_HASH
+    ? c.restricted_parse
+    : (c.restricted_parse ? {"direct call": c.restricted_parse} : {});
+foreach hash<auto> i in (parse_cases.pairIterator()) {
     Program pp(PO_NEW_STYLE | Restrictions);
     if (sandbox) {
         pp.setSandboxManager(mgr);
     }
     pp.setExecMode(Modes{mode});
     try {
-        pp.parse(c.restricted_parse, "restricted-parse");
-        printf("direct call: parsed\n");
+        pp.parse(i.value, "restricted-parse");
+        printf("%s: parsed\n", i.key);
     } catch (hash<ExceptionInfo> ex) {
-        printf("direct call: %s: %s\n", ex.err,
+        printf("%s: %s: %s\n", i.key, ex.err,
             (ex.desc =~ /functional domain: [A-Z_]+/) ? (ex.desc =~ x/(functional domain: [A-Z_]+)/)[0] : ex.desc);
     }
 }

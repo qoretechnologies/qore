@@ -2394,6 +2394,32 @@ class DataProviderModuleLoader {
         map DataProviderModuleLoader::tryLoad($1, True), DataProvider::FactoryModuleList;
     }
 
+    #! Loads a module and rolls back the registrations that its initialization made if loading it fails
+    /** The rollback closures added since the load started are run (all of them, even if one raises an exception) and
+        the exception of the load is raised again.  The public ImplicitModuleTransaction API, which acts on the
+        rollback closures of other loads too, declares \c PROCESS_CONTROL; the module's own loads for a lookup use
+        this (qore#6337)
+
+        @throw any exception raised while loading the module
+    */
+    static loadModule(string module_str) {
+        if (!Priv::rb) {
+            Priv::rb = new ImplicitModuleTransaction();
+        }
+        int sp = Priv::rb.savepointImpl();
+        try {
+            load_module(module_str);
+            Priv::rb.commitImpl(sp);
+        } catch (hash<ExceptionInfo> ex) {
+            # the error of the load is the one raised
+            try {
+                Priv::rb.rollbackImpl(sp);
+            } catch (hash<ExceptionInfo> rex) {
+            }
+            rethrow;
+        }
+    }
+
     #! Try to load the given module; see DataProvider::tryLoad()
     static bool tryLoad(string module_str, *bool init, *bool rethrow_exception) {
         *LoggerInterface logger = DataProvider::getGlobalLogger();
@@ -2402,7 +2428,7 @@ class DataProviderModuleLoader {
                 logger.info("DataProvider loading module: %y", module_str);
             }
             # any partial registrations from the failed module are rolled back
-            ImplicitModuleTransaction::loadModule(module_str);
+            DataProviderModuleLoader::loadModule(module_str);
             return True;
         } catch (hash<ExceptionInfo> ex) {
             if (rethrow_exception) {

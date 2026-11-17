@@ -1620,7 +1620,10 @@ xcrun notarytool submit MyModule.zip --keychain-profile my-notary-profile --wait
       modules register with it for later (such as the lazy application actions of the DataProvider catalog and the
       pending connection schemes of the ConnectionProvider module) tests it with is_module_init_closure() when it is
       registered and runs it with call_module_init_closure(), which raises \c MODULE-INIT-CLOSURE-ERROR for code that
-      the initialization of its library module did not create, so code cannot give its own code this exemption.  Work
+      the initialization of its library module did not create, created while code that is not a library module's ran
+      above the module's initialization, or when the code that calls it is not a library module's, so code cannot give
+      its own code this exemption.  A module that is not library code (one loaded by its path, for example) has the
+      restrictions of the %Program that loaded it, and its code is checked as the calling code.  Work
       that module code hands to a
       thread that it started earlier (through a queue, for example) runs with the restrictions of the code that the
       thread was started for, not with those of the code that hands it over.  Since %Qore 3.0
