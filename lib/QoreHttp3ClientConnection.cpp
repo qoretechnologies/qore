@@ -45,6 +45,7 @@
 #include "qore/intern/QuicSession.h"
 #include "qore/intern/QoreLibIntern.h"
 #include "qore/intern/ql_debug.h"
+#include "qore/intern/QoreSocketObjectPrivate.h"
 
 #include <cstdio>
 
@@ -176,11 +177,11 @@ void Http3ClientConnection::setMaxResponseBodySizeHook(int64_t max_size) {
     max_response_body_size_ = max_size;
     for (auto& a : attempts_) {
         if (a && a->sock_priv) {
-            a->sock_priv->setMaxResponseBodySize(max_size);
+            qore_socket_object_private(a->sock_priv).setMaxResponseBodySize(max_size);
         }
     }
     if (sock_priv) {
-        sock_priv->setMaxResponseBodySize(max_size);
+        qore_socket_object_private(sock_priv).setMaxResponseBodySize(max_size);
     }
 }
 
@@ -221,7 +222,7 @@ int Http3ClientConnection::buildAttempt(int family, int64_t not_before_ns_abs,
     }
     if (!ssl_ca_file_.empty() || !ssl_ca_path_.empty()) {
         // the socket is not submitted yet, so it is configured directly
-        sock_priv_raw->setSslCaLocationsForAsyncPoll(ssl_ca_file_.empty() ? nullptr : ssl_ca_file_.c_str(),
+        qore_socket_object_private(sock_priv_raw).setSslCaLocationsForAsyncPoll(ssl_ca_file_.empty() ? nullptr : ssl_ca_file_.c_str(),
             ssl_ca_path_.empty() ? nullptr : ssl_ca_path_.c_str(), xsink);
         if (*xsink) {
             return -1;
@@ -305,7 +306,7 @@ int Http3ClientConnection::buildAttempt(int family, int64_t not_before_ns_abs,
     priv_raw->armHappyEyeballsOwner(this);
 
     std::lock_guard<std::mutex> lk(attempts_mu_);
-    sock_priv_raw->setMaxResponseBodySize(max_response_body_size_);
+    qore_socket_object_private(sock_priv_raw).setMaxResponseBodySize(max_response_body_size_);
     int idx = static_cast<int>(attempts_.size());
     attempts_.push_back(std::move(a));
     return idx;
@@ -673,7 +674,7 @@ void Http3ClientConnection::onInnerHandshakeReady(Http3ClientPollOperationPriv* 
     // where the connection leads: the winning attempt's socket, which a pool checks before it hands the connection
     // to other code
     std::shared_ptr<const QoreConnectionDestinations> winner_destinations
-        = sock_priv ? sock_priv->getConnectedDestinations() : nullptr;
+        = sock_priv ? qore_socket_object_private(sock_priv).getConnectedDestinations() : nullptr;
     sock_obj = w->sock_obj;          w->sock_obj = nullptr;
     poll_op_priv = w->poll_op_priv;  w->poll_op_priv = nullptr;
     poll_op_obj = w->poll_op_obj;    w->poll_op_obj = nullptr;
@@ -1135,7 +1136,7 @@ void Http3ClientConnection::setTrailers(const QoreHashNode* trailers, ExceptionS
         return;
     }
 
-    sock_priv->submitQuicClientTrailers(streaming_send_stream_id, trailers, xsink);
+    qore_socket_object_private(sock_priv).submitQuicClientTrailers(streaming_send_stream_id, trailers, xsink);
 }
 
 bool Http3ClientConnection::cancelRequest(int64_t stream_id, ExceptionSink* xsink) {

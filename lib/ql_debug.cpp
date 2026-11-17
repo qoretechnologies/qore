@@ -102,6 +102,7 @@
 #include "qore/intern/QoreAOTBatchMemory.h"
 #include "qore/intern/FileStreamIo.h"
 #include "qore/intern/qore_enum_decl_private.h"
+#include "qore/intern/QoreSocketObjectPrivate.h"
 
 #include <llvm/MC/TargetRegistry.h>
 #include <llvm/TargetParser/Host.h>
@@ -4715,8 +4716,8 @@ public:
             }
             ReferenceHolder<QoreSocketObject> socket(new QoreSocketObject, &xsink);
             int rv = protocol == 2
-                ? socket->sendHttp2StreamDataForAsyncPoll(1, nullptr, false, &xsink)
-                : socket->sendQuicClientStreamDataForAsyncPoll(0, nullptr, 0, false, &xsink);
+                ? qore_socket_object_private(socket).sendHttp2StreamDataForAsyncPoll(1, nullptr, false, &xsink)
+                : qore_socket_object_private(socket).sendQuicClientStreamDataForAsyncPoll(0, nullptr, 0, false, &xsink);
             {
                 std::lock_guard<std::mutex> lock(m);
                 done = true;
@@ -17019,7 +17020,7 @@ static QoreValue f_dbg_close_socket_at_next_ssl_io(const QoreListNode* params, R
     if (*xsink || !sock) {
         return QoreValue();
     }
-    sock->dbgCloseAtNextSslIo();
+    qore_socket_object_private(sock).dbgCloseAtNextSslIo();
     return QoreValue();
 }
 
@@ -17269,7 +17270,7 @@ static QoreValue f_dbg_reset_socket(const QoreListNode* params, RuntimeConfig& r
             return QoreValue();
         }
     }
-    sock->dbgResetOnClose();
+    qore_socket_object_private(sock).dbgResetOnClose();
     sock->close();
     return QoreValue();
 }
@@ -17289,7 +17290,7 @@ static QoreValue f_dbg_force_ssl_error_ssl(const QoreListNode* params, RuntimeCo
         }
         return QoreValue();
     }
-    sock->dbgForceSslErrorSslAtNextWrite();
+    qore_socket_object_private(sock).dbgForceSslErrorSslAtNextWrite();
     return QoreValue();
 }
 
@@ -17377,7 +17378,7 @@ static QoreValue f_dbg_socket_stream_records(const QoreListNode* params, Runtime
     if (*xsink || !sock) {
         return QoreValue();
     }
-    return sock->dbgGetStreamRecordCounts(get_param_value(params, 1).getAsBigInt(), xsink);
+    return qore_socket_object_private(sock).dbgGetStreamRecordCounts(get_param_value(params, 1).getAsBigInt(), xsink);
 }
 
 //! Debug-only: stops one I/O thread of the global async I/O controller and waits until it has stopped
@@ -17792,7 +17793,7 @@ static QoreValue f_dbg_force_fd_swap_next_wait(const QoreListNode* params, Runti
     if (*xsink || !sock) {
         return QoreValue();
     }
-    sock->dbgForceFdSwapNextWait();
+    qore_socket_object_private(sock).dbgForceFdSwapNextWait();
     return QoreValue();
 }
 

@@ -42,6 +42,7 @@
 #include "qore/intern/ql_debug.h"
 #include "qore/intern/QC_FutureImpl.h"
 #include "qore/intern/AsyncIoControllerPriv.h"
+#include "qore/intern/QoreSocketObjectPrivate.h"
 
 #include <cstdio>
 
@@ -182,7 +183,7 @@ int Http1ClientConnection::buildAndSubmit(ExceptionSink* xsink) {
     sock_priv_raw->acceptAllCertificates(accept_all_certs);
     if (!ssl_ca_file.empty() || !ssl_ca_path.empty()) {
         // the socket is not submitted yet, so it is configured directly
-        sock_priv_raw->setSslCaLocationsForAsyncPoll(ssl_ca_file.empty() ? nullptr : ssl_ca_file.c_str(),
+        qore_socket_object_private(sock_priv_raw).setSslCaLocationsForAsyncPoll(ssl_ca_file.empty() ? nullptr : ssl_ca_file.c_str(),
             ssl_ca_path.empty() ? nullptr : ssl_ca_path.c_str(), xsink);
         if (*xsink) {
             return -1;
@@ -197,7 +198,7 @@ int Http1ClientConnection::buildAndSubmit(ExceptionSink* xsink) {
         if (ut_ms > 0) {
             // async-poll variant: the adopt-socket path runs on the I/O thread when the ALPN
             // handover happens from continuePoll(), where the public sync API is forbidden
-            sock_priv_raw->setUserTimeoutForAsyncPoll(ut_ms, xsink);
+            qore_socket_object_private(sock_priv_raw).setUserTimeoutForAsyncPoll(ut_ms, xsink);
         }
     }
     if (client_cert) {
@@ -349,7 +350,7 @@ int Http1ClientConnection::buildAndSubmitAdopted(QoreObject* adopted_sock_obj,
         if (ut_ms > 0) {
             // async-poll variant: the adopt-socket path runs on the I/O thread when the ALPN
             // handover happens from continuePoll(), where the public sync API is forbidden
-            sock_priv_raw->setUserTimeoutForAsyncPoll(ut_ms, xsink);
+            qore_socket_object_private(sock_priv_raw).setUserTimeoutForAsyncPoll(ut_ms, xsink);
         }
     }
 

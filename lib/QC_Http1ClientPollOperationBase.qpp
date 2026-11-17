@@ -43,6 +43,7 @@
 #include "qore/intern/QoreHttpHeaderPairs.h"
 #include "qore/intern/ql_debug.h"
 #include "qore/intern/PollStateCloseHook.h"
+#include "qore/intern/QoreSocketObjectPrivate.h"
 
 // Forward declarations for QPP type references
 extern QoreClass* QC_ABSTRACTHTTPPOLLCONNECTION;
@@ -570,7 +571,7 @@ void Http1ClientPollOperationPriv::startSslUpgrade(ExceptionSink* xsink) {
     if (proxy_tunnel) {
         // the socket is connected to the proxy: the TLS connection through the tunnel is made for the target server,
         // which is the name sent with SNI and verified in the server's certificate
-        sock_obj->setSslTargetHostForAsyncPoll(target_host.c_str());
+        qore_socket_object_private(sock_obj).setSslTargetHostForAsyncPoll(target_host.c_str());
     }
     sock_obj->ref();
     // through an HTTPS proxy, the TLS connection to the target server is carried by the TLS connection to the proxy
@@ -1260,7 +1261,7 @@ QoreHashNode* Http1ClientPollOperationPriv::handleIdle(ExceptionSink* xsink) {
             }
 #endif
             ExceptionSink idle_xsink;
-            int idle_rc = sock_obj->checkIdleDataForAsyncPoll(&idle_xsink);
+            int idle_rc = qore_socket_object_private(sock_obj).checkIdleDataForAsyncPoll(&idle_xsink);
             if (idle_rc < 0 || idle_xsink) {
                 // EOF or SSL error - preserve the underlying error category
                 // (e.g. SOCKET-SSL-ERROR when the TLS handshake or an
@@ -1363,7 +1364,7 @@ QoreHashNode* Http1ClientPollOperationPriv::handleIdle(ExceptionSink* xsink) {
     int fd = sock_obj->getPollableDescriptor();
     if (fd >= 0) {
         ExceptionSink idle_xsink;
-        int idle_rc = sock_obj->checkIdleDataForAsyncPoll(&idle_xsink);
+        int idle_rc = qore_socket_object_private(sock_obj).checkIdleDataForAsyncPoll(&idle_xsink);
         if (idle_rc < 0 || idle_xsink) {
             ASYNC_IO_TRACE("H1 handleIdle: checkIdleData rc=%d, closing fd=%d (no pending req)\n",
                 idle_rc, fd);
@@ -1600,7 +1601,7 @@ QoreHashNode* Http1ClientPollOperationPriv::handleSending(ExceptionSink* xsink) 
                 }
 #endif
                 ExceptionSink idle_xsink;
-                int idle_rc = sock_obj->checkIdleDataForAsyncPoll(&idle_xsink);
+                int idle_rc = qore_socket_object_private(sock_obj).checkIdleDataForAsyncPoll(&idle_xsink);
                 if (idle_rc < 0 || idle_xsink) {
                     // EOF or socket/TLS error before the response header.
                     ASYNC_IO_TRACE("H1 handleSending: stale connection detected "
@@ -3296,7 +3297,7 @@ void Http1ClientPollOperationPriv::notifyPendingStreams(const char* err, const c
 void Http1ClientPollOperationPriv::fireReadyCallback(ExceptionSink* xsink) {
     // where the connection leads, which a pool checks before it hands the connection to other code
     std::shared_ptr<const QoreConnectionDestinations> destinations
-        = sock_obj ? sock_obj->getConnectedDestinations() : nullptr;
+        = sock_obj ? qore_socket_object_private(sock_obj).getConnectedDestinations() : nullptr;
     // Read connection_priv under stream_lock to race-free disarm against
     // closeConnection's disarmConnectionPriv - matches the pattern used
     // by abort() / setError() above and by the H2 / H3 equivalents.
