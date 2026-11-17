@@ -1,0 +1,125 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes of its own binary started without an execution mode
+# test-platform: macos - native thread joins, thread-local destructors and the signal masks of native threads
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires FsUtil
+%requires QUnit
+%requires ../../../TestInterpreter.qm
+
+%exec-class ThreadReaperTest
+
+#! The native thread reaper blocks every signal, and one slow thread exit does not delay the joins of the others
+#! (qore#6433)
+/** The reaper that joins the threads that Qore starts was created with the signal mask of the thread that started
+    it, so with signal handling disabled (as an embedding application can run Qore) it could receive any
+    process-directed signal; and it joined the threads one at a time, so a thread whose thread-local destructors
+    blocked delayed the joins of every thread that ended after it, which stayed in the library's thread counts.
+
+    The children: one reads the signal masks of the reaper threads (every signal blocked but those of their own
+    faults) of a process with signal handling disabled and of one with it from /proc (Linux); the other holds a thread
+    in a thread-local destructor (a debug control of DEBUG builds), lets another thread end and waits until it has been
+    joined, then releases the held thread.  The waits are condition waits whose timeouts only bound a failure, and
+    each child must end normally.
+*/
+class ThreadReaperTest inherits QUnit::Test {
+    public {
+        #! the child that prints the blocked signals of the reaper threads
+        const MaskChild = "%modern
+Counter c(1);
+background sub () { c.dec(); }();
+c.waitForZero();
+Dir d();
+d.chdir(\"/proc/self/task\");
+int reapers;
+foreach string t in (d.list()) {
+    string comm;
+    string status;
+    try {
+        comm = trim(ReadOnlyFile::readTextFile(\"/proc/self/task/\" + t + \"/comm\"));
+        status = ReadOnlyFile::readTextFile(\"/proc/self/task/\" + t + \"/status\");
+    } catch (hash<ExceptionInfo> ex) {
+        # a thread that has ended meanwhile
+        continue;
+    }
+    if (comm != \"qore-reaper\") {
+        continue;
+    }
+    ++reapers;
+    int blk = (\"0x\" + (status =~ x/SigBlk:\\s*([0-9a-f]+)/)[0]).toInt(16);
+    # every standard signal but SIGKILL and SIGSTOP, which cannot be blocked, and the signals of the thread's own
+    # faults (SIGILL, SIGTRAP, SIGBUS, SIGFPE, SIGSEGV), which stay unblocked
+    hash<string, bool> skip = map {$1: True}, (\"4\", \"5\", \"7\", \"8\", \"9\", \"11\", \"19\");
+    list<int> unblocked = select xrange(1, 31), !skip{$1} && !(blk & (1 << ($1 - 1)));
+    printf(\"reaper %s: unblocked signals: %y\\n\", t, unblocked);
+}
+printf(\"reapers: %d\\n\", reapers);
+";
+
+        #! the child that holds a thread in a thread-local destructor while another one ends
+        const SlowExitChild = "%modern
+# the next thread is held in a thread-local destructor, after its thread function has returned
+call_function(\"dbg_hold_next_thread_tls_exit\", 60000);
+Counter c(1);
+background sub () { c.dec(); }();
+c.waitForZero();
+if (!call_function(\"dbg_wait_thread_finish_held\", 30000)) {
+    printf(\"the thread was not held\\n\");
+    exit(2);
+}
+# another thread ends: it is joined while the first one is held, leaving only the held one counted
+Counter c2(1);
+background sub () { c2.dec(); }();
+c2.waitForZero();
+bool joined = call_function(\"dbg_wait_thread_counter_at_most\", 1, 30000);
+call_function(\"dbg_release_thread_finish_hold\");
+printf(\"joined while the other thread was held: %y\\n\", joined);
+";
+    }
+
+    constructor() : QUnit::Test("ThreadReaper", "1.0") {
+        addTestCase("the reaper blocks every signal", \testSignalMask());
+        addTestCase("a slow thread exit does not delay the others", \testSlowExit());
+        set_return_value(main());
+    }
+
+    #! runs the code in a child; checks that it ends normally and returns its output
+    string run(string code, string opts = "") {
+        TmpDir tmp("qore-thread-reaper-");
+        string file = tmp.path + DirSep + "child.q";
+        File f();
+        f.open2(file, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(code);
+        f.close();
+        int status;
+        string out = backquote(sprintf("%s %s %s 2>&1", TestInterpreter::qore_interpreter(), opts, file), \status);
+        assertEq(0, status, out);
+        return out;
+    }
+
+    testSignalMask() {
+        if (!is_dir("/proc/self/task")) {
+            testSkip("the signal masks of threads are read from /proc");
+            return;
+        }
+        # without signal handling the thread that starts the reaper has no signal blocked; with it, the main thread
+        # has the signals of its handlers unblocked
+        foreach string opts in (("-b", "")) {
+            string out = run(MaskChild, opts);
+            assertRegex("^(reaper [0-9]+: unblocked signals: \\[\\]\n)+reapers: [1-9][0-9]*\n$", out,
+                opts ? opts : "default");
+        }
+    }
+
+    testSlowExit() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("needs a debug build (dbg_hold_next_thread_tls_exit())");
+            return;
+        }
+        assertEq("joined while the other thread was held: True\n", run(SlowExitChild));
+    }
+}

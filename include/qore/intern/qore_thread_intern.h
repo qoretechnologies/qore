@@ -934,6 +934,13 @@ DLLLOCAL void qore_dbg_hold_next_thread_finish(int ms);
 DLLLOCAL void qore_dbg_hold_next_thread_tls_exit(int ms);
 //! Waits until a finishing background thread is held; returns false on timeout
 DLLLOCAL bool qore_dbg_wait_thread_finish_held(int timeout_ms);
+//! Releases a thread that qore_dbg_hold_next_thread_tls_exit() holds, if it is held (qore#6433)
+DLLLOCAL void qore_dbg_release_thread_finish_hold();
+//! Waits until the background thread count (thread_counter) is at most \a count; returns false on timeout
+/** A thread leaves the count when it has been joined (qore#6412), so a test can tell when a thread was joined
+    (qore#6433)
+*/
+DLLLOCAL bool qore_dbg_wait_thread_counter_at_most(int count, int timeout_ms);
 
 //! Returns true, and disarms the site, if the next step at \a site is armed to fail
 DLLLOCAL bool qore_dbg_program_entry_fails(int site);
