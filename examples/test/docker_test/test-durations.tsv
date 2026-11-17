@@ -386,7 +386,9 @@ examples/test/ir/JITLargeFunctionBlocks-7.qtest	26.1	18.8	-	-	-	12.0	-	-	29.2	19
 examples/test/ir/JITReloadChainFlush-1.qtest	42.7	14.2	-	-	-	7.6	-	-	24.1	12.9
 examples/test/ir/JITReloadChainFlush-2.qtest	159.4	52.9	-	-	-	28.3	-	-	89.8	48.0
 examples/test/ir/JITReloadChainFlush-3.qtest	56.9	18.9	-	-	-	10.1	-	-	32.1	17.1
-examples/test/ir/JITSmoke.qtest	133.0	83.0	-	-	-	-	-	-	68.0	78.0
+examples/test/ir/JITSmoke-1.qtest	44.3	27.7	-	-	-	-	-	-	22.7	26.0
+examples/test/ir/JITSmoke-2.qtest	44.3	27.7	-	-	-	-	-	-	22.7	26.0
+examples/test/ir/JITSmoke-3.qtest	44.3	27.7	-	-	-	-	-	-	22.7	26.0
 examples/test/ir/JITSmoke_49d3.qtest	7.0	7.0	-	-	-	6.0	-	-	8.0	5.0
 examples/test/ir/JITStaticMethodDirectCalls.qtest	7.0	6.0	-	-	-	-	-	-	13.0	5.0
 examples/test/ir/JITTransitiveBatch.qtest	1.0	0.0	-	-	-	-	-	-	1.0	0.0
