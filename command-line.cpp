@@ -1762,6 +1762,12 @@ int qore_main_intern(int argc, char* argv[], int other_po) {
          }
       }
 
+      // the exceptions raised before the parse started (ex: a script file that cannot be opened) are diagnostics of
+      // it too in the diagnostic modes (issue #6516)
+      if (diag_json || code_frames) {
+         qore_add_parse_exception_diagnostics(**qpgm, xsink);
+      }
+
       // structured-diagnostics mode: emit the collected diagnostics as JSON and exit without executing
       if (diag_json) {
          printf("%s\n", qore_get_parse_diagnostics_json(**qpgm).c_str());

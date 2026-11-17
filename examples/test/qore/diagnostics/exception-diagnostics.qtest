@@ -1,0 +1,191 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires json
+%requires ../../TestInterpreter.qm
+
+%exec-class ExceptionDiagnosticsTest
+
+#! Exceptions that fail a parse without a parse diagnostic are diagnostics of the parse (issue #6516)
+/** An exception can be raised in a parse without a diagnostic: in the initialization of a constant, by a module
+    command or by a parse directive.  The exceptions that no error diagnostic stands for are recorded as error
+    diagnostics at the end of the parse, at their location, so that Program::getParseDiagnostics(),
+    --diag-format=json and --code-frames report every reason of a failed parse.
+*/
+public class ExceptionDiagnosticsTest inherits QUnit::Test {
+    private {
+        TmpDir tmp("qore-exception-diagnostics-");
+    }
+
+    constructor() : QUnit::Test("ExceptionDiagnosticsTest", "1.0", \ARGV) {
+        addTestCase("an exception in a constant initialization", \constantTest());
+        addTestCase("exceptions in two constant initializations", \twoConstantsTest());
+        addTestCase("a parse error in a constant initialization is recorded once", \constantParseErrorTest());
+        addTestCase("an exception in a constant initialization at commit", \constantCommitTest());
+        addTestCase("an exception of a Program parsed in a constant initialization", \childProgramTest());
+        addTestCase("a module command error", \moduleCmdTest());
+        addTestCase("an unknown time zone", \timeZoneTest());
+        addTestCase("an exception beside parse errors", \mixedTest());
+        addTestCase("parse errors are not recorded twice", \noDuplicateTest());
+        addTestCase("--diag-format=json", \jsonTest());
+        addTestCase("--code-frames", \codeFramesTest());
+        addTestCase("a script that cannot be opened", \missingFileTest());
+        addTestCase("--only-first-exception", \onlyFirstTest());
+        set_return_value(main());
+    }
+
+    #! parses \a src in a Program collecting diagnostics, which must fail, and returns its error diagnostics
+    private list<hash<ParseDiagnosticInfo>> parseErrors(string src) {
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.setParseDiagnosticsCollected(True);
+        bool failed;
+        try {
+            p.parse(src, "exception-diagnostics");
+        } catch (hash<ExceptionInfo> ex) {
+            failed = True;
+        }
+        assertTrue(failed, "the parse failed");
+        return (map $1, p.getParseDiagnostics(), $1.severity == "error");
+    }
+
+    constantTest() {
+        list<hash<ParseDiagnosticInfo>> l = parseErrors("# a constant\nconst X = 1 / 0;\n");
+        assertEq(1, l.size(), sprintf("%N", l));
+        assertEq("DIVISION-BY-ZERO", l[0].code);
+        assertEq("DIVISION-BY-ZERO", l[0].id);
+        assertEq(2, l[0].startLine);
+        assertEq("exception-diagnostics", l[0].file);
+    }
+
+    #! each exception is located at its constant and names it
+    twoConstantsTest() {
+        list<hash<ParseDiagnosticInfo>> l = parseErrors("const X = 1 / 0;\nconst Y = 2 / 0;\n");
+        assertEq(2, l.size(), sprintf("%N", l));
+        assertEq((1, 2), (map $1.startLine, l));
+        assertRegex("\\(while initializing constant 'X'\\)$", l[0].message);
+        assertRegex("\\(while initializing constant 'Y'\\)$", l[1].message);
+    }
+
+    #! an error that a constant initialization raises as a parse error is one diagnostic
+    constantParseErrorTest() {
+        list<hash<ParseDiagnosticInfo>> l = parseErrors("# a constant\nconst X = no_such_function();\n");
+        assertEq(1, l.size(), sprintf("%N", l));
+        assertEq("PARSE-EXCEPTION", l[0].code);
+        assertEq(2, l[0].startLine);
+        l = parseErrors("# a constant\nconst int X = \"str\";\n");
+        assertEq(1, l.size(), sprintf("%N", l));
+        assertEq("PARSE-TYPE-ERROR", l[0].code);
+    }
+
+    #! an initialization that calls user code runs at commit; the exception is located at the constant
+    constantCommitTest() {
+        list<hash<ParseDiagnosticInfo>> l = parseErrors("int sub z() { return 0; }\nconst X = 1 / z();\n");
+        assertEq(1, l.size(), sprintf("%N", l));
+        assertEq("DIVISION-BY-ZERO", l[0].code);
+        assertEq(2, l[0].startLine);
+        assertRegex("\\(while initializing constant 'X'\\)$", l[0].message);
+    }
+
+    #! a parse error of another Program that collects diagnostics, raised in the initialization of a constant, is a
+    #! diagnostic of this Program too
+    childProgramTest() {
+        list<hash<ParseDiagnosticInfo>> l = parseErrors("int sub f() {\n    Program p(PO_NEW_STYLE);\n"
+            "    p.setParseDiagnosticsCollected(True);\n    p.parse(\"bogus(;\", \"child\");\n    return 1;\n}\n"
+            "const X = f();\n");
+        assertEq(1, l.size(), sprintf("%N", l));
+        assertEq("PARSE-EXCEPTION", l[0].code);
+    }
+
+    moduleCmdTest() {
+        list<hash<ParseDiagnosticInfo>> l = parseErrors("%requires json\n%module-cmd(json) bogus\n");
+        assertEq(1, l.size(), sprintf("%N", l));
+        assertEq("PARSE-COMMAND-ERROR", l[0].code);
+    }
+
+    timeZoneTest() {
+        list<hash<ParseDiagnosticInfo>> l = parseErrors("%set-time-zone Bogus/No_Such_Zone\n");
+        assertEq(1, l.size(), sprintf("%N", l));
+        assertRegex("Bogus/No_Such_Zone", l[0].message);
+    }
+
+    #! the exception and the parse error are both reported
+    mixedTest() {
+        list<hash<ParseDiagnosticInfo>> l = parseErrors("const X = 1 / 0;\nint sub f() { return \"s\"; }\n");
+        list<string> codes = sort(map $1.code, l);
+        assertEq(2, l.size(), sprintf("%N", l));
+        assertTrue(inlist("DIVISION-BY-ZERO", codes), sprintf("%y", codes));
+    }
+
+    #! errors with the same message, each a diagnostic, stand for their exceptions: none is added
+    noDuplicateTest() {
+        list<hash<ParseDiagnosticInfo>> l = parseErrors("sub f() {\nundeclared_v = 1;\nundeclared_v = 1;\n}\n");
+        assertEq(2, l.size(), sprintf("%N", l));
+        assertEq(l[0].message, l[1].message);
+        assertEq((2, 3), (map $1.startLine, l));
+    }
+
+    private string writeSource(string name, string src) {
+        string path = tmp.path + DirSep + name;
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(src);
+        f.close();
+        return path;
+    }
+
+    private hash<auto> run(string opt, string path, bool stderr = True) {
+        int rc;
+        string out = backquote(sprintf("%s %s %s%s", TestInterpreter::qore_interpreter(), opt, path,
+            stderr ? " 2>&1" : " 2>/dev/null"), \rc);
+        return {"out": out, "status": rc};
+    }
+
+    jsonTest() {
+        string path = writeSource("const.q", "%modern\nconst X = 1 / 0;\n");
+        hash<auto> r = run("--diag-format=json", path, False);
+        assertEq(2, r.status, r.out);
+        list<auto> diags = parse_json(r.out);
+        assertEq(1, diags.size(), r.out);
+        assertEq("DIVISION-BY-ZERO", diags[0].code, r.out);
+        assertEq("error", diags[0].severity, r.out);
+        assertEq(2, diags[0].startLine, r.out);
+    }
+
+    #! the exception is shown as a code frame also when a parse error is reported
+    codeFramesTest() {
+        string path = writeSource("mixed.q", "%modern\nconst X = 1 / 0;\nint sub f() { return \"s\"; }\n");
+        hash<auto> r = run("--code-frames", path);
+        assertEq(2, r.status, r.out);
+        assertRegex("mixed\\.q:2.*error\\[DIVISION-BY-ZERO\\]", r.out);
+        assertRegex("mixed\\.q:3.*error\\[", r.out);
+    }
+
+    #! a script that cannot be opened is reported as a diagnostic, without a file name of the parse
+    missingFileTest() {
+        string path = tmp.path + DirSep + "does-not-exist.q";
+        hash<auto> r = run("--diag-format=json", path, False);
+        assertEq(2, r.status, r.out);
+        list<auto> diags = parse_json(r.out);
+        assertEq(1, diags.size(), r.out);
+        assertEq("error", diags[0].severity, r.out);
+        assertRegex("does-not-exist\\.q", diags[0].message, r.out);
+    }
+
+    #! with only the first exception raised, the second constant's name is not added to the first exception
+    onlyFirstTest() {
+        string path = writeSource("first.q", "%modern\nconst A = no_such_a();\nconst B = no_such_b();\n");
+        hash<auto> r = run("--only-first-exception --diag-format=json", path, False);
+        assertEq(2, r.status, r.out);
+        list<auto> diags = parse_json(r.out);
+        assertTrue(diags.size() >= 1, r.out);
+        assertEq(0, (select diags, $1.message =~ /constant 'B'/ && $1.message =~ /no_such_a/).size(), r.out);
+        # each exception is recorded once
+        assertEq(diags.size(), (map {$1.message: True}, diags).size(), r.out);
+    }
+}
