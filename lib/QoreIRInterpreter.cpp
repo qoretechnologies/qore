@@ -12,6 +12,7 @@
 #include "qore/intern/QoreJITIncludes.h"
 #include <qore/intern/QoreIRInterpreter.h>
 #include <qore/intern/QoreHashKeyHelper.h>
+#include "QoreIRTypeProfile.h"
 
 #include <algorithm>
 #include <cmath>
@@ -2530,7 +2531,9 @@ static QoreValue coerceIRLocalValue(LocalVar* var, const QoreValue& value, Excep
     (LocalVarValue::resolveLValueTypeInfo()), as the AST interpreter does (qore#5885).  An enum type accepts only its
     members, which are enum values, never a plain value of its base type, which parseAcceptsReturns() accepts
     (qore#6197); so does a union with an enum member, whose other members can accept the value only if it is not
-    the base type of the enum (qore#6259).
+    the base type of the enum (qore#6259).  A union converts the value to its first member that accepts it (an int
+    stored in a union<float, int> is the float; the member that accepts the value's type is not necessarily the first),
+    which only acceptAssignment() does, as for a local in IR slots and in the AST interpreter (qore#6282).
 */
 static QORE_INTERN_ALWAYS_INLINE bool qore_ir_local_stores_simple_value(const QoreTypeInfo* ti, qore_type_t vt) {
     // the most common case, which needs no look at the type
@@ -2538,8 +2541,8 @@ static QORE_INTERN_ALWAYS_INLINE bool qore_ir_local_stores_simple_value(const Qo
             || (vt == NT_BOOLEAN && ti == boolTypeInfo)) {
         return true;
     }
-    return !qore_type_contains_type_parameter(ti) && QoreTypeInfo::parseAcceptsReturns(ti, vt)
-        && !QoreTypeInfo::returnsEnum(ti);
+    return !qore_type_contains_type_parameter(ti) && !QoreTypeInfo::getUnionType(ti)
+        && QoreTypeInfo::parseAcceptsReturns(ti, vt) && !QoreTypeInfo::returnsEnum(ti);
 }
 
 //! Returns the line given, which the compiler cannot evaluate a test of before the code that calls this function
@@ -9627,6 +9630,16 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             && dot_eval_only_bases[i->result.id];
     };
 
+    // the parent slots of a handler are its first slots and those of its parent: a count that either does not hold,
+    // which only IR read from a malformed AOT module can give, is refused before the slots are used (qore#6451)
+    if (func.parent_slot_count && (func.parent_slot_count > locals_slot_cache.vector().size()
+            || (parent_slot_cache && func.parent_slot_count > parent_slot_cache->size()))) {
+        xsink->raiseException("IR-ERROR", "IR function '%s' has %u parent slots, more than its frame (%zu) or that of "
+            "its parent (%zu) holds", func.name.c_str(), func.parent_slot_count, locals_slot_cache.vector().size(),
+            parent_slot_cache ? parent_slot_cache->size() : static_cast<size_t>(0));
+        return false;
+    }
+
     // Phase B2: Build reverse map for parent slot TLS access.
     // Maps slot_id -> LocalVar* for slots 0..parent_slot_count-1.
     // Dirty parent-slot writeback uses this to read the authoritative runtime
@@ -12036,6 +12049,9 @@ dispatch_folded_step_host:
             case QoreIROpcode::ExceptionResume: {
                 // no exception check: the code that follows routes the exceptions
                 qore_rt_exception_resume(ir_value_pointer<void>(getIRValue(values, inst->operands[0])), xsink);
+                // the object is released: the slot no longer holds its address, so that IR that uses it again (only IR
+                // read from a malformed AOT module) finds no object (qore#6451)
+                setValueSlotDirect(values, inst->operands[0].id, QoreValue(static_cast<int64_t>(0)));
                 ++ip;
                 break;
             }
@@ -15558,9 +15574,12 @@ load_local_done:
                         // through the full path to preserve enum identity and type checking
                         const QoreTypeInfo* target_ti = local_inst->local
                             ? local_inst->local->getTypeInfo() : nullptr;
+                        // a type that the value is not stored in as it is (a mismatch, a type that names type
+                        // parameters, an enum, or a union, which converts the value to its first member that accepts it:
+                        // an int stored in a union<float, int> is the float; qore#6282) takes the full path
                         if (!qore_ir_local_stores_simple_value(target_ti, val.getType())) {
-                            // Type mismatch: invalidate caches and use full
-                            // type-checking path (will raise RUNTIME-TYPE-ERROR)
+                            // Type mismatch, or a value that a union converts: invalidate caches and use the full
+                            // type-checking path (raises RUNTIME-TYPE-ERROR or converts the value)
                             locals_slot_cache.release(local_inst->slot_id, xsink);
                             locals_slot_cache.set(local_inst->slot_id, QoreValue());
                             if (local_inst->slot_id < locals_lvar_cache.size()) {
@@ -16518,6 +16537,9 @@ load_local_done:
             case QoreIROpcode::ContextDestroy: {
                 QoreValue state_val = getIRValue(values, inst->operands[0]);
                 qore_rt_context_destroy(ir_value_handle(state_val), xsink);
+                // the object is released: the slot no longer holds its address, so that IR that uses it again (only IR
+                // read from a malformed AOT module) finds no object (qore#6451)
+                setValueSlotDirect(values, inst->operands[0].id, QoreValue(static_cast<int64_t>(0)));
                 ++ip;
                 break;
             }
@@ -16677,8 +16699,10 @@ load_local_done:
                 const QoreValue& list_val = values[next_inst->iterator.id];
                 size_t index = static_cast<size_t>(values[next_inst->index.id].getAsBigInt());
                 size_t limit = static_cast<size_t>(values[next_inst->limit.id].getAsBigInt());
-                const QoreListNode* list = list_val.get<const QoreListNode>();
-                if (index >= limit || index >= list->size()) {
+                // the lowering iterates a list here; IR read from a malformed AOT module can give another value, which
+                // ends the loop (qore#6451)
+                const QoreListNode* list = list_val.getType() == NT_LIST ? list_val.get<const QoreListNode>() : nullptr;
+                if (!list || index >= limit || index >= list->size()) {
                     prev_block = block;
                     block = next_inst->done_target;
                     ip = 0;
@@ -16922,6 +16946,9 @@ load_local_done:
                 QoreValue state_val = getIRValue(values, inst->operands[0]);
                 QoreValue fill_val = getIRValue(values, inst->operands[1]);
                 qore_rt_ref_foreach_finalize(ir_value_handle(state_val), fill_val.getAsBigInt(), xsink);
+                // the object is released: the slot no longer holds its address, so that IR that uses it again (only IR
+                // read from a malformed AOT module) finds no object (qore#6451)
+                setValueSlotDirect(values, inst->operands[0].id, QoreValue(static_cast<int64_t>(0)));
                 if (xsink && *xsink) {
                     // the write-back raised an exception (the lvalue refused the list, or a destructor of a value
                     // released): it goes to the handler of an enclosing try block (qore#6197)
@@ -16938,6 +16965,9 @@ load_local_done:
             case QoreIROpcode::RefForeachCleanup: {
                 QoreValue state_val = getIRValue(values, inst->operands[0]);
                 qore_rt_ref_foreach_cleanup(ir_value_handle(state_val), xsink);
+                // the object is released: the slot no longer holds its address, so that IR that uses it again (only IR
+                // read from a malformed AOT module) finds no object (qore#6451)
+                setValueSlotDirect(values, inst->operands[0].id, QoreValue(static_cast<int64_t>(0)));
                 ++ip;
                 break;
             }
@@ -23749,5 +23779,53 @@ QoreValue QoreIRInterpreter::evalLValueTernary(QoreIROpcode op, const QoreValue&
         xsink->raiseException("IR-INTERPRETER-ERROR", "unsupported lvalue ternary opcode");
     }
     return QoreValue();
+}
+#endif // QORE_IR_INTERPRETER_GIVEN_ARGS_UNIT
+
+// QoreIRInterpreterGivenArgs.cpp compiles this file again (see above): these functions are defined once
+#ifndef QORE_IR_INTERPRETER_GIVEN_ARGS_UNIT
+QoreIRFunction::~QoreIRFunction() {
+    // no eviction may run on the guard profiles once they are being freed (issue #6421)
+    if (guard_profile_types) {
+        qore_generic_cache_unregister(guard_profile_types.get());
+    }
+    delete cached_pre_instantiated;
+    for (auto* loc : owned_locations) {
+        delete loc;
+    }
+}
+
+void QoreIRFunction::initGuardProfiles() {
+    if (guard_profile_count < num_guards) {
+        if (!guard_profile_types) {
+            guard_profile_types = std::make_unique<QoreIRGuardProfileTypes>(*this);
+        } else {
+            // no eviction may run on the profiles that are replaced
+            qore_generic_cache_unregister(guard_profile_types.get());
+        }
+        guard_profiles.reset(new TypeProfile[num_guards]());
+        for (uint32_t i = 0; i < num_guards; ++i) {
+            guard_profiles[i].type_cache = guard_profile_types.get();
+        }
+        guard_profile_count = num_guards;
+    }
+}
+
+void TypeProfile::recordNewTypeInfo(const TypeProfileTypeKey& key) {
+    auto add = [this, &key] () {
+        std::lock_guard<std::mutex> lock(extended_mutex);
+        if (!extended_type_counts) {
+            extended_type_counts = std::make_unique<std::unordered_map<TypeProfileTypeKey, uint32_t,
+                TypeProfileTypeKeyHash>>();
+        }
+        ++(*extended_type_counts)[key];
+    };
+    if (key.serial && type_cache) {
+        // the entry is added with the registry locked, so the eviction of the type cannot run in between
+        qore_generic_cache_insert_weak(type_cache, {key.type_info}, add);
+    } else {
+        // a type that is never freed while the library is initialized
+        add();
+    }
 }
 #endif // QORE_IR_INTERPRETER_GIVEN_ARGS_UNIT

@@ -1228,6 +1228,12 @@ DLLLOCAL void parse_raise_background_lvalue_error(const QoreProgramLocation* loc
         const char* what);
 DLLLOCAL int check_readonly_receiver_method_call(const QoreProgramLocation* loc, const char* name,
         const MethodVariantBase* variant, const QoreFunction* func = nullptr);
+//! returns true if an lvalue of the given soft type does not hold a value of the type that an operator computes, but
+//! converts it when it is assigned, as for an assignment (ex: a softstring or softbool lvalue and an integer result)
+/** the operator then takes the generic path that converts the value, and its result type follows the lvalue's type
+    (qore#6304)
+*/
+DLLLOCAL bool qore_lvalue_converts_result(const QoreTypeInfo* typeInfo, qore_type_t t);
 DLLLOCAL int check_lvalue_int(const QoreProgramLocation* loc, const QoreTypeInfo*& typeInfo, const char* name);
 DLLLOCAL int check_lvalue_float(const QoreProgramLocation* loc, const QoreTypeInfo*& typeInfo, const char* name);
 DLLLOCAL int check_lvalue_int_float_number(const QoreProgramLocation* loc, const QoreTypeInfo*& typeInfo, const char* name);

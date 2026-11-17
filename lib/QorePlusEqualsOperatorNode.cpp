@@ -173,6 +173,11 @@ int QorePlusEqualsOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& 
                 "INVALID-OPERATION", desc.c_str());
         }
 
+        // an lvalue that converts the integer (ex: softbool) is assigned the converted sum and gives the value it
+        // holds afterwards: the generic operator, with the lvalue's type as the result type (qore#6304)
+        if (kind == plus_equals_lvalue_e::INT && qore_lvalue_converts_result(ti, NT_INT)) {
+            kind = plus_equals_lvalue_e::KEEP;
+        }
         if (kind == plus_equals_lvalue_e::INT) {
             parse_context.typeInfo = ti = bigIntTypeInfo;
             // the analysis left by the right operand describes that operand, not the result

@@ -4747,6 +4747,15 @@ public:
 DLLLOCAL void qore_generic_cache_insert(QoreGenericTypeCache* cache, const std::vector<const QoreTypeInfo*>& types,
         const std::function<void()>& insert);
 
+//! Adds an entry to a cache whose key identifies types without naming them, and registers the types of its key
+/** As qore_generic_cache_insert(), but the registration does not count as a name of the types: a declaration whose
+    types only such entries identify is freed when its last reference is released, not kept for the cache (see
+    QoreTypeOwner), and its types are evicted from the cache then, before their memory can be reused.  For caches of
+    information about types that must not keep them alive, such as the IR guard type profiles (issue #6421).
+*/
+DLLLOCAL void qore_generic_cache_insert_weak(QoreGenericTypeCache* cache,
+        const std::vector<const QoreTypeInfo*>& types, const std::function<void()>& insert);
+
 //! The number of live specialized IR functions (generic function and method specializations), for debug checks
 DLLLOCAL extern std::atomic<int64_t> qore_live_generic_specializations;
 //! The number of live concrete declarations of generic hashdecls, for debug checks

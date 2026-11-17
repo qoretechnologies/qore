@@ -1,0 +1,57 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - fork() reopen of an inherited connection and lock reinitialization after fork
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class DatasourcePendingValuesLockTest
+
+#! The pending connection values of a datasource are read and written only with the lock that guards them (qore#6142)
+/** The C++ unit tests of dbg_run_datasource_pending_tests() (debug builds of the library only):
+    - X1-X3: a hook runs in every critical section on the pending values (the user, password, database, encoding, host
+      and port that the next connection is opened with) and another thread checks that the lock is held in each one;
+      the number of sections of each path is exact: a copy, the configuration hash and string of a closed datasource,
+      the pending accessors and setters, the copy to another datasource, an open and a reset, and the reopen of an
+      inherited connection in a child process created with fork()
+    - X4: the debug checks of the locks pass on each of these paths, and an entry point called with the lock of a
+      datasource held aborts a child process created with fork()
+    - the record of the code that chose the connection (qore#6142): Z1 (a Datasource that C++ creates on a thread
+      with no Qore thread data), the API of QoreDatasourceConnectChoosers, copies and merges of the creators, a
+      datasource that sandboxed code created and that code which is not restricted configures and copies (which
+      Qore code cannot do: a call of a method of such an object runs under its sandbox), and a pool connection
+      created on another thread
+
+    Before the fix, a copy, the configuration hash and string, serialization and the reopen in a child read the
+    values while another thread could be changing them, which is a data race on std::string that can read freed memory.
+*/
+class DatasourcePendingValuesLockTest inherits QUnit::Test {
+    constructor() : Test("DatasourcePendingValuesLockTest", "1.0") {
+        addTestCase("the locks of the pending connection values", \lockTest());
+        set_return_value(main());
+    }
+
+    lockTest() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the C++ unit tests need a debug build of the library");
+        }
+        if (PlatformOS == "Windows") {
+            testSkip("the tests use fork()");
+        }
+        # registered only in a debug build of the library, so it is looked up at run time
+        hash<auto> result = call_function("dbg_run_datasource_pending_tests");
+        assertEq(0, result.fail_count, sprintf("C++ unit tests: %d/%d passed, %d failed", result.pass_count,
+            result.test_count, result.fail_count));
+        # the exact number of assertions of the tests: a path that is not run is a failure as well
+        assertEq(TestCount, result.test_count, "every check ran");
+    }
+
+    private {
+        #! the number of assertions of dbg_run_datasource_pending_tests()
+        const TestCount = 145;
+    }
+}

@@ -2112,7 +2112,10 @@ int UnresolvedStaticMethodCallReferenceNode::parseInit(QoreValue& val, QoreParse
         const qore_class_private* code_class = parse_get_class_priv();
         bool current_receiver;
         const QoreClass* ref_cls = qc;
-        if (qore_class_private::parseGetStaticCallReceiverTypeInfo(*qm, qc, code_class, current_receiver)
+        // (only in the code of a class, and for a method of a generic class: a method of a class that is not generic
+        // has a receiver for the variants that it adds to a generic base class's method also in top-level code)
+        if (code_class && qm->getClass()->hasTypeParameters()
+                && qore_class_private::parseGetStaticCallReceiverTypeInfo(*qm, qc, code_class, current_receiver)
                 && qore_class_private::get(*qc)->hasTypeParams()
                 && const_cast<qore_class_private*>(code_class)->parseFindStaticMethod(scope->getIdentifier(),
                     code_class) == qm) {

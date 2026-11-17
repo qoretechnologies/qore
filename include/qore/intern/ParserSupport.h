@@ -160,6 +160,12 @@ struct QoreParseState {
    bool line_start_directive_active = false;
    //! Provenance of the current legacy options; tokens copy it before later directives can restore %modern.
    QoreNativeParseInfo native_parse_info;
+   //! the extent of the last expression in parentheses that the parser reduced ('(' exp ')'): an operand of the
+   //! chomp, trim or splice operator with this extent is in parentheses of its own (issue #1867)
+   int paren_first_line = 0, paren_first_col = 0, paren_last_line = 0, paren_last_col = 0;
+   //! true if the parentheses of the last expression in parentheses are those of a list: (a, b), not ((a, b)), so
+   //! that its elements are the arguments of a call (issue #1867)
+   bool paren_list = false;
 };
 
 //! returns the description of a syntax error on a line that starts with % and \a name, which no parse directive's

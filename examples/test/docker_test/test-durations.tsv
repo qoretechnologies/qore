@@ -386,7 +386,9 @@ examples/test/ir/JITLargeFunctionBlocks-7.qtest	26.1	18.8	-	-	-	12.0	-	-	29.2	19
 examples/test/ir/JITReloadChainFlush-1.qtest	42.7	14.2	-	-	-	7.6	-	-	24.1	12.9
 examples/test/ir/JITReloadChainFlush-2.qtest	159.4	52.9	-	-	-	28.3	-	-	89.8	48.0
 examples/test/ir/JITReloadChainFlush-3.qtest	56.9	18.9	-	-	-	10.1	-	-	32.1	17.1
-examples/test/ir/JITSmoke.qtest	133.0	83.0	-	-	-	-	-	-	68.0	78.0
+examples/test/ir/JITSmoke-1.qtest	44.3	27.7	-	-	-	-	-	-	22.7	26.0
+examples/test/ir/JITSmoke-2.qtest	44.3	27.7	-	-	-	-	-	-	22.7	26.0
+examples/test/ir/JITSmoke-3.qtest	44.3	27.7	-	-	-	-	-	-	22.7	26.0
 examples/test/ir/JITSmoke_49d3.qtest	7.0	7.0	-	-	-	6.0	-	-	8.0	5.0
 examples/test/ir/JITStaticMethodDirectCalls.qtest	7.0	6.0	-	-	-	-	-	-	13.0	5.0
 examples/test/ir/JITTransitiveBatch.qtest	1.0	0.0	-	-	-	-	-	-	1.0	0.0
@@ -2254,6 +2256,9 @@ examples/test/qore/misc/lvalue-path-threads/lvalue-path-threads.qtest	5.0	2.0	5.
 examples/test/qore/misc/math_host_portability.qtest	0.0	0.0	0.0	0.0	0.0	-	-	1.0	0.0	0.0
 examples/test/qore/misc/member-notification/member-notification.qtest	1.0	1.0	2.0	1.0	2.0	-	-	1.0	2.0	1.0
 examples/test/qore/misc/module-cleanup-unlocked.qtest	0.0	0.0	0.0	0.0	1.0	-	-	0.0	0.0	0.0
+examples/test/qore/misc/module-loader/ConcurrentModuleProgramMerge-1.qtest	34.0	18.0	80.3	72.0	39.7	-	-	40.7	34.0	28.3
+examples/test/qore/misc/module-loader/ConcurrentModuleProgramMerge-2.qtest	34.0	18.0	80.3	72.0	39.7	-	-	40.7	34.0	28.3
+examples/test/qore/misc/module-loader/ConcurrentModuleProgramMerge-3.qtest	34.0	18.0	80.3	72.0	39.7	-	-	40.7	34.0	28.3
 examples/test/qore/misc/module-loader/aot-binary-symbol-resolution.qtest	3.0	2.0	4.0	1.0	2.0	3.0	-	1.0	2.0	2.0
 examples/test/qore/misc/module-loader/aot-hashdecl-constant-default.qtest	0.0	1.0	1.0	0.0	0.0	-	-	0.0	0.0	0.0
 examples/test/qore/misc/module-loader/aot-module-init-ownership.qtest	1.0	0.0	1.0	1.0	1.0	-	-	1.0	0.0	1.0
@@ -2261,7 +2266,6 @@ examples/test/qore/misc/module-loader/aot-module-reinjection.qtest	0.0	0.0	1.0	1
 examples/test/qore/misc/module-loader/aot-runtime-class-context.qtest	2.0	1.0	2.0	1.0	2.0	-	-	2.0	1.0	1.0
 examples/test/qore/misc/module-loader/blacklist.qtest	0.0	0.0	0.0	0.0	0.0	-	-	0.0	0.0	0.0
 examples/test/qore/misc/module-loader/circular-module-dependency.qtest	0.0	0.0	1.0	0.0	0.0	-	-	1.0	0.0	0.0
-examples/test/qore/misc/module-loader/concurrent-module-program-merge.qtest	102.0	54.0	241.0	216.0	119.0	-	-	122.0	102.0	85.0
 examples/test/qore/misc/module-loader/explicit-qmod-fallback.qtest	0.0	0.0	0.0	0.0	0.0	-	-	0.0	0.0	0.0
 examples/test/qore/misc/module-loader/injection.qtest	0.0	0.0	0.0	0.0	0.0	-	-	1.0	0.0	0.0
 examples/test/qore/misc/module-loader/issue-3504.qtest	0.0	0.0	1.0	0.0	0.0	-	-	0.0	0.0	0.0

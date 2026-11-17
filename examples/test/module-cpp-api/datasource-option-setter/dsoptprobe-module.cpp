@@ -22,6 +22,24 @@
     A value of \c "refuse" is refused by the driver on an open connection (\c DSOPTPROBE-REFUSED), so that a test can
     check that a refused value keeps the previous setter.
 
+    The driver also reports the code that chose the connection (qore#6142): its creators and the setters of the
+    connection values in use (Datasource::getConnectChoosers()), and the setter of the option \c "dest", which the
+    driver treats as an option that chooses the destination (Datasource::addOptionChooser(); matched without regard to
+    case, as a driver whose option names are not case-sensitive does).  <tt>select("choosers")</tt> returns the record
+    read when the connection was opened, and <tt>select("reconnect")</tt> reads it again on the calling thread, as a
+    driver's own reconnect does.  The record is a hash:
+    - \c known: true if the library has the record (\c _QORE_HAS_DATASOURCE_CONNECT_CHOOSERS); false otherwise, and
+      then no other key is set
+    - \c allows_uncontrolled: true if every entry may use uncontrolled APIs, derived from the entries below, each read
+      once
+    - \c aggregate: QoreDatasourceConnectChoosers::allowsUncontrolledApis()
+    - \c n: the number of entries
+    - \c dest: 1 if the setter of \c "dest" is an entry, 0 if the option has no setter, -1 if it is not set
+    - \c entries: a list of hashes, one per entry: \c allows_uncontrolled, \c sandboxed and \c restricted (of its
+      restrictions), \c no_uncontrolled (its restrictions have \c PO_NO_UNCONTROLLED_APIS) and \c policy (a policy
+      manager governed it)
+    - \c tid: the TID of the thread that read the record
+
     The functions of the namespace \c DsOptProbe stop a thread in the driver, so that a test can change a datasource
     at a chosen point of an operation of another thread without waiting for time to pass:
     - <tt>blockGet(string opt)</tt>: the next call of the driver that reads the value of \a opt on an open connection
@@ -58,6 +76,7 @@
 #include <qore/QoreSandboxManager.h>
 
 #include <cassert>
+#include <strings.h>
 #include <chrono>
 #include <condition_variable>
 #include <cstring>
@@ -67,7 +86,10 @@
 
 namespace {
 //! the options of the driver
-const char* const ProbeOptions[] = {"classpath", "other"};
+const char* const ProbeOptions[] = {"classpath", "other", "dest"};
+
+//! the option that the driver treats as choosing the destination of a connection (qore#6142)
+const char* const ProbeDestOption = "dest";
 
 //! the namespace of the module, copied into each Program that loads it
 QoreNamespace ProbeNs("DsOptProbe");
@@ -140,6 +162,62 @@ private:
 
 GetBlocker get_blocker;
 
+//! returns what the driver observes about the code that chose the connection of \a ds (qore#6142)
+QoreHashNode* observe_choosers(const Datasource& ds, ExceptionSink* xsink) {
+    ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), xsink);
+#ifdef _QORE_HAS_DATASOURCE_CONNECT_CHOOSERS
+    QoreDatasourceConnectChoosers c;
+    if (ds.getConnectChoosers(c, xsink)) {
+        return nullptr;
+    }
+    // the options that choose the destination; the names are matched without regard to case
+    int dest = -1;
+    ConstHashIterator hi(ds.getConnectOptions());
+    while (hi.next()) {
+        if (!strcasecmp(hi.getKey(), ProbeDestOption)) {
+            int rc = ds.addOptionChooser(hi.getKey(), c, xsink);
+            if (rc < 0) {
+                return nullptr;
+            }
+            if (rc > dest) {
+                dest = rc;
+            }
+        }
+    }
+    h->setKeyValue("known", true, xsink);
+    h->setKeyValue("n", static_cast<int64>(c.size()), xsink);
+    h->setKeyValue("dest", dest, xsink);
+    h->setKeyValue("aggregate", c.allowsUncontrolledApis(), xsink);
+    // each entry's policy is read once, and the result is derived from those reads
+    bool allows = true;
+    ReferenceHolder<QoreListNode> entries(new QoreListNode(autoTypeInfo), xsink);
+    for (size_t i = 0; i < c.size(); ++i) {
+        ReferenceHolder<QoreHashNode> e(new QoreHashNode(autoTypeInfo), xsink);
+        bool a = c.allowsUncontrolledApis(i);
+        if (!a) {
+            allows = false;
+        }
+        e->setKeyValue("allows_uncontrolled", a, xsink);
+        QoreModuleCommandRestrictions r;
+        bool got = c.getRestrictions(i, r);
+        assert(got);
+        (void)got;
+        e->setKeyValue("sandboxed", r.isSandboxed(), xsink);
+        e->setKeyValue("restricted", r.isRestricted(), xsink);
+        e->setKeyValue("no_uncontrolled", r.hasAny(QoreParseOptions(PO_NO_UNCONTROLLED_APIS)), xsink);
+        ReferenceHolder<QoreSandboxManager> policy(c.getPolicyManagerRef(i), xsink);
+        e->setKeyValue("policy", static_cast<bool>(policy), xsink);
+        entries->push(e.release(), xsink);
+    }
+    h->setKeyValue("allows_uncontrolled", allows, xsink);
+    h->setKeyValue("entries", entries.release(), xsink);
+#else
+    h->setKeyValue("known", false, xsink);
+#endif
+    h->setKeyValue("tid", q_gettid(), xsink);
+    return *xsink ? nullptr : h.release();
+}
+
 //! the connection data of the driver: the values of the options and what the driver observed about their setters
 /** Used only by the thread that holds the connection
 */
@@ -152,6 +230,20 @@ public:
         ExceptionSink xsink;
         values->deref(&xsink);
         observed->deref(&xsink);
+        if (choosers) {
+            choosers->deref(&xsink);
+        }
+    }
+
+    //! keeps the record of the code that chose the connection, read when it was opened; takes the reference
+    void setChoosers(QoreHashNode* h) {
+        assert(!choosers);
+        choosers = h;
+    }
+
+    //! returns the record read when the connection was opened
+    QoreValue getChoosers() const {
+        return choosers ? choosers->hashRefSelf() : QoreValue();
     }
 
     //! records the value of an option and what the driver observes about the code that set it
@@ -197,6 +289,8 @@ public:
 private:
     QoreHashNode* values;
     QoreHashNode* observed;
+    //! the record of the code that chose the connection, read when it was opened (qore#6142)
+    QoreHashNode* choosers = nullptr;
 };
 
 int probe_open(Datasource* ds, ExceptionSink* xsink) {
@@ -209,6 +303,12 @@ int probe_open(Datasource* ds, ExceptionSink* xsink) {
             return -1;
         }
     }
+    // the code that chose the connection, as a driver that judges the destination reads it when it connects
+    QoreHashNode* choosers = observe_choosers(*ds, xsink);
+    if (!choosers) {
+        return -1;
+    }
+    conn->setChoosers(choosers);
     ds->setPrivateData(conn.release());
     return 0;
 }
@@ -276,6 +376,13 @@ QoreValue probe_select(Datasource* ds, const QoreString* sql, const QoreListNode
     TempEncodingHelper str(sql, QCS_DEFAULT, xsink);
     if (*xsink) {
         return QoreValue();
+    }
+    // the record of the code that chose the connection (qore#6142): read at the open, or now, as a reconnect does
+    if (!strcmp(str->c_str(), "choosers")) {
+        return conn->getChoosers();
+    }
+    if (!strcmp(str->c_str(), "reconnect")) {
+        return observe_choosers(*ds, xsink);
     }
     return conn->getObservation(str->c_str());
 }
