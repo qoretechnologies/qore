@@ -1,19 +1,10 @@
-#!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
-
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
-%modern
-%no-child-restrictions
-
-%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
-%requires QUnit
-%requires ../../../TestInterpreter.qm
-%requires Util
-%requires FsUtil
-%requires ProviderIndexUtil
-
-%exec-class ConcurrentModuleProgramMergeTest
+# The cases of the ConcurrentModuleProgramMerge-<n>.qtest tests: each runs one part of them, so that each takes a short
+# time (the three rounds of the race took about 220 s of CPU time and up to 250 s with 16 copies beside each other on a
+# 32-core host, past the 300 s limit of run_tests.sh on a loaded host: qore#6377), and together they run every case
+# (see addPartCase()); each part runs one round, which takes about a third of the time
 
 #! Importing a module while its own Program is the target of a runtime module load
 /** Code in an AOT module runs in the module's own Program, so a \c load_module() call in it merges
@@ -42,9 +33,9 @@ Program_loadModule_VsVi(...)
     2 minutes on two cores, and the test ran past its timeout on a loaded machine; a bounded round
     takes about 21 s, and 29 s on two cores.  Without the fix,
     a round crashed in 4 of 4 runs importing without pause and in 9 of 10 bounded (Linux x86_64 debug
-    build); three rounds are run.
+    build); three rounds are run, one in each part.
 */
-class ConcurrentModuleProgramMergeTest inherits QUnit::Test {
+class ConcurrentModuleProgramMergeBase inherits QUnit::Test {
     public {
         #! the number of modules the module's own code loads into its Program in one round
         const LoadCount = 120;
@@ -55,24 +46,35 @@ class ConcurrentModuleProgramMergeTest inherits QUnit::Test {
         #! the number of times each importing thread imports the module while one module is loaded
         const ImportsPerLoad = 32;
 
-        #! the number of rounds of the race
-        const Rounds = 3;
-
         #! printed by the child when a round completes
         const Done = "ROUND-DONE";
     }
 
     private {
+        #! the part of the cases that this test runs (see addPartCase())
+        int part;
+
         string qore_bin;
         string qlib_dir;
     }
 
-    constructor() : QUnit::Test("ConcurrentModuleProgramMergeTest", "1.0") {
+    constructor(string name, int part) : QUnit::Test(name, "1.0", \ARGV) {
+        self.part = part;
         qore_bin = TestInterpreter::qore_interpreter();
         qlib_dir = normalize_dir(get_script_dir() + "/../../../../../qlib");
-        addTestCase("module code loads modules into the module's own Program", \moduleProgramIsTheTarget());
-        addTestCase("importing a module while its Program is merged into", \importDuringRuntimeLoad());
+        addPartCase(1, "module code loads modules into the module's own Program", \moduleProgramIsTheTarget());
+        # one round of the race in each part: a round takes nearly all of the time of the test
+        addPartCase(1, "importing a module while its Program is merged into: round 1", \importDuringRuntimeLoad(), 1);
+        addPartCase(2, "importing a module while its Program is merged into: round 2", \importDuringRuntimeLoad(), 2);
+        addPartCase(3, "importing a module while its Program is merged into: round 3", \importDuringRuntimeLoad(), 3);
         set_return_value(main());
+    }
+
+    #! adds a case if it is in the part that this test runs
+    private addPartCase(int case_part, string name, code call, *softlist<auto> args) {
+        if (case_part == part) {
+            addTestCase(name, call, args);
+        }
     }
 
     #! The premise of the race: a module loaded by module code lands in the module's Program
@@ -86,7 +88,10 @@ class ConcurrentModuleProgramMergeTest inherits QUnit::Test {
             "and Mime is merged into ProviderIndexUtil's own Program, not into the test Program");
     }
 
-    importDuringRuntimeLoad() {
+    #! runs one round of the race
+    /** @param round the number of the round, from 1
+    */
+    importDuringRuntimeLoad(int round) {
         if (!isAotModule()) {
             testSkip("ProviderIndexUtil was loaded from source; no module Program is merged into at runtime");
         }
@@ -151,7 +156,7 @@ printf(\"%s loaded=%%d imports=%%d\\n\", loaded, imports);
 ", qlib_dir, ImportThreads, ImportsPerLoad, Done));
         f.close();
 
-        for (int round = 1; round <= Rounds; ++round) {
+        {
             string output = backquote(sprintf("%s %s %s 2>/dev/null; echo \"rc=$?\"", qore_bin, script,
                 list_file));
             *list<*string> result = (output =~ x/rc=([0-9]+)\s*$/);
