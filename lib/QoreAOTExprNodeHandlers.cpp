@@ -1902,7 +1902,7 @@ static QoreValue read_node_EN_STATIC_METH_REF(AOTExprNodeReadCtx& ctx) {
             m = qore_aot_find_loading_method(qc, method_name.c_str(), true);
         }
         if (m) {
-            return QoreValue(new LocalStaticMethodCallReferenceNode(&loc_builtin, m));
+            return QoreValue(new LocalStaticMethodCallReferenceNode(&loc_builtin, m, qc));
         }
     }
     printd(0, "AOT EXPR_TREE: cannot resolve static method ref '%s::%s'\n",

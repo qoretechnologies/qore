@@ -327,7 +327,17 @@ void QoreForkThreadLock::child() noexcept {
     for (QoreCondition* c : conds) {
         c->reinitAfterFork();
     }
-    // held by this thread since prepare(), or by a thread that no longer exists, or not held at all
+    // a lock that this thread acquired in prepare() is released, so that the release is seen (by ThreadSanitizer,
+    // which otherwise considers it held for the rest of the child's life, and reports a lock order inversion for any
+    // lock that the child takes after it which was taken before it in the parent); a recursive lock cannot be released
+    // in the child on glibc (its owner is the parent's thread ID), and a lock that was not acquired here can be held
+    // by a thread that does not exist in the child: they are initialized again
+    if (acquired && !recursive) {
+        acquired = false;
+        l.unlock();
+        return;
+    }
+    acquired = false;
     l.reinitAfterFork(recursive ? qore_recursive_mutex_attr() : nullptr);
 }
 
@@ -370,6 +380,15 @@ void QoreForkStdMutex::child() noexcept {
     // destroyed, since destroying a condition variable waits for its waiters
     for (std::condition_variable* c : conds) {
         new (c) std::condition_variable();
+    }
+    // a mutex that this thread acquired in prepare() is released, so that the release is seen (by ThreadSanitizer,
+    // which otherwise considers it held for the rest of the child's life, and reports a lock order inversion for any
+    // lock that the child takes after it which was taken before it in the parent); one that was not acquired here can
+    // be held by a thread that does not exist in the child, and is created again
+    if (acquired) {
+        acquired = false;
+        m.unlock();
+        return;
     }
     new (&m) std::mutex();
 }

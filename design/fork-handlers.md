@@ -31,10 +31,16 @@ Each handler belongs to one rank (the lock order below) and one mode:
 - `TRY` and `RESET` are for locks that can be held for a long time or across operations that wait for other threads
   (module loading, LLVM compilation, running compiled initializers): waiting for them before `fork()` could
   deadlock the parent, which before these handlers could always fork.
+- A leaf lock that a handled object owns and that its holders take only briefly, with no lock order of its own (a Program's parse option lock `po_mutex` and the condition of the copies of its external data, the parse option mask locks of the module manager and of each module, the debug lock of the thread list's records of cancellable waits), is initialized again in the child by the handler of its owner, which also drops the state of the parent's other threads (ex: their copies of a Program's external data in progress).
 - Conditions bound to a lock are initialized again in the child too: their waiters do not exist there, and a glibc
   condition variable with waiters that never return can block a later signal or broadcast.
-- A lock is initialized again in the child rather than unlocked: a recursive mutex held by the forking thread
-  cannot be unlocked there on glibc (its owner is the parent's thread ID). It is first reset by assigning its static
+- A plain mutex (`std::mutex`, a non-recursive `QoreThreadLock`) that the forking thread acquired before `fork()` is
+  unlocked in the child, so that ThreadSanitizer sees the release: a lock that it considers held for the rest of the
+  child's life makes it report a lock order inversion for every lock that the child takes after it and that was taken
+  before it in the parent (qore#6177's leaf lock, which the parent takes under a Program's options lock, showed it).
+  Any other lock is initialized again in the child rather than unlocked: a recursive mutex held by the forking thread
+  cannot be unlocked there on glibc (its owner is the parent's thread ID), and a lock that the handler did not
+  acquire can be held by a thread that does not exist in the child. It is first reset by assigning its static
   initializer, since a held `pthread_rwlock_t` cannot be initialized again on macOS (`EBUSY`); the environment lock
   is only reset that way.
 
@@ -61,7 +67,7 @@ cannot deadlock with a thread that keeps to the order.
 | 500 | thread list (`thread_list.lck`) | ACQUIRE | condition waker, stack lock |
 | 510 | condition waker (`cond_waker.lck`) | ACQUIRE | — |
 | 520 | stack lock (`stack_lck`) | ACQUIRE | — (only `pthread_create()`) |
-| 1000 | leaf locks: caches and registries (among them the JIT caches and queue, the AOT pending constants, the AOT regex cache, the registry of the native fast entries of AOT modules, the content hashes of the sources of linked AOT modules, the DBI object registry, the sandbox watchdog's deadline map, and the QUIC idle-close test hook of debug builds), and the leaf locks of modules (`QFR_MODULE_LEAF`: the i18n locale data fallbacks, the logger_bin event start time and id sequence, the ml ONNX provider list) | ACQUIRE | environment, debug output, allocation tracking |
+| 1000 | leaf locks: caches and registries (among them the JIT caches and queue, the AOT pending constants, the AOT regex cache, the registry of the native fast entries of AOT modules, the content hashes of the sources of linked AOT modules, the DBI object registry, the sandbox watchdog's deadline map, the set of Programs left allocated at exit (`left_programs`), the count of thread data of debug builds (`tpd_live_count`), the insertion into the value sets of the parse options of Programs (`qore_parse_options_values_mutex`, held only while a value is inserted: a Program's options lock is held across checks and parses and cannot be acquired before `fork()`), and the QUIC idle-close test hook of debug builds), and the leaf locks of modules (`QFR_MODULE_LEAF`: the i18n locale data fallbacks, the logger_bin event start time and id sequence, the ml ONNX provider list) | ACQUIRE | environment, debug output, allocation tracking |
 | 1100 | LLVM target initialization (`qore_llvm_initialize_targets()`): held while LLVM registers its targets, once per process | ACQUIRE | — |
 | 1500 | environment (`SystemEnvironment`) | ACQUIRE | debug output, allocation tracking |
 | 1900 | debug output (`printd()`) | ACQUIRE | allocation tracking |

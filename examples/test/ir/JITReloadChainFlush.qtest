@@ -23,6 +23,10 @@
     one call with a table now.  This test generates functions with many catch blocks that have a local, an object local
     and a handler, checks that the code of the function grows linearly with the catch blocks, and that the results and
     the order of the destructors are those of the AST in every mode, and in executables made by qcc at -O0 and -O3.
+
+    The tables of the helpers give their slots by their indexes in the cleanup frame of the function: the entry block
+    stored the address of each slot in arrays, thousands of stores without a call between them that made LLVM's code
+    generation superlinear; the test checks that the entry block stores no address.
 */
 class JITReloadChainFlushTest inherits QUnit::Test {
     public {
@@ -50,6 +54,7 @@ class JITReloadChainFlushTest inherits QUnit::Test {
         addTestCase("the code of a function with many tracked locals grows linearly", \testLinear());
         addTestCase("the flushes keep the results and the order of the destructors of the AST", \testResults());
         addTestCase("a function under the threshold keeps the inline flush", \testInline());
+        addTestCase("the entry block of a large function stores no slot address", \testEntryBlock());
         set_return_value(main());
     }
 
@@ -147,6 +152,65 @@ for (int c = 0; c < 3; ++c) {
             throw "NO-DUMP", sprintf("no LLVM function 'big' in the output for %s (%d bytes)", what, out.size());
         }
         return calls;
+    }
+
+    #! Returns the entry blocks of the native code of function \c big in the LLVM dump in \a out (see getCalls())
+    private list<string> getEntryBlocks(string out, string what) {
+        list<string> rv;
+        *string entry;
+        int labels;
+        foreach string line in (out.split("\n")) {
+            if (line =~ /^define .* @"?big(@[0-9]+_0|_[A-Za-z0-9_]+)"?\(/ && line !~ /_obe_[0-9]/
+                    && line !~ /_fast_?/) {
+                entry = "";
+                labels = 0;
+                continue;
+            }
+            if (!exists entry) {
+                continue;
+            }
+            if (line =~ /^}/ || (line =~ /^[^ ;].*:/ && ++labels > 1)) {
+                rv += entry;
+                remove entry;
+                continue;
+            }
+            entry += line + "\n";
+        }
+        if (!rv) {
+            throw "NO-DUMP", sprintf("no LLVM function 'big' in the output for %s (%d bytes)", what, out.size());
+        }
+        return rv;
+    }
+
+    #! Checks that the entry blocks have a cleanup frame and store no address
+    private checkEntryBlocks(list<string> entries, string what) {
+        foreach string entry in (entries) {
+            # (an array type once optimized)
+            assertRegex("%cleanup_frame[0-9]* = alloca (i64, i64 [0-9]+|\\[[0-9]+ x i64\\])", entry,
+                what + ": the function has a frame");
+            assertEq(0, (entry =~ x/(store ptr %)/g ?? ()).size(), what + ": no address is stored in the entry block");
+        }
+    }
+
+    testEntryBlock() {
+        foreach int n in ((Small, Large)) {
+            string what = sprintf("%d catch blocks", n);
+            checkEntryBlocks(getEntryBlocks(runScript(getCode(n), "jit", "QORE_DUMP_LLVM_IR=1"), what), what);
+        }
+        # in executables made by qcc as well
+        TmpDir dir();
+        string src = join_paths(dir.path, "entry.qr");
+        File f();
+        f.open2(src, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(getCode(Small));
+        f.close();
+        foreach string opt in (("-O0", "-O3")) {
+            string exe = join_paths(dir.path, "entry" + opt);
+            string out = backquote(sprintf("%s QORE_DUMP_LLVM_IR=1 %s %s -o %s %s 2>&1", lib_env, qcc_bin, opt,
+                exe, src));
+            assertTrue(is_executable(exe), sprintf("qcc %s made an executable: %s", opt, out.substr(-2000)));
+            checkEntryBlocks(getEntryBlocks(out, "qcc " + opt), "qcc " + opt);
+        }
     }
 
     testLinear() {

@@ -1529,6 +1529,10 @@ void ThreadEntry::abandonAfterFork() {
     wake_busy = false;
     waiting_fd.store(-1, std::memory_order_relaxed);
     wake_reg_depth = 0;
+#ifdef DEBUG
+    // the thread's wait does not go on in the child, where its TID can be given to another thread
+    dbg_in_wait.store(false);
+#endif
     // the descriptors are the child's own copies
     closeCancelWakeup();
     status = QTS_AVAIL;
@@ -1944,6 +1948,8 @@ struct ThreadProgramDataLiveCount {
     std::mutex m;
     std::condition_variable cond;
     int64 count = 0;
+    //! a leaf lock, taken whenever thread data is created or destroyed, also in the child of fork()
+    QoreForkStdMutex fork_handler{m, QFLR_LEAF, "tpd_live_count", QFLM_ACQUIRE, {&cond}};
 };
 
 ThreadProgramDataLiveCount& tpd_live_count() {
@@ -1951,6 +1957,10 @@ ThreadProgramDataLiveCount& tpd_live_count() {
     static ThreadProgramDataLiveCount* c = new ThreadProgramDataLiveCount;
     return *c;
 }
+
+// created during static initialization, so that its fork handler is not registered while another registered lock is
+// held (see design/fork-handlers.md)
+[[maybe_unused]] ThreadProgramDataLiveCount& tpd_live_count_init = tpd_live_count();
 }
 
 void ThreadProgramData::dbgLiveCountChanged(int64 delta) {
@@ -4516,6 +4526,7 @@ int ThreadEntryHandlerFrame::enterHandlers(ThreadData* td, QoreProgram* pgm, Exc
         if (xsink) {
             xsink->assimilate(handler_xsink);
         }
+        handler_cpp_exception = true;
         throw;
     }
     if (!handler_xsink) {
@@ -4858,6 +4869,49 @@ void ProgramThreadCountContextHelper::takeModuleThreadCount(QoreReferenceProgram
 }
 
 void ProgramThreadCountContextHelper::set(ExceptionSink* xsink, QoreProgram* pgm, bool runtime) {
+    if (!pgm) {
+        return;
+    }
+    // a call within the Program that the thread has entered, the usual case, has nothing to do (see setRethrow()),
+    // and is made without the call that converts a C++ exception
+    {
+        ThreadData* td = thread_data.get();
+        if (pgm == td->current_pgm && td->tlpd && td->entry_pgm == pgm && !td->cancel_defer_count
+                && !td->dtor_cancel_defer_count) {
+            assert(!old_pgm);
+            assert(!entry_frame.isActive());
+            ctx_td = td;
+            return;
+        }
+    }
+    try {
+        setRethrow(xsink, pgm, runtime);
+    } catch (std::exception& e) {
+        // the entry left the thread as it was; the code that enters the Program gets a Qore exception instead, which
+        // it can catch (issue #6255), as for a Qore exception of the entry handler; an exception already in xsink
+        // (one that the handler raised, or one propagating while a destructor runs) is the one reported
+        if (!xsink) {
+            // nothing can tell the caller that the entry failed but the exception
+            throw;
+        }
+        failed = true;
+        if (!*xsink) {
+            try {
+                if (entry_frame.handlerFailedWithCppException()) {
+                    xsink->raiseException("THREAD-ENTRY-HANDLER-ERROR", "the Program's thread entry handler could "
+                        "not be completed: out of memory or an internal error (%s)", e.what());
+                } else {
+                    xsink->raiseException("PROGRAM-ENTRY-ERROR", "the thread could not enter Program " QLLD ": out "
+                        "of memory or an internal error (%s)", (int64)pgm->getProgramId(), e.what());
+                }
+            } catch (...) {
+                // nothing more can be recorded
+            }
+        }
+    }
+}
+
+void ProgramThreadCountContextHelper::setRethrow(ExceptionSink* xsink, QoreProgram* pgm, bool runtime) {
     if (!pgm) {
         return;
     }
@@ -5685,6 +5739,47 @@ bool qore_caller_is_sandboxed() {
         // the sandbox cannot be resolved: what the code creates is not trusted
         return true;
     }
+}
+
+//! returns true if the parse options of \a pgm, a Program that is not a module's, restrict \a dom
+static bool qore_program_restricts(const QoreProgram* pgm, const QoreParseOptions& dom) {
+    assert(pgm && !qore_program_is_module_inline(pgm));
+    return qore_program_private::getParseOptions(*pgm).hasAny(dom);
+}
+
+bool qore_caller_restricts_domain(int64 domain) {
+    // only the restricting options are domains; the positive options (PO_ALLOW_*) and PO_IN_MODULE are not
+    const QoreParseOptions dom = QoreParseOptions(domain) & ~QoreParseOptions::POSITIVE_OPTIONS
+        & ~QoreParseOptions(PO_IN_MODULE);
+    ThreadData* td = thread_data.get();
+    // before the library is initialized, only the embedding application runs
+    if (!dom || !td) {
+        return false;
+    }
+    // the restrictions of a sandboxed caller that the module code runs with (see
+    // qore_set_module_call_runtime_po_override()); the module code passes them on to the module code it calls
+    if (td->runtime_po_caller_restrictions.hasAny(dom)) {
+        return true;
+    }
+    // the calling code is the nearest Program on the call stack that is not a module's: a module's own options are
+    // those of the Program that loaded it first, which say nothing about the code that calls it now
+    const QoreProgram* pgm = td->current_pgm;
+    if (pgm && !qore_program_is_module_inline(pgm)) {
+        return qore_program_restricts(pgm, dom);
+    }
+    for (const ProgramThreadCountContextHelper* ch = td->current_pgm_ctx; ch; ch = ch->getOldContext()) {
+        const QoreProgram* old_pgm = ch->getOldProgram();
+        if (old_pgm && !qore_program_is_module_inline(old_pgm)) {
+            return qore_program_restricts(old_pgm, dom);
+        }
+    }
+    // a builtin call of a module function made for another Program (QoreProgram::callFunction()): the Program of the
+    // call
+    if (td->call_program_context && !qore_program_is_module_inline(td->call_program_context)) {
+        return qore_program_restricts(td->call_program_context, dom);
+    }
+    // no code of a Program that is not a module's is on the stack: the embedding application calls the module code
+    return false;
 }
 
 //! returns the ID of the current Program of the thread, or QORE_NO_PROGRAM_ID
@@ -9371,6 +9466,11 @@ void QoreThreadList::forkChild(int tid) {
     // the joiners of the parent do not exist in the child, and one of them may have held join_lck
     join_lck.reinitAfterFork();
     join_cond.reinitAfterFork();
+#ifdef DEBUG
+    // a thread of the parent may have held the lock of dbgNoteWait(), which every cancellable wait takes
+    dbg_wait_lck.reinitAfterFork();
+    dbg_wait_cond.reinitAfterFork();
+#endif
 }
 
 int qore_fork_get_tid() {

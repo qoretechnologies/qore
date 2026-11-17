@@ -1643,7 +1643,8 @@ static QoreValue do_method_intern(QoreObject* self, const QoreMethod* meth, Clas
     }
     // a value created at run time: it records the permissions of the code creating it, which a call through it runs
     // with (see ResolvedCallReferenceNodeIntern::getCreatorParseOptions())
-    return QoreValue(new StaticMethodCallReferenceNode(&loc_builtin, meth, ::getProgram(), runtime_get_class()));
+    return QoreValue(new StaticMethodCallReferenceNode(&loc_builtin, meth, ::getProgram(), runtime_get_class(),
+        LocalStaticMethodCallReferenceNode::getRuntimeReceiverTypeInfo(*meth, pcls->cls, runtime_get_class())));
 }
 
 QoreValue get_call_reference_intern(QoreObject* self, const QoreStringNode* identifier, ExceptionSink* xsink) {

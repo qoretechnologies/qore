@@ -1,0 +1,85 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires FsUtil
+%requires QUnit
+%requires ../../../TestInterpreter.qm
+%requires ../../../ExecModeHarness.qm
+
+%exec-class EnumSoftListReleaseTest
+
+#! A soft list type that wraps a single enum value in a list keeps the reference that the value holds (qore#6355)
+/** An enum value holds a reference to its declaration.  The probes (enum-softlist-release/probes.q) give single enum
+    values to softlist, softlist<auto> and their or-nothing types (locals, a parameter, the members of a hashdecl and a
+    cast to it), print the lists, and count the references to the declarations around further runs with
+    dbg_enum_decl_reference_count() in a build with library debugging, which must stay balanced; they run in each
+    execution mode in a child process, on the IR tier and as qcc-compiled executables (-O0, -O3), and each run must
+    end normally.
+*/
+class EnumSoftListReleaseTest inherits QUnit::Test {
+    public {
+        #! the result of each probe, followed by the references that its runs did not balance with library debugging
+        const Results = (
+            ("softlist-auto", "[1]"),
+            ("or-nothing-softlist-auto", "[2]"),
+            ("softlist", "[\"a\"]"),
+            ("or-nothing-softlist", "[1]"),
+            ("param", "[2]"),
+            ("hashdecl-member", "[1] [1]"),
+            ("hashdecl-cast", "[2] [2]"),
+        );
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+        string expected;
+    }
+
+    constructor() : QUnit::Test("EnumSoftListRelease", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        string line = (map sprintf("%s=%s%s", $1[0], $1[1], Option::HAVE_LIBRARY_DEBUGGING ? "/0" : ""),
+            Results).join(" ");
+        for (int i = 0; i < 4; ++i) {
+            expected += sprintf("%d: %s\n", i, line);
+        }
+        expected += "status=0\n";
+
+        addTestCase("soft lists keep the references of enum values in every mode", \testModes());
+        set_return_value(main());
+    }
+
+    testModes() {
+        TmpDir tmp("qore-enum-softlist-release-");
+        string file = tmp.path + DirSep + "prog.q";
+        File f();
+        f.open2(file, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(ReadOnlyFile::readTextFile(get_script_dir() + DirSep + "probes.q")
+            + "\nfor (int i = 0; i < 4; ++i) {\n    printf(\"%d: %s\\n\", i, probes());\n}\n");
+        f.close();
+
+        # the status of the process shows an abort at the end of the program
+        string env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s", libqore_dir, libqore_dir);
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            assertEq(expected, ExecModeHarness::run(sprintf("%s %s --exec-mode=%s %s; echo status=$?", env, qore_bin,
+                mode, file)), mode);
+        }
+        assertEq(expected, ExecModeHarness::run_ir_tier(sprintf("%s %s --exec-mode=tiered %s; echo status=$?", env,
+            qore_bin, file)), "IR tier");
+        foreach string opt in (("-O0", "-O3")) {
+            string exe = file + opt;
+            string out = backquote(sprintf("QORE_LIBDIR=%s %s %s -o %s %s 2>&1", libqore_dir, qcc_bin, opt, exe,
+                file));
+            assertTrue(is_file(exe), sprintf("qcc %s compiled the executable: %s", opt, out));
+            assertEq(expected, backquote(sprintf("%s %s 2>&1; echo status=$?", env, exe)), "qcc " + opt);
+        }
+    }
+}

@@ -3173,12 +3173,22 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
                         op = static_cast<const QoreIRInvokeInstruction*>(inst.get())
                             ->invoke_opcode;
                     }
+                    // a context statement and a find expression evaluate their expressions (the data, where and
+                    // sort expressions of a context statement, the source, find and where expressions of a find
+                    // expression) as AST at run time, where a $# in them reads the thread's implicit element
+                    // (qore#6341)
                     if (getOpcodeIsCallInvoke(static_cast<int>(op))
                             || op == QoreIROpcode::InvokeMethodDirect
                             || op == QoreIROpcode::DotEvalMethodDirect
                             || op == QoreIROpcode::InvokeDotEvalMethodDirect
                             || op == QoreIROpcode::LoadImplicitElement
-                            || op == QoreIROpcode::OnBlockExit) {
+                            || op == QoreIROpcode::OnBlockExit
+                            || (inst->opcode == QoreIROpcode::Context
+                                && static_cast<const QoreIRContextInstruction*>(inst.get())
+                                    ->reads_implicit_element)
+                            || (inst->opcode == QoreIROpcode::Find
+                                && static_cast<const QoreIRFindInstruction*>(inst.get())
+                                    ->reads_implicit_element)) {
                         ++observers;
                     }
                 }
@@ -3458,6 +3468,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         }
         auto* init_inst = builder.createContext(name, context_stmt->exp,
             context_stmt->where_exp, sort_exp, sort_type, stmt->loc);
+        init_inst->reads_implicit_element = context_stmt->reads_implicit_element;
         if (!exception_stack.empty()) {
             init_inst->exception_target = exception_stack.back();
         }
@@ -7141,6 +7152,7 @@ QoreIRValue QoreIRLowering::lowerExpressionImpl(const QoreValue& expr, std::stri
     if (auto* find_node = dynamic_cast<const FindNode*>(node)) {
         auto* inst = builder.createFind(find_node->exp, find_node->find_exp, find_node->where,
                 static_cast<int32_t>(find_node->getMode()), find_node->loc);
+        inst->reads_implicit_element = find_node->reads_implicit_element;
         if (!exception_stack.empty()) {
             inst->exception_target = exception_stack.back();
         }

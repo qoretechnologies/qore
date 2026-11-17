@@ -229,10 +229,15 @@ public:
     //! creates a new QoreStringNode from a string and converts its encoding
     DLLEXPORT static QoreStringNode* createAndConvertEncoding(const char* str, const QoreEncoding* from, const QoreEncoding* to, ExceptionSink* xsink);
 
-    //! Creates a zero-copy read-only view over \a parent's buffer starting at \a byte_offset, of \a byte_len bytes.
-    /** The returned string shares \a parent's bytes; the parent is ref'd and kept alive as long as the view exists.
-        Reads on the view go through the parent's buffer. On any mutation, the view promotes itself to an owned
-        copy (copy-on-write) and releases the parent.
+    //! Returns the part of \a parent from \a byte_offset of \a byte_len bytes, as a zero-copy read-only view if it
+    //! reaches the end of \a parent
+    /** A part that reaches the end of \a parent shares \a parent's bytes and terminator; the parent is ref'd and kept
+        alive as long as the view exists.  Reads on the view go through the parent's buffer and never write, so a view
+        can be read by several threads at once.  On any mutation, the view promotes itself to an owned copy
+        (copy-on-write) and releases the parent.
+
+        A part that does not reach the end of \a parent is returned as a copy: it would need a terminator of its own,
+        which a read could not add safely while other threads read the same string.
 
         Arguments are <b>byte</b> offsets and lengths; the caller is responsible for ensuring that \a byte_offset and
         \a byte_offset + \a byte_len fall on codepoint boundaries for multibyte encodings. (In debug builds an
@@ -245,7 +250,7 @@ public:
                       itself refs the parent to guarantee this)
         @param byte_offset byte offset into \a parent's buffer
         @param byte_len number of bytes in the view
-        @return a new QoreStringNode in view state, owned by the caller
+        @return a new QoreStringNode, in view state if the part reaches the end of \a parent, owned by the caller
 
         @since %Qore 3.0
     */

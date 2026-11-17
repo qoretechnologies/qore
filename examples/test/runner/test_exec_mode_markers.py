@@ -262,6 +262,12 @@ class ExecModeMarkerTest(unittest.TestCase):
         #   a debug hook in them
         # - JITFinalizeCancellation (#6305, #6313): its checks run in child processes that set their own --exec-mode
         #   and arm a debug hook in them
+        # - generic-static-call-type-params (#6186, #6285, #6308, #6256): its probes run in child processes that set
+        #   their own --exec-mode, in qcc executables and in a qcc-compiled module
+        # - UndefinedArithmetic-<n> (#1034): their probes run in child processes that set their own --exec-mode, in qcc
+        #   executables and in a qcc-compiled module
+        # - entry-cpp-exception (#6255): its checks run in child processes that set their own --exec-mode and in qcc
+        #   executables, which arm a debug hook
         # - deleted-program-own-generic-cycle (#6419): its checks run in child processes that set their own
         #   --exec-mode and in qcc executables
         self.assertEqual(sorted(["examples/test/ir/AOTConstantImportStale.qtest",
@@ -281,6 +287,9 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/qore/classes/deleted-object-overload.qtest",
                                  "examples/test/qore/operators/empty-string-order.qtest",
                                  "examples/test/qore/operators/float-int-conversion.qtest",
+                                 "examples/test/qore/operators/UndefinedArithmetic-1.qtest",
+                                 "examples/test/qore/operators/UndefinedArithmetic-2.qtest",
+                                 "examples/test/qore/operators/UndefinedArithmetic-3.qtest",
                                  "examples/test/qore/threads/unhandled-exception-report.qtest",
                                  "examples/test/qore/functions/float-conversion-edges.qtest",
                                  "examples/test/qore/classes/AsyncIoController/asyncio_callback_exception_stderr.qtest",
@@ -300,6 +309,7 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/qore/misc/hashdecl-default-closure-typeparam.qtest",
                                  "examples/test/qore/misc/declaration-initializer-scope.qtest",
                                  "examples/test/qore/classes/or-nothing-container-casts.qtest",
+                                 "examples/test/qore/classes/generic-static-call-type-params.qtest",
                                  "examples/test/qore/misc/reflection-typed-hash-visibility.qtest",
                                  "examples/test/ir/AOTModuleDelClosure.qtest",
                                  "examples/test/ir/AOTNestedFind.qtest",
@@ -322,6 +332,7 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/qlib/RestSchemaActions/RestSchemaModuleLazyTypes-7.qtest",
                                  "examples/test/qlib/RestSchemaActions/RestSchemaModuleLazyTypes-8.qtest",
                                  "examples/test/qlib/WebSocketHandler/WebSocketProgramEnd.qtest",
+                                 "examples/test/qore/classes/Program/entry-cpp-exception/entry-cpp-exception.qtest",
                                  "examples/test/qlib/QUnit/result-counts.qtest",
                                  "modules/dataframe/test/dataframe-default-encoding.qtest",
                                  "modules/dataframe/test/dataframe-default-encoding-names.qtest",

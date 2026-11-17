@@ -225,6 +225,12 @@ struct QoreParseContext {
     //! --stub external constant. Constants with such dependencies cannot be
     //! folded at compile time; AOT must preserve their initializer expression.
     bool external_stub_constant_ref = false;
+    //! The number of implicit index references (\c $#) that read the index of an enclosing operator or foreach
+    //! statement initialized so far (qore#6341)
+    /** A context statement and a find expression compare it before and after the initialization of their
+        expressions, which run as AST at run time, to know whether they read \c $#
+    */
+    unsigned implicit_element_reads = 0;
 
     DLLLOCAL QoreParseContext(QoreProgram* pgm = getProgram()) : pgm(pgm) {
     }
@@ -611,6 +617,9 @@ static inline int64 qore_int_div(int64 l, int64 r) {
     assert(r);
     return r == -1 ? static_cast<int64>(0 - static_cast<uint64_t>(l)) : l / r;
 }
+
+//! Raises DIVISION-BY-ZERO for a modulo operator (\c %, \c %=) with a divisor of zero (qore#1034)
+DLLLOCAL void qore_raise_modulo_by_zero(ExceptionSink* xsink);
 
 //! Returns the remainder of an integer division by a divisor that is not zero
 /** The remainder of a division by -1 is 0, also for the smallest integer, where the CPU's division instruction
