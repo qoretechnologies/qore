@@ -523,29 +523,13 @@ static int initial_thread = -1;
 // this structure holds all thread-specific data
 class ThreadData {
 public:
-    QoreParseOptions runtime_po;
-    QoreParseOptions runtime_po_override_mask;
-    QoreParseOptions runtime_po_override_value;
-    //! the options of runtime_po_override_mask whose value is that of the override, not also that of the code
-    /** see QoreCallParseOptionsOverride::replace
-    */
-    QoreParseOptions runtime_po_override_replace;
-    //! the restrictions that the code of runtime_po_module_pgm inherits from its caller
-    /** see runtime_get_own_program_state_parse_options()
-    */
-    QoreParseOptions runtime_po_caller_restrictions;
-    //! the Program of the module whose code runs with runtime_po_caller_restrictions, or nullptr
-    const QoreProgram* runtime_po_module_pgm = nullptr;
+    //! the run-time parse options of the thread and the override that they were computed with; a struct declared in
+    //! qore_thread_intern.h, so that RuntimeParseOptionsOverrideHelper restores it inline (qore#6446)
+    QoreRuntimePoState runtime_po_state;
     //! the Program that the next user call is made on behalf of, or nullptr; see QoreCallbackCallerHelper
     const QoreProgram* callback_caller_pgm = nullptr;
     //! the Program running on the thread when callback_caller_pgm was set
     const QoreProgram* callback_from_pgm = nullptr;
-    //! the ID of the application Program that the code of runtime_po_module_pgm runs for
-    qore_program_id_t runtime_po_app_pgm_id = 0;
-    //! true while module code runs for a sandboxed caller; see QoreCallParseOptionsOverride::sandboxed
-    bool runtime_po_sandboxed = false;
-    //! the module Program whose code the override was set for; see QoreCallParseOptionsOverride::override_pgm
-    const QoreProgram* runtime_po_override_pgm = nullptr;
     //! the data of the thread's RuntimeConfig (rc_get_tls_impl()), once it has been looked up; see
     //! sync_runtime_config_program()
     mutable RuntimeConfig::Impl* rc = nullptr;
@@ -3370,16 +3354,16 @@ const QoreStackLocation* get_runtime_stack_location() {
 // lifts a restriction of the code itself, so code of another Program that runs while it is active (a callback, a
 // closure, Program::run()) keeps its own restrictions, and a module keeps those it inherited
 static inline QoreParseOptions apply_runtime_po_override(ThreadData* td, const QoreParseOptions& po) {
-    if (!td->runtime_po_override_mask) {
+    if (!td->runtime_po_state.override_mask) {
         return po;
     }
-    const QoreParseOptions& mask = td->runtime_po_override_mask;
-    const QoreParseOptions& value = td->runtime_po_override_value;
+    const QoreParseOptions& mask = td->runtime_po_state.override_mask;
+    const QoreParseOptions& value = td->runtime_po_state.override_value;
     QoreParseOptions positive_mask = mask & QoreParseOptions::POSITIVE_OPTIONS;
     QoreParseOptions restricting_mask = mask & ~QoreParseOptions::POSITIVE_OPTIONS;
     QoreParseOptions rv = (po | (value & restricting_mask)) & ~(positive_mask & ~value);
     // these options are those of the override only, so a restriction of the code that made the call does not stay
-    const QoreParseOptions& replace = td->runtime_po_override_replace;
+    const QoreParseOptions& replace = td->runtime_po_state.override_replace;
     return (rv & ~replace) | (value & replace);
 }
 
@@ -3618,10 +3602,10 @@ int swap_runtime_statement_location(ExceptionSink* xsink, const AbstractStatemen
     ThreadData* td = thread_data.get();
     old_stmt = td->runtime_statement;
     old_loc = td->runtime_loc;
-    old_po = td->runtime_po;
+    old_po = td->runtime_po_state.po;
     td->runtime_statement = stmt;
     td->runtime_loc = loc;
-    td->runtime_po = apply_runtime_po_override(td, po);
+    td->runtime_po_state.po = apply_runtime_po_override(td, po);
 
 #ifdef QORE_MANAGE_STACK
     // a caller that gives no exception sink, such as one that restores a location, cannot receive the exception
@@ -3645,8 +3629,8 @@ void swap_runtime_parse_options(const QoreParseOptions& po, const AbstractStatem
     ThreadData* td = thread_data.get();
     old_stmt = td->runtime_statement;
     old_loc = td->runtime_loc;
-    old_po = td->runtime_po;
-    td->runtime_po = apply_runtime_po_override(td, po);
+    old_po = td->runtime_po_state.po;
+    td->runtime_po_state.po = apply_runtime_po_override(td, po);
 }
 
 // the per-statement path of the AST interpreter (AbstractStatement::exec()) inlines update_runtime_statement_location():
@@ -3657,8 +3641,8 @@ __attribute__((noinline, cold)) void swap_toplevel_code_parse_options(const Qore
     ThreadData* td = thread_data.get();
     old_stmt = td->runtime_statement;
     old_loc = td->runtime_loc;
-    old_po = td->runtime_po;
-    td->runtime_po = apply_runtime_po_override(td, po);
+    old_po = td->runtime_po_state.po;
+    td->runtime_po_state.po = apply_runtime_po_override(td, po);
 }
 
 __attribute__((noinline, cold)) void restore_toplevel_code_parse_options(const AbstractStatement* stmt,
@@ -3666,7 +3650,7 @@ __attribute__((noinline, cold)) void restore_toplevel_code_parse_options(const A
     ThreadData* td = thread_data.get();
     td->runtime_statement = stmt;
     td->runtime_loc = loc;
-    td->runtime_po = apply_runtime_po_override(td, po);
+    td->runtime_po_state.po = apply_runtime_po_override(td, po);
 }
 
 void update_runtime_statement_location(const AbstractStatement* stmt, const QoreProgramLocation* loc,
@@ -3674,7 +3658,7 @@ void update_runtime_statement_location(const AbstractStatement* stmt, const Qore
     ThreadData* td = thread_data.get();
     td->runtime_statement = stmt;
     td->runtime_loc = loc;
-    td->runtime_po = apply_runtime_po_override(td, po);
+    td->runtime_po_state.po = apply_runtime_po_override(td, po);
 }
 
 void update_runtime_statement_location(const AbstractStatement* stmt, const QoreProgramLocation* loc) {
@@ -3888,7 +3872,7 @@ void qore_get_runtime_context(QoreRuntimeContext* rc) {
     rc->pgm = pgm ? pgm : td->call_program_context;
     rc->loc = td->runtime_loc;
     rc->stmt = td->runtime_statement;
-    rc->po = td->runtime_po.getLo();
+    rc->po = td->runtime_po_state.po.getLo();
     rc->stack_loc = td->current_stack_location.load(std::memory_order_relaxed);
     rc->element = get_implicit_element();
 }
@@ -5649,7 +5633,7 @@ bool qore_caller_is_untrusted() {
     if (!td) {
         return false;
     }
-    if (!!(td->runtime_po & restricting)) {
+    if (!!(td->runtime_po_state.po & restricting)) {
         return true;
     }
     // library code that code that is not trusted loaded, while it is initialized
@@ -5758,7 +5742,7 @@ bool qore_caller_restricts_domain(int64 domain) {
     }
     // the restrictions of a sandboxed caller that the module code runs with (see
     // qore_set_module_call_runtime_po_override()); the module code passes them on to the module code it calls
-    if (td->runtime_po_caller_restrictions.hasAny(dom)) {
+    if (td->runtime_po_state.caller_restrictions.hasAny(dom)) {
         return true;
     }
     // the calling code is the nearest Program on the call stack that is not a module's: a module's own options are
@@ -6591,7 +6575,7 @@ QoreParseOptions parse_get_parse_options() {
 }
 
 QoreParseOptions runtime_get_parse_options() {
-    return (thread_data.get())->runtime_po;
+    return (thread_data.get())->runtime_po_state.po;
 }
 
 QoreParseOptions runtime_get_effective_program_parse_options() {
@@ -6677,7 +6661,7 @@ QoreCallbackCallerHelper::~QoreCallbackCallerHelper() {
 
 QoreParseOptions runtime_get_effective_parse_options_for(const QoreProgram* pgm) {
     ThreadData* td = thread_data.get();
-    return pgm ? apply_runtime_po_override(td, qore_program_private::getParseOptions(*pgm)) : td->runtime_po;
+    return pgm ? apply_runtime_po_override(td, qore_program_private::getParseOptions(*pgm)) : td->runtime_po_state.po;
 }
 
 QoreParseOptions runtime_get_own_program_state_parse_options(const QoreParseOptions& po) {
@@ -6685,14 +6669,14 @@ QoreParseOptions runtime_get_own_program_state_parse_options(const QoreParseOpti
     // only code running in the module's own Program reaches only the module's own state: code of another Program
     // can run while the module's override is active (a callback of the caller, or user code whose Program has
     // released it, which runs in its caller's Program)
-    if (!td->runtime_po_module_pgm || td->runtime_po_module_pgm != td->current_pgm) {
+    if (!td->runtime_po_state.module_pgm || td->runtime_po_state.module_pgm != td->current_pgm) {
         return po;
     }
-    return po & ~td->runtime_po_caller_restrictions;
+    return po & ~td->runtime_po_state.caller_restrictions;
 }
 
 const QoreProgram* runtime_get_module_call_program() {
-    return thread_data.get()->runtime_po_module_pgm;
+    return thread_data.get()->runtime_po_state.module_pgm;
 }
 
 ThreadData* qore_get_thread_data() {
@@ -6701,7 +6685,7 @@ ThreadData* qore_get_thread_data() {
 
 QoreParseOptions runtime_get_effective_parse_options_for(ThreadData* td, const QoreProgram* pgm) {
     assert(td == thread_data.get());
-    return pgm ? apply_runtime_po_override(td, qore_program_private::getParseOptions(*pgm)) : td->runtime_po;
+    return pgm ? apply_runtime_po_override(td, qore_program_private::getParseOptions(*pgm)) : td->runtime_po_state.po;
 }
 
 bool runtime_module_call_inherits_caller_restrictions(const QoreProgram* caller_pgm) {
@@ -6713,7 +6697,7 @@ bool runtime_module_call_inherits_caller_restrictions(ThreadData* td, const Qore
         return false;
     }
     // module code running for a sandboxed caller passes the caller's restrictions on
-    if (td->runtime_po_sandboxed || td->runtime_po_module_pgm) {
+    if (td->runtime_po_state.sandboxed || td->runtime_po_state.module_pgm) {
         return true;
     }
     // a thread that runs for sandboxed code
@@ -6728,8 +6712,8 @@ bool runtime_module_call_inherits_caller_restrictions(ThreadData* td, const Qore
 
 qore_program_id_t runtime_get_module_call_app_id(const QoreProgram* caller_pgm) {
     ThreadData* td = thread_data.get();
-    if (td->runtime_po_module_pgm) {
-        return td->runtime_po_app_pgm_id;
+    if (td->runtime_po_state.module_pgm) {
+        return td->runtime_po_state.app_pgm_id;
     }
     return caller_pgm ? caller_pgm->getProgramId() : 0;
 }
@@ -6739,10 +6723,10 @@ bool runtime_get_module_caller_app(qore_program_id_t& app_pgm_id) {
     // module code running for a restricted caller, or for none (application 0): the code of a thread that module
     // code started, which serves no caller of its own; its timers are untagged, and it can cancel only untagged
     // timers, so that it cannot be used to cancel the timers of an application (qore#6208)
-    if (!td->runtime_po_module_pgm || td->runtime_po_module_pgm != td->current_pgm) {
+    if (!td->runtime_po_state.module_pgm || td->runtime_po_state.module_pgm != td->current_pgm) {
         return false;
     }
-    app_pgm_id = td->runtime_po_app_pgm_id;
+    app_pgm_id = td->runtime_po_state.app_pgm_id;
     return true;
 }
 
@@ -6785,12 +6769,12 @@ static int check_module_owned_code(const ResolvedCallReferenceNode* rcr, int64 d
     assert(xsink);
     ThreadData* td = thread_data.get();
     // only module code running in its own Program for a caller with restrictions is checked
-    if (!td->runtime_po_module_pgm || td->runtime_po_module_pgm != td->current_pgm) {
+    if (!td->runtime_po_state.module_pgm || td->runtime_po_state.module_pgm != td->current_pgm) {
         return 0;
     }
     // the restrictions of the caller that the call needs: running code asynchronously, or with cancellation
     // deferred, is thread control
-    QoreParseOptions needed = QoreParseOptions(domain | QDOM_THREAD_CONTROL) & td->runtime_po_caller_restrictions;
+    QoreParseOptions needed = QoreParseOptions(domain | QDOM_THREAD_CONTROL) & td->runtime_po_state.caller_restrictions;
     if (!needed) {
         return 0;
     }
@@ -6847,64 +6831,29 @@ void RuntimeParseOptionsOverrideHelper::set(ThreadData* td, const QoreCallParseO
     assert(!o.caller_restrictions || o.module_pgm);
     assert(!active);
     assert(td == thread_data.get());
-    this->td = td;
+    state = &td->runtime_po_state;
     active = true;
-    old_mask = td->runtime_po_override_mask;
-    old_value = td->runtime_po_override_value;
-    old_replace = td->runtime_po_override_replace;
-    old_po = td->runtime_po;
-    old_caller_restrictions = td->runtime_po_caller_restrictions;
-    old_module_pgm = td->runtime_po_module_pgm;
-    old_app_pgm_id = td->runtime_po_app_pgm_id;
-    old_sandboxed = td->runtime_po_sandboxed;
-    old_override_pgm = td->runtime_po_override_pgm;
-    td->runtime_po_override_mask = o.mask;
-    td->runtime_po_override_value = o.value;
-    td->runtime_po_override_replace = o.replace & o.mask;
-    td->runtime_po_caller_restrictions = o.caller_restrictions;
-    td->runtime_po_module_pgm = o.module_pgm;
-    td->runtime_po_app_pgm_id = o.app_pgm_id;
-    td->runtime_po_sandboxed = o.sandboxed;
-    td->runtime_po_override_pgm = o.override_pgm;
-    td->runtime_po = apply_runtime_po_override(td, td->runtime_po);
+    old = *state;
+    state->override_mask = o.mask;
+    state->override_value = o.value;
+    state->override_replace = o.replace & o.mask;
+    state->caller_restrictions = o.caller_restrictions;
+    state->module_pgm = o.module_pgm;
+    state->app_pgm_id = o.app_pgm_id;
+    state->sandboxed = o.sandboxed;
+    state->override_pgm = o.override_pgm;
+    state->po = apply_runtime_po_override(td, state->po);
 }
 
 void RuntimeParseOptionsOverrideHelper::setCleared() {
     assert(!active);
-    td = thread_data.get();
+    state = &thread_data.get()->runtime_po_state;
     active = true;
-    old_mask = td->runtime_po_override_mask;
-    old_value = td->runtime_po_override_value;
-    old_replace = td->runtime_po_override_replace;
-    old_po = td->runtime_po;
-    old_caller_restrictions = td->runtime_po_caller_restrictions;
-    old_module_pgm = td->runtime_po_module_pgm;
-    old_app_pgm_id = td->runtime_po_app_pgm_id;
-    old_sandboxed = td->runtime_po_sandboxed;
-    old_override_pgm = td->runtime_po_override_pgm;
-    td->runtime_po_override_mask = QoreParseOptions();
-    td->runtime_po_override_value = QoreParseOptions();
-    td->runtime_po_override_replace = QoreParseOptions();
-    td->runtime_po_caller_restrictions = QoreParseOptions();
-    td->runtime_po_module_pgm = nullptr;
-    td->runtime_po_app_pgm_id = 0;
-    td->runtime_po_sandboxed = false;
-    td->runtime_po_override_pgm = nullptr;
+    old = *state;
     // an empty override leaves the runtime parse options as they are (see apply_runtime_po_override())
-}
-
-void RuntimeParseOptionsOverrideHelper::restore() {
-    assert(active);
-    assert(td == thread_data.get());
-    td->runtime_po_override_mask = old_mask;
-    td->runtime_po_override_value = old_value;
-    td->runtime_po_override_replace = old_replace;
-    td->runtime_po_caller_restrictions = old_caller_restrictions;
-    td->runtime_po_module_pgm = old_module_pgm;
-    td->runtime_po_app_pgm_id = old_app_pgm_id;
-    td->runtime_po_sandboxed = old_sandboxed;
-    td->runtime_po_override_pgm = old_override_pgm;
-    td->runtime_po = old_po;
+    QoreParseOptions po = state->po;
+    *state = QoreRuntimePoState();
+    state->po = po;
 }
 
 void QoreThreadRuntimeParseOptions::refPrograms() {
@@ -6935,29 +6884,29 @@ bool QoreThreadRuntimeParseOptions::currentRestrictsNothing() {
     ThreadData* td = thread_data.get();
     // the options that grant or deny access: the functional domains and the positive options
     static const QoreParseOptions access_options = QoreParseOptions(QDOM_ALL) | QoreParseOptions::POSITIVE_OPTIONS;
-    return !(td->runtime_po & access_options)
-        && !td->runtime_po_override_mask
-        && !td->runtime_po_override_value
-        && !td->runtime_po_override_replace
-        && !td->runtime_po_caller_restrictions
-        && !td->runtime_po_module_pgm
-        && !td->runtime_po_app_pgm_id
-        && !td->runtime_po_sandboxed
-        && !td->runtime_po_override_pgm;
+    return !(td->runtime_po_state.po & access_options)
+        && !td->runtime_po_state.override_mask
+        && !td->runtime_po_state.override_value
+        && !td->runtime_po_state.override_replace
+        && !td->runtime_po_state.caller_restrictions
+        && !td->runtime_po_state.module_pgm
+        && !td->runtime_po_state.app_pgm_id
+        && !td->runtime_po_state.sandboxed
+        && !td->runtime_po_state.override_pgm;
 }
 
 QoreThreadRuntimeParseOptions QoreThreadRuntimeParseOptions::capture() {
     ThreadData* td = thread_data.get();
     QoreThreadRuntimeParseOptions rv;
-    rv.po = td->runtime_po;
-    rv.override.mask = td->runtime_po_override_mask;
-    rv.override.value = td->runtime_po_override_value;
-    rv.override.replace = td->runtime_po_override_replace;
-    rv.override.caller_restrictions = td->runtime_po_caller_restrictions;
-    rv.override.module_pgm = td->runtime_po_module_pgm;
-    rv.override.app_pgm_id = td->runtime_po_app_pgm_id;
-    rv.override.sandboxed = td->runtime_po_sandboxed;
-    rv.override.override_pgm = td->runtime_po_override_pgm;
+    rv.po = td->runtime_po_state.po;
+    rv.override.mask = td->runtime_po_state.override_mask;
+    rv.override.value = td->runtime_po_state.override_value;
+    rv.override.replace = td->runtime_po_state.override_replace;
+    rv.override.caller_restrictions = td->runtime_po_state.caller_restrictions;
+    rv.override.module_pgm = td->runtime_po_state.module_pgm;
+    rv.override.app_pgm_id = td->runtime_po_state.app_pgm_id;
+    rv.override.sandboxed = td->runtime_po_state.sandboxed;
+    rv.override.override_pgm = td->runtime_po_state.override_pgm;
     rv.refPrograms();
     return rv;
 }
@@ -6971,7 +6920,7 @@ QoreThreadRuntimeParseOptionsHelper::QoreThreadRuntimeParseOptionsHelper(const Q
     // saves the override and the options in effect, and sets the override
     override_helper->set(td, o->override);
     // the options were computed with the override in the starting thread
-    td->runtime_po = o->po;
+    td->runtime_po_state.po = o->po;
 }
 
 bool runtime_module_call_override_in_effect(const QoreProgram* module_pgm) {
@@ -6979,42 +6928,42 @@ bool runtime_module_call_override_in_effect(const QoreProgram* module_pgm) {
 }
 
 bool runtime_module_call_override_in_effect(ThreadData* td, const QoreProgram* module_pgm) {
-    return td && td->runtime_po_override_pgm == module_pgm;
+    return td && td->runtime_po_state.override_pgm == module_pgm;
 }
 
 LoadTimeParseOptionsHelper::LoadTimeParseOptionsHelper(const QoreParseOptions& po) {
     ThreadData* td = thread_data.get();
-    old_po = td->runtime_po;
-    old_mask = td->runtime_po_override_mask;
-    old_value = td->runtime_po_override_value;
-    old_replace = td->runtime_po_override_replace;
-    old_caller_restrictions = td->runtime_po_caller_restrictions;
-    old_module_pgm = td->runtime_po_module_pgm;
-    old_app_pgm_id = td->runtime_po_app_pgm_id;
-    old_sandboxed = td->runtime_po_sandboxed;
-    old_override_pgm = td->runtime_po_override_pgm;
-    td->runtime_po_override_mask = QoreParseOptions();
-    td->runtime_po_override_value = QoreParseOptions();
-    td->runtime_po_override_replace = QoreParseOptions();
-    td->runtime_po_caller_restrictions = QoreParseOptions();
-    td->runtime_po_module_pgm = nullptr;
-    td->runtime_po_app_pgm_id = 0;
-    td->runtime_po_sandboxed = false;
-    td->runtime_po_override_pgm = nullptr;
-    td->runtime_po = po;
+    old_po = td->runtime_po_state.po;
+    old_mask = td->runtime_po_state.override_mask;
+    old_value = td->runtime_po_state.override_value;
+    old_replace = td->runtime_po_state.override_replace;
+    old_caller_restrictions = td->runtime_po_state.caller_restrictions;
+    old_module_pgm = td->runtime_po_state.module_pgm;
+    old_app_pgm_id = td->runtime_po_state.app_pgm_id;
+    old_sandboxed = td->runtime_po_state.sandboxed;
+    old_override_pgm = td->runtime_po_state.override_pgm;
+    td->runtime_po_state.override_mask = QoreParseOptions();
+    td->runtime_po_state.override_value = QoreParseOptions();
+    td->runtime_po_state.override_replace = QoreParseOptions();
+    td->runtime_po_state.caller_restrictions = QoreParseOptions();
+    td->runtime_po_state.module_pgm = nullptr;
+    td->runtime_po_state.app_pgm_id = 0;
+    td->runtime_po_state.sandboxed = false;
+    td->runtime_po_state.override_pgm = nullptr;
+    td->runtime_po_state.po = po;
 }
 
 LoadTimeParseOptionsHelper::~LoadTimeParseOptionsHelper() {
     ThreadData* td = thread_data.get();
-    td->runtime_po_override_mask = old_mask;
-    td->runtime_po_override_value = old_value;
-    td->runtime_po_override_replace = old_replace;
-    td->runtime_po_caller_restrictions = old_caller_restrictions;
-    td->runtime_po_module_pgm = old_module_pgm;
-    td->runtime_po_app_pgm_id = old_app_pgm_id;
-    td->runtime_po_sandboxed = old_sandboxed;
-    td->runtime_po_override_pgm = old_override_pgm;
-    td->runtime_po = old_po;
+    td->runtime_po_state.override_mask = old_mask;
+    td->runtime_po_state.override_value = old_value;
+    td->runtime_po_state.override_replace = old_replace;
+    td->runtime_po_state.caller_restrictions = old_caller_restrictions;
+    td->runtime_po_state.module_pgm = old_module_pgm;
+    td->runtime_po_state.app_pgm_id = old_app_pgm_id;
+    td->runtime_po_state.sandboxed = old_sandboxed;
+    td->runtime_po_state.override_pgm = old_override_pgm;
+    td->runtime_po_state.po = old_po;
 }
 
 QoreParseOptions runtime_get_parse_options_stack(ExceptionSink* xsink, size_t n) {
