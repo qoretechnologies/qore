@@ -317,6 +317,9 @@ enum class QoreDbgHttpHoldPoint : unsigned char {
     //! reference to the request's action that the dispatch held (armed with a release Counter of 0, the point only
     //! reports it)
     StreamEndDispatched,
+    //! an I/O thread of the asynchronous I/O controller is about to continue a C++ poll operation on the thread
+    //! (call its continuePoll()); the point is armed for the operation's object
+    ContinuePoll,
     //! the number of hold points
     Count,
 };
@@ -327,6 +330,12 @@ enum class QoreDbgHttpHoldPoint : unsigned char {
     an object holds only the thread that reaches it for that object
 */
 DLLLOCAL void qore_dbg_http_hold(QoreDbgHttpHoldPoint point, const void* target = nullptr);
+
+//! true while dbg_http_hold_at() has armed QoreDbgHttpHoldPoint::ContinuePoll and no thread has reached it yet
+/** Read before the hold point, which is on a path that runs for each step of a poll operation, so that the path takes
+    no lock while the point is not armed
+*/
+DLLLOCAL extern std::atomic<bool> qore_dbg_continue_poll_hold_armed;
 
 //! holds the creation of a child Program after its options were checked and before the Program is created, if
 //! dbg_hold_child_program_create() armed it (one-shot)

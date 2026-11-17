@@ -24005,6 +24005,8 @@ std::mutex dbg_http_hold_m;
 DbgHttpHold dbg_http_holds[static_cast<int>(QoreDbgHttpHoldPoint::Count)];
 }
 
+std::atomic<bool> qore_dbg_continue_poll_hold_armed{false};
+
 void qore_dbg_http_hold(QoreDbgHttpHoldPoint point, const void* target) {
     DbgHttpHold h;
     {
@@ -24017,6 +24019,9 @@ void qore_dbg_http_hold(QoreDbgHttpHoldPoint point, const void* target) {
         // one-shot: the hold is taken over by this thread
         h = armed;
         armed = DbgHttpHold();
+        if (point == QoreDbgHttpHoldPoint::ContinuePoll) {
+            qore_dbg_continue_poll_hold_armed.store(false, std::memory_order_relaxed);
+        }
     }
     ExceptionSink xsink;
     h.reached->dec(&xsink);
@@ -24127,12 +24132,14 @@ static QoreValue f_dbg_hold_child_program_create_clear(const QoreListNode* param
     teardown (the poll operation of an HTTP/3 client connection, read for its error, or the inner operation of an HTTP
     client ping poll operation) has taken it, and is about to use it; \c "stream-end-dispatched": an HTTP/1.1 or
     HTTP/3 client poll operation dispatched the end of a request's response and released the reference to the
-    request's action that the dispatch held (with a release Counter of 0, the point only reports it)
+    request's action that the dispatch held (with a release Counter of 0, the point only reports it);
+    \c "continue-poll": an I/O thread of the asynchronous I/O controller is about to continue a C++ poll operation on
+    the thread (to call its continuePoll()), armed for the operation's object
     @param reached decremented when a thread reaches the point
     @param release the thread waits until it reaches zero
     @param target if given, only a thread that reaches the point for this object is held: the poll operation of the
     \c "error-record", \c "error-read", \c "value-record", \c "value-read", \c "teardown-read" and
-    \c "stream-end-dispatched" points (the object is compared, not referenced)
+    \c "stream-end-dispatched" and \c "continue-poll" points (the object is compared, not referenced)
 
     @throw DBG-ARGUMENT-ERROR unknown point, or the point is already armed
 */
@@ -24169,6 +24176,8 @@ static QoreValue f_dbg_http_hold_at(const QoreListNode* params, RuntimeConfig& r
         point = static_cast<int>(QoreDbgHttpHoldPoint::TeardownRead);
     } else if (!strcmp(name->c_str(), "stream-end-dispatched")) {
         point = static_cast<int>(QoreDbgHttpHoldPoint::StreamEndDispatched);
+    } else if (!strcmp(name->c_str(), "continue-poll")) {
+        point = static_cast<int>(QoreDbgHttpHoldPoint::ContinuePoll);
     } else {
         xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_http_hold_at(): unknown point '%s'", name->c_str());
         return QoreValue();
@@ -24192,6 +24201,9 @@ static QoreValue f_dbg_http_hold_at(const QoreListNode* params, RuntimeConfig& r
     h.release = release.release();
     QoreValue target = get_param_value(params, 3);
     h.target = target.getType() == NT_OBJECT ? static_cast<const void*>(target.get<const QoreObject>()) : nullptr;
+    if (point == static_cast<int>(QoreDbgHttpHoldPoint::ContinuePoll)) {
+        qore_dbg_continue_poll_hold_armed.store(true, std::memory_order_relaxed);
+    }
     return QoreValue();
 }
 
@@ -24246,6 +24258,7 @@ static QoreValue f_dbg_http_hold_clear(const QoreListNode* params, RuntimeConfig
             h = DbgHttpHold();
         }
     }
+    qore_dbg_continue_poll_hold_armed.store(false, std::memory_order_relaxed);
     return QoreValue();
 }
 

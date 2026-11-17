@@ -1,0 +1,203 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - deletion of C++ socket poll operations while an async I/O thread continues them
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class AsyncIoDeleteSubmittedOpTest
+
+#! The bound on every blocking wait in this test: a hang guard only, never a timing assertion
+const HangGuard = 60s;
+
+#! The bound on the deletion: the I/O thread is held for up to a minute, and a deletion that waits for it fails first
+const DeleteGuard = 30s;
+
+#! a connected TCP socket pair
+class SocketPair {
+    public {
+        #! the client end
+        Socket client();
+        #! the server end
+        Socket server;
+    }
+
+    private {
+        Socket listener();
+    }
+
+    constructor() {
+        listener.bindINET("127.0.0.1", 0, True, AF_INET);
+        listener.listen();
+        client.connect("127.0.0.1:" + listener.getSocketInfo().port, HangGuard);
+        *Socket s = listener.accept(HangGuard);
+        if (!s) {
+            throw "TEST-ERROR", "the connection was not accepted";
+        }
+        server = s;
+    }
+
+    #! returns the port of the listener, which accepts no further connections
+    int getPort() {
+        return listener.getSocketInfo().port;
+    }
+
+    #! returns a new connection accepted by the listener
+    Socket accept() {
+        *Socket s = listener.accept(HangGuard);
+        if (!s) {
+            throw "TEST-ERROR", "the connection was not accepted";
+        }
+        return s;
+    }
+
+    close() {
+        client.close();
+        server.close();
+        listener.close();
+    }
+}
+
+#! A C++ socket poll operation that is deleted while the async I/O controller continues it is canceled (issue #6464)
+/** The controller holds a submitted operation and continues it on its I/O thread; an explicit delete runs the
+    destructor of its object meanwhile.  The I/O thread is held (the "continue-poll" hold point of debug builds) when
+    it is committed to a step of the operation, the operation is deleted from another thread, which must not wait for
+    the I/O thread, and the I/O thread is released: the step runs on the operation's state, which the deletion did not
+    release, and the controller completes the operation as canceled, without another step.
+*/
+class AsyncIoDeleteSubmittedOpTest inherits QUnit::Test {
+    constructor() : Test("AsyncIoDeleteSubmittedOpTest", "1.0") {
+        addTestCase("HTTP/1.1 client operation", \http1ClientTest());
+        addTestCase("HTTP keep-alive (server) operation", \keepAliveTest());
+        addTestCase("HTTP idle (server) operation", \idleTest());
+        addTestCase("WebSocket server operation", \webSocketServerTest());
+        addTestCase("WebSocket client operation", \webSocketClientTest());
+        addTestCase("poll pipeline", \pipelineTest());
+        addTestCase("delegating operation", \delegatingTest());
+        set_return_value(main());
+    }
+
+    http1ClientTest() {
+        checkDebug();
+        SocketPair p();
+        on_exit p.close();
+        # the operation connects to the listener of the pair: its first step starts the connect
+        Socket s();
+        int port = p.getPort();
+        # the operation only refers to its connection
+        AbstractHttpPollConnection conn();
+        Http1ClientPollOperationBase op(s, "127.0.0.1:" + port, "127.0.0.1", port, False, False, False, conn);
+        deleteInStep(s, op, "http1-client");
+    }
+
+    keepAliveTest() {
+        checkDebug();
+        SocketPair p();
+        on_exit p.close();
+        # the operation waits for a request header that the client never sends
+        deleteInStep(p.server, new HttpKeepAlivePollOperationBase(p.server, 60000), "keep-alive");
+    }
+
+    idleTest() {
+        checkDebug();
+        SocketPair p();
+        on_exit p.close();
+        deleteInStep(p.server, new HttpIdlePollOperationBase(p.server, 60s), "idle");
+    }
+
+    webSocketServerTest() {
+        checkDebug();
+        SocketPair p();
+        on_exit p.close();
+        # the operation waits for frames that the client never sends
+        deleteInStep(p.server, new HttpWebSocketPollOperationBase(p.server), "ws-server");
+    }
+
+    webSocketClientTest() {
+        checkDebug();
+        SocketPair p();
+        on_exit p.close();
+        deleteInStep(p.client, new WebSocketClientPollOperationBase(p.client), "ws-client");
+    }
+
+    pipelineTest() {
+        checkDebug();
+        SocketPair p();
+        on_exit p.close();
+        # the pipeline waits for data that the server never sends
+        PollPipeline pp(p.client);
+        pp.addRecvExact(4);
+        deleteInStep(p.client, pp, "pipeline");
+    }
+
+    delegatingTest() {
+        checkDebug();
+        SocketPair p();
+        on_exit p.close();
+        PollPipeline pp(p.client);
+        pp.addRecvExact(4);
+        deleteInStep(p.client, new DelegatingPollOperation(pp), "delegating");
+    }
+
+    #! submits the operation, deletes it while the I/O thread is committed to its first step, and checks the result
+    private deleteInStep(Socket sock, object op, string name) {
+        string owner = sprintf("delete-submitted-%s-%d", name, getpid());
+        on_exit AsyncIoController::cancelByOwner(owner);
+
+        Counter reached(1);
+        Counter release(1);
+        on_exit if (release.getCount()) {
+            release.dec();
+        }
+        on_exit call_function("dbg_http_hold_clear");
+        call_function("dbg_http_hold_at", "continue-poll", reached, release, op);
+
+        # the result Queue is given, as no Queue is returned for an operation with its own onComplete()
+        Queue<hash<SocketPollResultInfo>> rq();
+        AsyncIoController::submit(<SocketPollOperationInfo>{
+            "sock": sock,
+            "spop": op,
+            "owner": owner,
+            "key": owner,
+            "to": -1s,
+            "resultQueue": rq,
+        });
+        # only the hold point decrements the Counter: an operation whose step does not reach it fails the test here
+        if (reached.waitForZero(HangGuard)) {
+            throw "TEST-ERROR", sprintf("%s: the I/O thread did not continue the operation", name);
+        }
+
+        # reports a further step of the operation without holding it
+        Counter stepped_again(1);
+        call_function("dbg_http_hold_at", "continue-poll", stepped_again, new Counter(0), op);
+
+        # the deletion runs in another thread, so that a deletion that waits for the held I/O thread fails the test
+        # instead of hanging it
+        Counter deleted(1);
+        background sub (object o) {
+            on_exit deleted.dec();
+            delete o;
+        }(op);
+        bool delete_waited = deleted.waitForZero(DeleteGuard) != 0;
+        release.dec();
+        assertFalse(delete_waited, name + ": the deletion did not wait for the I/O thread");
+        if (delete_waited && deleted.waitForZero(HangGuard)) {
+            throw "TEST-ERROR", sprintf("%s: the deletion did not end", name);
+        }
+
+        hash<SocketPollResultInfo> r = rq.get(HangGuard);
+        assertTrue(r.canceled, name + ": the deleted operation is canceled");
+        assertEq(NOTHING, r.ex, name + ": the deleted operation has no error");
+        assertEq(1, stepped_again.getCount(), name + ": the deleted operation was not continued again");
+    }
+
+    private checkDebug() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("needs a debug build of the library (dbg_http_hold_at())");
+        }
+    }
+}

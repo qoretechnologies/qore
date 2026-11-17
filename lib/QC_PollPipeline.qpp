@@ -32,6 +32,7 @@
 */
 
 #include "qore/Qore.h"
+#include "qore/intern/QC_SocketPollOperationBase.h"
 #include "qore/intern/QC_PollPipeline.h"
 #include "qore/intern/QC_SocketPollOperation.h"
 #include "qore/intern/qore_socket_private.h"
@@ -313,6 +314,14 @@ PollPipelinePriv::~PollPipelinePriv() {
     if (current_op || sock_obj || result_action) {
         ExceptionSink xsink;
         cleanup(&xsink);
+    }
+}
+
+void PollPipelinePriv::deref(ExceptionSink* xsink) {
+    // an async I/O controller that holds the pipeline can still continue it after the destructor of its object
+    if (ROdereference()) {
+        cleanup(xsink);
+        delete this;
     }
 }
 
@@ -1304,6 +1313,11 @@ QoreHashNode* PollPipelinePriv::continuePoll(ExceptionSink* xsink) {
             ExceptionSink poll_xsink;
             QoreHashNode* poll_info = current_op->continuePoll(&poll_xsink);
             if (poll_xsink) {
+                // a step can return its poll info with an exception (one raised after the hash was made, such as
+                // for the socket member of an operation whose object was deleted)
+                if (poll_info) {
+                    poll_info->deref(xsink);
+                }
                 QoreStringValueHelper err_str(poll_xsink.getExceptionErr());
                 QoreStringValueHelper desc_str(poll_xsink.getExceptionDesc());
                 setError(*err_str ? err_str->c_str() : "POLL-PIPELINE-ERROR",
@@ -2263,7 +2277,9 @@ PollPipeline::constructor(*string goal) [flags=NAMED_ARGS] {
 /** Releases all internal references.
 */
 PollPipeline::destructor() {
-    priv->cleanup(xsink);
+    // the operation's state is released with its last reference, which an async I/O controller that continues the
+    // operation can hold; the controller cancels the operation
+    qore_socket_poll_op_object_deleted(priv);
     priv->deref(xsink);
 }
 

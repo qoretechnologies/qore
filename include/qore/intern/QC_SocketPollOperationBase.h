@@ -39,4 +39,13 @@
 // Internal-only: QPP class init function
 DLLLOCAL QoreClass* initSocketPollOperationBaseClass(QoreNamespace& qorens);
 
+//! Called by the destructor of the Qore object of a C++ poll operation that releases its state with its last reference
+/** An explicit \c delete runs the destructor while an async I/O controller can still hold the operation and continue
+    it on an I/O thread; the controller then cancels the operation (see AsyncIoControllerPriv::opObjectDeleted()).
+    Does not wait for the I/O threads and runs no Qore code.
+
+    @param op the operation of the object
+*/
+DLLLOCAL void qore_socket_poll_op_object_deleted(SocketPollOperationBase* op);
+
 #endif // _QORE_CLASS_SOCKETPOLLOPERATIONBASE_H

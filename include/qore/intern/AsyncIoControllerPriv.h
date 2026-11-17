@@ -906,6 +906,26 @@ public:
     */
     DLLLOCAL void wakeSocketByObject(QoreObject* sock_obj, ExceptionSink* xsink);
 
+    //! Called by the destructor of the Qore object of a C++ poll operation: the controller cancels the operation
+    /** An explicit \c delete runs the destructor of an operation that a controller still holds and polls; the
+        operation's state is then released only with its last reference (see the deref() of the operation classes),
+        and the controller sees the deletion as a cancellation of the operation:
+        - an operation in the cache of an I/O thread is canceled by a CancelDeletedOp command, which each running
+          I/O thread receives (the operation does not know its thread); it is not waited for
+        - an operation whose submission has not been processed yet is canceled when it is (see attachOp())
+        - an operation that is deleted is not continued again (see isOpDeleted())
+
+        Does not block on the I/O threads and runs no Qore code.
+
+        @param op the C++ poll operation of the object that is being deleted
+    */
+    DLLLOCAL static void opObjectDeleted(SocketPollOperationBase* op);
+
+    //! Returns true if the Qore object of the given C++ poll operation was deleted (see opObjectDeleted())
+    /** Called by an I/O thread before each step of an operation; a single atomic load
+    */
+    DLLLOCAL static bool isOpDeleted(const SocketPollOperationBase* op);
+
     //! Wait for all pending onComplete/abort callbacks to be processed
     /** Call after cancelByOwner() to ensure all cancelled operation callbacks
         have been delivered before stopping thread pools that depend on them.
@@ -1097,6 +1117,8 @@ private:
         CancelTimer,
         ContinuePollResult,  //!< Result from async continuePoll() dispatch
         GetInfo,             //!< Snapshot cache info on the I/O thread
+        //! Cancel the operation of a C++ poll operation whose Qore object was deleted (see opObjectDeleted())
+        CancelDeletedOp,
     };
 
     //! Forward declaration — full definition below (requires PollInfo)
@@ -1221,6 +1243,10 @@ private:
         AsyncIoSandboxContext submit_sandbox_ctx;        //!< For SubmitOp: the submitter's sandbox context
         //! For SubmitOp: the references taken by the synchronous exec() call that waits for the operation, or empty
         std::shared_ptr<AsyncIoSyncRelease> submit_sync_release;
+        //! For CancelDeletedOp: the C++ poll operation whose Qore object was deleted (referenced)
+        /** The reference keeps the address from being reused for another operation until the command is processed
+        */
+        SocketPollOperationBase* cancel_spop_base = nullptr;
     };
 
     //! Internal poll info (mirrors Qore Priv::PollInfo)
@@ -2087,6 +2113,22 @@ private:
         @param xsink exception sink for immediate releases
     */
     DLLLOCAL void releaseOffIoThread(AsyncIoDeferredRelease& refs, ExceptionSink* xsink);
+
+    //! Records that the given C++ poll operation is held in a cache of this controller (see opObjectDeleted())
+    /** Called on the I/O thread whose cache takes the operation.
+
+        @return true if the operation's Qore object was deleted: the operation is canceled instead of polled
+    */
+    DLLLOCAL bool attachOp(SocketPollOperationBase* op, QoreObject* sock_obj);
+
+    //! Records that the given C++ poll operation is no longer held in a cache of this controller
+    DLLLOCAL static void detachOp(SocketPollOperationBase* op);
+
+    //! Sends a CancelDeletedOp command for the given C++ poll operation to the running I/O threads
+    /** @param op the operation, referenced by each command
+        @param only_idx if not negative, the command is sent to this I/O thread only
+    */
+    DLLLOCAL void postDeletedOpCancel(SocketPollOperationBase* op, int only_idx = -1);
 
     //! Releases references held by the controller for an operation, off the async I/O thread
     /** As releaseOffIoThread(AsyncIoDeferredRelease&, ExceptionSink*), except that on an I/O thread the references

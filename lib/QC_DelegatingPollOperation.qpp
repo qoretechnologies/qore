@@ -79,6 +79,18 @@ public:
         assert(!counter_obj);
     }
 
+    //! Releases the operation's state (cleanup()) with its last reference
+    /** An async I/O controller that holds the operation can still continue it after the destructor of its object
+        (issue #6464)
+    */
+    DLLLOCAL void deref(ExceptionSink* xsink) override {
+        if (ROdereference()) {
+            cleanup(xsink);
+            delete this;
+        }
+    }
+    using SocketPollOperationBase::deref;
+
     DLLLOCAL void cleanup(ExceptionSink* xsink) {
         if (inner_obj) {
             inner_obj->deref(xsink);
@@ -354,7 +366,9 @@ DelegatingPollOperation::constructor(AbstractPollOperation<?> operation, *code o
 */
 DelegatingPollOperation::destructor() {
     qore_object_private::get(*self)->decScanPrivateData();
-    poll->cleanup(xsink);
+    // the operation's state is released with its last reference, which an async I/O controller that continues the
+    // operation can hold; the controller cancels the operation
+    qore_socket_poll_op_object_deleted(poll);
     poll->deref(xsink);
 }
 
