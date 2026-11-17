@@ -4207,7 +4207,11 @@ static bool write_expr_implicit_arg(AOTExprWriteCtx& ctx) {
 
 static QoreValue read_expr_implicit_arg(AOTExprReadCtx& ctx) {
     int64_t offset = QoreAOTBinaryReader::readI64(ctx.ptr);
-    int ctor_offset = offset >= 0 ? static_cast<int>(offset + 1) : static_cast<int>(offset);
+    int ctor_offset;
+    if (!qore_aot_implicit_arg_ctor_offset(offset, ctor_offset)) {
+        ctx.error = "invalid implicit argument offset " + std::to_string(offset);
+        return QoreValue();
+    }
     return QoreValue(new QoreImplicitArgumentNode(&loc_builtin, ctor_offset));
 }
 
@@ -5685,6 +5689,10 @@ static QoreValue read_expr_complex_context_ref(AOTExprReadCtx& ctx) {
     const char* name = ctx.reader.readStringRef(ctx.ptr);
     const char* member = ctx.reader.readStringRef(ctx.ptr);
     int64_t stack_offset = QoreAOTBinaryReader::readI64(ctx.ptr);
+    if (!qore_aot_valid_context_stack_offset(stack_offset)) {
+        ctx.error = "invalid context stack offset " + std::to_string(stack_offset);
+        return QoreValue();
+    }
 
     std::string spec = name ? name : "";
     spec += ":";
