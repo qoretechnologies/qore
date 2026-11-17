@@ -922,6 +922,9 @@ DLLLOCAL void qore_dbg_fail_next_program_entry(int site);
 //! Holds the next background thread that releases its TID for up to \a ms milliseconds before it leaves
 //! thread_counter, or until the static objects are destroyed (issue #6405)
 DLLLOCAL void qore_dbg_hold_next_thread_finish(int ms);
+//! Holds the next background thread that ends for up to \a ms milliseconds in a thread-local destructor, after it
+//! has returned from its thread function, or until the static objects are destroyed (issue #6412)
+DLLLOCAL void qore_dbg_hold_next_thread_tls_exit(int ms);
 //! Waits until a finishing background thread is held; returns false on timeout
 DLLLOCAL bool qore_dbg_wait_thread_finish_held(int timeout_ms);
 

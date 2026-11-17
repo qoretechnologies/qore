@@ -142,6 +142,8 @@ struct QoreDbgFinishHold {
     std::condition_variable cv;
     //! the time the next finishing thread is held, if positive
     int hold_ms = 0;
+    //! the time the next finishing background thread is held in a thread-local destructor, if positive (#6412)
+    int tls_hold_ms = 0;
     //! a thread is held
     bool held = false;
     //! the held thread is to continue
@@ -7307,6 +7309,10 @@ QoreException* catch_get_exception() {
     return td->catchException;
 }
 
+#ifdef DEBUG
+static void qore_dbg_release_finishing_hold();
+#endif
+
 //! Waits for the background threads that have released their TID and are finishing; returns -1 if they do not finish
 /** A background thread releases its TID (thread_list.deleteDataRelease()) before it runs the thread cleanup functions
     and leaves thread_counter, so thread_list does not count it then; exit() must not run the static destructors
@@ -7316,6 +7322,13 @@ QoreException* catch_get_exception() {
     not waited for.
 */
 static int qore_exit_wait_finishing_threads() {
+#ifdef DEBUG
+    // a held finishing thread (the debug controls of the tests of issues #6405 and #6412) is released by the wait
+    // only if the wait waits for it: a thread that exit() did not wait for is released by the static releaser
+    if (thread_counter.getCount() > qore_thread_counter_share) {
+        qore_dbg_release_finishing_hold();
+    }
+#endif
     // a condition wait on thread_counter, which wakes it when a thread leaves it
     return thread_counter.waitForCountAtMost(qore_thread_counter_share, 10 * 1000) ? -1 : 0;
 }
@@ -7387,6 +7400,53 @@ bool qore_dbg_wait_thread_finish_held(int timeout_ms) {
 }
 
 //! Holds a background thread that has released its TID, before it leaves thread_counter, if a hold is armed
+void qore_dbg_hold_next_thread_tls_exit(int ms) {
+    std::lock_guard<std::mutex> l(dbg_finish_hold->m);
+    dbg_finish_hold->tls_hold_ms = ms;
+    dbg_finish_hold->released = false;
+}
+
+namespace {
+//! Holds its thread in its destructor, a thread-local destructor that runs after the thread function returns
+/** Then reads thread_counter, as the thread-local destructors of a thread can use the library's static objects: a
+    thread that exit() did not wait for reads the destroyed counter (issue #6412).
+*/
+struct QoreDbgTlsHold {
+    int ms = 0;
+
+    ~QoreDbgTlsHold() {
+        if (ms <= 0) {
+            return;
+        }
+        {
+            std::unique_lock<std::mutex> l(dbg_finish_hold->m);
+            dbg_finish_hold->held = true;
+            dbg_finish_hold->cv.notify_all();
+            dbg_finish_hold->cv.wait_for(l, std::chrono::milliseconds(ms),
+                [] () { return dbg_finish_hold->released; });
+            if (!dbg_finish_hold->released) {
+                // the test fails on this output: the hold must end by the exit() wait or the static releaser
+                fputs("qore-dbg: a finishing thread hold ended by its timeout\n", stderr);
+            }
+            dbg_finish_hold->held = false;
+            dbg_finish_hold->cv.notify_all();
+        }
+        thread_counter.getCount();
+    }
+};
+thread_local QoreDbgTlsHold qore_dbg_tls_hold;
+}
+
+//! Arms the thread-local hold of the calling thread if a hold of the next thread's exit is armed
+static void qore_dbg_arm_thread_tls_hold() {
+    std::lock_guard<std::mutex> l(dbg_finish_hold->m);
+    if (dbg_finish_hold->tls_hold_ms > 0) {
+        // the first use constructs the thread-local object, whose destructor then runs when the thread ends
+        qore_dbg_tls_hold.ms = dbg_finish_hold->tls_hold_ms;
+        dbg_finish_hold->tls_hold_ms = 0;
+    }
+}
+
 static void qore_dbg_hold_thread_finish() {
     std::unique_lock<std::mutex> l(dbg_finish_hold->m);
     int ms = dbg_finish_hold->hold_ms;
@@ -7397,8 +7457,21 @@ static void qore_dbg_hold_thread_finish() {
     dbg_finish_hold->held = true;
     dbg_finish_hold->cv.notify_all();
     dbg_finish_hold->cv.wait_for(l, std::chrono::milliseconds(ms), [] () { return dbg_finish_hold->released; });
+    if (!dbg_finish_hold->released) {
+        // the test fails on this output: the hold must end by the exit() wait or the static releaser
+        fputs("qore-dbg: a finishing thread hold ended by its timeout\n", stderr);
+    }
     dbg_finish_hold->held = false;
     dbg_finish_hold->cv.notify_all();
+}
+
+//! Releases a held finishing thread because exit() waits for it (see qore_exit_wait_finishing_threads())
+static void qore_dbg_release_finishing_hold() {
+    std::lock_guard<std::mutex> l(dbg_finish_hold->m);
+    if (dbg_finish_hold->held) {
+        dbg_finish_hold->released = true;
+        dbg_finish_hold->cv.notify_all();
+    }
 }
 #endif
 
@@ -7676,7 +7749,7 @@ public:
         // condition variable while the reaper is still waiting on it. A zero
         // external counter means that no worker can still publish completion.
         stop();
-        if (head || tail) {
+        if (head || tail || counted_head) {
             fputs("qore: native thread cleanup queue is not empty during static destruction\n", stderr);
             abort();
         }
@@ -7695,6 +7768,40 @@ public:
         }
         started = true;
         return 0;
+    }
+
+    //! Hands the calling thread, counted in thread_counter, to the reaper; returns false if the reaper does not run
+    /** The reaper joins the thread, so that its thread-local destructors have run, and then leaves thread_counter
+        for it (issue #6412); a caller for which this returns false detaches itself and leaves thread_counter itself.
+    */
+    bool completeCounted() {
+        CountedThread* t = new (std::nothrow) CountedThread{pthread_self(), nullptr};
+        if (!t) {
+            return false;
+        }
+        AutoLocker al(mutex);
+        if (!started || stopping) {
+            delete t;
+            return false;
+        }
+        if (counted_tail) {
+            counted_tail->next = t;
+        } else {
+            counted_head = t;
+        }
+        counted_tail = t;
+        condition.signal();
+        return true;
+    }
+
+    //! Starts the reaper if it is not running; returns false if it cannot be started
+    bool ensureStartedQuiet() {
+        ExceptionSink xsink;
+        if (ensureStarted(&xsink)) {
+            xsink.clear();
+            return false;
+        }
+        return true;
     }
 
     void complete(ThreadArg* arg) {
@@ -7723,6 +7830,9 @@ public:
                 return;
             }
             assert(!head);
+            // a thread counted in thread_counter can still be queued here (one that user module cleanup started in
+            // qore_cleanup(), or a stop by the static destructor without a wait): run() joins every queued thread
+            // before it returns, and a thread that comes later detaches itself (completeCounted())
             stopping = true;
             condition.signal();
         }
@@ -7754,15 +7864,24 @@ public:
     void forkChild() {
         started = stopping = false;
         head = tail = nullptr;
+        counted_head = counted_tail = nullptr;
         condition.reinitAfterFork();
         mutex.reinitAfterFork();
     }
 
 private:
+    //! a thread counted in thread_counter that is waiting to be joined
+    struct CountedThread {
+        pthread_t native_id;
+        CountedThread* next;
+    };
+
     QoreThreadLock mutex;
     QoreCondition condition;
     ThreadArg* head = nullptr;
     ThreadArg* tail = nullptr;
+    CountedThread* counted_head = nullptr;
+    CountedThread* counted_tail = nullptr;
     pthread_t native_id{};
     bool started = false;
     bool stopping = false;
@@ -7780,8 +7899,24 @@ private:
         // its completion is published. This native worker has no Qore program/TID.
         SafeLocker lock(mutex);
         while (true) {
-            while (!head && !stopping) {
+            while (!head && !counted_head && !stopping) {
                 condition.wait(mutex);
+            }
+            if (counted_head) {
+                std::unique_ptr<CountedThread> t(counted_head);
+                counted_head = counted_head->next;
+                if (!counted_head) {
+                    counted_tail = nullptr;
+                }
+                lock.unlock();
+                int rc = pthread_join(t->native_id, nullptr);
+                if (rc) {
+                    fprintf(stderr, "qore: cannot join completed native thread: %s\n", strerror(rc));
+                    abort();
+                }
+                thread_counter.dec();
+                lock.lock();
+                continue;
             }
             if (!head) {
                 assert(stopping);
@@ -7809,6 +7944,20 @@ static ExternalThreadReaper external_thread_reaper;
 
 void qore_stop_external_thread_reaper() {
     external_thread_reaper.stop();
+}
+
+//! Leaves thread_counter for a thread that has released its TID, once its thread-local destructors have run
+/** The thread was marked as joined before it released its TID, so it was not detached: the reaper joins it and then
+    decrements thread_counter, so that exit() and qore_cleanup(), which wait for thread_counter, also wait for the
+    thread's thread-local destructors and its exit from the C library (issue #6412).  If the reaper does not run, the
+    thread detaches itself and leaves thread_counter now, as before.
+*/
+static void q_finish_counted_thread() {
+    qore_thread_counter_share = 0;
+    if (!external_thread_reaper.completeCounted()) {
+        pthread_detach(pthread_self());
+        thread_counter.dec();
+    }
 }
 
 static void set_tid_thread_name(int tid) {
@@ -7909,6 +8058,10 @@ namespace {
                 sandbox_helper.reset();
                 sandbox.reset();
 
+                // the thread is joined by the reaper, not detached, if it is counted in thread_counter (issue #6412)
+                if (!(ta_flags & QTF_EXTERNAL_LIFECYCLE)) {
+                    thread_list.setJoined(ta->tid);
+                }
                 // delete internal thread data structure and release TID entry
                 thread_list.deleteDataRelease(ta->tid);
 
@@ -7930,8 +8083,7 @@ namespace {
             // the reaper releases the count once it has joined this thread
             external_thread_reaper.complete(ta);
         } else {
-            qore_thread_counter_share = 0;
-            thread_counter.dec();
+            q_finish_counted_thread();
         }
         return nullptr;
     }
@@ -8135,6 +8287,8 @@ namespace {
                 hub->threadFinished(thread_id, outcome, error.release(), exception_count, cleanup_error.release());
                 hub.reset();
 
+                // the thread is joined by the reaper, not detached (issue #6412)
+                thread_list.setJoined(tid);
                 // delete internal thread data structure and release TID entry
                 thread_list.deleteDataRelease(tid);
             }
@@ -8144,11 +8298,12 @@ namespace {
 #ifdef DEBUG
         // the thread has released its TID and is not counted by thread_list any more (issue #6405)
         qore_dbg_hold_thread_finish();
+        // a hold in a thread-local destructor, which runs after this function returns (issue #6412)
+        qore_dbg_arm_thread_tls_hold();
 #endif
         // NOTE: do not call OPENSSL_thread_stop() here — returning from the
         // thread function triggers TLS destructors automatically (see above).
-        qore_thread_counter_share = 0;
-        thread_counter.dec();
+        q_finish_counted_thread();
         return nullptr;
     }
 }
@@ -8237,6 +8392,8 @@ QoreValue do_op_background(RuntimeConfig& rc, const QoreValue left, ExceptionSin
         return QoreValue();
     }
 
+    // the reaper joins the thread when it ends (issue #6412)
+    external_thread_reaper.ensureStartedQuiet();
     thread_counter.inc();
 
     int rc_thread = q_create_native_thread(op_background_thread, tp);
@@ -8309,6 +8466,8 @@ QoreValue do_op_background_helper(const QoreBackgroundHelperCode& code, LocalVar
         return QoreValue();
     }
 
+    // the reaper joins the thread when it ends (issue #6412)
+    external_thread_reaper.ensureStartedQuiet();
     thread_counter.inc();
 
     int rc_thread = q_create_native_thread(op_background_thread, tp);
@@ -8355,6 +8514,8 @@ int q_start_thread(ExceptionSink* xsink, q_thread_t f, void* arg) {
 
     ThreadArg* ta = new ThreadArg(f, arg, tid, QTF_NONE, std::move(sandbox));
 
+    // the reaper joins the thread when it ends (issue #6412)
+    external_thread_reaper.ensureStartedQuiet();
     thread_counter.inc();
     int rc = q_create_native_thread(q_run_thread, ta);
     if (rc) {
@@ -8431,6 +8592,8 @@ int q_start_thread(ExceptionSink* xsink, q_thread_t f, void* arg, size_t stack_s
     if (flags & QTF_EXTERNAL_LIFECYCLE) {
         tp_thread_counter.inc();
     } else {
+        // the reaper joins the thread when it ends (issue #6412)
+        external_thread_reaper.ensureStartedQuiet();
         thread_counter.inc();
     }
     if ((rc = pthread_create(&ptid, local_attr.get_ptr(), q_run_thread, ta))) {
@@ -8472,6 +8635,8 @@ int q_start_thread(ExceptionSink* xsink, q_thread_t f, void* arg, int flags) {
     if (flags & QTF_EXTERNAL_LIFECYCLE) {
         tp_thread_counter.inc();
     } else {
+        // the reaper joins the thread when it ends (issue #6412)
+        external_thread_reaper.ensureStartedQuiet();
         thread_counter.inc();
     }
     int rc = q_create_native_thread(q_run_thread, ta);
