@@ -4325,6 +4325,14 @@ void ThreadLocalProgramData::dbgException(const AbstractStatement* statement, Ex
     }
 }
 
+void qore_program_private::dbgRunExit(QoreValue& rv, ExceptionSink* xsink) {
+    // called in the Program's context: the thread-local data is this Program's, if a debugger is attached
+    ThreadLocalProgramData* tlpd = get_thread_local_program_data();
+    if (tlpd) {
+        tlpd->dbgExit(&sb, rv, xsink);
+    }
+}
+
 void ThreadLocalProgramData::dbgExit(const StatementBlock* statement, QoreValue& returnValue, ExceptionSink* xsink) {
     if (runState != DBG_RS_STOPPED && runState != DBG_RS_DETACH) {
         printd(5, "ThreadLocalProgramData::dbgExit() this: %p, rs: %d, rts: %p, tid: %d\n", this, runState, runToStatement, q_gettid());
@@ -5175,7 +5183,16 @@ QoreValue QoreProgram::runTopLevel(ExceptionSink* xsink) {
     if (!*xsink && priv->debugger_terminating.load(std::memory_order_relaxed)) {
         qore_check_cancel(xsink, "end of the program's top-level code");
     }
-    return *xsink ? QoreValue() : rv.release();
+    // the debugger's exit event of the top-level code gets the value that Program::run() returns, which it can
+    // replace (#3401); after an exception, rv releases the value, and the event gets none
+    QoreValue result = *xsink ? QoreValue() : rv.release();
+    priv->dbgRunExit(result, xsink);
+    if (*xsink) {
+        // nothing is returned with an exception, also if the debugger set a value
+        result.discard(xsink);
+        return QoreValue();
+    }
+    return result;
 }
 
 template <bool LexicalInvocation>
@@ -5325,6 +5342,9 @@ void QoreProgram::runClass(const char* classname, ExceptionSink* xsink) {
         // waitForTerminationAndClear() after all threads have terminated.
         priv->exec_class_inst.discard(xsink);
         priv->exec_class_inst = qc->execConstructor((QoreListNode*)0, xsink);
+        // the debugger's exit event of the exec class gets the value that Program::run() returns (the return value
+        // that the class set), which it can replace (#3401)
+        priv->dbgRunExit(priv->exec_class_rv, xsink);
     }
 }
 
