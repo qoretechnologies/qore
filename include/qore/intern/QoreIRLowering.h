@@ -124,6 +124,20 @@ private:
 
 class QoreIRLowering {
 public:
+    //! Virtual implicit argument context - eliminates push/pop runtime calls for map/select/foldl/foldr
+    /** When active, $1/$2/$# references in lowerExpression() use these IR values directly
+     * instead of emitting LoadImplicitArg/LoadImplicitElement runtime calls.
+     * This eliminates 6+ runtime calls (push/pop/load for arg and element) per loop iteration.
+     */
+    struct VirtualImplicitContext {
+        QoreIRValue arg0;      //!< virtual $1 value (offset 0)
+        QoreIRValue arg1;      //!< virtual $2 value (offset 1, for foldl/foldr)
+        QoreIRValue element;   //!< virtual $# value
+        bool active = false;   //!< true when virtual context is in effect
+        //! true when the implicit argument list (and element, if any) is also set at run time
+        bool runtime = false;
+    };
+
     //! Handler metadata for inline compilation at block exit points
     /** Stores on_exit/on_success/on_error handler StatementBlocks along with their type
      *  and location information. These are lowered inline at block exit points rather than
@@ -140,6 +154,9 @@ public:
         //! the depth of the statements of the catch block that the handler is declared in, or -1 (see
         //! QoreIRLowering::debug_catch_child_depth)
         int debug_catch_child_depth = -1;
+        //! the virtual implicit arguments and element of the block that declares the handler, which it runs in at
+        //! every exit, also one in a loop nested in the block that has its own (qore#6383)
+        VirtualImplicitContext virtual_implicit;
     };
 
     explicit QoreIRLowering(QoreIRBuilder& builder, QoreParseContext* parse_context = nullptr,
@@ -1105,6 +1122,21 @@ private:
     DLLLOCAL void releasePredicateValue(QoreIRValue value, const QoreValue& expr, QoreIRValue element,
             const QoreProgramLocation* loc);
 
+    //! Creates the block that restores the implicit element of a foreach statement for an exception that leaves its
+    //! body for a handler of this function, and puts it on the exception stack (qore#6432)
+    /** Returns nullptr, and changes nothing, when no handler of this function encloses the body: the exception then
+        leaves the function.  The block is emitted with emitForeachElementExceptionRestore() once the body has been
+        lowered; \a next is set to the exception target that the block continues to.
+    */
+    DLLLOCAL QoreIRBasicBlock* beginForeachElementExceptionRestore(QoreIRBasicBlock*& next, std::string& error);
+
+    //! Emits the block of beginForeachElementExceptionRestore(): it restores the implicit element that the loop set
+    //! (\a old_element, the result of its PushImplicitElement) and continues to \a next with the exception, so that
+    //! the handlers of the enclosing blocks run with the element of the code around the loop, as in the AST
+    //! interpreter, whose foreach statement restores it when the exception unwinds it (qore#6432)
+    DLLLOCAL void emitForeachElementExceptionRestore(QoreIRBasicBlock* block, QoreIRBasicBlock* next,
+            QoreIRValue old_element, const QoreProgramLocation* loc);
+
     DLLLOCAL void emitForeachExceptionCleanup(QoreIRBasicBlock* cleanup_block, QoreIRBasicBlock* outer_target,
             QoreIRValue iterator, QoreIRValue list, QoreIRValue element, const LVList* lvars,
             const QoreProgramLocation* loc, QoreIRValue partial_result = QoreIRValue(),
@@ -1187,6 +1219,10 @@ private:
     };
     //! the blocks with exception paths of their own being lowered, innermost last (#5968)
     std::vector<AnchorCatchInfo> anchor_catch_stack;
+    //! The blocks that only restore state on the exception path and continue to another exception target with the
+    //! exception (see beginForeachElementExceptionRestore()), with that target: the exceptions of the statements of a
+    //! catch block that go to one of them go on to the target (qore#6432)
+    std::unordered_map<const QoreIRBasicBlock*, QoreIRBasicBlock*> exception_forwarding_blocks;
 
     //! catch_cleanup_depth at the body of each enclosing try statement, innermost last
     /** An exception raised in a try body lands in that try statement's catch block, so a throw or rethrow there
@@ -1274,19 +1310,6 @@ private:
         return catchScopesLeftByThrow() > 0 && !catch_exit_stack[catch_cleanup_depth - 1].has_exit ? 1 : 0;
     }
 
-    //! Virtual implicit argument context - eliminates push/pop runtime calls for map/select/foldl/foldr
-    /** When active, $1/$2/$# references in lowerExpression() use these IR values directly
-     * instead of emitting LoadImplicitArg/LoadImplicitElement runtime calls.
-     * This eliminates 6+ runtime calls (push/pop/load for arg and element) per loop iteration.
-     */
-    struct VirtualImplicitContext {
-        QoreIRValue arg0;      //!< virtual $1 value (offset 0)
-        QoreIRValue arg1;      //!< virtual $2 value (offset 1, for foldl/foldr)
-        QoreIRValue element;   //!< virtual $# value
-        bool active = false;   //!< true when virtual context is in effect
-        //! true when the implicit argument list (and element, if any) is also set at run time
-        bool runtime = false;
-    };
     VirtualImplicitContext virtual_implicit;
 
     //! The state of the lowering of a background helper function; see lowerBackgroundHelper()

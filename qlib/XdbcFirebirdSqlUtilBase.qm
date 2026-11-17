@@ -1444,6 +1444,11 @@ string sql = db.getSqlIdentifier("Order Date");
             return new XdbcFirebirdView(name, row.src);
         }
 
+        #! Returns a view object for a view of a schema description
+        private AbstractView makeViewImpl(string name, string src) {
+            return new XdbcFirebirdView(name, src);
+        }
+
         private AbstractFunction makeFunctionImpl(string name, string src, *hash<auto> opts) {
             throw "UNSUPPORTED";
         }

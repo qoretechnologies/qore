@@ -268,11 +268,30 @@ struct qore_es_private {
     bool thread_exit = false;
     bool rethrown = false;
     bool externally_managed = false;
+    //! True while an event is pending in the sink: an exception (head) or a thread exit (qore#6370)
+    /** Kept up to date by every change of head and thread_exit (see syncPending()), so that a check of the sink, in
+        libqore and in the code that the JIT and qcc generate (QoreIRToLLVM::emitPendingExceptionTest()), is one load
+        and one compare.  It takes the byte after externally_managed that was padding, so the offsets of the other
+        members and the size, which code compiled before it was added reads, are unchanged (see the static_asserts
+        after the struct)
+    */
+    bool pending = false;
 
     DLLLOCAL qore_es_private() {
     }
 
     DLLLOCAL ~qore_es_private() {
+    }
+
+    //! sets pending from head and thread_exit; called after any change of them
+    DLLLOCAL void syncPending() {
+        pending = head || thread_exit;
+    }
+
+    //! returns true if an exception or a thread exit is pending
+    DLLLOCAL bool isPending() const {
+        assert(pending == (head || thread_exit));
+        return pending;
     }
 
     DLLLOCAL void clearIntern() {
@@ -281,6 +300,7 @@ struct qore_es_private {
         if (head) {
             head->del(&xs);
             head = tail = nullptr;
+            syncPending();
         }
     }
 
@@ -355,6 +375,7 @@ struct qore_es_private {
         bool thread_exit = xsink.priv->thread_exit;
         xsink.clear();
         xsink.priv->thread_exit = thread_exit;
+        xsink.priv->syncPending();
     }
 
     DLLLOCAL static void addStackInfo(ExceptionSink& xsink, qore_call_t type, const char* class_name,
@@ -366,6 +387,27 @@ struct qore_es_private {
         xsink.priv->appendListIntern(str);
     }
 };
+
+// the members that code compiled before pending was added reads (qcc-compiled code tests head and thread_exit) keep
+// their offsets, and the struct its size (see qore_es_private::pending)
+static_assert(offsetof(qore_es_private, head) == 0, "qore_es_private::head moved");
+static_assert(offsetof(qore_es_private, thread_exit) == sizeof(void*) * 2 + sizeof(unsigned),
+    "qore_es_private::thread_exit moved");
+static_assert(offsetof(qore_es_private, pending) == offsetof(qore_es_private, externally_managed) + 1,
+    "qore_es_private::pending is not in the padding after externally_managed");
+static_assert(sizeof(qore_es_private) == (offsetof(qore_es_private, thread_exit) + 4 + alignof(void*) - 1)
+    / alignof(void*) * alignof(void*), "the size of qore_es_private changed");
+
+// The checks of a sink, inline in libqore (qore#6369): every "if (*xsink)" in the library would otherwise be a call
+// through the PLT.  Modules, which see the declarations without "inline", call the copies that the library exports
+// (ExceptionSink.cpp makes the compiler emit them), so the API and the ABI are unchanged.
+inline bool ExceptionSink::isEvent() const {
+    return priv->isPending();
+}
+
+inline ExceptionSink::operator bool() const {
+    return priv->isPending();
+}
 
 //! Returns the value that code gives, or no value if the code raised an exception
 /** Code that raises an exception gives no value to its caller: a return statement whose value the declared return
@@ -385,7 +427,7 @@ DLLLOCAL QORE_INTERN_ALWAYS_INLINE QoreValue qore_release_value_with_exception(Q
     // variant passes its value here; the value is released out of line
     if (rv.needsRef()) {
         const qore_es_private* es = qore_es_private::get(*xsink);
-        if (__builtin_expect(es->head || es->thread_exit, 0)) {
+        if (__builtin_expect(es->isPending(), 0)) {
             return qore_release_value_with_exception_intern(rv, xsink);
         }
     }
