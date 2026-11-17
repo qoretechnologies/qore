@@ -4882,6 +4882,13 @@ bool QoreFunction::hasInheritedVariants() const {
     return false;
 }
 
+QORE_INTERN_NOINLINE void QoreFunction::noteAncestor(const QoreFunction& ancestor) {
+    const QoreClass* qc = ancestor.getClass();
+    if (qc && qc->hasTypeParameters()) {
+        has_generic_class_ancestor = true;
+    }
+}
+
 // finds a variant at runtime
 const AbstractQoreFunctionVariant* QoreFunction::runtimeFindVariant(ExceptionSink* xsink, const type_vec_t& args,
         const qore_class_private* class_ctx, const QoreTypeInfo* receiver_type_info,

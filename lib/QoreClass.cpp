@@ -4134,6 +4134,91 @@ void QoreClass::addBuiltinVirtualBaseClass(QoreClass* qc) {
     priv->addBaseClass(qc, true);
 }
 
+namespace {
+//! A level of the walk of qore_class_private::findParameterizedBaseTypeInfo()
+struct ParameterizedBaseWalkFrame {
+    //! the class whose parent classes are walked
+    const qore_class_private* cls;
+    //! the index of its next parent class
+    size_t next;
+    //! the class with the type arguments that it has in the walk, if it has type parameters (see
+    //! findParameterizedBaseTypeInfo())
+    const QoreParameterizedClassTypeInfo* source;
+};
+}
+
+const QoreTypeInfo* qore_class_private::getParameterizedParentTypeInfo(const QoreClass& parent) const {
+    for (const QoreTypeInfo* parent_type : parameterized_vparents) {
+        const QoreParameterizedClassTypeInfo* parent_pti = QoreTypeInfo::getParameterizedClassType(parent_type);
+        if (parent_pti && sameDeclaration(parent_pti->getBaseClass(), &parent)) {
+            return parent_type;
+        }
+    }
+    // a generic class that defaults to a value-erased instance for raw use can be inherited without type arguments
+    // (qore#6082), which is inheriting it with auto for each (as a class loaded from compiled code records it)
+    const qore_class_private* p = qore_class_private::get(parent);
+    if (p->hasTypeParams() && p->rawConstructionDefaultsToAuto()) {
+        type_vec_t raw_args(p->type_params.size(), autoTypeInfo);
+        return p->getTypeInfo(raw_args);
+    }
+    return nullptr;
+}
+
+const QoreTypeInfo* qore_class_private::findParameterizedBaseTypeInfo(const QoreParameterizedClassTypeInfo* source,
+        const QoreClass* target_base) const {
+    // the parent classes are walked depth first in the order in which they are declared, through those that are not
+    // generic too (W<V> inherits H inherits G<float>), iteratively, as the hierarchy can be as long as the code
+    // declares it (issue #6047); the type arguments of a parent class are those of the walk's path to it
+    // (G<float> for HK inherits K<float> and K<U> inherits G<U>), so that the first one found is the answer
+    // (qore#6447), as a class cannot inherit two different specializations of a generic class (see
+    // parseCheckGenericParentInstantiations()); a generic class that defaults to a value-erased instance for raw use
+    // and is inherited without type arguments is that instance on the path that inherits it so, as in a class loaded
+    // from compiled code (see getParameterizedParentTypeInfo())
+    HierarchyWalkStack<ParameterizedBaseWalkFrame> stack;
+    // a class without type arguments in the walk has the same answer on every path to it: one that a path through a
+    // class with more than one parent class (a diamond) reaches again is not walked again
+    std::set<const qore_class_private*> walked;
+    bool multiple = false;
+    stack.push({this, 0, source});
+    while (!stack.empty()) {
+        ParameterizedBaseWalkFrame& f = stack.back();
+        // a class hierarchy with an error (such as a circular one) is not walked further
+        if (!f.cls->scl || !f.cls->scl->valid || f.next == f.cls->scl->size()) {
+            stack.pop();
+            continue;
+        }
+        if (!f.next && f.cls->scl->size() > 1) {
+            multiple = true;
+        }
+        const BCNode& n = *(*f.cls->scl)[f.next++];
+        // if there was a parse error finding the base class, then skip
+        if (!n.sclass) {
+            continue;
+        }
+        const QoreParameterizedClassTypeInfo* parent_pti = nullptr;
+        if (const QoreTypeInfo* parent_type = f.cls->getParameterizedParentTypeInfo(*n.sclass)) {
+            if (f.source) {
+                parent_type = qore_substitute_type_params_if_needed(parent_type, f.source);
+            }
+            parent_pti = QoreTypeInfo::getParameterizedClassType(parent_type);
+            if (!parent_pti) {
+                continue;
+            }
+            if (sameDeclaration(n.sclass, target_base)) {
+                return parent_type;
+            }
+        } else if (sameDeclaration(n.sclass, target_base)) {
+            continue;
+        }
+        const qore_class_private* parent = qore_class_private::get(*n.sclass);
+        if (!parent_pti && multiple && !walked.insert(parent).second) {
+            continue;
+        }
+        stack.push({parent, 0, parent_pti});
+    }
+    return nullptr;
+}
+
 const QoreTypeInfo* qore_class_private::getParameterizedBaseTypeInfo(
         const QoreParameterizedClassTypeInfo* source, const QoreClass* target_base) const {
     assert(source);
@@ -4142,77 +4227,24 @@ const QoreTypeInfo* qore_class_private::getParameterizedBaseTypeInfo(
     if (sameDeclaration(source->getBaseClass(), target_base)) {
         return source;
     }
-
-    for (const QoreTypeInfo* parent_type : parameterized_vparents) {
-        const QoreTypeInfo* subst = qore_substitute_type_params_if_needed(parent_type, source);
-        const QoreParameterizedClassTypeInfo* parent_pti = QoreTypeInfo::getParameterizedClassType(subst);
-        if (!parent_pti) {
-            continue;
-        }
-        if (sameDeclaration(parent_pti->getBaseClass(), target_base)) {
-            return subst;
-        }
-        const QoreTypeInfo* indirect = qore_class_private::get(*parent_pti->getBaseClass())
-            ->getParameterizedBaseTypeInfo(parent_pti, target_base);
-        if (indirect) {
-            return indirect;
-        }
-    }
-
-    return nullptr;
+    return findParameterizedBaseTypeInfo(source, target_base);
 }
 
 const QoreTypeInfo* qore_class_private::getConcreteParameterizedBaseTypeInfo(const QoreClass* target_base,
         bool allow_raw_self) const {
     assert(target_base);
 
-    if (allow_raw_self && sameDeclaration(cls, target_base) && hasTypeParams() && rawConstructionDefaultsToAuto()) {
+    // a generic class that defaults to a value-erased instance for raw use is seen as that instance
+    const QoreParameterizedClassTypeInfo* source = nullptr;
+    if (hasTypeParams() && rawConstructionDefaultsToAuto()) {
         type_vec_t raw_args(type_params.size(), autoTypeInfo);
-        return getTypeInfo(raw_args);
+        const QoreTypeInfo* raw_self = getTypeInfo(raw_args);
+        if (allow_raw_self && sameDeclaration(cls, target_base)) {
+            return raw_self;
+        }
+        source = QoreTypeInfo::getParameterizedClassType(raw_self);
     }
-
-    for (const QoreTypeInfo* parent_type : parameterized_vparents) {
-        if (hasTypeParams() && rawConstructionDefaultsToAuto()) {
-            type_vec_t raw_args(type_params.size(), autoTypeInfo);
-            parent_type = qore_substitute_type_params_if_needed(parent_type, getTypeInfo(raw_args));
-        }
-        const QoreParameterizedClassTypeInfo* parent_pti = QoreTypeInfo::getParameterizedClassType(parent_type);
-        if (!parent_pti) {
-            continue;
-        }
-        if (sameDeclaration(parent_pti->getBaseClass(), target_base)) {
-            return parent_type;
-        }
-        const QoreTypeInfo* indirect = qore_class_private::get(*parent_pti->getBaseClass())
-            ->getParameterizedBaseTypeInfo(parent_pti, target_base);
-        if (indirect) {
-            return indirect;
-        }
-    }
-
-    const QoreTypeInfo* raw_target_fallback = nullptr;
-    QoreClassHierarchyIterator i(*cls);
-    while (i.next()) {
-        const QoreClass& base = i.get();
-        if (&base == cls) {
-            continue;
-        }
-        if (sameDeclaration(&base, target_base)) {
-            const qore_class_private* target = qore_class_private::get(base);
-            if (!raw_target_fallback && target->hasTypeParams() && target->rawConstructionDefaultsToAuto()) {
-                type_vec_t raw_args(base.getTypeParameterCount(), autoTypeInfo);
-                raw_target_fallback = base.getTypeInfo(raw_args);
-            }
-            continue;
-        }
-        const QoreTypeInfo* indirect = qore_class_private::get(base)->getConcreteParameterizedBaseTypeInfo(
-            target_base, false);
-        if (indirect) {
-            return indirect;
-        }
-    }
-
-    return raw_target_fallback;
+    return findParameterizedBaseTypeInfo(source, target_base);
 }
 
 const QoreTypeInfo* qore_class_private::runtimeResolveTypeParamDefault(size_t index) const {
@@ -4268,9 +4300,21 @@ const QoreTypeInfo* qore_class_private::runtimeResolveTypeParamDefault(size_t in
     return rv;
 }
 
+const QoreTypeInfo* qore_class_private::getInheritedStaticCallReceiverTypeInfo(const QoreMethod& m) {
+    const QoreClass* mcls = m.getClass();
+    assert(mcls && !mcls->hasTypeParameters());
+    return qore_method_private::get(m)->getFunction()->hasGenericClassAncestor() ? mcls->getTypeInfo() : nullptr;
+}
+
 const QoreTypeInfo* qore_class_private::getStaticCallReceiverTypeInfo(const QoreMethod& m) const {
     const QoreClass* mcls = m.getClass();
-    if (hasTypeParams() || !mcls || !mcls->hasTypeParameters()) {
+    if (!mcls) {
+        return nullptr;
+    }
+    if (!mcls->hasTypeParameters()) {
+        return getInheritedStaticCallReceiverTypeInfo(m);
+    }
+    if (hasTypeParams()) {
         return nullptr;
     }
     return getConcreteParameterizedBaseTypeInfo(mcls, false);
@@ -4280,8 +4324,13 @@ const QoreTypeInfo* qore_class_private::parseGetStaticCallReceiverTypeInfo(const
         const QoreClass* scope_cls, const qore_class_private* class_ctx, bool& current_receiver) {
     current_receiver = false;
     const QoreClass* mcls = m.getClass();
-    if (!mcls || !mcls->hasTypeParameters()) {
+    if (!mcls) {
         return nullptr;
+    }
+    // the method of a class without type parameters binds those of the generic classes whose variants it has
+    // wherever it is called from
+    if (!mcls->hasTypeParameters()) {
+        return getInheritedStaticCallReceiverTypeInfo(m);
     }
     // a class without type parameters names the specialization that it inherits
     if (scope_cls) {
