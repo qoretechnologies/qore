@@ -4203,6 +4203,9 @@ private:
     the caller's claim rather than taking a second one.
     @return a state > 0 when the call site may be inlined; any value <= 0 means the caller
     must use the generic call path.
+
+    @note ensureInterpreterResolvedInlineIRCallStateFast() repeats its first two checks (a resolved and an ineligible
+    call site) inline; the two must stay in sync
 */
 template <typename DirectCallInst>
 static int8_t ensureInterpreterResolvedInlineIRCallState(DirectCallInst* inst, const QoreMethod* method,
@@ -4286,6 +4289,9 @@ static QORE_INTERN_NOINLINE int8_t ensureInterpreterResolvedInlineIRCallStateSlo
 /** For the call sites inlined into execute(), where GCC does not inline a function of this size, so that whether the
     fast paths (a resolved call site and an ineligible one) are inlined does not depend on the size of the rest of the
     single compilation unit (issue #6381)
+
+    @note repeats the first two checks of ensureInterpreterResolvedInlineIRCallState(), which must stay in sync with
+    them (any other state takes the slow path, which checks it again)
 */
 template <typename DirectCallInst>
 static QORE_INTERN_ALWAYS_INLINE int8_t ensureInterpreterResolvedInlineIRCallStateFast(DirectCallInst* inst,
@@ -6073,8 +6079,9 @@ static bool executeInterpreterInlineIRMethodTarget(DirectMethodInst* inst, const
     return true;
 }
 
-// always inlined into the call sites of execute() (irCallMethodDirect(), irInvokeMethodDirect()): GCC inlines it, a
-// function not declared inline, only within the limit of --param max-inline-insns-auto, and whether it does
+// always inlined into the call sites of execute() (irCallMethodDirect(), irInvokeMethodDirect()), and so also into
+// the cold irCallMethodDirectGiven() and irInvokeMethodDirectGiven() (QoreIRInterpreterGivenArgs.cpp): GCC inlines
+// it, a function not declared inline, only within the limit of --param max-inline-insns-auto, and whether it does
 // depended on the size of the rest of the single compilation unit, as did the cost of the method calls in the IR
 // (issue #6381)
 template <bool GIVEN = false, typename DirectMethodInst>

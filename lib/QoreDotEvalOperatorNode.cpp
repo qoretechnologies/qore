@@ -64,7 +64,8 @@ QoreValue QoreDotEvalOperatorNode::evalCommon(bool& needs_deref, ExceptionSink* 
 //! calls the method of the object of a weak reference
 /** Out of line: GCC inlined MethodCallNode::exec() here depending on the size of the rest of the single compilation
     unit, which took another callee-saved register and more frame in evalWithBaseCommon(), paid by every call of a
-    method of an object (issue #6381)
+    method of an object (issue #6381).  The measured case is evalWithBaseCommon<false>(); the helper is out of line
+    for <true> as well, which is harmless, as a call through a weak reference is rare
 */
 template <bool Lexical>
 static QORE_INTERN_NOINLINE QoreValue qore_dot_eval_weakref_call(const MethodCallNode* m,
