@@ -23638,6 +23638,8 @@ QoreValue QoreIRInterpreter::evalLValueTernary(QoreIROpcode op, const QoreValue&
 }
 #endif // QORE_IR_INTERPRETER_GIVEN_ARGS_UNIT
 
+// QoreIRInterpreterGivenArgs.cpp compiles this file again (see above): these functions are defined once
+#ifndef QORE_IR_INTERPRETER_GIVEN_ARGS_UNIT
 QoreIRFunction::~QoreIRFunction() {
     // no eviction may run on the guard profiles once they are being freed (issue #6421)
     if (guard_profile_types) {
@@ -23702,3 +23704,4 @@ void TypeProfile::recordTypeInfo(const QoreTypeInfo* type_info) {
     }
     other_count.fetch_add(1, std::memory_order_relaxed);
 }
+#endif // QORE_IR_INTERPRETER_GIVEN_ARGS_UNIT
