@@ -951,12 +951,17 @@ static inline bool qore_parse_infer_candidate_type_args(const AbstractQoreFuncti
     variant of a Java method that takes its variable arguments as separate arguments (module jni), whose parameters
     have no types.  The Program of the call is not known at parse time: such a call is resolved at run time.
 */
+bool qore_variant_takes_call_arity(unsigned num_args, unsigned nparams, bool uses_extra_args) {
+    return num_args <= nparams || uses_extra_args;
+}
+
 static bool qore_untyped_variant_cannot_win(const AbstractQoreFunctionVariant* chosen, bool variant_untyped,
         int variant_pmatch, int pmatch, int max_pscore, int score, unsigned num_args) {
     if (!chosen || !variant_untyped || variant_pmatch != pmatch || max_pscore >= score) {
         return false;
     }
-    return num_args <= chosen->getSignature()->numParams() || (chosen->getFlags() & QCF_USES_EXTRA_ARGS);
+    return qore_variant_takes_call_arity(num_args, chosen->getSignature()->numParams(),
+        chosen->getFlags() & QCF_USES_EXTRA_ARGS);
 }
 
 static bool qore_infer_signature_type_args_runtime(const AbstractQoreFunctionVariant* variant,

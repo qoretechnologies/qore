@@ -20881,6 +20881,20 @@ extern "C" uint64_t qore_rt_background_self_call_aot_throwing(const char* method
     method; a standalone executable compiled by an older qcc and linked to libqore dynamically (which no runtime
     identity check refuses) calls the old symbol with the old arguments, which must not be taken as the new ones
 */
+//! The parse-time search commits a variant with typed parameters over a variant without typed parameters only if the
+//! chosen variant can take the call at run time: module jni's array variant of a Java varargs method, called with an
+//! excess argument, must leave the call to the run-time search (variant that takes extra arguments), as before #6152
+static void ut_variant_takes_call_arity(UnitTestCounters& c) {
+    // as many arguments as parameters, or fewer
+    UT_ASSERT(c, qore_variant_takes_call_arity(1, 1, false), "one argument for one parameter");
+    UT_ASSERT(c, qore_variant_takes_call_arity(0, 1, false), "fewer arguments than parameters");
+    // excess arguments: only a variant that takes extra arguments takes the call
+    UT_ASSERT(c, !qore_variant_takes_call_arity(2, 1, false), "an excess argument for a variant without extra args");
+    UT_ASSERT(c, !qore_variant_takes_call_arity(3, 0, false), "arguments for a variant without parameters");
+    UT_ASSERT(c, qore_variant_takes_call_arity(2, 1, true), "an excess argument for a variant with extra args");
+    UT_ASSERT(c, qore_variant_takes_call_arity(255, 0, true), "many arguments for a variant with extra args");
+}
+
 static void ut_old_background_self_call_helper(UnitTestCounters& c) {
     auto is_rebuild_error = [] (ExceptionSink& xsink) -> bool {
         if (!xsink.isException()) {
@@ -20934,6 +20948,7 @@ static QoreValue f_run_debug_unit_tests(const QoreListNode* params, RuntimeConfi
     ut_callback_caller_parse_options(c, rc.getProgram());
     ut_self_call_without_method(c, rc.getProgram());
     ut_old_background_self_call_helper(c);
+    ut_variant_takes_call_arity(c);
 #ifdef DEBUG
     ut_sandbox_context_inner_program_id(c, rc.getProgram());
     ut_sandbox_context_continued_walk(c, rc.getProgram());
