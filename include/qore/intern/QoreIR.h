@@ -1969,13 +1969,19 @@ struct TypeProfile {
             + other_count.load(std::memory_order_relaxed);
     }
 
-    //! counts a value of a type that is not builtin
-    /** A type that can be freed (one with an identity serial) is registered with the function's cache when it is first
-        counted, so that its entry is evicted when the type is destroyed (issue #6421); the registration does not keep
-        the type's declaration alive (qore_generic_cache_insert_weak()).  Defined in QoreIRInterpreter.cpp: it calls
-        internal functions of the library, which code outside of it that includes this header cannot link.
+    //! counts a value of a type that is not builtin; defined in lib/QoreIRTypeProfile.h (see record())
+    /** The count of a type that is already counted is incremented inline; a type counted for the first time is added
+        by recordNewTypeInfo()
     */
-    DLLLOCAL void recordTypeInfo(const QoreTypeInfo* type_info);
+    DLLLOCAL inline void recordTypeInfo(const QoreTypeInfo* type_info);
+
+    //! adds a type that is counted for the first time
+    /** A type that can be freed (one with an identity serial) is registered with the function's cache, so that its
+        entry is evicted when the type is destroyed (issue #6421); the registration does not keep the type's
+        declaration alive (qore_generic_cache_insert_weak()).  Defined in QoreIRInterpreter.cpp: it calls internal
+        functions of the library.
+    */
+    DLLLOCAL void recordNewTypeInfo(const TypeProfileTypeKey& key);
 
     uint32_t getTypeInfoCount(const QoreTypeInfo* type_info) const {
         std::lock_guard<std::mutex> lock(extended_mutex);
@@ -2109,40 +2115,12 @@ struct TypeProfile {
         return dominantKey(threshold).legacyBuiltinType();
     }
 
-    void record(const QoreValue& v) {
-        switch (v.getType()) {
-            case NT_INT:
-                int_count.fetch_add(1, std::memory_order_relaxed);
-                break;
-            case NT_FLOAT:
-                float_count.fetch_add(1, std::memory_order_relaxed);
-                break;
-            case NT_STRING:
-                string_count.fetch_add(1, std::memory_order_relaxed);
-                break;
-            case NT_BOOLEAN:
-                bool_count.fetch_add(1, std::memory_order_relaxed);
-                break;
-            case NT_NOTHING:
-                nothing_count.fetch_add(1, std::memory_order_relaxed);
-                break;
-            case NT_PLUGIN_VALUE: {
-                std::string module_name;
-                uint16_t local_type_id = 0;
-                const QoreTypeInfo* type_info = nullptr;
-                if (qore_plugin_get_value_profile_info(v.getInternalNode(), module_name, local_type_id,
-                        type_info)) {
-                    recordPluginTypeInfo(std::move(module_name), local_type_id, type_info);
-                } else {
-                    recordTypeInfo(v.getFullTypeInfo());
-                }
-                break;
-            }
-            default:
-                recordTypeInfo(v.getFullTypeInfo());
-                break;
-        }
-    }
+    //! records the type of a value at the guard point
+    /** Defined in lib/QoreIRTypeProfile.h, which only the library includes: its slow path calls internal functions of
+        the library, which code outside of it that includes this header (the AOT IR test programs) cannot link, and its
+        fast path is inline in the IR interpreter
+    */
+    DLLLOCAL inline void record(const QoreValue& v);
 };
 
 class QoreIRGuardInstruction : public QoreIRInstruction {
