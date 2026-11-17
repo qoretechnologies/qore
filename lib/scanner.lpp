@@ -1493,8 +1493,25 @@ std::string qore_parse_directive_error(const std::string& name) {
     } \
 }
 
-#define DO_DOT_KW_IDENTIFIER(kw) { yylval->String = new QoreStringNode(kw); size_t pos = yylval->String->size() + 1; if (yytext[pos]) unput(yytext[pos]); return DOT_KW_IDENTIFIER; }
-#define DO_DOT_HARD_KEYWORD(kw) { yylval->String = new QoreStringNode(kw); size_t pos = yylval->String->size() + 1; if (yytext[pos]) unput(yytext[pos]); return DOT_HARD_KEYWORD; }
+// a dot, white space, a keyword and the character after it, which is given back unless the match ends at the keyword
+// (at the end of a line), so that the token's location ends with the keyword; white space between the dot and the
+// keyword is allowed, as after any other dot (issue #525)
+#define DO_DOT_KEYWORD_TOKEN(kw, tok) { yylval->String = new QoreStringNode(kw); \
+    if (!scanner_match_ends_with(yytext, yyleng, kw)) { \
+        yylloc->revertUpdate(); \
+        yyless(yyleng - 1); \
+        yylloc->update(yylineno, yyleng, yytext); \
+        set_native_token_info(yylloc, yyextra); \
+    } \
+    return tok; }
+#define DO_DOT_KW_IDENTIFIER(kw) DO_DOT_KEYWORD_TOKEN(kw, DOT_KW_IDENTIFIER)
+#define DO_DOT_HARD_KEYWORD(kw) DO_DOT_KEYWORD_TOKEN(kw, DOT_HARD_KEYWORD)
+
+//! returns true if the text matched ends with the given keyword
+static bool scanner_match_ends_with(const char* text, size_t len, const char* kw) {
+    size_t kl = strlen(kw);
+    return len >= kl && !memcmp(text + len - kl, kw, kl);
+}
 
 #define QORE_FLEX_DO_EOF { /* delete current buffer */ yy_delete_buffer(YY_CURRENT_BUFFER, yyscanner); \
     /* get last parse state */ YY_BUFFER_STATE yybs = (YY_BUFFER_STATE)endParsing(); \
@@ -1531,6 +1548,8 @@ OCTAL_CONST     \\[0-7]{1,3}
 DIGIT           [0-9]
 WORD            [a-zA-Z_][a-zA-Z0-9_]*
 WS              [ \t\r]
+ /* the white space between a dot and a keyword that is the name of a member or method after it (issue #525) */
+DOTWS           [ \t\r\n]
 WSNL            [ \t\r\n]
 SOFT_IDENTIFIER_FOLLOW \+|-|{WSNL}*(\+\+|--|\+=|-=|\+{WSNL}+|-{WSNL}+|\*=|\/=|%=|&=|\|=|\^=|>>=|<<=|==|!=|<>|<=|>=|<=>|&&|\|\||{WSNL}+(instanceof|in)[^a-zA-Z0-9_]|[=;,\)\]\}\{\*\/%&\|\^<>?:\.\[\~])
 TYPE_ARG_START  [a-zA-Z_*:?]
@@ -3483,84 +3502,84 @@ returns{WS}*\(                          yylval->string = strdup("returns"); retu
 public{WS}*\(                           yylval->string = strdup("public"); return KW_IDENTIFIER_OPENPAREN;
 deprecated{WS}*\(                       yylval->string = strdup("deprecated"); return KW_IDENTIFIER_OPENPAREN;
 module{WS}*\(                           yylval->string = strdup("module"); return KW_IDENTIFIER_OPENPAREN;
-\.enum([^A-Za-z_0-9]|$)                 {
+\.{DOTWS}*enum([^A-Za-z_0-9]|$)                 {
                                             if (getProgram()->getParseOptions() & PO_NO_ENUM) {
                                                 DO_DOT_KW_IDENTIFIER("enum")
                                             }
                                             DO_DOT_HARD_KEYWORD("enum")
                                         }
-\.returns[^A-Za-z_0-9]                  DO_DOT_KW_IDENTIFIER("returns")
-\.new[^A-Za-z_0-9]                      DO_DOT_KW_IDENTIFIER("new")
-\.private[^A-Za-z_0-9]                  DO_DOT_KW_IDENTIFIER("private")
-\.public[^A-Za-z_0-9]                   DO_DOT_KW_IDENTIFIER("public")
-\.class[^A-Za-z_0-9]                    DO_DOT_KW_IDENTIFIER("class")
-\.elements[^A-Za-z_0-9]                 DO_DOT_KW_IDENTIFIER("elements")
-\.delete[^A-Za-z_0-9]                   DO_DOT_KW_IDENTIFIER("delete")
-\.case[^A-Za-z_0-9]                     DO_DOT_KW_IDENTIFIER("case")
-\.default[^A-Za-z_0-9]                  DO_DOT_KW_IDENTIFIER("default")
-\.map[^A-Za-z_0-9]                      DO_DOT_KW_IDENTIFIER("map")
-\.select[^A-Za-z_0-9]                   DO_DOT_KW_IDENTIFIER("select")
-\.keys[^A-Za-z_0-9]                     DO_DOT_KW_IDENTIFIER("keys")
-\.chomp[^A-Za-z_0-9]                    DO_DOT_KW_IDENTIFIER("chomp")
-\.trim[^A-Za-z_0-9]                     DO_DOT_KW_IDENTIFIER("trim")
-\.push[^A-Za-z_0-9]                     DO_DOT_KW_IDENTIFIER("push")
-\.pop[^A-Za-z_0-9]                      DO_DOT_KW_IDENTIFIER("pop")
-\.splice[^A-Za-z_0-9]                   DO_DOT_KW_IDENTIFIER("splice")
-\.shift[^A-Za-z_0-9]                    DO_DOT_KW_IDENTIFIER("shift")
-\.unshift[^A-Za-z_0-9]                  DO_DOT_KW_IDENTIFIER("unshift")
-\.background[^A-Za-z_0-9]               DO_DOT_KW_IDENTIFIER("background")
-\.find[^A-Za-z_0-9]                     DO_DOT_KW_IDENTIFIER("find")
-\.exists[^A-Za-z_0-9]                   DO_DOT_KW_IDENTIFIER("exists")
-\.foldr[^A-Za-z_0-9]                    DO_DOT_KW_IDENTIFIER("foldr")
-\.foldl[^A-Za-z_0-9]                    DO_DOT_KW_IDENTIFIER("foldl")
-\.iterate[^A-Za-z_0-9]                  DO_DOT_KW_IDENTIFIER("iterate")
-\.first[^A-Za-z_0-9]                    DO_DOT_KW_IDENTIFIER("first")
-\.any[^A-Za-z_0-9]                      DO_DOT_KW_IDENTIFIER("any")
-\.all[^A-Za-z_0-9]                      DO_DOT_KW_IDENTIFIER("all")
-\.count[^A-Za-z_0-9]                    DO_DOT_KW_IDENTIFIER("count")
-\.take[^A-Za-z_0-9]                     DO_DOT_KW_IDENTIFIER("take")
-\.drop[^A-Za-z_0-9]                     DO_DOT_KW_IDENTIFIER("drop")
-\.takewhile[^A-Za-z_0-9]                DO_DOT_KW_IDENTIFIER("takewhile")
-\.takeuntil[^A-Za-z_0-9]                DO_DOT_KW_IDENTIFIER("takeuntil")
-\.static[^A-Za-z_0-9]                   DO_DOT_KW_IDENTIFIER("static")
-\.abstract[^A-Za-z_0-9]                 DO_DOT_KW_IDENTIFIER("abstract")
-\.deprecated[^A-Za-z_0-9]               DO_DOT_KW_IDENTIFIER("deprecated")
-\.summarize[^A-Za-z_0-9]                DO_DOT_KW_IDENTIFIER("summarize")
-\.sub[^A-Za-z_0-9]                      DO_DOT_KW_IDENTIFIER("sub")
-\.subcontext[^A-Za-z_0-9]               DO_DOT_KW_IDENTIFIER("subcontext")
-\.sortBy[^A-Za-z_0-9]                   DO_DOT_KW_IDENTIFIER("sortBy")
-\.sortDescendingBy[^A-Za-z_0-9]         DO_DOT_KW_IDENTIFIER("sortDescendingBy")
-\.by[^A-Za-z_0-9]                       DO_DOT_KW_IDENTIFIER("by")
-\.switch[^A-Za-z_0-9]                   DO_DOT_KW_IDENTIFIER("switch")
-\.return[^A-Za-z_0-9]                   DO_DOT_KW_IDENTIFIER("return")
-\.rethrow[^A-Za-z_0-9]                  DO_DOT_KW_IDENTIFIER("rethrow")
-\.break[^A-Za-z_0-9]                    DO_DOT_KW_IDENTIFIER("break")
-\.catch[^A-Za-z_0-9]                    DO_DOT_KW_IDENTIFIER("catch")
-\.const[^A-Za-z_0-9]                    DO_DOT_KW_IDENTIFIER("const")
-\.context[^A-Za-z_0-9]                  DO_DOT_KW_IDENTIFIER("context")
-\.continue[^A-Za-z_0-9]                 DO_DOT_KW_IDENTIFIER("continue")
-\.do[^A-Za-z_0-9]                       DO_DOT_KW_IDENTIFIER("do")
-\.else[^A-Za-z_0-9]                     DO_DOT_KW_IDENTIFIER("else")
-\.final[^A-Za-z_0-9]                    DO_DOT_KW_IDENTIFIER("final")
-\.for[^A-Za-z_0-9]                      DO_DOT_KW_IDENTIFIER("for")
-\.foreach[^A-Za-z_0-9]                  DO_DOT_KW_IDENTIFIER("foreach")
-\.if[^A-Za-z_0-9]                       DO_DOT_KW_IDENTIFIER("if")
-\.in[^A-Za-z_0-9]                       DO_DOT_KW_IDENTIFIER("in")
-\.inherits[^A-Za-z_0-9]                 DO_DOT_KW_IDENTIFIER("inherits")
-\.instanceof[^A-Za-z_0-9]               DO_DOT_KW_IDENTIFIER("instanceof")
-\.namespace[^A-Za-z_0-9]                DO_DOT_KW_IDENTIFIER("namespace")
-\.my[^A-Za-z_0-9]                       DO_DOT_KW_IDENTIFIER("my")
-\.on_error[^A-Za-z_0-9]                 DO_DOT_KW_IDENTIFIER("on_error")
-\.on_exit[^A-Za-z_0-9]                  DO_DOT_KW_IDENTIFIER("on_exit")
-\.on_success[^A-Za-z_0-9]               DO_DOT_KW_IDENTIFIER("on_success")
-\.our[^A-Za-z_0-9]                      DO_DOT_KW_IDENTIFIER("our")
-\.synchronized[^A-Za-z_0-9]             DO_DOT_KW_IDENTIFIER("synchronized")
-\.thread_exit[^A-Za-z_0-9]              DO_DOT_KW_IDENTIFIER("thread_exit")
-\.throw[^A-Za-z_0-9]                    DO_DOT_KW_IDENTIFIER("throw")
-\.try[^A-Za-z_0-9]                      DO_DOT_KW_IDENTIFIER("try")
-\.where[^A-Za-z_0-9]                    DO_DOT_KW_IDENTIFIER("where")
-\.while[^A-Za-z_0-9]                    DO_DOT_KW_IDENTIFIER("while")
-\.module[^A-Za-z_0-9]                   DO_DOT_KW_IDENTIFIER("module")
+\.{DOTWS}*returns[^A-Za-z_0-9]                  DO_DOT_KW_IDENTIFIER("returns")
+\.{DOTWS}*new[^A-Za-z_0-9]                      DO_DOT_KW_IDENTIFIER("new")
+\.{DOTWS}*private[^A-Za-z_0-9]                  DO_DOT_KW_IDENTIFIER("private")
+\.{DOTWS}*public[^A-Za-z_0-9]                   DO_DOT_KW_IDENTIFIER("public")
+\.{DOTWS}*class[^A-Za-z_0-9]                    DO_DOT_KW_IDENTIFIER("class")
+\.{DOTWS}*elements[^A-Za-z_0-9]                 DO_DOT_KW_IDENTIFIER("elements")
+\.{DOTWS}*delete[^A-Za-z_0-9]                   DO_DOT_KW_IDENTIFIER("delete")
+\.{DOTWS}*case[^A-Za-z_0-9]                     DO_DOT_KW_IDENTIFIER("case")
+\.{DOTWS}*default[^A-Za-z_0-9]                  DO_DOT_KW_IDENTIFIER("default")
+\.{DOTWS}*map[^A-Za-z_0-9]                      DO_DOT_KW_IDENTIFIER("map")
+\.{DOTWS}*select[^A-Za-z_0-9]                   DO_DOT_KW_IDENTIFIER("select")
+\.{DOTWS}*keys[^A-Za-z_0-9]                     DO_DOT_KW_IDENTIFIER("keys")
+\.{DOTWS}*chomp[^A-Za-z_0-9]                    DO_DOT_KW_IDENTIFIER("chomp")
+\.{DOTWS}*trim[^A-Za-z_0-9]                     DO_DOT_KW_IDENTIFIER("trim")
+\.{DOTWS}*push[^A-Za-z_0-9]                     DO_DOT_KW_IDENTIFIER("push")
+\.{DOTWS}*pop[^A-Za-z_0-9]                      DO_DOT_KW_IDENTIFIER("pop")
+\.{DOTWS}*splice[^A-Za-z_0-9]                   DO_DOT_KW_IDENTIFIER("splice")
+\.{DOTWS}*shift[^A-Za-z_0-9]                    DO_DOT_KW_IDENTIFIER("shift")
+\.{DOTWS}*unshift[^A-Za-z_0-9]                  DO_DOT_KW_IDENTIFIER("unshift")
+\.{DOTWS}*background[^A-Za-z_0-9]               DO_DOT_KW_IDENTIFIER("background")
+\.{DOTWS}*find[^A-Za-z_0-9]                     DO_DOT_KW_IDENTIFIER("find")
+\.{DOTWS}*exists[^A-Za-z_0-9]                   DO_DOT_KW_IDENTIFIER("exists")
+\.{DOTWS}*foldr[^A-Za-z_0-9]                    DO_DOT_KW_IDENTIFIER("foldr")
+\.{DOTWS}*foldl[^A-Za-z_0-9]                    DO_DOT_KW_IDENTIFIER("foldl")
+\.{DOTWS}*iterate[^A-Za-z_0-9]                  DO_DOT_KW_IDENTIFIER("iterate")
+\.{DOTWS}*first[^A-Za-z_0-9]                    DO_DOT_KW_IDENTIFIER("first")
+\.{DOTWS}*any[^A-Za-z_0-9]                      DO_DOT_KW_IDENTIFIER("any")
+\.{DOTWS}*all[^A-Za-z_0-9]                      DO_DOT_KW_IDENTIFIER("all")
+\.{DOTWS}*count[^A-Za-z_0-9]                    DO_DOT_KW_IDENTIFIER("count")
+\.{DOTWS}*take[^A-Za-z_0-9]                     DO_DOT_KW_IDENTIFIER("take")
+\.{DOTWS}*drop[^A-Za-z_0-9]                     DO_DOT_KW_IDENTIFIER("drop")
+\.{DOTWS}*takewhile[^A-Za-z_0-9]                DO_DOT_KW_IDENTIFIER("takewhile")
+\.{DOTWS}*takeuntil[^A-Za-z_0-9]                DO_DOT_KW_IDENTIFIER("takeuntil")
+\.{DOTWS}*static[^A-Za-z_0-9]                   DO_DOT_KW_IDENTIFIER("static")
+\.{DOTWS}*abstract[^A-Za-z_0-9]                 DO_DOT_KW_IDENTIFIER("abstract")
+\.{DOTWS}*deprecated[^A-Za-z_0-9]               DO_DOT_KW_IDENTIFIER("deprecated")
+\.{DOTWS}*summarize[^A-Za-z_0-9]                DO_DOT_KW_IDENTIFIER("summarize")
+\.{DOTWS}*sub[^A-Za-z_0-9]                      DO_DOT_KW_IDENTIFIER("sub")
+\.{DOTWS}*subcontext[^A-Za-z_0-9]               DO_DOT_KW_IDENTIFIER("subcontext")
+\.{DOTWS}*sortBy[^A-Za-z_0-9]                   DO_DOT_KW_IDENTIFIER("sortBy")
+\.{DOTWS}*sortDescendingBy[^A-Za-z_0-9]         DO_DOT_KW_IDENTIFIER("sortDescendingBy")
+\.{DOTWS}*by[^A-Za-z_0-9]                       DO_DOT_KW_IDENTIFIER("by")
+\.{DOTWS}*switch[^A-Za-z_0-9]                   DO_DOT_KW_IDENTIFIER("switch")
+\.{DOTWS}*return[^A-Za-z_0-9]                   DO_DOT_KW_IDENTIFIER("return")
+\.{DOTWS}*rethrow[^A-Za-z_0-9]                  DO_DOT_KW_IDENTIFIER("rethrow")
+\.{DOTWS}*break[^A-Za-z_0-9]                    DO_DOT_KW_IDENTIFIER("break")
+\.{DOTWS}*catch[^A-Za-z_0-9]                    DO_DOT_KW_IDENTIFIER("catch")
+\.{DOTWS}*const[^A-Za-z_0-9]                    DO_DOT_KW_IDENTIFIER("const")
+\.{DOTWS}*context[^A-Za-z_0-9]                  DO_DOT_KW_IDENTIFIER("context")
+\.{DOTWS}*continue[^A-Za-z_0-9]                 DO_DOT_KW_IDENTIFIER("continue")
+\.{DOTWS}*do[^A-Za-z_0-9]                       DO_DOT_KW_IDENTIFIER("do")
+\.{DOTWS}*else[^A-Za-z_0-9]                     DO_DOT_KW_IDENTIFIER("else")
+\.{DOTWS}*final[^A-Za-z_0-9]                    DO_DOT_KW_IDENTIFIER("final")
+\.{DOTWS}*for[^A-Za-z_0-9]                      DO_DOT_KW_IDENTIFIER("for")
+\.{DOTWS}*foreach[^A-Za-z_0-9]                  DO_DOT_KW_IDENTIFIER("foreach")
+\.{DOTWS}*if[^A-Za-z_0-9]                       DO_DOT_KW_IDENTIFIER("if")
+\.{DOTWS}*in[^A-Za-z_0-9]                       DO_DOT_KW_IDENTIFIER("in")
+\.{DOTWS}*inherits[^A-Za-z_0-9]                 DO_DOT_KW_IDENTIFIER("inherits")
+\.{DOTWS}*instanceof[^A-Za-z_0-9]               DO_DOT_KW_IDENTIFIER("instanceof")
+\.{DOTWS}*namespace[^A-Za-z_0-9]                DO_DOT_KW_IDENTIFIER("namespace")
+\.{DOTWS}*my[^A-Za-z_0-9]                       DO_DOT_KW_IDENTIFIER("my")
+\.{DOTWS}*on_error[^A-Za-z_0-9]                 DO_DOT_KW_IDENTIFIER("on_error")
+\.{DOTWS}*on_exit[^A-Za-z_0-9]                  DO_DOT_KW_IDENTIFIER("on_exit")
+\.{DOTWS}*on_success[^A-Za-z_0-9]               DO_DOT_KW_IDENTIFIER("on_success")
+\.{DOTWS}*our[^A-Za-z_0-9]                      DO_DOT_KW_IDENTIFIER("our")
+\.{DOTWS}*synchronized[^A-Za-z_0-9]             DO_DOT_KW_IDENTIFIER("synchronized")
+\.{DOTWS}*thread_exit[^A-Za-z_0-9]              DO_DOT_KW_IDENTIFIER("thread_exit")
+\.{DOTWS}*throw[^A-Za-z_0-9]                    DO_DOT_KW_IDENTIFIER("throw")
+\.{DOTWS}*try[^A-Za-z_0-9]                      DO_DOT_KW_IDENTIFIER("try")
+\.{DOTWS}*where[^A-Za-z_0-9]                    DO_DOT_KW_IDENTIFIER("where")
+\.{DOTWS}*while[^A-Za-z_0-9]                    DO_DOT_KW_IDENTIFIER("while")
+\.{DOTWS}*module[^A-Za-z_0-9]                   DO_DOT_KW_IDENTIFIER("module")
 
 {YEAR}-{MONTH}-{DAY}T{HOUR}:{MSEC}(:{DSEC}(\.{US})?)?{TZ}?   yylval->datetime = makeDateTime(yylloc, yytext, true); return DATETIME;
 {YEAR}-{MONTH}-{DAY}-{HOUR}:{MSEC}:{DSEC}(\.{US})?{TZ}?      yylval->datetime = makeDateTime(yylloc, yytext, true); return DATETIME;
