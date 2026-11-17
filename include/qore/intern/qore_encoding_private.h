@@ -223,4 +223,25 @@ struct qore_encoding_private {
     }
 };
 
+//! Returns the encoding that a character encoding name from untrusted data selects, or nullptr (qore#6460)
+/** The name selects an encoding that Qore knows already (a built-in encoding, an alias, or an encoding registered
+    before; the name is matched in any case), or the encoding of a label in a fixed table of standard character set
+    names and their common labels (ex: \c "Shift_JIS", \c "x-sjis", \c "EUC-KR", \c "ks_c_5601-1987",
+    \c "GB18030"), which is registered then if it is not built in; any other name, and a name with a NUL
+    character, selects none and registers nothing.  Names from data that Qore does not control (HTTP headers and
+    bodies, MIME messages) are looked up with it instead of QoreEncodingManager::findCreate(), which registers every
+    name that it does not know for the life of the process: iconv accepts an unbounded number of spellings of one
+    encoding, so that such data could make the registry grow without limit.
+
+    @param name the character encoding name, NUL-terminated after \a len bytes; may be nullptr or empty, in which
+    case nullptr is returned
+    @param len the length of the name in bytes
+*/
+DLLLOCAL const QoreEncoding* qore_find_untrusted_encoding(const char* name, size_t len);
+
+//! Returns the encoding that a NUL-terminated character encoding name from untrusted data selects, or nullptr
+/** See qore_find_untrusted_encoding(const char*, size_t)
+*/
+DLLLOCAL const QoreEncoding* qore_find_untrusted_encoding(const char* name);
+
 #endif

@@ -1,0 +1,95 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class MemberMethodNameTest
+
+#! An undeclared member with the name of a method of the class (issue #2967)
+/** Accessing a member that is not declared and that has the name of a method of the object's class is a parse
+    exception in every mode: it is a method call without its argument list.  Members that are declared, members of
+    a class with a memberGate() method and undeclared members with other names are not affected.
+*/
+public class MemberMethodNameTest inherits QUnit::Test {
+    constructor() : QUnit::Test("MemberMethodNameTest", "1.0", \ARGV) {
+        addTestCase("builtin class", \builtinTest());
+        addTestCase("user class", \userTest());
+        addTestCase("not affected", \notAffectedTest());
+        addTestCase("%modern", \modernTest());
+        set_return_value(main());
+    }
+
+    #! parses the code in a Program with the options given; returns the description of the parse exception, if any
+    private static *string parseError(string code, int opts = PO_NEW_STYLE) {
+        Program p(opts | PO_NO_CHILD_PO_RESTRICTIONS);
+        try {
+            p.parse(code, "test");
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.desc;
+        }
+    }
+
+    private assertMethodError(string code, string member, string cls, int opts = PO_NEW_STYLE) {
+        *string err = parseError(code, opts);
+        assertTrue(exists err, code);
+        assertNeq(-1, err.find("is a method of the class"), sprintf("%s: %y", code, err));
+        assertNeq(-1, err.find(sprintf("member '%s' of class '%s'", member, cls)), sprintf("%s: %y", code, err));
+    }
+
+    builtinTest() {
+        # the example of the issue: a read in a loop condition
+        assertMethodError("HashIterator it({}); while (it.next) {}", "next", "HashIterator");
+        # a write
+        assertMethodError("HashIterator it({}); it.next = 1;", "next", "HashIterator");
+        # a method of a base class (AbstractIterator::valid())
+        assertMethodError("HashIterator it({}); auto v = it.valid;", "valid", "HashIterator");
+    }
+
+    userTest() {
+        assertMethodError("class C { m() {} } C c(); auto v = c.m;", "m", "C");
+        # a static method
+        assertMethodError("class C { static s() {} } C c(); auto v = c.s;", "s", "C");
+        # a method of a base class, through self
+        assertMethodError("class B { m() {} } class C inherits B { x() { auto v = self.m; } }", "m", "C");
+        # a private method
+        assertMethodError("class C { private m() {} } C c(); c.m = 1;", "m", "C");
+        # a slice of the object
+        assertMethodError("class C { m() {} } C c(); auto v = c{\"m\", \"x\"};", "m", "C");
+        # the old-style internal access of a method of the class
+        assertMethodError("class C { m() {} x() { my $v = $.m; } }", "m", "C", PO_NO_CHILD_PO_RESTRICTIONS);
+        assertMethodError("class C { m() {} x() { $.m = 1; } }", "m", "C", PO_NO_CHILD_PO_RESTRICTIONS);
+        # an inherited method, and a class with a memberGate() method, which is not called for $. reads
+        assertMethodError("class B { m() {} } class C inherits B { x() { my $v = $.m; } }", "m", "C",
+            PO_NO_CHILD_PO_RESTRICTIONS);
+        assertMethodError("class C { m() {} memberGate($n) { return $n; } x() { my $v = $.m; } }", "m", "C",
+            PO_NO_CHILD_PO_RESTRICTIONS);
+    }
+
+    notAffectedTest() {
+        # a declared member with the name of a method
+        assertNothing(parseError("class C { public { int m = 1; } m() {} } C c(); int v = c.m;"));
+        # a class with a memberGate() method reads the member with it
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.parse("our auto r; class G { m() {} memberGate(string n) { return n + \"!\"; } } G g(); r = g.m;", "gate");
+        p.run();
+        assertEq("m!", p.getGlobalVariable("r"));
+        # a write to the member of a class with a memberGate() method and no write gate is checked
+        assertMethodError("class G { m() {} memberGate(string n) { return n; } } G g(); g.m = 1;", "m", "G");
+        # undeclared members with other names are dynamic members as before
+        p = new Program(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.parse("our auto r; class C { m() {} } C c(); c.other = 2; r = c.other;", "dynamic");
+        p.run();
+        assertEq(2, p.getGlobalVariable("r"));
+        # an object whose class is not known at parse time is not checked
+        assertNothing(parseError("object o = new Mutex(); auto v = o.lock;"));
+    }
+
+    modernTest() {
+        assertMethodError("hash<auto> h = {}; HashIterator it(h); while (it.next) {}", "next", "HashIterator",
+            PO_MODERN);
+    }
+}

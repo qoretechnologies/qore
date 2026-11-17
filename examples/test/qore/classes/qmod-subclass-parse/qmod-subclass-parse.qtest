@@ -1,0 +1,72 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - threads using the classes of an AOT-compiled module while another Program parses subclasses of them
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../../TestInterpreter.qm
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class QmodSubclassParseTest
+
+#! Regression test for issue #6106: parsing a subclass of a class of a compiled module does not write the class
+/** A class of a compiled module is shared by every Program that loads the module, and other threads can use it
+    while a Program parses a subclass of it; the parse must not write the class's parse state, which shares memory
+    with the flags that the other threads read (a data race that ThreadSanitizer reports).  The worker creates and
+    destroys objects of the module's classes in two threads while Programs parse and run subclasses of them, in each
+    execution mode; run with a ThreadSanitizer build, it fails if the parse writes a class of the module.
+*/
+class QmodSubclassParseTest inherits QUnit::Test {
+    public {
+        const Expected = "total=2740\n";
+    }
+
+    private {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string libqore_dir;
+        string qcc_bin;
+        string module_dir;
+        TmpDir tmp("qore-qmod-subclass-parse-");
+    }
+
+    constructor() : QUnit::Test("parse of a subclass of a class of a compiled module", "1.0", \ARGV) {
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        module_dir = tmp.path;
+
+        addTestCase("compile the module", \compileModule());
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            string execution_mode = mode;
+            addTestCase("execution mode " + mode, sub () {
+                assertEq(Expected, ExecModeHarness::run(command(execution_mode)));
+            });
+        }
+
+        set_return_value(main());
+    }
+
+    compileModule() {
+        # the directory holds only the compiled module, so the worker cannot load the source instead
+        string qmod = module_dir + DirSep + "QmodSubclassParseBase.qmod";
+        string out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s %s -m -o %s %s 2>&1",
+            shellQuote(libqore_dir), shellQuote(libqore_dir), shellQuote(qcc_bin), shellQuote(qmod),
+            shellQuote(get_script_dir() + DirSep + "QmodSubclassParseBase.qm")));
+        assertTrue(is_file(qmod), "compiled the module: " + out);
+    }
+
+    private string command(string mode) {
+        return sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug --exec-mode=%s %s",
+            shellQuote(libqore_dir), shellQuote(module_dir), shellQuote(qore_bin), mode,
+            shellQuote(get_script_dir() + DirSep + "qmod-subclass-parse-worker.q"));
+    }
+
+    private static string shellQuote(string value) {
+        return "'" + replace(value, "'", "'\\''") + "'";
+    }
+}

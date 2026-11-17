@@ -1,0 +1,50 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - native AOT IR decoding and the IR interpreter's frame checks for IR read from a module
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: LGPL-2.1-or-later
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires ../TestInterpreter.qm
+
+%exec-class AOTIRValueIdsTest
+
+#! qore#6451: the value ids of IR read from an AOT module are checked before the IR is used
+/** Runs qore-aot-ir-value-ids-test (aot_ir_value_ids.cpp): every instruction that holds value ids in fields of its
+    own, with each id set beyond the function's highest value id and each handle of an object set to a value that the
+    instruction creating the object does not define, is refused by the reader; the interpreter refuses parent slots
+    that its frame does not hold, a typed foreach over a value that is not a list ends, and the runtime functions of
+    the handles of objects accept no object.
+*/
+class AOTIRValueIdsTest inherits QUnit::Test {
+    constructor() : Test("AOT IR value ids", "1.0", \ARGV) {
+        addTestCase("value ids and handles of IR read from an AOT module", \nativeValidation());
+        set_return_value(main());
+    }
+
+    private nativeValidation() {
+        string native = ENV.QORE_AOT_IR_VALUE_IDS_TEST
+            ?? dirname(TestInterpreter::qore_interpreter()) + "/qore-aot-ir-value-ids-test";
+        if (!is_file(native)) {
+            testSkip("the native AOT IR value id test executable is not available");
+            return;
+        }
+        string prefix;
+        foreach string name in (("LD_LIBRARY_PATH", "DYLD_LIBRARY_PATH")) {
+            if (ENV{name}) {
+                prefix += name + "=" + shellQuote(ENV{name}) + " ";
+            }
+        }
+        int rc;
+        string output = backquote(prefix + shellQuote(native) + " 2>&1", \rc);
+        assertEq(0, rc, output);
+        assertEq("PASS: 47 AOT IR value id checks\n", output);
+    }
+
+    private static string shellQuote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+}

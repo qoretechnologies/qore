@@ -736,6 +736,75 @@ const QoreEncoding* QoreEncodingManager::find(const char* name) {
     return findUnlocked(name);
 }
 
+// the character set labels that a name from untrusted data may select besides the names and aliases of the encodings
+// that Qore knows (see qore_find_untrusted_encoding()): standard character set names (IANA) that Qore has no built-in
+// encoding for, and common labels of them and of built-in encodings (WHATWG Encoding labels and IANA aliases), each
+// with the name of the encoding that it selects, which is registered on its first use if it is not built in; the table
+// is fixed, so that such data can register only these encodings
+static const struct {
+    const char* label;
+    const char* name;
+} qore_untrusted_charset_labels[] = {
+    // Japanese
+    {"Shift_JIS", "Shift_JIS"}, {"SJIS", "Shift_JIS"}, {"x-sjis", "Shift_JIS"}, {"MS_Kanji", "Shift_JIS"},
+    {"csShiftJIS", "Shift_JIS"}, {"Windows-31J", "Windows-31J"}, {"CP932", "CP932"}, {"EUC-JP", "EUC-JP"},
+    {"x-euc-jp", "EUC-JP"}, {"csEUCPkdFmtJapanese", "EUC-JP"}, {"ISO-2022-JP", "ISO-2022-JP"},
+    {"csISO2022JP", "ISO-2022-JP"}, {"ISO-2022-JP-2", "ISO-2022-JP-2"},
+    // Korean
+    {"EUC-KR", "EUC-KR"}, {"csEUCKR", "EUC-KR"}, {"ks_c_5601-1987", "CP949"}, {"ks_c_5601-1989", "CP949"},
+    {"KSC_5601", "CP949"}, {"korean", "CP949"}, {"windows-949", "CP949"}, {"CP949", "CP949"}, {"UHC", "CP949"},
+    // Chinese
+    {"GB2312", "GB2312"}, {"csGB2312", "GB2312"}, {"EUC-CN", "GB2312"}, {"GBK", "GBK"}, {"x-gbk", "GBK"},
+    {"GB18030", "GB18030"}, {"Big5", "Big5"}, {"csBig5", "Big5"}, {"x-x-big5", "Big5"}, {"CN-Big5", "Big5"},
+    {"Big5-HKSCS", "Big5-HKSCS"}, {"CP950", "CP950"}, {"EUC-TW", "EUC-TW"},
+    // Unicode
+    {"UTF-32", "UTF-32"}, {"UTF-32BE", "UTF-32BE"}, {"UTF-32LE", "UTF-32LE"}, {"UTF-7", "UTF-7"},
+    {"unicode-1-1-utf-8", "UTF-8"}, {"unicode11utf8", "UTF-8"}, {"x-unicode20utf8", "UTF-8"},
+    // labels of built-in encodings
+    {"ANSI_X3.4-1968", "US-ASCII"}, {"iso-ir-6", "US-ASCII"}, {"csASCII", "US-ASCII"}, {"us", "US-ASCII"},
+    {"iso-ir-100", "ISO-8859-1"}, {"csISOLatin1", "ISO-8859-1"}, {"l1", "ISO-8859-1"}, {"iso_8859-1", "ISO-8859-1"},
+    {"cp819", "ISO-8859-1"}, {"ibm819", "ISO-8859-1"},
+    {"iso-ir-101", "ISO-8859-2"}, {"csISOLatin2", "ISO-8859-2"}, {"l2", "ISO-8859-2"}, {"iso_8859-2", "ISO-8859-2"},
+    {"iso_8859-3", "ISO-8859-3"}, {"iso_8859-4", "ISO-8859-4"}, {"iso_8859-5", "ISO-8859-5"},
+    {"iso_8859-6", "ISO-8859-6"}, {"iso_8859-7", "ISO-8859-7"}, {"iso_8859-8", "ISO-8859-8"},
+    {"iso_8859-9", "ISO-8859-9"}, {"iso_8859-10", "ISO-8859-10"}, {"iso_8859-13", "ISO-8859-13"},
+    {"iso_8859-14", "ISO-8859-14"}, {"iso_8859-15", "ISO-8859-15"}, {"iso_8859-16", "ISO-8859-16"},
+    {"ISO-8859-8-I", "ISO-8859-8"}, {"csISO88598I", "ISO-8859-8"}, {"logical", "ISO-8859-8"},
+    {"x-cp1250", "WINDOWS-1250"}, {"x-cp1251", "WINDOWS-1251"}, {"x-cp1252", "WINDOWS-1252"},
+    {"x-cp1253", "WINDOWS-1253"}, {"x-cp1254", "WINDOWS-1254"}, {"x-cp1255", "WINDOWS-1255"},
+    {"x-cp1256", "WINDOWS-1256"}, {"x-cp1257", "WINDOWS-1257"}, {"x-cp1258", "WINDOWS-1258"},
+    {"dos-874", "WINDOWS-874"}, {"csKOI8R", "KOI8-R"}, {"koi", "KOI8-R"}, {"koi8", "KOI8-R"},
+    // others
+    {"TIS-620", "TIS-620"}, {"VISCII", "VISCII"}, {"macintosh", "macintosh"}, {"mac", "macintosh"},
+    {"x-mac-roman", "macintosh"}, {"csMacintosh", "macintosh"}, {"IBM437", "IBM437"}, {"CP437", "IBM437"},
+    {"IBM850", "IBM850"}, {"CP850", "IBM850"}, {"IBM852", "IBM852"}, {"CP852", "IBM852"}, {"IBM855", "IBM855"},
+    {"IBM857", "IBM857"}, {"IBM862", "IBM862"}, {"IBM866", "IBM866"}, {"CP866", "IBM866"}, {"KOI8-RU", "KOI8-RU"},
+};
+
+const QoreEncoding* qore_find_untrusted_encoding(const char* name, size_t len) {
+    // a name with a NUL character would be looked up cut at the NUL character
+    if (!name || !len || memchr(name, '\0', len)) {
+        return nullptr;
+    }
+    // the name is looked up as a NUL-terminated string
+    assert(!name[len]);
+    const QoreEncoding* enc = QoreEncodingManager::find(name);
+    if (enc) {
+        return enc;
+    }
+    for (const auto& label : qore_untrusted_charset_labels) {
+        if (!strcasecmp(name, label.label)) {
+            enc = QoreEncodingManager::find(label.name);
+            return enc ? enc : QEM.findCreate(label.name);
+        }
+    }
+    return nullptr;
+}
+
+const QoreEncoding* qore_find_untrusted_encoding(const char* name) {
+    return qore_find_untrusted_encoding(name, name ? strlen(name) : 0);
+}
+
 const QoreEncoding* QoreEncodingManager::findCreate(const QoreString* str) {
     // a name with a NUL character would be looked up cut at the NUL character and select the encoding named before
     // it; it is the name of an encoding that Qore does not know instead: the whole name, with every control

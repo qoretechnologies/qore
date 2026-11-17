@@ -38,13 +38,27 @@ run_case("directive-mid-file", ("%modern\n" + stmt("first") + "%no-filesystem\n"
 run_case("same-options", ("%modern\n%no-filesystem\n" + stmt("first") + stmt("second"),));
 # a statement that leaves the top-level code: the statements after it do not run
 run_case("return", ("%modern\n" + stmt("first") + "%no-filesystem\nif (True) { return; }\n" + stmt("second"),));
+# an on_exit handler runs with the options of the statement that declares it
+run_case("on_exit-before-directive", ("%modern\non_exit " + stmt("handler") + stmt("first") + "%no-filesystem\n"
+    + stmt("second"),));
+run_case("on_exit-after-directive", ("%modern\n" + stmt("first") + "%no-filesystem\non_exit " + stmt("handler")
+    + "%no-database\n" + stmt("second"),));
+run_case("on_exit-first-file", ("%modern\non_exit { " + stmt("handler") + "}\n" + stmt("first"),
+    "%modern\n%no-filesystem\n" + stmt("second")));
+run_case("on_exit-exception", ("%modern\non_exit " + stmt("handler") + stmt("first") + "%no-filesystem\n"
+    + stmt("second") + "throw \"STOP\";\n",));
 
-# the top-level code of this program: a restriction and an option that allows more after a statement
+# the top-level code of this program: a restriction and an option that allows more after a statement; the on_exit
+# handlers run at the end, each with the options of the statement that declares it
+on_exit printf("own-handler1=%y %y\n", Program::hasParseOption("no-filesystem"),
+    Program::hasParseOption("allow-weak-references"));
 printf("own-first=%y %y\n", Program::hasParseOption("no-filesystem"),
     Program::hasParseOption("allow-weak-references"));
 %no-filesystem
 printf("own-second=%y %y\n", Program::hasParseOption("no-filesystem"),
     Program::hasParseOption("allow-weak-references"));
 %allow-weak-references
+on_exit printf("own-handler2=%y %y\n", Program::hasParseOption("no-filesystem"),
+    Program::hasParseOption("allow-weak-references"));
 printf("own-third=%y %y\n", Program::hasParseOption("no-filesystem"),
     Program::hasParseOption("allow-weak-references"));

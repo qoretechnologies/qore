@@ -49,6 +49,7 @@
 #include <deque>
 #include <memory>
 #include <string>
+#include <vector>
 
 class qore_ds_option_setter;
 
@@ -76,6 +77,13 @@ protected:
         Declared before \c opts, so that it is created before the reference to the options is taken
     */
     std::shared_ptr<const qore_ds_option_setter> opt_setter;
+    //! the creators of the pool, which are the creators of each of its connections (qore#6142)
+    /** The code that created the pool, and for a copy also the code that copied it.  Connections are judged by them,
+        not by the code that grows the pool; immutable, so it is shared by the connections without a lock.
+
+        Declared before \c opts, so that it is created before the reference to the options is taken
+    */
+    std::shared_ptr<const std::vector<std::shared_ptr<const qore_ds_option_setter>>> creators;
     // options
     QoreHashNode* opts;
     // event queue
@@ -91,12 +99,14 @@ public:
                                 const char* n_encoding, const char* n_host, int n_port,
                                 const QoreHashNode* n_opts, Queue* n_q, QoreValue n_arg);
 
-    DLLLOCAL DatasourceConfig(const DatasourceConfig& old) :
-        driver(old.driver), user(old.user), pass(old.pass), db(old.db), encoding(old.encoding), host(old.host),
-        port(old.port), opt_setter(old.opt_setter), opts(old.opts ? old.opts->hashRefSelf() : nullptr),
-        q(old.q ? old.q->queueRefSelf() : nullptr), arg(old.arg.refSelf()),
-        mctx(old.mctx ? old.mctx->refSelf() : nullptr) {
-    }
+    //! copies the configuration of a pool for a copy of the pool, which \a copier makes (qore#6142)
+    /** The creators of the copy are \a copier and the creators of \a old; the setter of the values and options stays
+        the code that configured \a old
+    */
+    DLLLOCAL DatasourceConfig(const DatasourceConfig& old, const std::shared_ptr<const qore_ds_option_setter>& copier);
+
+    //! a copy must name the code that makes it
+    DatasourceConfig(const DatasourceConfig& old) = delete;
 
     DLLLOCAL ~DatasourceConfig() {
         assert(!q);
@@ -130,6 +140,19 @@ public:
     // the first connection (opened in the DatasourcePool constructor) is passed with an xsink obj
     // because invalid options can cause an exception to be thrown
     DLLLOCAL Datasource* get(DatasourceStatementHelper* dsh, ExceptionSink* xsink) const;
+
+    //! returns the user name of the connections of the pool, for messages
+    /** Immutable, so it is read without a lock; the values in use of a connection belong to the thread that holds it
+        (qore#6142)
+    */
+    DLLLOCAL const std::string& getUser() const {
+        return user;
+    }
+
+    //! returns the database name of the connections of the pool, for messages; see getUser()
+    DLLLOCAL const std::string& getDb() const {
+        return db;
+    }
 
     DLLLOCAL void setQueue(Queue* n_q, QoreValue n_arg, ExceptionSink* xsink) {
         if (q)
@@ -265,7 +288,12 @@ protected:
     };
 
     //! copies the pool with the lock of the pool that is copied held, which the caller acquires with \a lock
-    DLLLOCAL DatasourcePool(const DatasourcePool& old, CopyLock&& lock, ExceptionSink* xsink);
+    DLLLOCAL DatasourcePool(const DatasourcePool& old, const std::shared_ptr<const qore_ds_option_setter>& copier,
+            CopyLock&& lock, ExceptionSink* xsink);
+
+    //! copies a pool for the code \a copier, which is recorded before the lock of \a old is taken (qore#6142)
+    DLLLOCAL DatasourcePool(const DatasourcePool& old, const std::shared_ptr<const qore_ds_option_setter>& copier,
+            ExceptionSink* xsink);
 
     DLLLOCAL Datasource* getAllocatedDS();
     //! returns the connection allocated to the current thread, or nullptr if it holds none

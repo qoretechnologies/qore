@@ -241,7 +241,7 @@ static void HTTPClient_deserializer(QoreObject& self, const QoreHashNode* sdata,
     as a @ref binary "binary" value, because its octets are not text and converting them would corrupt them.
 
     |!Media type|!Body
-    |\c text/&#42;, \c application/json, \c application/xml, \c application/javascript, \c application/x-www-form-urlencoded, \c application/x-yaml, \c application/yaml, and any \c +json or \c +xml structured syntax suffix|a string in the character encoding given by the \c charset parameter, or the assumed encoding if none is given
+    |\c text/&#42;, \c application/json, \c application/xml, \c application/javascript, \c application/x-www-form-urlencoded, \c application/x-yaml, \c application/yaml, and any \c +json or \c +xml structured syntax suffix|a string in the character encoding given by the \c charset parameter, or the assumed encoding if none is given or it selects no encoding (see @ref Qore::get_known_encoding() "get_known_encoding()")
     |any other media type, such as \c application/octet-stream, \c image/png, or \c application/pdf|a @ref binary "binary" value holding the octets as received
     |none declared|a string, as this class has always delivered a response that declares no media type
 

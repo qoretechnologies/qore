@@ -134,6 +134,11 @@ int QoreMinusEqualsOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext&
         }
     }
 
+    // an lvalue that converts the integer (ex: softstring, softbool) is assigned the converted difference: the
+    // generic operator, whose value, computed from the converted value, has no type known at parse time (qore#6304)
+    if (kind == minus_equals_lvalue_e::INT && qore_lvalue_converts_result(ti, NT_INT)) {
+        kind = minus_equals_lvalue_e::GENERIC;
+    }
     if (kind == minus_equals_lvalue_e::INT) {
         parse_context.typeInfo = ti = bigIntTypeInfo;
         // the analysis left by the right operand describes that operand, not the result
