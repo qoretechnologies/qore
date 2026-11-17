@@ -782,10 +782,12 @@ class DataSchemaTest inherits QUnit::Test {
             \Schema::DataSchemaLoader::validate(), (migration_trigger,));
 
         # any other unknown table key is rejected and names the valid keys
-        assertThrows("DATA-SCHEMA-ERROR", "^table \"t\": unknown key \"comment\"; valid keys: \\[\"columns\"",
-            \Schema::DataSchemaLoader::normalizeTable(), ("t", {"columns": columns, "comment": "x"}));
-        assertThrows("DATA-SCHEMA-VALIDATION-ERROR", "^table \"t\": unknown key \"comment\"",
-            \Schema::DataSchemaLoader::validate(), (getSequenceSchema({"columns": columns, "comment": "x"}),));
+        assertThrows("DATA-SCHEMA-ERROR", "^table \"t\": unknown key \"remark\"; valid keys: \\[\"columns\"",
+            \Schema::DataSchemaLoader::normalizeTable(), ("t", {"columns": columns, "remark": "x"}));
+        assertThrows("DATA-SCHEMA-VALIDATION-ERROR", "^table \"t\": unknown key \"remark\"",
+            \Schema::DataSchemaLoader::validate(), (getSequenceSchema({"columns": columns, "remark": "x"}),));
+        # the comment of a table is a table key (issue #1483)
+        assertEq("x", Schema::DataSchemaLoader::normalizeTable("t", {"columns": columns, "comment": "x"}).comment);
         # "constraints" says how constraints are declared
         assertThrows("DATA-SCHEMA-ERROR", "unknown key \"constraints\"; constraints are declared with "
             "\"primary_key\", \"unique_constraints\" and \"foreign_constraints\"",

@@ -53,8 +53,8 @@ class HttpServerContentTypeCharsetTest inherits QUnit::Test {
         const Requests = (
             {
                 "content-type": "text/plain;charset=ISO-8859-2",
-                # the first element of the value is the response encoding: UTF-8 is seen only at the start of an
-                # element directly after a comma, as for HTTP/1.x (qore#6333)
+                # the charset with the highest weight is the response encoding, as for HTTP/1.x (qore#6333,
+                # qore#6343)
                 "accept-charset": "iso-8859-2;q=0.9, utf-8;q=0.5",
                 "body": "latin2",
                 "expected": {
@@ -125,7 +125,8 @@ class HttpServerContentTypeCharsetTest inherits QUnit::Test {
         # a value in another encoding is read in UTF-8
         assertEq(<HttpContentTypeInfo>{"charset": "utf-8", "body_content_type": "text/plain"},
             get_http_content_type_info(convert_encoding("text/plain;charset=utf-8", "UTF-16LE")));
-        # the response encoding: UTF-8 if any character set or UTF-8 is accepted, else the first character set
+        # the response encoding: the acceptable charset with the highest weight, UTF-8 if it has the same weight
+        # (HttpServerAcceptCharset.qtest has the rule's cases, qore#6343)
         assertEq("utf8", get_http_accept_charset());
         assertEq("utf8", get_http_accept_charset(""));
         assertEq("utf8", get_http_accept_charset("*"));

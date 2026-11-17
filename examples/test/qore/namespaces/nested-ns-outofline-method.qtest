@@ -17,9 +17,9 @@
     and constants declared in a namespace; a path that starts with the name of the enclosing namespace is still
     accepted.  Every script runs in a child process; a crash shows as an exit status of a signal.
 
-    Code without \c %modern runs only with the AST interpreter, and qcc compiles only \c %modern code: the other
-    execution modes and qcc are covered by the \c %modern script, which may declare out-of-line methods in a namespace
-    (only the top-level form is refused under strong encapsulation).
+    Code without \c %modern runs only with the AST interpreter, and qcc compiles only \c %modern code, whose
+    strong encapsulation refuses every out-of-line method definition, in a namespace block as at the top level
+    (issue #6384): the other execution modes and qcc check that the \c %modern script is refused.
 */
 class NestedNsOutOfLineMethodTest inherits QUnit::Test {
     private {
@@ -54,7 +54,7 @@ class NestedNsOutOfLineMethodTest inherits QUnit::Test {
 
         const LegacyOut = "11 \"x\" 21 9 4 5 3 6 7 8 2 1\n";
 
-        #! with %modern, in every execution mode and with qcc
+        #! with %modern: refused in every execution mode and by qcc (issue #6384)
         const Modern = "%modern\n"
             "namespace NS {\n"
             "    namespace I {\n"
@@ -74,7 +74,8 @@ class NestedNsOutOfLineMethodTest inherits QUnit::Test {
             "NS::I::D e(9);\n"
             "printf(\"%y %y %y %y %y %y\\n\", c.m(1), c.g(\"x\"), NS::I::C::s(1), e.x, d.deep(), c.fq());\n";
 
-        const ModernOut = "11 \"x\" 21 9 4 3\n";
+        #! the error that strong encapsulation gives for each out-of-line method of the %modern script
+        const ModernErr = "illegal out of line method definition";
 
         #! scripts that must fail to parse: name -> source, expected error
         const Failing = {
@@ -105,7 +106,7 @@ class NestedNsOutOfLineMethodTest inherits QUnit::Test {
 
     constructor() : QUnit::Test("NestedNsOutOfLineMethodTest", "1.0", \ARGV) {
         addTestCase("without %modern", \testLegacy());
-        addTestCase("with %modern in every execution mode", \testModern());
+        addTestCase("with %modern refused in every execution mode", \testModern());
         addTestCase("qcc", \testQcc());
         foreach string name in (keys Failing) {
             string script = name;
@@ -137,9 +138,10 @@ class NestedNsOutOfLineMethodTest inherits QUnit::Test {
         foreach string mode in (ExecModeHarness::ExecModes) {
             hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s --exec-mode=%s %s",
                 shellQuote(qore_bin), mode, shellQuote(path)));
-            ExecModeHarness::check_native(r, ExecModeHarness::NativeCheck::Jit);
-            assertEq(0, r.rc, sprintf("%s: exit status: %s", mode, r.out));
-            assertEq(ModernOut, r.out, mode);
+            ExecModeHarness::check_native(r, ExecModeHarness::NativeCheck::None);
+            checkNoCrash(mode, r.rc, r.out);
+            assertNeq(0, r.rc, sprintf("%s: exit status: %s", mode, r.out));
+            assertTrue(r.out.find(ModernErr) >= 0, sprintf("%s: parse error: %s", mode, r.out));
         }
     }
 
@@ -150,10 +152,10 @@ class NestedNsOutOfLineMethodTest inherits QUnit::Test {
         int rc;
         string out = backquote(sprintf("%s -o %s %s 2>&1", shellQuote(qcc_bin), shellQuote(exe), shellQuote(path)),
             \rc);
-        assertEq(0, rc, sprintf("qcc exit status: %s", out));
-        out = backquote(sprintf("%s 2>&1", shellQuote(exe)), \rc);
-        assertEq(0, rc, sprintf("compiled program exit status: %s", out));
-        assertEq(ModernOut, out, "compiled program output");
+        checkNoCrash("qcc", rc, out);
+        assertNeq(0, rc, sprintf("qcc exit status: %s", out));
+        assertTrue(out.find(ModernErr) >= 0, sprintf("qcc parse error: %s", out));
+        assertFalse(is_file(exe), "no executable");
 
         # a parse error is reported by qcc as well
         path = writeScript("modern-no-class", "%modern\nnamespace NS {\n    namespace I {}\n"

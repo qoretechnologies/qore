@@ -3867,6 +3867,24 @@ void qore_string_private::prepareMutableBuffer() {
     }
 }
 
+void qore_string_private::adoptCopy(const char* src, size_t n, size_t ascii_prefix) {
+    assert(!view_parent);
+    assert(!buffer);
+    assert(ascii_prefix <= n);
+    size_t new_alloc = n + STR_CLASS_EXTRA;
+    new_alloc = (new_alloc / 0x10 + 1) * 0x10;
+    buffer = (char*)malloc(sizeof(char) * new_alloc);
+    if (n) {
+        memcpy(buffer, src, n);
+    }
+    buffer[n] = '\0';
+    len = n;
+    allocated = new_alloc;
+    sb.sync(allocated);
+    // in an owned string, view_offset is the ASCII prefix cache
+    view_offset = ascii_prefix;
+}
+
 void qore_string_private::materialize() {
     assert(view_parent);
     assert(buffer == nullptr);

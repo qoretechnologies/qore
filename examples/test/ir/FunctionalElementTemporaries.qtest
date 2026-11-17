@@ -1,0 +1,119 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - JIT and AOT code generation of the temporary scopes of functional loops
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+%requires ../TestInterpreter.qm
+%exec-class FunctionalElementTemporariesTest
+
+#! the temporary values of a functional operator's element are destroyed at the end of the element (qore#6288)
+/** The expressions that map, select, map with a condition, foldl, foldr and hash map evaluate for each element, and the
+    stages of fused pipelines, are statements of their own: the temporary values of an element, such as the receiver of
+    <tt>(new O($1)).get()</tt>, are destroyed once the element's value has been computed, before the next element, in
+    every execution mode (the AST interpreter's QoreScopedEvalHolder; the IR lowering's lowerExpressionInTempScope());
+    before, an expression whose value was used kept its temporary until the next element replaced it.
+*/
+class FunctionalElementTemporariesTest inherits QUnit::Test {
+    private {
+        string qore_bin = executablePath(TestInterpreter::qore_interpreter());
+        string lib_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        string qcc_bin = ENV.QCC ?? lib_dir + "/qcc";
+        string probe = get_script_dir() + "/FunctionalElementTemporaries/probe.q";
+        *string ast_out;
+    }
+
+    constructor() : Test("functional element temporaries", "1.0", \ARGV) {
+        addTestCase("AST destroys each element's temporaries before the next element", \astReference());
+        addTestCase("compiled modes match AST", \sourceModes());
+        addTestCase("qcc executables match AST", \compiled());
+        set_return_value(main());
+    }
+
+    astReference() {
+        string out = getAst();
+        # each element's temporary is destroyed right after its call, before the next element's is created
+        foreach string prefix in ("m", "s", "c", "h", "x", "a", "b", "d", "e", "g", "i") {
+            foreach int n in (1, 2) {
+                string seq = sprintf("get %s%d\n~%s%d\n", prefix, n, prefix, n);
+                assertTrue(out.find(seq) >= 0, sprintf("%y in %y", seq, out));
+            }
+        }
+        # the fold expressions destroy theirs before the next element's
+        assertRegex("get f2\n~f2\nnew f3\n", out);
+        assertRegex("get r2\n~r2\nnew r1\n", out);
+        # a destructor that raises an exception raises it at the first element
+        assertRegex("get e1\nfn map raising: caught DTOR-e1\n", out);
+        assertRegex("get s1\nfn select raising: caught DTOR-s1\n", out);
+        # a value read from a local that a closure parsed after the operator binds is released with its element, also
+        # in a generic function and in the closure of a constant
+        foreach string prefix in ("u", "v", "w") {
+            string seq = sprintf("get %s1\nnew %s2\n~%s1\nlate bound", prefix, prefix, prefix);
+            assertTrue(out.find(seq) >= 0, sprintf("%y in %y", seq, out));
+        }
+        assertFalse(out =~ /unhandled/, out);
+    }
+
+    sourceModes() {
+        string expected = getAst();
+        foreach string mode in ("ir", "jit") {
+            assertEq(expected, run(("QORE_JIT_SYNC_COMPILE=1", qore_bin, "-b", "--enable-debug", "--exec-mode=" + mode,
+                probe)), mode);
+        }
+        assertEq(expected, run(("QORE_JIT_SYNC_COMPILE=1", "QORE_IR_THRESHOLD=1", "QORE_JIT_THRESHOLD=1", qore_bin,
+            "-b", "--enable-debug", "--exec-mode=tiered", probe)), "tiered");
+    }
+
+    compiled() {
+        string expected = getAst();
+        foreach string level in ("-O0", "-O3") {
+            TmpDir dir("qore-functional-element-temporaries-");
+            string exe = dir.path + "/probe";
+            run((qcc_bin, level, "-o", exe, probe));
+            assertEq(expected, run((exe, "-b", "--enable-debug")), "qcc " + level);
+        }
+    }
+
+    private string getAst() {
+        if (!exists ast_out) {
+            ast_out = run((qore_bin, "-b", "--enable-debug", "--exec-mode=ast", probe));
+        }
+        return ast_out;
+    }
+
+    private static string quote(string value) {
+        return "'" + join("'\\''", split("'", value)) + "'";
+    }
+
+    private static string executablePath(string name) {
+        if (name.regex("/")) {
+            return realpath(name);
+        }
+        foreach string directory in (split(":", ENV.PATH ?? "")) {
+            string path = (directory ? directory : ".") + "/" + name;
+            if (is_executable(path)) {
+                return realpath(path);
+            }
+        }
+        throw "TEST-SETUP-ERROR", "cannot locate Qore executable " + name;
+    }
+
+    #! runs a command; one that runs qore with an execution mode runs through ExecModeHarness
+    private string run(list<string> args) {
+        string command = "env LD_LIBRARY_PATH=" + quote(lib_dir) + " QORE_LIBDIR=" + quote(lib_dir) + " "
+            + (map quote($1), args).join(" ");
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(command);
+        if (r.mode) {
+            ExecModeHarness::check_native(r);
+        }
+        assertEq(0, r.rc, r.out);
+        return r.out;
+    }
+}

@@ -314,8 +314,9 @@ enum class QoreDbgHttpHoldPoint : unsigned char {
     //! about to use it
     TeardownRead,
     //! an HTTP/1.1 or HTTP/3 client poll operation dispatched the end of a request's response and released the
-    //! reference to the request's action that the dispatch held (armed with a release Counter of 0, the point only
-    //! reports it)
+    //! reference to the request's action that the dispatch held: on the I/O thread, or for an HTTP/3 response that
+    //! arrived before its request was registered, on the thread that registered it (armed with a release Counter of
+    //! 0, the point only reports it)
     StreamEndDispatched,
     //! an I/O thread of the asynchronous I/O controller is about to continue a C++ poll operation on the thread
     //! (call its continuePoll()); the point is armed for the operation's object

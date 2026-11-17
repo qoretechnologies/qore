@@ -1809,10 +1809,10 @@ int64_t Http2ClientPollOperationPriv::submitRequest(const char* method, const ch
         std::string desc;
         ExceptionSink* xsink;
 
-        DLLLOCAL RefusedAction(ExceptionSink* xsink) : xsink(xsink) {
+        RefusedAction(ExceptionSink* xsink) : xsink(xsink) {
         }
 
-        DLLLOCAL ~RefusedAction() {
+        ~RefusedAction() {
             if (action) {
                 if (!err.empty()) {
                     action->executeError(err.c_str(), desc.c_str(), xsink);

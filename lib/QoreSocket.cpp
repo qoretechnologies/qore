@@ -10527,6 +10527,22 @@ int SocketRecvSomePollState::continuePollIntern(ExceptionSink* xsink) {
 
 SocketRecvUntilBytesPollState::SocketRecvUntilBytesPollState(ExceptionSink* xsink, qore_socket_private* sock,
         const char* bytes, size_t size) : sock(sock), bin(new QoreStringNode), bytes(bytes), size(size) {
+    // the failure table is only kept if the pattern has a proper prefix that is also a suffix of one of its prefixes
+    // (issue #6325)
+    for (size_t i = 1, k = 0; i < size; ++i) {
+        while (k && bytes[i] != bytes[k]) {
+            k = fail[k - 1];
+        }
+        if (bytes[i] == bytes[k]) {
+            ++k;
+        }
+        if (k && !fail) {
+            fail.reset(new size_t[size]());
+        }
+        if (fail) {
+            fail[i] = k;
+        }
+    }
 }
 
 /** returns:
@@ -10580,7 +10596,23 @@ int SocketRecvUntilBytesPollState::continuePollIntern(ExceptionSink* xsink) {
                 break;
             }
         } else if (matched) {
-            matched = 0;
+            // a mismatch after a partial match: the match falls back to the longest prefix of the pattern that ends
+            // here, and the byte is compared again, as it can start or continue a match (issue #6325)
+            if (!fail) {
+                // no prefix of the pattern is a suffix of another: the byte can only start a match, which cannot be
+                // complete, as a pattern of one byte never has a partial match
+                matched = c == bytes[0];
+            } else {
+                do {
+                    matched = fail[matched - 1];
+                } while (matched && c != bytes[matched]);
+                if (c == bytes[matched]) {
+                    ++matched;
+                    if (matched == size) {
+                        break;
+                    }
+                }
+            }
         }
     }
 

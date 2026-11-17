@@ -124,6 +124,20 @@ private:
 
 class QoreIRLowering {
 public:
+    //! Virtual implicit argument context - eliminates push/pop runtime calls for map/select/foldl/foldr
+    /** When active, $1/$2/$# references in lowerExpression() use these IR values directly
+     * instead of emitting LoadImplicitArg/LoadImplicitElement runtime calls.
+     * This eliminates 6+ runtime calls (push/pop/load for arg and element) per loop iteration.
+     */
+    struct VirtualImplicitContext {
+        QoreIRValue arg0;      //!< virtual $1 value (offset 0)
+        QoreIRValue arg1;      //!< virtual $2 value (offset 1, for foldl/foldr)
+        QoreIRValue element;   //!< virtual $# value
+        bool active = false;   //!< true when virtual context is in effect
+        //! true when the implicit argument list (and element, if any) is also set at run time
+        bool runtime = false;
+    };
+
     //! Handler metadata for inline compilation at block exit points
     /** Stores on_exit/on_success/on_error handler StatementBlocks along with their type
      *  and location information. These are lowered inline at block exit points rather than
@@ -140,6 +154,9 @@ public:
         //! the depth of the statements of the catch block that the handler is declared in, or -1 (see
         //! QoreIRLowering::debug_catch_child_depth)
         int debug_catch_child_depth = -1;
+        //! the virtual implicit arguments and element of the block that declares the handler, which it runs in at
+        //! every exit, also one in a loop nested in the block that has its own (qore#6383)
+        VirtualImplicitContext virtual_implicit;
     };
 
     explicit QoreIRLowering(QoreIRBuilder& builder, QoreParseContext* parse_context = nullptr,
@@ -753,6 +770,14 @@ private:
     */
     QoreIRValue lowerExpressionInTempScope(const QoreValue& expr, const QoreProgramLocation* loc,
         std::string& error, bool containers_only = false);
+    //! Lowers an expression that a functional operator evaluates for an element, as a statement of its own
+    /** The temporaries of an element are released when its value has been computed, before the next element, as in
+        the AST interpreter (qore#6288): the expression is lowered with lowerExpressionInTempScope() when it can create
+        a temporary besides its value whose release a destructor can observe (a call's or a construction's value, an
+        object-holding read of a variable that other code can change), and directly otherwise, so that a loop of plain
+        reads keeps its optimizations.
+    */
+    QoreIRValue lowerElementExpression(const QoreValue& expr, const QoreProgramLocation* loc, std::string& error);
     QoreIRBasicBlock* getCurrentExceptionTarget() const;
     QoreIRBasicBlock* getGuardExceptionTarget() const;
     //! Gives an instruction that can raise an exception the active handler
@@ -894,6 +919,9 @@ private:
         QoreIRValue value;
         //! true if the operator's value can be the source's (a source that is not known to be a list)
         bool may_alias = false;
+        //! the list that the stages of a lazy pipeline gave a fold, which the fold iterates as its source (foldr $1,
+        //! (select l, c)), released after the operator before the source (issue #6262)
+        QoreIRValue intermediate;
     };
     //! The sources of the functional operators being lowered, innermost last
     std::vector<FunctionalSourceCapture> functional_source_captures;
@@ -902,6 +930,17 @@ private:
     //! returns true if the source of the functional operator being lowered is released after the operator (a
     //! temporary or a plain read of a local, see FunctionalSourceRelease)
     DLLLOCAL bool functionalSourceReleased() const;
+    //! Releases the value that a functional operator's expression gave once its result container holds it
+    /** The container takes a reference of its own, as the AST interpreter's operator pushes the value, which the
+        container then holds alone; see the definition.  Nothing is emitted for a value of a type that holds no object,
+        or for \a element, the element that the operator's expression reads (<tt>map $1, l</tt>)
+    */
+    DLLLOCAL void releaseStoredOperatorValue(QoreIRValue value, const QoreTypeInfo* ti, QoreIRValue element,
+            const QoreProgramLocation* loc);
+    //! Returns the single value that a functional operator over a single value gives, \a unwrapped, read from its
+    //! result list \a list, with a reference of its own, and releases the list (see the definition)
+    DLLLOCAL QoreIRValue ownUnwrappedOperatorValue(QoreIRValue unwrapped, QoreIRValue list,
+            const QoreProgramLocation* loc);
 
     QoreIRBuilder& builder;
     QoreParseContext* parse_context = nullptr;
@@ -924,6 +963,12 @@ private:
     bool handover_try_active = false;
     //! the value of the return of handover_try_active; invalid for a return without a value
     QoreIRValue handover_try_value;
+    //! the value of the switch statement whose case with an operator is being lowered: the value of the
+    //! QoreSwitchValueOperatorNode in the case's comparison (qore#6252)
+    QoreIRValue switch_case_value;
+    //! the switch expression whose value is switch_case_value: the guaranteed type of the switch value in the case's
+    //! comparison is that of the expression (qore#6252)
+    QoreValue switch_case_expr;
     //! the handler body that lowerHandlerAtExit() lowers inline next: its block gets an exception path of its own for
     //! its locals (see lowerStatementBlock(), #6002)
     const StatementBlock* inline_handler_block = nullptr;
@@ -1037,6 +1082,24 @@ private:
     */
     DLLLOCAL bool expressionReadsWeakCapableLocal(const QoreValue& expr) const;
 
+    //! Returns true if evaluating \a expr reads, other than as its own value, a local variable whose value can be or
+    //! hold an object and whose release by the cleanups of a return statement can be observed (see
+    //! localReleaseObservedByReturn())
+    /** The value read is a temporary of the statement, which can keep the variable's object after the variable is
+        released: the AST interpreter releases the temporaries of the statement first, so the object is destroyed when
+        its variable is, in reverse declaration order with the other locals (qore#6309).
+    */
+    DLLLOCAL bool expressionReadsReleasedObjectLocal(const QoreValue& expr) const;
+
+    //! Returns true if the cleanups of a return statement release the local and then release or run something else
+    //! that can see when the local's object is destroyed
+    /** The local is one of a block that the return leaves, or the variable of a catch block that it leaves; what
+        is released after it is a local declared before it in its block that can be or hold an object, or a cleanup of
+        an enclosing block (an object local, a catch variable, a handler, a foreach).  A temporary of the statement
+        that keeps the local's object is observable only then.
+    */
+    DLLLOCAL bool localReleaseObservedByReturn(const LocalVar* lv) const;
+
     //! Emits the block that an exception leaving the body of a value foreach loop goes to before \a outer_target
     /** Releases the element (if valid), the values that map expressions gave from it last (the valid ones, in their
         order: the list holds a reference of its own), the partial result (if valid: the list that a functional operator built so far), the
@@ -1054,6 +1117,21 @@ private:
     */
     DLLLOCAL void releasePredicateValue(QoreIRValue value, const QoreValue& expr, QoreIRValue element,
             const QoreProgramLocation* loc);
+
+    //! Creates the block that restores the implicit element of a foreach statement for an exception that leaves its
+    //! body for a handler of this function, and puts it on the exception stack (qore#6432)
+    /** Returns nullptr, and changes nothing, when no handler of this function encloses the body: the exception then
+        leaves the function.  The block is emitted with emitForeachElementExceptionRestore() once the body has been
+        lowered; \a next is set to the exception target that the block continues to.
+    */
+    DLLLOCAL QoreIRBasicBlock* beginForeachElementExceptionRestore(QoreIRBasicBlock*& next, std::string& error);
+
+    //! Emits the block of beginForeachElementExceptionRestore(): it restores the implicit element that the loop set
+    //! (\a old_element, the result of its PushImplicitElement) and continues to \a next with the exception, so that
+    //! the handlers of the enclosing blocks run with the element of the code around the loop, as in the AST
+    //! interpreter, whose foreach statement restores it when the exception unwinds it (qore#6432)
+    DLLLOCAL void emitForeachElementExceptionRestore(QoreIRBasicBlock* block, QoreIRBasicBlock* next,
+            QoreIRValue old_element, const QoreProgramLocation* loc);
 
     DLLLOCAL void emitForeachExceptionCleanup(QoreIRBasicBlock* cleanup_block, QoreIRBasicBlock* outer_target,
             QoreIRValue iterator, QoreIRValue list, QoreIRValue element, const LVList* lvars,
@@ -1137,6 +1215,10 @@ private:
     };
     //! the blocks with exception paths of their own being lowered, innermost last (#5968)
     std::vector<AnchorCatchInfo> anchor_catch_stack;
+    //! The blocks that only restore state on the exception path and continue to another exception target with the
+    //! exception (see beginForeachElementExceptionRestore()), with that target: the exceptions of the statements of a
+    //! catch block that go to one of them go on to the target (qore#6432)
+    std::unordered_map<const QoreIRBasicBlock*, QoreIRBasicBlock*> exception_forwarding_blocks;
 
     //! catch_cleanup_depth at the body of each enclosing try statement, innermost last
     /** An exception raised in a try body lands in that try statement's catch block, so a throw or rethrow there
@@ -1224,19 +1306,6 @@ private:
         return catchScopesLeftByThrow() > 0 && !catch_exit_stack[catch_cleanup_depth - 1].has_exit ? 1 : 0;
     }
 
-    //! Virtual implicit argument context - eliminates push/pop runtime calls for map/select/foldl/foldr
-    /** When active, $1/$2/$# references in lowerExpression() use these IR values directly
-     * instead of emitting LoadImplicitArg/LoadImplicitElement runtime calls.
-     * This eliminates 6+ runtime calls (push/pop/load for arg and element) per loop iteration.
-     */
-    struct VirtualImplicitContext {
-        QoreIRValue arg0;      //!< virtual $1 value (offset 0)
-        QoreIRValue arg1;      //!< virtual $2 value (offset 1, for foldl/foldr)
-        QoreIRValue element;   //!< virtual $# value
-        bool active = false;   //!< true when virtual context is in effect
-        //! true when the implicit argument list (and element, if any) is also set at run time
-        bool runtime = false;
-    };
     VirtualImplicitContext virtual_implicit;
 
     //! The state of the lowering of a background helper function; see lowerBackgroundHelper()

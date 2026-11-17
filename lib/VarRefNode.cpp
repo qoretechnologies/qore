@@ -121,6 +121,17 @@ bool VarRefNode::parseIsReadOnly() const {
     }
 }
 
+int VarRefNode::checkTopLevelStorage() const {
+    const LocalVar* lv = ref.id;
+    if (!lv->isTopLevelCommitted() || lv->closureUse()) {
+        return 0;
+    }
+    parse_error(*loc, "local variable '%s' cannot be captured by a closure or referenced: it is a top-level local "
+        "variable of an earlier parse of a Program that did not have PO_ALLOW_REPARSE when it was declared, so it can "
+        "have been instantiated as a plain local variable already", lv->getName());
+    return -1;
+}
+
 // get string representation (for %n and %N), foff is for multi-line formatting offset, -1 = no line breaks
 // the ExceptionSink is only needed for QoreObject where a method may be executed
 // use the QoreNodeAsStringHelper class (defined in QoreStringNode.h) instead of using these functions directly
@@ -295,6 +306,11 @@ int VarRefNode::parseInitIntern(QoreParseContext& parse_context, bool is_new) {
         assert(type == VT_UNRESOLVED);
         // otherwise reference must be resolved
         resolve(parse_context.typeInfo);
+    }
+
+    // a local variable used in its own initialization expression has no value yet (qore#526)
+    if (!new_decl && (type == VT_LOCAL || type == VT_CLOSURE || type == VT_LOCAL_TS)) {
+        QoreParseInitializerTarget::parseUse(ref.id, nullptr, loc);
     }
 
     name.optimize();
@@ -656,6 +672,9 @@ int VarRefNewObjectNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_c
     // so calling parseAssigned on a global Var* (cast to LocalVar*) would write into
     // Var::name's std::string pointer field at the LocalVar::parse_assigned offset
     const bool is_local_type = (type == VT_LOCAL || type == VT_CLOSURE || type == VT_LOCAL_TS);
+    // the arguments are the initialization expression of the declared local variable (qore#526); a global keeps its
+    // value when its declaration runs again, so it is not checked
+    QoreParseInitializerTarget init_target(new_decl && is_local_type ? ref.id : nullptr);
     const QoreClass* qc = QoreTypeInfo::getUniqueReturnClass(typeInfo);
     if (qc) {
         err = parseInitConstructorCall(loc, parse_context, qc);
@@ -724,6 +743,10 @@ int VarRefNewObjectNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_c
                 }
             }
         }
+    }
+
+    if (init_target.raiseUseError("local variable", getName()) && !err) {
+        err = -1;
     }
 
     if (parse_context.pflag & PF_FOR_ASSIGNMENT) {

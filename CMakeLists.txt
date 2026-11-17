@@ -1560,6 +1560,14 @@ HAVE_USELOCALE)
 include(CheckIncludeFiles)
 check_include_files("sys/types.h;sys/socket.h;net/if_dl.h" HAVE_NET_IF_DL_H)
 
+# the debug hook dbg_reset_socket() reads the receive window that the peer of a TCP socket last advertised: the
+# tcpi_snd_wnd member of struct tcp_info (Linux) or of struct tcp_connection_info (macOS)
+include(CheckStructHasMember)
+check_struct_has_member("struct tcp_info" tcpi_snd_wnd "sys/types.h;sys/socket.h;netinet/in.h;netinet/tcp.h"
+    HAVE_TCP_INFO_TCPI_SND_WND LANGUAGE CXX)
+check_struct_has_member("struct tcp_connection_info" tcpi_snd_wnd
+    "sys/types.h;sys/socket.h;netinet/in.h;netinet/tcp.h" HAVE_TCP_CONNECTION_INFO_TCPI_SND_WND LANGUAGE CXX)
+
 qore_search_libs(LIBQORE_LIBS setsockopt socket)
 qore_search_libs(LIBQORE_LIBS gethostbyname nsl)
 qore_search_libs(LIBQORE_LIBS clock_gettime rt)
@@ -1868,6 +1876,7 @@ set(LIBQORE_CPP_SRC
     lib/QoreIRAnalysis.cpp
     lib/QoreIRLowering.cpp
     lib/QoreIRToLLVM.cpp
+    lib/QoreIRFrameCheck.cpp
     lib/QoreIRVerifier.cpp
     lib/QoreIRTakeOver.cpp
     lib/QoreAOT.cpp
@@ -2513,6 +2522,7 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreParseContext.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreIRLowering.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreIRToLLVM.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreIRFrameCheck.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreIRVerifier.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreAOT.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreAOTBatchMemory.cpp\"
@@ -2912,6 +2922,10 @@ add_executable(qore-aot-ir-instruction-test examples/test/ir/aot_ir_instruction_
 target_include_directories(qore-aot-ir-instruction-test PRIVATE
     ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include)
 target_link_libraries(qore-aot-ir-instruction-test PRIVATE libqore)
+add_executable(qore-aot-lvalue-path-ref-rv-test examples/test/ir/aot_lvalue_path_ref_rv.cpp)
+target_include_directories(qore-aot-lvalue-path-ref-rv-test PRIVATE
+    ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include)
+target_link_libraries(qore-aot-lvalue-path-ref-rv-test PRIVATE libqore)
 add_executable(qore-aot-builtin-type-path-test examples/test/ir/aot_builtin_type_path_cache.cpp)
 target_include_directories(qore-aot-builtin-type-path-test PRIVATE
     ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include)
@@ -3210,6 +3224,11 @@ set(_qcc_format_sources
     ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreIRExprRegistry.h
     ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreIRLowering.h
     ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreIRToLLVM.h
+    ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreIRFrameCheck.h
+    # the NaN-boxing constants that the code generators emit
+    ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreValueEncoding.h
+    # generated code tests qore_es_private::pending at its offset (QoreIRToLLVM::emitPendingExceptionTest(), #6370)
+    ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreException.h
     ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreIRVerifier.h
     ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreOpcodeRegistry.h
     # the layout of the data that generated code reads by index (QoreNativeEntrySlots) and the runtime helpers it calls
@@ -3238,6 +3257,7 @@ set(_qcc_format_sources
     ${CMAKE_SOURCE_DIR}/lib/QoreIRExprRegistry.cpp
     ${CMAKE_SOURCE_DIR}/lib/QoreIRLowering.cpp
     ${CMAKE_SOURCE_DIR}/lib/QoreIRToLLVM.cpp
+    ${CMAKE_SOURCE_DIR}/lib/QoreIRFrameCheck.cpp
     ${CMAKE_SOURCE_DIR}/lib/QoreIRVerifier.cpp
     # the analysis of the parameters that take their arguments over, compiled from QoreIRVerifier.cpp
     ${CMAKE_SOURCE_DIR}/lib/QoreIRTakeOver.cpp
@@ -4602,9 +4622,9 @@ endif()
 
     # Tag files imported by each bundled native module's final documentation pass: the modules whose pages the
     # module's documentation links to (see qore_bundled_module_two_phase_docs()); importing every module's tag
-    # file instead copies all their symbols into the module's search index (#6350).  A missing entry is only a
-    # Doxygen warning in the module's final pass (nothing fails; the reference renders as plain text): add the
-    # module here, do not widen the set.  A name that is not a module fails the configure.  Like
+    # file instead copies all their symbols into the module's search index (#6350).  A missing entry fails the
+    # module's final pass with an error that names the module to add here (doxygen/check-module-doc-references.py,
+    # #6367); do not widen the set.  A name that is not a module fails the configure.  Like
     # QORE_DOC_EXTRA_MODULES_<mod> for user modules, these are the documentation references.
     set(QORE_DOC_REFERENCE_MODULES_astparser Qdx QoreApiMetadata QoreCodeFormat)
     set(QORE_DOC_REFERENCE_MODULES_avro AvroUtil DataProvider)

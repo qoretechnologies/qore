@@ -1292,6 +1292,9 @@ void Http3ClientPollOperationPriv::dispatchBufferedResponses(int64_t stream_id,
     // Keep the action alive while completeStream() drops stream_actions' ref
     // before dispatching a buffered final response.
     action->ref();
+#ifdef DEBUG
+    bool dispatched_end = false;
+#endif
     for (size_t i = 0; i < buffered->size(); ++i) {
         QoreValue v = buffered->retrieveEntry(i);
         if (v.getType() != NT_HASH) {
@@ -1322,10 +1325,21 @@ void Http3ClientPollOperationPriv::dispatchBufferedResponses(int64_t stream_id,
                 // the request is complete, so nothing sends on the stream any more; see handleReading()
                 releaseStream(stream_id);
             }
+#ifdef DEBUG
+            dispatched_end = true;
+#endif
             break;
         }
     }
     action->deref(xsink);
+#ifdef DEBUG
+    if (dispatched_end) {
+        // reports that the dispatch of the end of the response is done with the request's action, as in
+        // handleReading(): the end of a response that arrived before its request was registered is dispatched here,
+        // by the thread that registered the request
+        qore_dbg_http_hold(QoreDbgHttpHoldPoint::StreamEndDispatched, *self);
+    }
+#endif
 }
 
 void Http3ClientPollOperationPriv::waitStreamCapacity(int64_t timeout_ms) {

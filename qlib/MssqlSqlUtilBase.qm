@@ -259,6 +259,8 @@ hash<auto> desc = {
       with \c sp_rename as a unique constraint is
     - fixed renaming a trigger, which named it without its schema: it is renamed with \c sp_rename by the name of
       its schema and its own name
+    - table comments are created, read and aligned on SQL Server, as the \c MS_Description extended property of the
+      table; Sybase has none (<a href="https://github.com/qoretechnologies/qore/issues/1483">issue 1483</a>)
 
     @subsection MssqlSqlUtilBasev10 MssqlSqlUtilBase v1.0
     - initial release
@@ -1811,6 +1813,13 @@ public class MssqlDatabase inherits SqlUtil::AbstractDatabase {
         row.definition =~ s/create view .* as //ig;
 
         return new MssqlView(name, row.definition, schema);
+    }
+
+    #! Returns a view object for a view of a schema description
+    private AbstractView makeViewImpl(string name, string src) {
+        string schema;
+        parse_schema_name(name, \schema, \name, default_schema);
+        return new MssqlView(name, src, schema);
     }
 
     private MssqlFunction makeFunctionImpl(string name, string src, *hash opts) {
@@ -3457,6 +3466,43 @@ tc.constraint_name, c1.ordinal_position", schema, name);
             opt.mssql_partition_column = getColumnSqlName(partitionStrategy.columns[0]);
             opt.mssql_partition_key = partitionStrategy.columns[0];
         }
+    }
+
+    #! Returns @ref True on SQL Server, which keeps the comment of a table as its \c MS_Description extended property; Sybase has none
+    /** @since MssqlSqlUtilBase 1.1
+    */
+    bool supportsTableComments() {
+        return !is_sybase;
+    }
+
+    #! Reads the comment of the table: its \c MS_Description extended property
+    private *string getCommentImpl() {
+        return ds.selectRow("select cast(ep.value as nvarchar(4000)) as c from sys.extended_properties ep "
+            "join sys.tables t on t.object_id = ep.major_id "
+            "join sys.schemas s on s.schema_id = t.schema_id "
+            "where ep.class = 1 and ep.minor_id = 0 and ep.name = 'MS_Description' and s.name = %v and t.name = %v",
+            schema, name).c;
+    }
+
+    #! Returns the SQL that adds, changes or drops the comment of the table: its \c MS_Description extended property
+    private softlist<string> getTableCommentSqlImpl(*string comment) {
+        # the property exists if the table has a comment in the database
+        bool exists_now = inDb && getCommentUnlocked().val();
+        string proc;
+        if (!comment.val()) {
+            if (!exists_now) {
+                return ();
+            }
+            proc = "sp_dropextendedproperty";
+        } else {
+            proc = exists_now ? "sp_updateextendedproperty" : "sp_addextendedproperty";
+        }
+        string sql = sprintf("exec %s @name = N'MS_Description', ", proc);
+        if (proc != "sp_dropextendedproperty") {
+            sql += sprintf("@value = N%s, ", mssql_get_string_literal(comment));
+        }
+        return sql + sprintf("@level0type = N'SCHEMA', @level0name = N%s, @level1type = N'TABLE', @level1name = N%s",
+            mssql_get_string_literal(schema), mssql_get_string_literal(name));
     }
 
     private *list getCreateMiscSqlImpl(*hash opt, bool cache) {

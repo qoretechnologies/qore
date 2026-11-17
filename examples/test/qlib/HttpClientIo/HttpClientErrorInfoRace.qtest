@@ -83,6 +83,8 @@ class HttpClientErrorInfoRaceTest inherits QUnit::Test {
         # armed for this operation: the server's operations record errors too, as the server is stopped
         call_function("dbg_http_hold_at", "error-record", reached, release, op);
         *hash<ExceptionInfo> submit_ex;
+        # set if the submitting thread ended without reaching the hold point
+        bool skipped = False;
         # a submitting thread records the error of a submission refused by the QUIC layer
         background sub () {
             on_exit done.dec();
@@ -91,14 +93,16 @@ class HttpClientErrorInfoRaceTest inherits QUnit::Test {
             } catch (hash<ExceptionInfo> ex) {
                 submit_ex = ex;
             }
-            # a thread that did not reach the hold point does not leave the test thread waiting for it
+            # a thread that did not reach the hold point (the count is 1 only then: a thread at the hold point is held
+            # there) reports it, and does not leave the test thread waiting for it
             if (reached.getCount()) {
+                skipped = True;
                 reached.dec();
             }
         }();
         started = True;
         readHeldError(op, reached, release, "QUIC-HTTP3-ERROR",
-            "nghttp3_conn_submit_request failed: ERR_CONN_CLOSING");
+            "nghttp3_conn_submit_request failed: ERR_CONN_CLOSING", bool sub () { return skipped; });
         done.waitForZero();
         if (submit_ex) {
             throw submit_ex.err, submit_ex.desc;
@@ -136,12 +140,22 @@ class HttpClientErrorInfoRaceTest inherits QUnit::Test {
     }
 
     #! reads the error of the operation while the thread that records it is held in its critical section
-    /** @return the error read
+    /** @param op the operation
+        @param reached the Counter of the "error-record" hold point
+        @param release the Counter that releases the thread held there
+        @param err the expected error code, if any
+        @param desc the expected error description, if any
+        @param skipped returns True if the recording thread ended without reaching the hold point, if given
+
+        @return the error read
     */
     private *hash<auto> readHeldError(HttpClientPollOperation op, Counter reached, Counter release, *string err,
-            *string desc) {
+            *string desc, *code<bool()> skipped) {
         if (reached.waitForZero(HoldWait)) {
             throw "TEST-ERROR", "no thread recorded an error";
+        }
+        if (skipped && skipped()) {
+            throw "TEST-ERROR", "the recording thread ended without reaching the \"error-record\" hold point";
         }
         # a read that finds the operation's lock taken releases the recording thread, as it then waits for it
         call_function("dbg_http_hold_at", "error-read", release, new Counter(0), op);
