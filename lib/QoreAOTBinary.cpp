@@ -4348,7 +4348,7 @@ bool QoreAOTBinaryWriter::writeValue(const QoreValue& v) {
     }
 }
 
-bool qore_aot_encoded_metadata_length(const uint8_t* data, size_t avail, size_t& len) {
+bool qore_aot_encoded_metadata_length(const uint8_t* data, size_t avail, size_t& len, bool* cancelled) {
     auto read_u16_le = [](const uint8_t* p) -> uint16_t {
         return static_cast<uint16_t>(p[0]) | (static_cast<uint16_t>(p[1]) << 8);
     };
@@ -4357,6 +4357,18 @@ bool qore_aot_encoded_metadata_length(const uint8_t* data, size_t avail, size_t&
             | (static_cast<uint32_t>(p[2]) << 16) | (static_cast<uint32_t>(p[3]) << 24);
     };
     len = 0;
+    if (cancelled) {
+        *cancelled = false;
+    }
+    auto check_cancel = [cancelled](const char* operation) -> bool {
+        if (!qore_check_cancel(nullptr, operation)) {
+            return false;
+        }
+        if (cancelled) {
+            *cancelled = true;
+        }
+        return true;
+    };
     if (avail < QORE_AOT_HEADER_SIZE) {
         return false;
     }
@@ -4390,7 +4402,7 @@ bool qore_aot_encoded_metadata_length(const uint8_t* data, size_t avail, size_t&
         uint64_t data_area_size = 0;
         const uint8_t* sec = data + QORE_AOT_HEADER_SIZE;
         for (uint32_t i = 0; i < section_count; ++i, sec += section_header_size) {
-            if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT metadata-length scan")) {
+            if (i && !(i % 100) && check_cancel("AOT metadata-length scan")) {
                 return false;
             }
             uint32_t offset = read_u32_le(sec + 4);
@@ -4413,7 +4425,7 @@ bool qore_aot_encoded_metadata_length(const uint8_t* data, size_t avail, size_t&
             return false;
         }
         uint32_t uncompressed_size = read_u32_le(data + QORE_AOT_HEADER_SIZE);
-        if (uncompressed_size > 100 * 1024 * 1024) {
+        if (uncompressed_size > QORE_AOT_MAX_DECOMPRESSED_METADATA_SIZE) {
             return false;
         }
         if (uncompressed_size == 0) {
@@ -4421,19 +4433,29 @@ bool qore_aot_encoded_metadata_length(const uint8_t* data, size_t avail, size_t&
             return true;
         }
 
-        std::vector<uint8_t> out(uncompressed_size);
+        // the stream is inflated into a buffer of fixed size, only to find its end: the output is not kept
+        constexpr size_t scratch_size = 64 * 1024;
+        std::unique_ptr<uint8_t[]> scratch(new uint8_t[scratch_size]);
         z_stream strm{};
-        int rc = inflateInit(&strm);
-        if (rc != Z_OK) {
+        if (inflateInit(&strm) != Z_OK) {
             return false;
         }
         strm.next_in = const_cast<Bytef*>(data + QORE_AOT_HEADER_SIZE + 4);
         strm.avail_in = static_cast<uInt>(std::min<size_t>(
             avail - QORE_AOT_HEADER_SIZE - 4, std::numeric_limits<uInt>::max()));
-        strm.next_out = out.data();
-        strm.avail_out = static_cast<uInt>(std::min<uint32_t>(
-            uncompressed_size, std::numeric_limits<uInt>::max()));
-        rc = inflate(&strm, Z_FINISH);
+        int rc = Z_OK;
+        unsigned chunks = 0;
+        while (rc == Z_OK) {
+            if (++chunks % 100 == 0 && check_cancel("AOT metadata-length scan")) {
+                break;
+            }
+            strm.next_out = scratch.get();
+            strm.avail_out = static_cast<uInt>(scratch_size);
+            rc = inflate(&strm, Z_NO_FLUSH);
+            if (strm.total_out > uncompressed_size) {
+                rc = Z_DATA_ERROR;
+            }
+        }
         bool ok = rc == Z_STREAM_END && strm.total_out == uncompressed_size;
         size_t consumed = static_cast<size_t>(strm.total_in);
         inflateEnd(&strm);
@@ -4449,7 +4471,7 @@ bool qore_aot_encoded_metadata_length(const uint8_t* data, size_t avail, size_t&
             return false;
         }
         uint32_t uncompressed_size = read_u32_le(data + QORE_AOT_HEADER_SIZE);
-        if (uncompressed_size > 100 * 1024 * 1024) {
+        if (uncompressed_size > QORE_AOT_MAX_DECOMPRESSED_METADATA_SIZE) {
             return false;
         }
         if (!uncompressed_size) {
@@ -4694,7 +4716,13 @@ bool QoreAOTBinaryReader::open(const uint8_t* in_data, uint32_t in_size, std::st
             // from the symbols of an object file without symbol sizes (Mach-O), up to the next symbol, which includes
             // the padding after it; the checksum follows the encoded metadata, whose length its header gives
             size_t exact = 0;
-            if (!qore_aot_encoded_metadata_length(in_data, in_size, exact)
+            bool cancelled = false;
+            bool found = qore_aot_encoded_metadata_length(in_data, in_size, exact, &cancelled);
+            if (cancelled) {
+                error = "operation cancelled while the AOT metadata was read";
+                return false;
+            }
+            if (!found
                     || exact + QORE_AOT_METADATA_CHECKSUM_SIZE >= in_size
                     || stored_checksum(exact) != qore_aot_metadata_checksum(in_data, exact)) {
                 error = "the AOT metadata does not match its checksum: it was changed after it was written";
@@ -4702,6 +4730,9 @@ bool QoreAOTBinaryReader::open(const uint8_t* in_data, uint32_t in_size, std::st
                 return false;
             }
             meta_size = static_cast<uint32_t>(exact);
+            // the input is the metadata and its checksum, without what follows: a copy of it can be opened again,
+            // also without verification (verify_checksum = false)
+            input_size = meta_size + QORE_AOT_METADATA_CHECKSUM_SIZE;
         }
         in_size = meta_size;
         // the checksum is not part of the metadata that is read; the input keeps it (getInputData()/getInputSize()),
