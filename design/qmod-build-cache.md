@@ -44,7 +44,7 @@ and its **result key** (the base key, the dependency records and the optional mo
 |Build context|The probe of optional external modules (`qore-aot-probe.stamp`) and the AOT link configuration (`aot-link.conf`)|`context`
 |Build context|The link driver qcc runs (`cxx` of `aot-link.conf`) and its version, the linker and its version, the macOS SDK version, the operating system (`ID`, `VERSION_ID`, macOS version), the C library (glibc or musl and its version), the system and machine|`context`
 |Build context|The versions of bison and flex, which generate libqore's parser and scanner; the content of the LLVM library and of every shared library libqore and qcc are linked with (their patch versions are not in `/etc/os-release`); `/etc/localtime` (the time zone of parse-time dates when `TZ` is not set)|`context`
-|Build context|The content of `tools/qore-qmod-cache.py` and the cache schema|`context`
+|Build context|The content of `tools/qore-qmod-cache.py`, of `tools/qore_qami.py` (the metadata record parser it shares with `tools/check-debian-artifacts.py`) and the cache schema|`context`
 |Base key|The qcc command line (absolute paths of the source and output, optimization level, prefix maps), its working directory|`exec`
 |Base key|Every environment variable named `QORE_*` or `QCC_*` except those in `ENV_EXCLUDED_NAMES`/`ENV_EXCLUDED_PREFIXES`, and `CC`, `CXX`, `LANG`, `LC_ALL`, `LC_CTYPE`, `TZ`, `MACOSX_DEPLOYMENT_TARGET`, `SDKROOT`, `LD_LIBRARY_PATH`, `LD_PRELOAD`, `DYLD_*`|`exec`
 |Base key|The module's own sources: every file of a module directory (but the qmods linked into it), or the `.qm` file, and the sources the build lists for it|`exec`
@@ -166,7 +166,7 @@ Before a cached module is used:
 4. each stored file must have the SHA-256 digest the entry records (a damaged entry is removed);
 5. the stored module must contain the AOT runtime identity of the build;
 6. the stored depfile must name the module's path (the loader uses a depfile only for the module its rule names);
-7. the stored module must have a version 3 metadata record.
+7. the stored module must have a metadata record of the version that qcc writes (version 3; `tools/qore_qami.py`).
 
 The depfile, the fingerprints, the paths of the optional modules (`<qmod>.d.optional`, see
 `aot-linked-module-sources.md`) and then the module are each renamed into place, and the module and depfile are
@@ -183,7 +183,7 @@ A module is stored only when qcc wrote the module, the depfile, the fingerprints
 build's identity, the depfile names the module, every source still has the size and modification time qcc recorded
 in its fingerprint and every dependency has one (a source written during the compile, or one qcc could not hash, is
 no stable input), every dependency can be covered (see
-above), and the metadata record can be read and has version 3.
+above), and the metadata record can be read and has the version that qcc writes.
 
 ### The CI guard: `verify`
 

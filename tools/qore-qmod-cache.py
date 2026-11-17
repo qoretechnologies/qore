@@ -15,7 +15,7 @@ the same:
   processor, LLVM version), the identity that qcc reports, the content of every libqore and qcc source and of the
   generated headers and compile flags of libqore and qcc (qcc's output depends on the whole parser and runtime, not
   only on the identity's sources), the probe of optional external modules, the AOT link configuration, the link
-  driver and linker versions, the operating system and its C library, and this script;
+  driver and linker versions, the operating system and its C library, this script and tools/qore_qami.py;
 - the qcc command line, its working directory and the environment variables that qcc or libqore read;
 - the content of the module's own sources (every file of a module directory);
 - every file that the module's dependency file lists (the sources of the modules it requires and the binary modules
@@ -74,6 +74,21 @@ import subprocess
 import sys
 import tempfile
 import time
+import importlib.util
+
+
+def _load_qami():
+    """Loads tools/qore_qami.py, the parser of the AOT module metadata record that this tool shares with
+    tools/check-debian-artifacts.py (qore#6526), from the directory of this script, which is not in sys.path with
+    python3 -I"""
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "qore_qami.py")
+    spec = importlib.util.spec_from_file_location("qore_qami", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+qore_qami = _load_qami()
 
 #: the cache layout and key format; a new value makes every earlier entry unreachable
 # 2: the entries also store <qmod>.d.optional, the paths where the modules of failed %try-module directives could be
@@ -121,13 +136,12 @@ SIDECAR_SUFFIX = ".qmod-cache.json"
 #: the most entries kept under one base key
 MAX_ENTRIES_PER_BASE = 8
 
-#: AOT module metadata record (include/qore/intern/QoreAOTBinary.h, QoreAOTModuleFileInfo)
-QAMI_MAGIC = b"QAMI"
-#: the only record version read: 3 (name, dependencies, unavailable optional modules, the names of the compile-time
-#: closure, the module's own module path directives, the parse options that its directives gave its dependencies); a
-#: module with a record of another version is never cached
-QAMI_VERSION = 3
-QAMI_MAX_PAYLOAD = 16 * 1024 * 1024
+#: AOT module metadata record (include/qore/intern/QoreAOTBinary.h, QoreAOTModuleFileInfo), parsed by tools/qore_qami.py
+QAMI_MAGIC = qore_qami.MAGIC
+#: the only record version read: the version that qcc writes (see tools/qore_qami.py); a module with a record of
+#: another version is never cached
+QAMI_VERSION = qore_qami.CURRENT_VERSION
+QAMI_MAX_PAYLOAD = qore_qami.MAX_PAYLOAD
 
 FINGERPRINT_HEADER = "# qore AOT module source fingerprints 1"
 
@@ -305,93 +319,15 @@ def read_fingerprints(path):
     return rv
 
 
-class ModuleInfo:
-    """The metadata record of an AOT module
-
-    - dependencies: the hard dependencies of the module descriptor (not the modules required with %requires(reexport))
-    - optional: the %try-module requests that failed when the module was compiled
-    - compiled_with: the names of every module of the compile-time closure, direct and transitive, re-exported
-      ones too, but not the module itself
-    - prepend_paths, append_paths: the module's own %prepend-module-path and %append-module-path directories as
-      compiled in
-    """
-
-    def __init__(self, name, dependencies, optional, compiled_with, prepend_paths=(), append_paths=()):
-        self.name = name
-        self.dependencies = dependencies
-        self.optional = optional
-        self.compiled_with = compiled_with
-        self.prepend_paths = list(prepend_paths)
-        self.append_paths = list(append_paths)
-
-
 def parse_qami_record(data, offset):
-    """Parses a version 3 AOT module metadata record at @p offset; returns a ModuleInfo or None"""
-    if offset + 12 > len(data):
-        return None
-    magic, version, payload_size = struct.unpack_from("<4sII", data, offset)
-    if magic != QAMI_MAGIC or version != QAMI_VERSION or payload_size > QAMI_MAX_PAYLOAD:
-        return None
-    pos = offset + 12
-    end = pos + payload_size
-    if end > len(data):
-        return None
-
-    def read_str(p):
-        if p + 4 > end:
-            raise ValueError
-        (length,) = struct.unpack_from("<I", data, p)
-        p += 4
-        if not length or p + length > end:
-            raise ValueError
-        s = data[p:p + length]
-        if b"\0" in s:
-            raise ValueError
-        return s.decode("utf-8"), p + length
-
-    def read_list(p):
-        if p + 4 > end:
-            raise ValueError
-        (count,) = struct.unpack_from("<I", data, p)
-        p += 4
-        if count > 65536:
-            raise ValueError
-        items = []
-        for _ in range(count):
-            s, p = read_str(p)
-            items.append(s)
-        return items, p
-
-    try:
-        name, pos = read_str(pos)
-        deps, pos = read_list(pos)
-        optional, pos = read_list(pos)
-        compiled_with, pos = read_list(pos)
-        prepend, pos = read_list(pos)
-        append, pos = read_list(pos)
-        # the parse options that the module's directives gave its dependencies: a name and four 32-bit words each
-        if pos + 4 > end:
-            raise ValueError
-        (count,) = struct.unpack_from("<I", data, pos)
-        pos += 4
-        if count > 65536:
-            raise ValueError
-        for _ in range(count):
-            _, pos = read_str(pos)
-            if pos + 16 > end:
-                raise ValueError
-            pos += 16
-        info = ModuleInfo(name, deps, optional, compiled_with, prepend, append)
-    except (ValueError, UnicodeDecodeError):
-        return None
-    if pos != end:
-        return None
-    return info
+    """Parses an AOT module metadata record of the current version at @p offset; returns a qore_qami.ModuleInfo (with
+    name, dependencies, optional, compiled_with, prepend_paths and append_paths) or None"""
+    return qore_qami.parse(data, offset, versions=(QAMI_VERSION,))
 
 
 def record_version_of(data, name):
-    """The version of a metadata record for module @p name in @p data that is not version 3, or None: the header and
-    the module name, which every version starts its payload with, are all that is read of it"""
+    """The version of a metadata record for module @p name in @p data that is not the current one, or None: the header
+    and the module name, which every version starts its payload with, are all that is read of it"""
     pos = data.find(QAMI_MAGIC)
     encoded = name.encode("utf-8")
     while pos >= 0:
@@ -405,7 +341,7 @@ def record_version_of(data, name):
 
 
 def read_module_info(path, name):
-    """Returns the ModuleInfo of the version 3 metadata record of the AOT module @p name
+    """Returns the qore_qami.ModuleInfo of the current version metadata record of the AOT module @p name
 
     The record is found by its magic and must parse completely and name the module; exactly one such record must be
     in the file (an ELF note or a Mach-O section holds it), or CacheError is raised.
@@ -690,6 +626,8 @@ def compute_context(source_dir, build_dir, qcc, inputs, env=None):
     items = {
         "schema": SCHEMA,
         "tool": sha256_file(os.path.abspath(__file__)),
+        # the parser of the module metadata record, which decides what the cache reads of a module
+        "tool-qami": sha256_file(os.path.join(os.path.dirname(os.path.abspath(__file__)), "qore_qami.py")),
         "qcc": qcc_lines,
         "inputs": [[os.path.basename(p), file_record(p)] for p in inputs],
         "compiler-sources": compiler,
@@ -1877,7 +1815,7 @@ class Module:
             os.chmod(tmps[""], int(entry["mode"]) & 0o777)
             if not contains_identity(tmps[""], self.identity):
                 raise CacheError("stored module lacks the AOT runtime identity %s" % self.identity)
-            # only modules with a version 3 metadata record are cached (see read_module_info())
+            # only modules with a metadata record of the current version are cached (see read_module_info())
             try:
                 read_module_info(tmps[""], self.name)
             except CacheError as e:
