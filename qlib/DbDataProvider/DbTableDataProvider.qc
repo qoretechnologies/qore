@@ -236,6 +236,10 @@ public class DbTableDataProvider inherits DbDataProviderBase {
             - \c forupdate: uses FOR UPDATE with the query to lock records selected; see
               <a href="../../SqlUtil/html/sql_operations.html#select_option_forupdate">SqlUtil select option forupdate</a>
               for more information on this argument
+            - \c recursive: searches the rows of a recursive query: the search condition and the other search options
+              apply to its rows, and the record type of the search has its columns; see
+              <a href="../../SqlUtil/html/sql_operations.html#select_option_recursive">SqlUtil select option
+              recursive</a> for more information on this argument
             - \c partition: restricts reads to one physical partition; see
               <a href="../../SqlUtil/html/sql_operations.html#select_option_partition">SqlUtil select option
               partition</a> for more information on this argument; the table's \c supportsPartitionRead() API must
@@ -296,6 +300,18 @@ public class DbTableDataProvider inherits DbDataProviderBase {
                     "expressions are rejected because their SQL evaluation order cannot be preserved after a "
                     "client-side filter.",
                 "default_value": False,
+            },
+            "recursive": <DataProviderOptionInfo>{
+                "display_name": "Recursive Query",
+                "short_desc": "Search the rows of a recursive query (a recursive common table expression)",
+                "type": AbstractDataProviderType::get(AutoHashType),
+                "desc": "The rows searched are those of a recursive query: the common table expression given by "
+                    "this option, as the `recursive` SqlUtil select option gives it, with its `name`, `columns`, "
+                    "`anchor`, `step`, `union`, `depth` and `max_depth` keys. The search condition and the "
+                    "`columns`, `orderby`, `limit`, `offset`, `groupby` and `having` search options apply to the "
+                    "rows of the common table expression, and the record type of the search has its columns. It "
+                    "cannot be combined with `forupdate` or `partition`; the table's `supportsRecursiveQueries()` "
+                    "API must return `True`.",
             },
             "partition": <DataProviderOptionInfo>{
                 "display_name": "Partition",
@@ -474,14 +490,18 @@ public class DbTableDataProvider inherits DbDataProviderBase {
     */
     *hash<auto> getSearchExpression(*hash<auto> where_cond, *hash<auto> search_options) {
         if (DbTableReadHelper::isSqlUtilWhere(where_cond)) {
-            return DbTableReadHelper::processSqlUtilWhere(getName(), table.getRecordType(), where_cond);
+            return DbTableReadHelper::processSqlUtilWhere(getName(),
+                DbTableReadHelper::getSearchRecordType(table, search_options), where_cond);
         }
         return AbstractDataProvider::getSearchExpression(where_cond, search_options);
     }
 
     #! Returns the description of the record type, if any
+    /** A search with the \c "recursive" search option returns the rows of the common table expression of a recursive
+        query (see @ref SearchOptions)
+    */
     private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
-        return table.getRecordType();
+        return DbTableReadHelper::getSearchRecordType(table, search_options);
     }
 
     #! Writes the given record to the data provider
