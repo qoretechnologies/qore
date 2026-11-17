@@ -934,6 +934,13 @@ DLLLOCAL void qore_dbg_hold_next_thread_finish(int ms);
 DLLLOCAL void qore_dbg_hold_next_thread_tls_exit(int ms);
 //! Waits until a finishing background thread is held; returns false on timeout
 DLLLOCAL bool qore_dbg_wait_thread_finish_held(int timeout_ms);
+//! Holds the next thread that is started, before it registers, for up to \a ms milliseconds or until
+//! qore_dbg_release_thread_start() (qore#6469)
+DLLLOCAL void qore_dbg_hold_next_thread_start(int ms);
+//! Waits until a starting thread is held; returns false on timeout
+DLLLOCAL bool qore_dbg_wait_thread_start_held(int timeout_ms);
+//! Releases the starting thread held, and waits until it has continued
+DLLLOCAL void qore_dbg_release_thread_start();
 
 //! Returns true, and disarms the site, if the next step at \a site is armed to fail
 DLLLOCAL bool qore_dbg_program_entry_fails(int site);
