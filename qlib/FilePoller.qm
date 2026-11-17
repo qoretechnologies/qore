@@ -770,7 +770,7 @@ public class FilePoller {
                     rethrow;
                 }
                 try {
-                    p.runOnce();
+                    p.pollOnce();
                 } catch (hash<ExceptionInfo> ex) {
                     ref.state.run = False;
                     FilePoller::logPollError(p, ex);
@@ -839,25 +839,33 @@ public class FilePoller {
 %endif
     }
 
+    #! runs one poll of the polling thread or of run()
+    /** An error raised by an event handler is logged, and the file is kept for the next poll (see
+        @ref filepollererrors); any other error is raised
+    */
+    private pollOnce() {
+        in_event = False;
+        try {
+            runOnce();
+        } catch (hash<ExceptionInfo> ex) {
+            if (!in_event) {
+                rethrow;
+            }
+            # the event handler refused or failed to handle a file, which is left in place, as are the other files of
+            # the poll that were not handled yet
+            in_event = False;
+            logInfo("an event handler for a file in %y failed: %s: %s; the file is kept and polled again in %ds", path,
+                ex.err, ex.desc, poll_interval);
+        }
+    }
+
     #! runs the polling operation in the calling thread (startInline())
     private run() {
         on_exit sc.done();
 
         while (run_state.run) {
             try {
-                in_event = False;
-                try {
-                    runOnce();
-                } catch (hash<ExceptionInfo> ex) {
-                    if (!in_event) {
-                        rethrow;
-                    }
-                    # the event handler refused or failed to handle a file, which is left in place, as are the other
-                    # files of the poll that were not handled yet
-                    in_event = False;
-                    logInfo("an event handler for a file in %y failed: %s: %s; the file is kept and polled again in "
-                        "%ds", path, ex.err, ex.desc, poll_interval);
-                }
+                pollOnce();
                 fileSleep(poll_interval);
             } catch (hash<ExceptionInfo> ex) {
                 logInfo("cannot get file list from %y: %s: %s", path, ex.desc, ex.err);

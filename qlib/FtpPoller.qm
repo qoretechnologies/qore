@@ -1308,6 +1308,9 @@ public class FtpPoller {
     */
     private int pollOnce() {
         try {
+            # an error before the files are polled (ex: setting up a new FTP connection) is an FTP error
+            get_files = True;
+            in_event = False;
             if (new_ftp.val()) {
                 setup(remove new_ftp);
             }
@@ -1316,6 +1319,13 @@ public class FtpPoller {
         } catch (hash<ExceptionInfo> ex) {
             if (get_files) {
                 logError("FTP error in %y: %s: %s; waiting %ds for next try", path, ex.err, ex.desc, error_delay);
+                return error_delay;
+            }
+            if (in_event) {
+                # the event handler refused or failed to handle the file, which is left in place
+                in_event = False;
+                logError("event handler error in %y: %s: %s; the remote file is kept; waiting %ds for next try",
+                    path, ex.err, ex.desc, error_delay);
                 return error_delay;
             }
             # error thrown in "post transfer" code
