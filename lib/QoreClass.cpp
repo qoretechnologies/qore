@@ -5539,7 +5539,7 @@ int qore_class_private::checkMethodForEval(const QoreObject* self, const char* n
         }
         return 0;
     }
-    if (const QoreMemberInfo* mi = runtimeGetMemberInfo(nme, class_ctx)) {
+    if (const QoreMemberInfo* mi = runtimeGetCallableMemberInfo(nme, class_ctx)) {
         const qore_class_private* member_class_ctx = mi->getClassContext(class_ctx);
         qore_object_private* obj_priv = qore_object_private::get(*const_cast<QoreObject*>(self));
         QoreAutoVarRWReadLocker al(obj_priv->rml);
@@ -5594,7 +5594,7 @@ QoreValue qore_class_private::evalMethodGivenArgs(QoreObject* self, const char* 
 
 QoreValue qore_class_private::getMemberCode(QoreObject* self, const char* nme, const qore_class_private* class_ctx,
         ExceptionSink* xsink) const {
-    const QoreMemberInfo* mi = runtimeGetMemberInfo(nme, class_ctx);
+    const QoreMemberInfo* mi = runtimeGetCallableMemberInfo(nme, class_ctx);
     if (!mi) {
         return QoreValue();
     }
@@ -5626,7 +5626,7 @@ template <bool Lexical>
 static QORE_INTERN_NOINLINE QoreValue qore_eval_missing_method(const qore_class_private& qcp,
         LexicalSemanticPolicy policy, QoreObject* self, const char* nme, const QoreListNode* args,
         const qore_class_private* class_ctx, RuntimeConfig& rc, ExceptionSink* xsink) {
-    const QoreMemberInfo* mi = qcp.runtimeGetMemberInfo(nme, class_ctx);
+    const QoreMemberInfo* mi = qcp.runtimeGetCallableMemberInfo(nme, class_ctx);
     if (mi) {
         const qore_class_private* member_class_ctx = mi->getClassContext(class_ctx);
         qore_object_private* obj_priv = qore_object_private::get(*self);
