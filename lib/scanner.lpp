@@ -673,7 +673,11 @@ static void parse_time(const char*& p, int &hour, int &minute, int &second, int 
     }
 }
 
-static DateTimeNode *makeDateTime(char* str, bool has_time) {
+//! Makes an absolute date literal: YYYY-MM-DD, with an optional time after T or - and an optional zone
+/** A leap second (second 60) cannot be represented, as with a string converted to a date; it raises a parse
+    exception (issue #503)
+*/
+static DateTimeNode* makeDateTime(YYLTYPE* yylloc, const char* str, bool has_time) {
     const char* p = str;
 
     // get year
@@ -693,6 +697,11 @@ static DateTimeNode *makeDateTime(char* str, bool has_time) {
     if (*p == 'T' || (*p == '-' && has_time)) {
         ++p;
         parse_time(p, hour, minute, second, us);
+        if (second == 60) {
+            parse_error(*get_loc(yylloc), "date literal '%s' provides an invalid second value: 60; expecting 0 - 59 "
+                "inclusive (a leap second cannot be represented)", str);
+            second = 59;
+        }
     }
 
     // get zone if present, otherwise assume local zone
@@ -1345,6 +1354,8 @@ MONTH           (0[1-9])|(1[012])
 DAY             ((0[1-9])|([12][0-9])|(3[01]))
 HOUR            ([01][0-9])|(2[0-3])
 MSEC            [0-5][0-9]
+ /* the seconds of a date literal with a time: 60, a leap second, is matched to be reported (issue #503) */
+DSEC            ({MSEC}|60)
 US              [0-9]{1,6}
 D2              [0-9]{2}
 BINARY          <({HEX_DIGIT}{HEX_DIGIT})+>
@@ -3339,9 +3350,9 @@ module{WS}*\(                           yylval->string = strdup("module"); retur
 \.while[^A-Za-z_0-9]                    DO_DOT_KW_IDENTIFIER("while")
 \.module[^A-Za-z_0-9]                   DO_DOT_KW_IDENTIFIER("module")
 
-{YEAR}-{MONTH}-{DAY}T{HOUR}:{MSEC}(:{MSEC}(\.{US})?)?{TZ}?   yylval->datetime = makeDateTime(yytext, true); return DATETIME;
-{YEAR}-{MONTH}-{DAY}-{HOUR}:{MSEC}:{MSEC}(\.{US})?{TZ}?      yylval->datetime = makeDateTime(yytext, true); return DATETIME;
-{YEAR}-{MONTH}-{DAY}?{TZ}?                                   yylval->datetime = makeDateTime(yytext, false); return DATETIME;
+{YEAR}-{MONTH}-{DAY}T{HOUR}:{MSEC}(:{DSEC}(\.{US})?)?{TZ}?   yylval->datetime = makeDateTime(yylloc, yytext, true); return DATETIME;
+{YEAR}-{MONTH}-{DAY}-{HOUR}:{MSEC}:{DSEC}(\.{US})?{TZ}?      yylval->datetime = makeDateTime(yylloc, yytext, true); return DATETIME;
+{YEAR}-{MONTH}-{DAY}{TZ}?                                    yylval->datetime = makeDateTime(yylloc, yytext, false); return DATETIME;
 {HOUR}:{MSEC}(:{MSEC}(\.{US})?)?{TZ}?   yylval->datetime = makeTime(yytext); return DATETIME;
 P{YEAR}-{D2}-{D2}(T{D2}:{D2}(:{D2}(\.{US})?)?)?   yylval->datetime = makeIso8601Duration(yylloc, yytext); return DATETIME;
 P{YEAR}{D2}{D2}(T{D2}{D2}({D2}(\.{US})?)?)?       yylval->datetime = makeIso8601Duration(yylloc, yytext); return DATETIME;
