@@ -1911,6 +1911,9 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - a \c private:internal member of a class with the same name as one of a base class was not initialized in an
+      object of a subclass, so the class's methods read no value, and was serialized without its value (see
+      @ref private_members; issue #6402)
     - parsing or loading a long chain of classes, each inheriting the previous one (see @ref inheritance), took time
       that grew with the fourth power of its length, as each class walked the whole hierarchy again for each of its
       ancestors; it now grows about with the square of the length (issue #6106)
