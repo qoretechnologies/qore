@@ -579,7 +579,9 @@ hash<HttpClientResponseInfo> resp = f.get(30s);
                         stream = mgr.acquireStream(origin, NOTHING,
                             deadline ? max(1, (deadline - now_us()).durationMilliseconds()) : NOTHING);
                         # the stream's wait for its connection ends at the operation's deadline as well
-                        stream.setRequestDeadline(deadline);
+                        stream.setRequestDeadline(deadline
+                            ? clock_get_monotonic_us() + (deadline - now_us()).durationMicroseconds()
+                            : NOTHING);
                         # the cookie jar supplies the cookies for each target
                         # the body is decoded unless the stream is handed over
                         stream.startStreaming(rf.getMethod(), target, mgr.prepareRequestHeaders(rf, auth,

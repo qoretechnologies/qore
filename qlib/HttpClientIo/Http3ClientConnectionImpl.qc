@@ -125,10 +125,6 @@ public class Http3ClientConnection inherits HttpClientConnection {
     */
     bool canAcceptStream() {
         AutoLock al(lock);
-        # a connection that a request whose time ran out is closing accepts no reservation (#6430)
-        if (expire_closing) {
-            return False;
-        }
         int cs = self.getConnectionState();
         if (cs != HttpClientConnectionState::Ready
                 && cs != HttpClientConnectionState::Connecting) {
@@ -160,10 +156,6 @@ public class Http3ClientConnection inherits HttpClientConnection {
     */
     bool tryReserveStream() {
         AutoLock al(lock);
-        # a connection that a request whose time ran out is closing accepts no reservation (#6430)
-        if (expire_closing) {
-            return False;
-        }
         int cs = self.getConnectionState();
         if (cs != HttpClientConnectionState::Ready
                 && cs != HttpClientConnectionState::Connecting) {

@@ -169,7 +169,7 @@ public class Http1ClientStreamHandle inherits HttpClientStreamHandle {
                 streaming = False;
                 request_body_streaming = False;
                 remove data_channel;
-                # the reservation is released, and the connection closed only if no other request waits for it (#6430)
+                # the reservation is released; the connection keeps connecting for other waiters (#6429, #6430)
                 throwConnectWaitExpired();
             }
         }
@@ -241,7 +241,7 @@ public class Http1ClientStreamHandle inherits HttpClientStreamHandle {
                     state = HttpClientStreamState::Pending;
                 }
                 streaming = False;
-                # the reservation is released, and the connection closed only if no other request waits for it (#6430)
+                # the reservation is released; the connection keeps connecting for other waiters (#6429, #6430)
                 throwConnectWaitExpired();
             }
         }

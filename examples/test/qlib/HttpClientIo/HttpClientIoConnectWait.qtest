@@ -36,6 +36,7 @@
 %requires HttpServerUtil
 %requires HttpServer
 %requires HttpClientIo
+%requires ../../TestCertificates.qm
 
 %exec-class HttpClientIoConnectWaitTest
 
@@ -170,6 +171,10 @@ class HttpClientIoConnectWaitTest inherits QUnit::Test {
             \testNoRetryPastDeadline());
         addTestCase("an async request whose acquisition times out is not sent again",
             \testAsyncAcquisitionTimeoutFinal());
+        addTestCase("async and streaming requests whose deadline ends their connection wait are not sent again",
+            \testDeadlineOnPendingConnectionIsFinal());
+        addTestCase("a happy-eyeballs race that a request's deadline cuts off still pools its winner",
+            \testAbandonedRacePoolsWinner());
         set_return_value(main());
     }
 
@@ -516,6 +521,129 @@ class HttpClientIoConnectWaitTest inherits QUnit::Test {
         assertEq("HTTPCLIENT-TIMEOUT", err.err, "the submission times out; got " + describe(err));
         assertEq(1, log.getMatching("happy eyeballs: starting H3 \\+ H2 race").size(), "one race");
         assertEq((), log.getMatching("retrying|falling back"), "no retry and no fallback");
+    }
+
+    #! An async or streaming request whose deadline ends its wait for a pending connection is final (#6429)
+    /** A stream handle holds a pending HTTP/2 connection; submitRequestAsync() and acquireAndStartStreaming(), with
+        a short \c request_timeout option, reuse it and their wait for it ends at their deadline.  The timeout
+        is final: no retry, no fallback.  Before the fix, the wait ended up to a millisecond before the deadline, the
+        clock comparison that should have stopped a retry mostly missed it, and the timeout was retried as a
+        connection error (with handleProtocolFallback(), which caches HTTP/2 for an origin cached as HTTP/3).
+    */
+    testDeadlineOnPendingConnectionIsFinal() {
+        SilentListener listener();
+        on_exit listener.close();
+        string url = listener.getUrl();
+
+        ConnectWaitLog log();
+        # a short timeout, so that the requests can be repeated: whether a wait ended before the deadline by the
+        # clock is a matter of chance, the result must not depend on it
+        HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{
+            "protocol": "h2",
+            "connect_timeout": 60s,
+            "request_timeout": 20ms,
+            "logger": log,
+        });
+        on_exit mgr.closeAll();
+
+        HttpClientStreamHandle s0 = mgr.acquireStream(url);
+        on_exit s0.cancel();
+        HttpClientConnection conn = s0.getConnection();
+        string reuse = "reusing h2 connection " + conn.getConnectionId() + " ";
+
+        const int Rounds = 10;
+        for (int i = 1; i <= Rounds; ++i) {
+            *hash<ExceptionInfo> err = getError(sub () { mgr.submitRequestAsync(url, "GET", "/"); });
+            assertEq("HTTPCLIENT-TIMEOUT", err.err, sprintf("submitRequestAsync() %d times out; got %s", i,
+                describe(err)));
+            err = getError(sub () { mgr.acquireAndStartStreaming(url, "GET", "/"); });
+            assertEq("HTTPCLIENT-TIMEOUT", err.err, sprintf("acquireAndStartStreaming() %d times out; got %s", i,
+                describe(err)));
+        }
+        assertEq(Rounds * 2, log.getMatching(reuse).size(), "one attempt for each request");
+        assertEq((), log.getMatching("retrying|falling back"), "no retry and no fallback");
+        assertFalse(conn.isClosed(), "the connection keeps connecting");
+    }
+
+    #! A happy-eyeballs race that a request's deadline cuts off goes on in the background and pools its winner (#6429)
+    /** The HTTP/3 candidate's datagrams are absorbed by a UDP socket on the server's port, and its TCP port never
+        accepts, so the first request's race cannot end within its 500 ms.  After that request has raised
+        \c HTTPCLIENT-TIMEOUT, the UDP socket is replaced by an HTTP/3 listener on the same port: the QUIC client
+        retransmits its handshake, which then completes, and the race, which went on in the background, pools the
+        HTTP/3 connection (signaled by the manager's log message).  A second request reuses it.  Before the change,
+        the race's candidates were closed with the first request's timeout, so no connection could be made on a link
+        slower than the request timeout.
+    */
+    testAbandonedRacePoolsWinner() {
+        # another process may already use the port number for UDP, in which case another port is chosen
+        const int MaxPortAttempts = 20;
+        Socket tcp_hold;
+        Socket udp_hold;
+        int port;
+        for (int attempt = 1; ; ++attempt) {
+            tcp_hold = new Socket();
+            tcp_hold.bind("127.0.0.1:0");
+            tcp_hold.listen();
+            port = tcp_hold.getSocketInfo().port;
+            udp_hold = new Socket();
+            try {
+                udp_hold.bindINET("127.0.0.1", string(port), False, AF_INET, SOCK_DGRAM);
+                break;
+            } catch (hash<ExceptionInfo> ex) {
+                tcp_hold.close();
+                if (ex.err != "SOCKET-BIND-ERROR" || attempt == MaxPortAttempts) {
+                    rethrow;
+                }
+            }
+        }
+        on_exit {
+            udp_hold.close();
+            tcp_hold.close();
+        }
+        string url = "https://127.0.0.1:" + port;
+
+        ConnectWaitLog log();
+        HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{
+            "protocol": "auto",
+            "accept_all_certs": True,
+            "connect_timeout": 30s,
+            "request_timeout": 60s,
+            "logger": log,
+        });
+        on_exit mgr.closeAll();
+
+        Counter pooled = log.signalOn("happy eyeballs: pooled h3 connection");
+        *hash<ExceptionInfo> err = getError(sub () { mgr.request(url, "GET", "/", NOTHING, NOTHING, 500ms); });
+        if (log.getMatching("H3 creation failed")) {
+            testSkip("HTTP/3 is not available");
+        }
+        assertEq("HTTPCLIENT-TIMEOUT", err.err, "the first request times out; got " + describe(err));
+
+        # the HTTP/3 server takes over the port
+        udp_hold.close();
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": new Logger("server", LoggerLevel::getLevelError()),
+        });
+        on_exit server.stop();
+        StallHandler handler();
+        on_exit handler.stall.dec();
+        server.setDefaultHandler("default", handler);
+        try {
+            server.addQuicListener(<HttpListenerOptionInfo>{
+                "node": "127.0.0.1",
+                "cert": new SSLCertificate(CertPem),
+                "key": new SSLPrivateKey(KeyPem),
+            }, port);
+        } catch (hash<ExceptionInfo> ex) {
+            testSkip("QUIC listener not available: " + ex.desc);
+        }
+        server.waitForAsyncIo();
+
+        assertEq(0, pooled.waitForZero(60s), "the race that went on in the background pools its HTTP/3 winner");
+        hash<auto> resp = mgr.request(url, "GET", "/", NOTHING, NOTHING, 30s);
+        assertEq(200, resp.status_code, "the second request succeeds");
+        assertEq(1, log.getMatching("reusing h3 connection").size(), "the second request reuses the winner");
+        assertEq(1, log.getMatching("happy eyeballs: starting H3 \\+ H2 race").size(), "one race");
     }
 
     #! Returns a connection manager with the "auto" protocol whose connect timeout is far beyond the requests' ones

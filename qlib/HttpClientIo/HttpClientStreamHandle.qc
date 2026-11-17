@@ -95,8 +95,15 @@ public class HttpClientStreamHandle {
         #! Request timeout
         timeout request_timeout;
 
-        #! The deadline of the whole request that the stream belongs to, if any; see @ref setRequestDeadline()
-        *date request_deadline;
+        #! The deadline of the whole request that the stream belongs to, if any, on the monotonic clock (µs); see
+        #! @ref setRequestDeadline()
+        *int request_deadline;
+
+        #! True if the last wait for the connection to become ready was bounded by @ref request_deadline
+        bool ready_wait_deadline_bound = False;
+
+        #! True once a wait of the stream ended at @ref request_deadline; see @ref requestDeadlineExpired()
+        bool request_deadline_expired = False;
 
         #! The timeout of the whole request that the stream belongs to, for error messages
         *timeout request_limit;
@@ -261,24 +268,22 @@ public class HttpClientStreamHandle {
     }
 
     #! Ends a readiness wait that expired: gives up the stream's reservation and raises the error of the connect phase
-    /** Readiness waits are bounded by the request budget, and the transport's own
+    /** Readiness waits are bounded by the request's time, and the transport's own
         connect-phase deadline (armed with \c connect_timeout at connection
         creation) normally fails the connection first, making
         @ref HttpClientConnection::waitForReady() "waitForReady()" throw the
         transport error directly.  This backstop only runs when the wait itself
         expired.
 
-        Other requests can wait for the same connection, each with its own deadline: the stream's reservation is
-        released, and the connection is closed only if no other request has a stream reserved or active on it (see
-        @ref HttpClientConnection::releaseExpiredReservation()); otherwise it keeps connecting for them, bounded by
-        its own connect timeout (#6430).
+        The stream's reservation is released, and the connection is not closed: the deadline belongs to the request,
+        not to the connection, which keeps connecting, bounded by its own connect timeout; other requests can wait
+        for it, and once it is ready, the connection manager's later requests use it (#6429, #6430).
 
-        The connection's error is read before the connection is closed: a transport error recorded by then
-        is surfaced so protocol-specific connect failures (e.g. \c QUIC-HANDSHAKE-TIMEOUT) stay diagnosable and keep
-        driving the connection manager's connection-error retry/fallback logic.  The close aborts the connect
-        operation, and the error that the abort records (\c HTTP2-ABORT for HTTP/2) is no transport error: without
-        an error before the close, the request ran out of its time in the connect phase, which is
-        \c HTTPCLIENT-TIMEOUT for every protocol (#6427).
+        A transport error that the connection recorded by then is surfaced so protocol-specific connect failures
+        (e.g. \c QUIC-HANDSHAKE-TIMEOUT) stay diagnosable and keep driving the connection manager's connection-error
+        retry/fallback logic; otherwise the request ran out of its time in the connect phase, which is
+        \c HTTPCLIENT-TIMEOUT for every protocol (#6427), and @ref requestDeadlineExpired() returns @ref True if the
+        wait was bounded by the request's deadline.
 
         @throw HTTPCLIENT-CONNECT-ERROR the connection failed with a transport-level
         error
@@ -290,10 +295,7 @@ public class HttpClientStreamHandle {
         genuinely timed out
     */
     private throwConnectWaitExpired() {
-        # read before the close, which records an error of its own (see above)
         *hash<auto> err = conn.getPollOperation().getError();
-        # the reservation is released, and the connection closed through the connection (so that the controller
-        # cancels the poll op and closes its socket) only if no other request uses it
         bool reserved = reservation_held;
         reservation_held = False;
         conn.releaseExpiredReservation(reserved);
@@ -303,6 +305,9 @@ public class HttpClientStreamHandle {
         if (err) {
             throw "HTTPCLIENT-CONNECT-ERROR",
                 sprintf("connection closed: %s: %s", err.err ?? "UNKNOWN", err.desc ?? "unknown"), err;
+        }
+        if (ready_wait_deadline_bound) {
+            request_deadline_expired = True;
         }
         throw "HTTPCLIENT-TIMEOUT", "connection establishment timed out";
     }
@@ -443,23 +448,46 @@ public class HttpClientStreamHandle {
         its connection, the wait for the connection to become ready, and the wait for the response share one
         deadline (#6429).  The wait of @ref request() for the response and the waits for the connection to become
         ready (also in @ref submitAsync() and @ref startStreaming()) end at this deadline at the latest; a timeout
-        error then states the request's timeout.  Sending data on a stream (@ref sendData()) is not bounded by it.
+        error then states the request's timeout, and @ref requestDeadlineExpired() returns @ref True.  Sending data on
+        a stream (@ref sendData()) is not bounded by it.
 
-        @param deadline the deadline of the request; @ref nothing removes it
+        @param deadline_us the deadline of the request on the monotonic clock, in microseconds, as returned by
+        @ref Qore::clock_get_monotonic_us() "clock_get_monotonic_us()"; @ref nothing removes it
         @param limit the request's timeout, for error messages
 
         @since HttpClientIo 1.0
     */
-    setRequestDeadline(*date deadline, *timeout limit) {
-        request_deadline = deadline;
+    setRequestDeadline(*int deadline_us, *timeout limit) {
+        request_deadline = deadline_us;
         request_limit = limit;
     }
 
     #! Returns the deadline of the whole request that the stream belongs to, if any; see @ref setRequestDeadline()
-    /** @since HttpClientIo 1.0
+    /** @return the deadline on the monotonic clock, in microseconds, as returned by
+        @ref Qore::clock_get_monotonic_us() "clock_get_monotonic_us()", or @ref nothing
+
+        @since HttpClientIo 1.0
     */
-    *date getRequestDeadline() {
+    *int getRequestDeadline() {
         return request_deadline;
+    }
+
+    #! Returns @ref True if a wait of the stream ended because the deadline of its request passed
+    /** The connection manager does not send a request again once this is @ref True, whatever the clock says when it
+        decides (#6429); see @ref setRequestDeadline()
+
+        @since HttpClientIo 1.0
+    */
+    bool requestDeadlineExpired() {
+        return request_deadline_expired;
+    }
+
+    #! Returns the time left until the request's deadline in milliseconds, rounded up, at least 1
+    /** Rounded up, so that a wait for the returned time does not end before the deadline
+    */
+    private int getRequestDeadlineWaitMs() {
+        int left_us = request_deadline - clock_get_monotonic_us();
+        return left_us > 0 ? (left_us + 999) / 1000 : 1;
     }
 
     #! Returns True if a request has been submitted on this stream
@@ -570,10 +598,12 @@ public class HttpClientStreamHandle {
     */
     private timeout getReadyWait() {
         timeout wait = getConnectWait();
+        ready_wait_deadline_bound = False;
         if (request_deadline) {
-            int remaining = max(1, (request_deadline - now_us()).durationMilliseconds());
-            if (!wait || remaining < wait) {
+            int remaining = getRequestDeadlineWaitMs();
+            if (!wait || remaining <= wait) {
                 wait = remaining;
+                ready_wait_deadline_bound = True;
             }
         }
         return wait;
@@ -639,9 +669,8 @@ public class HttpClientStreamHandle {
 
         @note Other requests can wait for the same connection while it connects (see
         @ref HttpClientConnectionManager::acquireStream()), each with its own timeout: a request whose time runs out
-        first gives up only its own stream, and the connection is closed only if no other request waits for it or uses
-        it, including asynchronous waiters (see @ref HttpClientConnection::registerReadyNotifier()); otherwise it keeps
-        connecting, bounded by its connect timeout
+        gives up only its own stream, and the connection is not closed: it keeps connecting, bounded by its connect
+        timeout, and once ready, it is used by later requests
     */
     hash<auto> request(string method, string path, *hash<auto> headers, *data body,
             *timeout timeout_ms) {
@@ -650,11 +679,16 @@ public class HttpClientStreamHandle {
         timeout wait_timeout = timeout_ms ?? request_timeout;
         *date end_time = wait_timeout > 0 ? now_us() + milliseconds(wait_timeout) : NOTHING;
         # the deadline of the whole request, if earlier, ends the waits; the error then states the request's timeout
-        # (#6429)
-        if (request_deadline && (!end_time || request_deadline < end_time)) {
-            end_time = request_deadline;
-            if (request_limit) {
-                wait_timeout = request_limit;
+        # (#6429); it is on the monotonic clock, and converted to an end time of this call's waits here
+        bool deadline_bound = False;
+        if (request_deadline) {
+            date request_end = now_us() + microseconds(request_deadline - clock_get_monotonic_us());
+            if (!end_time || request_end <= end_time) {
+                end_time = request_end;
+                deadline_bound = True;
+                if (request_limit) {
+                    wait_timeout = request_limit;
+                }
             }
         }
 
@@ -673,13 +707,15 @@ public class HttpClientStreamHandle {
             # timeout and the connection manager's connection-error
             # retry/fallback logic would never fire.
             # without an overall deadline, the transport's own connect deadline ends the wait
-            date remaining = end_time ? end_time - now_us() : milliseconds(connect_timeout * 2);
-            if (remaining <= 0us) {
-                # the reservation is released, and the connection closed only if no other request waits for it
-                # (#6430)
+            # rounded up to milliseconds, so that the wait does not end before the deadline
+            int remaining_ms = end_time
+                ? ((end_time - now_us()).durationMicroseconds() + 999) / 1000
+                : connect_timeout * 2;
+            ready_wait_deadline_bound = deadline_bound;
+            if (remaining_ms <= 0) {
                 throwConnectWaitExpired();
             }
-            if (!conn.waitForReady(timeout_ms: remaining)) {
+            if (!conn.waitForReady(timeout_ms: remaining_ms)) {
                 throwConnectWaitExpired();
             }
         }
@@ -715,6 +751,12 @@ public class HttpClientStreamHandle {
         } catch (hash<ExceptionInfo> ex) {
             if (ex.err == "HTTPCLIENT-CANCELLED") {
                 throw "HTTPCLIENT-CANCELLED", "request was cancelled";
+            }
+            # a response wait that ended at the request's deadline (#6429); not an inactivity timeout (io_timeout),
+            # which ends the wait earlier: waitForResponse() raises the deadline's timeout only once the end time has
+            # passed on this clock, so the comparison is exact
+            if (ex.err == "HTTPCLIENT-TIMEOUT" && deadline_bound && now_us() >= end_time) {
+                request_deadline_expired = True;
             }
             # Let connection errors and the errors of requests that the server refused propagate unwrapped so the
             # connection manager can detect, evict dead connections, and send the request again

@@ -483,6 +483,16 @@ therefore ends the request with `HTTPCLIENT-TIMEOUT`.  A timeout on a fresh conn
 connection that never became ready (a pending connection that other requests may also wait for), is
 never retried.
 
+The deadline belongs to the request, not to the connection: a request whose time runs out while its
+connection is still connecting releases only its own stream reservation, and the connection keeps
+connecting, bounded by `connect_timeout`, for other waiters and later requests.  A synchronous
+happy-eyeballs race that the caller's deadline cuts off goes on in a background thread (counted in
+`in_flight`, its candidates closed by `closeAll()`), with the creation of the key still claimed, and its
+winner is pooled; so a link slower than the request timeout still gets a connection.  Deadlines are on
+the monotonic clock (`clock_get_monotonic_us()`), and waits are rounded up to milliseconds; whether a
+request may be sent again is decided by the stream's `requestDeadlineExpired()` flag, not by comparing
+clocks after a wait.
+
 ## Module Registration
 
 ### CMakeLists.txt
