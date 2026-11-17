@@ -184,6 +184,13 @@ $env:QORE_CONNECTION_PROVIDERS="MyConnectionProvider;OtherConnectionProvider"
 
 
     @section connectionprovider_3_1 ConnectionProvider 3.1
+    - the errors of the validation of connection options
+      (@ref ConnectionProvider::ConnectionSchemeCache::validateConnectionOptions()
+      "ConnectionSchemeCache::validateConnectionOptions()") name the options; they no longer contain the options
+      provided, unknown options or a value of a wrong type, nor any value of an option marked \c sensitive, which can
+      be a credential; for an option that is not sensitive, a value that is not allowed or a string that is not a
+      date is still given, and a string that is not a date raises \c CONNECTION-OPTION-ERROR
+      (<a href="https://github.com/qoretechnologies/qore/issues/6467">issue 6467</a>)
     - @ref ConnectionProvider::AbstractConnection::parseUrl() "AbstractConnection::parseUrl()" is declared to return
       \c hash<auto>, as a connection with another URL scheme returns its own hash (see @ref override_return_types)
     - a sandboxed caller is refused the I/O of a connection whose class belongs to a module that registers a data

@@ -69,6 +69,8 @@ module TelnetClient {
     @section telnetclient_relnotes TelnetClient Module Release Notes
 
     @subsection telnetclient_v1_8 TelnetClient v1.8
+    - errors no longer contain the values of options or credentials, which can be passwords or tokens
+      (<a href="https://github.com/qoretechnologies/qore/issues/6467">issue 6467</a>)
     - @ref TelnetClient::TelnetClient::sendTextData() "TelnetClient::sendTextData()" doubles each IAC byte (\c 0xff) in
       the text, as the telnet protocol requires for data; before, text with a 0xff byte (for example \c "ÿ" in
       ISO-8859-1) was read by the server as the start of a command
@@ -372,10 +374,11 @@ public class TelnetClient {
         if (connect =~ /^[^:]+:\/\//) {
             hash h = parse_url(connect);
             if (h.protocol != "telnet")
-                throw "INVALID-TARGET", sprintf("URL %y contains invalid scheme %y; expecting \"telnet\"", connect, h.protocol);
+                throw "INVALID-TARGET", sprintf("URL %y contains invalid scheme %y; expecting \"telnet\"", get_masked_url(connect), h.protocol);
             foreach string key in ("username", "password", "path") {
                 if (h{key})
-                    throw "INVALID-TARGET", sprintf("URL %y contains a value for the %s which is not supported, remove this value from the URL and try again", connect, key);
+                    # the URL is given without its password
+                    throw "INVALID-TARGET", sprintf("URL %y contains a value for the %s which is not supported, remove this value from the URL and try again", get_masked_url(connect), key);
             }
             connect = h.host;
             # if there is no port and the host is not a path for a UNIX domain socket, then add the default telnet port

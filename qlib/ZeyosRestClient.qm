@@ -91,6 +91,8 @@ printf("Response body: %Y\n", response.body);
     @section Zeyosrestclientrelnotes Release Notes
 
     @subsection Zeyosrestclientv1_2 ZeyosRestClient v1.2
+    - errors no longer contain the values of options or credentials, which can be passwords or tokens
+      (<a href="https://github.com/qoretechnologies/qore/issues/6467">issue 6467</a>)
     - fixed the login: \c loginIntern() overrides the method of \c RestClient, so a login that
       @ref RestClient::RestClient "RestClient" makes itself (such as a refresh of the token) uses the Zeyos login
     - added the @ref ZeyosRestClient::ZeyosRestClientIo "ZeyosRestClientIo" class, which makes the
@@ -220,9 +222,10 @@ ZeyosRestClient zeyos(
                     throw "ZEYOSRESTCLIENT-ERROR", sprintf("missing required option %y", key);
                 }
                 if (value.typeCode() != NT_STRING) {
+                    # only the type of the value, which can be a credential
                     throw "ZEYOSRESTCLIENT-ERROR",
-                            sprintf("required option %y was passed as a %s (%y); expecting \"string\"",
-                                    key, value.type(), value);
+                            sprintf("required option %y was passed as a %s; expecting \"string\"",
+                                    key, value.type());
                 }
                 self{key} = value;
             }
