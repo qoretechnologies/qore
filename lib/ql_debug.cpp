@@ -22405,6 +22405,15 @@ static QoreValue f_dbg_get_lvalue_scan_count(const QoreListNode* params, Runtime
     return q_get_lvalue_scan_count();
 }
 
+//! returns the number of parent class edges that the checks of the generic parent instantiations have visited
+/** In all threads, since the library was loaded: a test takes the difference over a parse, so that it can require a
+    bound on the steps of the checks of the classes that the parse declares (qore#6423)
+*/
+static QoreValue f_dbg_generic_parent_check_steps(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return qore_generic_parent_check_steps.load(std::memory_order_relaxed);
+}
+
 //! returns the number of values visited by removal bookkeeping in the current thread
 static QoreValue f_dbg_get_lvalue_removal_visit_count(const QoreListNode* params, RuntimeConfig& rc,
         ExceptionSink* xsink) {
@@ -26378,6 +26387,8 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_arg_presence", f_dbg_arg_presence, QCF_USES_EXTRA_ARGS, QDOM_DEBUG_HOOK,
         listTypeInfo);
     qns.addBuiltinVariant("dbg_get_lvalue_scan_count", f_dbg_get_lvalue_scan_count, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_generic_parent_check_steps", f_dbg_generic_parent_check_steps, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_get_lvalue_removal_visit_count", f_dbg_get_lvalue_removal_visit_count, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);

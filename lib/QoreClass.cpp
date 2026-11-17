@@ -6792,6 +6792,10 @@ void collect_hierarchy_functions(const qore_class_private& qc, const std::string
 
 } // namespace
 
+#ifdef DEBUG
+std::atomic<int64> qore_generic_parent_check_steps{0};
+#endif
+
 namespace {
 
 //! an instantiation of a generic class that a class inherits, and the direct parent class through which it does
@@ -6810,15 +6814,29 @@ std::string generic_parent_name(const QoreTypeInfo* type) {
     return str;
 }
 
+//! the parent classes that a walk of collect_generic_parents() has expanded, with the name of the type arguments that
+//! it was given for each (empty for none)
+typedef std::set<std::pair<const qore_class_private*, std::string>> generic_parents_expanded_t;
+
 //! collects the instantiations of the generic classes that \a cls inherits through all paths, in the order of the
 //! parent classes; returns false and fills \a first and \a second if one class has two different instantiations
+/** Each parent class is expanded once for the type arguments that the walk gives it (\a expanded): a class reached
+    again through another path (a diamond) gives the instantiations that it gave when it was first reached, which are
+    collected and compared already, so a walk takes steps linear in the parent class edges of the hierarchy, not in
+    its paths, which a lattice of classes multiplies with each level (qore#6423).  Leaving them out changes neither
+    the first two different instantiations found nor the paths that they are reported through: an instantiation that
+    is reached again was compared with every other when it was first collected.  The type arguments are compared by
+    name: a type parameter left in them is one of the class whose instantiations are checked, the same on every path,
+    or one of a generic parent class inherited without type arguments, whose instantiations are never compared.
+*/
 bool collect_generic_parents(const qore_class_private& cls, const QoreTypeInfo* source, const std::string& via,
         std::vector<GenericParentSeen>& seen, std::unordered_set<const qore_class_private*>& path,
-        GenericParentSeen*& first, GenericParentSeen& second) {
+        generic_parents_expanded_t& expanded, GenericParentSeen*& first, GenericParentSeen& second) {
     if (!cls.scl || !cls.scl->valid) {
         return true;
     }
     for (auto& i : *cls.scl) {
+        QORE_GENERIC_PARENT_CHECK_STEP();
         QoreClass* pc = i->sclass;
         if (!pc) {
             continue;
@@ -6834,21 +6852,37 @@ bool collect_generic_parents(const qore_class_private& cls, const QoreTypeInfo* 
         if (pti) {
             // type arguments that contain a type parameter are known when the class is instantiated
             const bool concrete = !qore_type_contains_type_parameter(subst);
+            bool collected = false;
             for (auto& s : seen) {
-                if (qore_class_private::sameDeclaration(s.base, pti->getBaseClass()) && concrete
-                        && !qore_type_contains_type_parameter(s.type)
-                        && strcmp(QoreTypeInfo::getName(s.type), QoreTypeInfo::getName(subst))) {
+                if (!qore_class_private::sameDeclaration(s.base, pti->getBaseClass())) {
+                    continue;
+                }
+                // the instantiation was collected and compared with the others already
+                if (!strcmp(QoreTypeInfo::getName(s.type), QoreTypeInfo::getName(subst))) {
+                    collected = true;
+                    break;
+                }
+                if (concrete && !qore_type_contains_type_parameter(s.type)) {
                     first = &s;
                     second = {pti->getBaseClass(), subst, pvia};
                     return false;
                 }
             }
-            seen.push_back({pti->getBaseClass(), subst, pvia});
+            if (!collected) {
+                seen.push_back({pti->getBaseClass(), subst, pvia});
+            }
         }
-        if (!path.insert(pcp).second) {
+        // a class on the path is its own ancestor (an error reported by the parse of the hierarchy)
+        if (path.count(pcp)) {
             continue;
         }
-        const bool ok = collect_generic_parents(*pcp, pti ? subst : nullptr, pvia, seen, path, first, second);
+        // a parent class that the walk has expanded for the same type arguments gives nothing new
+        if (!expanded.emplace(pcp, pti ? std::string(QoreTypeInfo::getName(subst)) : std::string()).second) {
+            continue;
+        }
+        path.insert(pcp);
+        const bool ok = collect_generic_parents(*pcp, pti ? subst : nullptr, pvia, seen, path, expanded, first,
+            second);
         path.erase(pcp);
         if (!ok) {
             return false;
@@ -6866,9 +6900,10 @@ int qore_class_private::parseCheckGenericParentInstantiations() const {
     std::vector<GenericParentSeen> seen;
     std::unordered_set<const qore_class_private*> path;
     path.insert(this);
+    generic_parents_expanded_t expanded;
     GenericParentSeen* first = nullptr;
     GenericParentSeen second;
-    if (collect_generic_parents(*this, nullptr, std::string(), seen, path, first, second)) {
+    if (collect_generic_parents(*this, nullptr, std::string(), seen, path, expanded, first, second)) {
         return 0;
     }
     parse_error(*loc, "class '%s' inherits generic class '%s' with different type arguments: '%s' through '%s' and "
