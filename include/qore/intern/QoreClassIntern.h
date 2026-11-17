@@ -33,6 +33,7 @@
 
 #define _QORE_QORECLASSINTERN_H
 
+#include <functional>
 #include <mutex>
 #include "qore/safe_dslist"
 #include "qore/intern/QoreTypeOwner.h"
@@ -2900,6 +2901,15 @@ public:
         only looks for the accessors of such classes
     */
     bool has_member_accessors = false;
+    //! Set when code in other threads can reach the class (issue #6422)
+    /** A builtin class committed into a namespace (QoreNamespace::addSystemClass()) outside a module's
+        initialization, a builtin class committed during a module's initialization once the initialization has
+        returned, and a user class when it is committed.  From then on other threads can read the class's members and
+        flags without a lock, so a module can no longer add a member through the API (QoreClass::addMember(),
+        QoreClass::addBuiltinMemberWithAccessors()); only the API's additions read it, under the lock that also
+        serializes its setting.
+    */
+    std::atomic<bool> reachable{false};
 
     DLLLOCAL QoreValue evalMemberWriteGate(QoreObject* self, const char* member, QoreValue value,
         QoreMemberWriteOp operation, ExceptionSink* xsink) const;
@@ -2921,6 +2931,23 @@ public:
         }
         return findAccessorMember(mem) != nullptr;
     }
+
+    //! marks the class as reachable by code in other threads (issue #6422)
+    DLLLOCAL void markReachable();
+
+    //! called when a builtin class is committed into a namespace: marks it reachable now, or when the module whose
+    //! initialization is running returns from it (issue #6422)
+    DLLLOCAL void systemClassCommitted();
+
+    //! returns true if code in other threads can reach the class
+    DLLLOCAL bool isReachable() const {
+        return reachable.load(std::memory_order_acquire);
+    }
+
+    //! adds a member through the API, unless the class is reachable; returns -1 with CLASS-MEMBER-ADD-ERROR then
+    /** \a add makes the addition, under the lock that serializes the marking (issue #6422)
+    */
+    DLLLOCAL int addMemberApi(const char* mem, ExceptionSink* xsink, const std::function<void()>& add);
 
     //! adds a declared member whose value is held in external storage; see QoreClass::addBuiltinMemberWithAccessors()
     DLLLOCAL void addBuiltinMemberWithAccessors(const char* mem, ClassAccess access, const QoreTypeInfo* n_typeinfo,
@@ -6193,6 +6220,23 @@ public:
         assert(this->valid());
         return this->i->first;
     }
+};
+
+//! Collects the builtin classes that a module commits into namespaces during its initialization (issue #6422)
+/** They become reachable by code in other threads when the initialization returns (commit()); nested module loads
+    stack
+*/
+class QoreModuleInitClassesHelper {
+public:
+    DLLLOCAL QoreModuleInitClassesHelper();
+    DLLLOCAL ~QoreModuleInitClassesHelper();
+
+    //! marks the classes as reachable; called when the module's initialization has returned without an error
+    DLLLOCAL void commit();
+
+private:
+    std::vector<qore_class_private*> classes;
+    std::vector<qore_class_private*>* prev;
 };
 
 #endif
