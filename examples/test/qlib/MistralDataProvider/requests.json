@@ -482,5 +482,106 @@
   },
   "delete-connector": {
     "connector_id_or_name": "00000000-0000-4000-8000-000000000001"
+  },
+  "search-logs": {},
+  "list-log-fields": {},
+  "list-log-field-options": {
+    "field_name": "service_name"
+  },
+  "search-traces": {},
+  "aggregate-traces": {
+    "metric": {
+      "measure": "duration_ns",
+      "aggregation": "avg"
+    }
+  },
+  "list-trace-fields": {},
+  "list-trace-field-options": {
+    "field_name": "service_name"
+  },
+  "get-trace": {
+    "trace_id": "0123456789abcdef0123456789abcdef"
+  },
+  "list-trace-spans": {
+    "trace_id": "0123456789abcdef0123456789abcdef"
+  },
+  "get-trace-span": {
+    "trace_id": "0123456789abcdef0123456789abcdef",
+    "span_id": "0123456789abcdef"
+  },
+  "search-spans": {},
+  "aggregate-spans": {
+    "metric": {
+      "measure": "duration_ns",
+      "aggregation": "avg"
+    }
+  },
+  "list-span-fields": {},
+  "list-span-field-options": {
+    "field_name": "request_model"
+  },
+  "search-span-evaluations": {},
+  "search-latest-span-evaluations": {},
+  "aggregate-span-evaluations": {
+    "metric": {
+      "measure": "duration_ns",
+      "aggregation": "avg"
+    }
+  },
+  "list-span-evaluation-fields": {},
+  "list-span-evaluation-field-options": {
+    "field_name": "score"
+  },
+  "list-pipelines": {},
+  "create-pipeline": {
+    "name": "test-value",
+    "selectors": [
+      {
+        "source_kind": "span"
+      }
+    ],
+    "definitions": [
+      {
+        "slug": "test-value"
+      }
+    ]
+  },
+  "get-pipeline": {
+    "pipeline_id": "00000000-0000-4000-8000-000000000002"
+  },
+  "update-pipeline": {
+    "pipeline_id": "00000000-0000-4000-8000-000000000002"
+  },
+  "delete-pipeline": {
+    "pipeline_id": "00000000-0000-4000-8000-000000000002"
+  },
+  "list-pipeline-result-fields": {
+    "pipeline_id": "00000000-0000-4000-8000-000000000002"
+  },
+  "search-pipeline-results": {
+    "pipeline_config_slugs": [
+      "test-value"
+    ]
+  },
+  "import-dataset-from-spans": {
+    "dataset_id": "00000000-0000-4000-8000-000000000001",
+    "span_references": [
+      {
+        "trace_id": "0123456789abcdef0123456789abcdef",
+        "span_id": "0123456789abcdef"
+      }
+    ],
+    "mapping_contract": {
+      "version": 1,
+      "mappings": [
+        {
+          "target_field": "input",
+          "source_field": {
+            "namespace": "span_attributes",
+            "key": "gen_ai.prompt"
+          }
+        }
+      ]
+    }
   }
 }

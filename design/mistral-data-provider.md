@@ -1,6 +1,6 @@
 # Mistral data provider
 
-MistralDataProvider 1.1 exposes 137 completed-response operations from Mistral's official
+MistralDataProvider 1.1 exposes 164 completed-response operations from Mistral's official
 OpenAPI document, vendored in the module (see below).
 The original `chat-completion`, `create-embeddings`, and `ocr` action IDs and public
 provider classes are retained. Their request and response classes now use the
@@ -9,19 +9,29 @@ Chat responses retain the original epoch-to-date conversion of `created`.
 
 The committed schema determines paths, HTTP methods, requiredness, nested types,
 validation, and wire formats. `MistralManifest` selects stable action names and adds
-presentation, finite choices, examples, and 21 resource dropdowns. Nullable enums
+presentation, finite choices, examples, and 26 resource dropdowns. Nullable enums
 and arrays retain the same choices and element lookups as their non-nullable forms.
 Parent-scoped dropdowns require the selected library, agent, conversation, or dataset. Listings fetch one
 page; custom identifiers remain accepted and normal action options expose pagination. Dataset-record selectors enumerate one page of records
 for each dataset in the first dataset page, because records are addressed globally but listed per dataset.
 
-The 137 actions cover models, chat, fill-in-the-middle completion, embeddings,
+The 164 actions cover models, chat, fill-in-the-middle completion, embeddings,
 moderation/classification, files, batch inference, OCR, audio, agents, conversations,
-libraries and documents, connectors and their credentials, evaluation datasets, and workflows,
-from 133 of the document's 347 operations (some operations back more than one action). The
-others are not exported: deprecated operations, streaming-only variants (streaming chat belongs
-to the Mistral LLM provider), and APIs that no action covers yet, such as administration, observability logs, traces, spans and pipelines, prompts, skills, triggers and
-webhooks. Publishing an upstream operation requires an explicit manifest change.
+libraries and documents, connectors and their credentials, evaluation datasets, observability
+(logs, traces, spans, span evaluations and evaluation pipelines), and workflows, from 160 of the
+document's 347 operations (some operations back more than one action). The others are not
+exported: deprecated operations, streaming-only variants (streaming chat belongs to the Mistral
+LLM provider), and APIs that no action covers yet, such as administration, the observability
+projects, evaluations, evaluation runs, optimizations and scorers, prompts, skills, triggers and
+webhooks (qore#6503). Publishing an upstream operation requires an explicit
+manifest change.
+
+The observability search and aggregation actions take a search expression over the fields that
+the matching `list-*-fields` action lists; the `field_name` of a `list-*-field-options` action is
+chosen from that list (`log-fields`, `trace-fields`, `span-fields`, `span-evaluation-fields`), and
+a pipeline from `pipelines`. Observability is a preview API: the account used for the live tests
+answers 403 for traces, spans, evaluations and pipelines and 404 (with an empty body) for the log
+operations, so `MistralLive.qtest` skips them there.
 
 `MistralSchema` records upstream provenance and loads the vendored JSON resource
 under a mutex. Module initialization builds and registers the action set; execution

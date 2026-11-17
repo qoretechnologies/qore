@@ -5028,6 +5028,101 @@
         "description": "Populate the dataset with records from playground conversations"
       }
     },
+    "/v1/observability/datasets/{dataset_id}/imports/from-spans": {
+      "post": {
+        "operationId": "post_dataset_records_from_spans_v1_observability_datasets__dataset_id__imports_from_spans_post",
+        "summary": "Populate the dataset with records mapped from telemetry spans",
+        "description": "Starts an asynchronous import of the requested telemetry spans. References not returned by the tenant-scoped telemetry query are skipped without distinguishing absence from access restrictions.",
+        "tags": [
+          "beta.observability.datasets"
+        ],
+        "parameters": [
+          {
+            "name": "dataset_id",
+            "in": "path",
+            "description": "Dataset UUID or workspace-scoped slug. UUID-shaped values are always interpreted as dataset IDs.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Dataset Id",
+              "description": "Dataset UUID or workspace-scoped slug. UUID-shaped values are always interpreted as dataset IDs."
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportDatasetFromSpansRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatasetImportTask"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request - Invalid request parameters or data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found - Resource does not exist",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          },
+          "408": {
+            "description": "Request Timeout - Operation timed out",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict - Resource conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity - Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/observability/datasets/{dataset_id}/imports/from-dataset": {
       "post": {
         "operationId": "post_dataset_records_from_dataset_v1_observability_datasets__dataset_id__imports_from_dataset_post",
@@ -5818,6 +5913,2937 @@
           }
         },
         "description": "Update dataset record properties"
+      }
+    },
+    "/v1/observability/pipelines": {
+      "post": {
+        "operationId": "create_pipeline_v1_observability_pipelines_post",
+        "summary": "Create a pipeline",
+        "tags": [
+          "beta.observability.evaluations"
+        ],
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreatePipelineRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Pipeline"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request - Invalid request parameters or data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found - Resource does not exist",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          },
+          "408": {
+            "description": "Request Timeout - Operation timed out",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict - Resource conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity - Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          }
+        },
+        "description": "Create a pipeline"
+      },
+      "get": {
+        "operationId": "list_pipelines_v1_observability_pipelines_get",
+        "summary": "List pipelines",
+        "tags": [
+          "beta.observability.evaluations"
+        ],
+        "parameters": [
+          {
+            "name": "enabled",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Enabled"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "From"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "To"
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "title": "Page Size",
+              "maximum": 100,
+              "minimum": 0,
+              "default": 50
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "title": "Page",
+              "minimum": 1,
+              "default": 1
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PipelinesResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request - Invalid request parameters or data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found - Resource does not exist",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          },
+          "408": {
+            "description": "Request Timeout - Operation timed out",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict - Resource conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity - Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          }
+        },
+        "description": "List pipelines",
+        "x-speakeasy-max-method-params": 6
+      }
+    },
+    "/v1/observability/pipelines/{pipeline_id}": {
+      "get": {
+        "operationId": "get_pipeline_v1_observability_pipelines__pipeline_id__get",
+        "summary": "Get a pipeline",
+        "tags": [
+          "beta.observability.evaluations"
+        ],
+        "parameters": [
+          {
+            "name": "pipeline_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Pipeline Id",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Pipeline"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request - Invalid request parameters or data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found - Resource does not exist",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          },
+          "408": {
+            "description": "Request Timeout - Operation timed out",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict - Resource conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity - Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          }
+        },
+        "description": "Get a pipeline"
+      },
+      "put": {
+        "operationId": "update_pipeline_v1_observability_pipelines__pipeline_id__put",
+        "summary": "Update a pipeline",
+        "tags": [
+          "beta.observability.evaluations"
+        ],
+        "parameters": [
+          {
+            "name": "pipeline_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Pipeline Id",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdatePipelineRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Pipeline"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request - Invalid request parameters or data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found - Resource does not exist",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          },
+          "408": {
+            "description": "Request Timeout - Operation timed out",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict - Resource conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity - Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          }
+        },
+        "description": "Update a pipeline"
+      },
+      "delete": {
+        "operationId": "delete_pipeline_v1_observability_pipelines__pipeline_id__delete",
+        "summary": "Delete a pipeline",
+        "tags": [
+          "beta.observability.evaluations"
+        ],
+        "parameters": [
+          {
+            "name": "pipeline_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Pipeline Id",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "400": {
+            "description": "Bad Request - Invalid request parameters or data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found - Resource does not exist",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          },
+          "408": {
+            "description": "Request Timeout - Operation timed out",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict - Resource conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity - Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          }
+        },
+        "description": "Delete a pipeline"
+      }
+    },
+    "/v1/observability/logs/search": {
+      "post": {
+        "operationId": "search_logs_v1_observability_logs_search_post",
+        "summary": "Search logs",
+        "tags": [
+          "beta.observability.logs"
+        ],
+        "parameters": [
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "From"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "To"
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "title": "Page Size",
+              "maximum": 100,
+              "minimum": 0,
+              "default": 50
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LogsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetLogs"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request - Invalid request parameters or data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found - Resource does not exist",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          },
+          "408": {
+            "description": "Request Timeout - Operation timed out",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict - Resource conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity - Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          }
+        },
+        "description": "Search logs",
+        "x-speakeasy-max-method-params": 5
+      }
+    },
+    "/v1/observability/traces/search": {
+      "post": {
+        "operationId": "search_traces_v1_observability_traces_search_post",
+        "summary": "Search traces",
+        "tags": [
+          "beta.observability.traces"
+        ],
+        "parameters": [
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "From"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "To"
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "title": "Page Size",
+              "maximum": 100,
+              "minimum": 0,
+              "default": 50
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TracesRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetTraces"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request - Invalid request parameters or data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found - Resource does not exist",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          },
+          "408": {
+            "description": "Request Timeout - Operation timed out",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict - Resource conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity - Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          }
+        },
+        "description": "Search traces",
+        "x-speakeasy-max-method-params": 5
+      }
+    },
+    "/v1/observability/traces/aggregate": {
+      "post": {
+        "operationId": "aggregate_traces_v1_observability_traces_aggregate_post",
+        "summary": "Aggregate traces",
+        "tags": [
+          "beta.observability.traces"
+        ],
+        "parameters": [
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "From"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "To"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AggregationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Aggregation"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request - Invalid request parameters or data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found - Resource does not exist",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          },
+          "408": {
+            "description": "Request Timeout - Operation timed out",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict - Resource conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity - Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          }
+        },
+        "description": "Aggregate traces"
+      }
+    },
+    "/v1/observability/spans/search": {
+      "post": {
+        "operationId": "search_spans_v1_observability_spans_search_post",
+        "summary": "Search spans",
+        "tags": [
+          "beta.observability.spans"
+        ],
+        "parameters": [
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "From"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "To"
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "title": "Page Size",
+              "maximum": 100,
+              "minimum": 0,
+              "default": 50
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SpansRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetSpans"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request - Invalid request parameters or data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found - Resource does not exist",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          },
+          "408": {
+            "description": "Request Timeout - Operation timed out",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict - Resource conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity - Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          }
+        },
+        "description": "Search spans",
+        "x-speakeasy-max-method-params": 5
+      }
+    },
+    "/v1/observability/spans/aggregate": {
+      "post": {
+        "operationId": "aggregate_spans_v1_observability_spans_aggregate_post",
+        "summary": "Aggregate spans",
+        "tags": [
+          "beta.observability.spans"
+        ],
+        "parameters": [
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "From"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "To"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AggregationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Aggregation"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request - Invalid request parameters or data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found - Resource does not exist",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          },
+          "408": {
+            "description": "Request Timeout - Operation timed out",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict - Resource conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity - Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          }
+        },
+        "description": "Aggregate spans"
+      }
+    },
+    "/v1/observability/spans/evaluations/aggregate": {
+      "post": {
+        "operationId": "aggregate_span_evaluations_v1_observability_spans_evaluations_aggregate_post",
+        "summary": "Aggregate span evaluations",
+        "tags": [
+          "beta.observability.spans"
+        ],
+        "parameters": [
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "From"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "To"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AggregationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Aggregation"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request - Invalid request parameters or data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found - Resource does not exist",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          },
+          "408": {
+            "description": "Request Timeout - Operation timed out",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict - Resource conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity - Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          }
+        },
+        "description": "Aggregate span evaluations"
+      }
+    },
+    "/v1/observability/spans/evaluations/search": {
+      "post": {
+        "operationId": "search_span_evaluations_v1_observability_spans_evaluations_search_post",
+        "summary": "Search span evaluations",
+        "tags": [
+          "beta.observability.spans"
+        ],
+        "parameters": [
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "From"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "To"
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "title": "Page Size",
+              "maximum": 100,
+              "minimum": 0,
+              "default": 50
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SpanEvaluationsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetSpanEvaluations"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request - Invalid request parameters or data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found - Resource does not exist",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          },
+          "408": {
+            "description": "Request Timeout - Operation timed out",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict - Resource conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity - Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          }
+        },
+        "description": "Search span evaluations",
+        "x-speakeasy-max-method-params": 5
+      }
+    },
+    "/v1/observability/spans/evaluations/search/latest": {
+      "post": {
+        "operationId": "search_latest_span_evaluations_v1_observability_spans_evaluations_search_latest_post",
+        "summary": "Search latest span evaluations",
+        "tags": [
+          "beta.observability.spans"
+        ],
+        "parameters": [
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "From"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "To"
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "title": "Page Size",
+              "maximum": 100,
+              "minimum": 0,
+              "default": 50
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SpanEvaluationsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetSpanEvaluations"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request - Invalid request parameters or data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found - Resource does not exist",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          },
+          "408": {
+            "description": "Request Timeout - Operation timed out",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict - Resource conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity - Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          }
+        },
+        "description": "Search latest span evaluations",
+        "x-speakeasy-max-method-params": 5
+      }
+    },
+    "/v1/observability/pipeline-results/search": {
+      "post": {
+        "operationId": "search_pipeline_results_v1_observability_pipeline_results_search_post",
+        "summary": "Search pipeline results",
+        "tags": [
+          "beta.observability.spans"
+        ],
+        "parameters": [
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "From"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "To"
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "title": "Page Size",
+              "maximum": 100,
+              "minimum": 0,
+              "default": 50
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PipelineResultsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetPipelineResults"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request - Invalid request parameters or data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found - Resource does not exist",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          },
+          "408": {
+            "description": "Request Timeout - Operation timed out",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict - Resource conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity - Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          }
+        },
+        "description": "Search pipeline results",
+        "x-speakeasy-max-method-params": 5
+      }
+    },
+    "/v1/observability/pipelines/{pipeline_id}/results/fields": {
+      "get": {
+        "operationId": "get_pipeline_result_fields_v1_observability_pipelines__pipeline_id__results_fields_get",
+        "summary": "Get pipeline result field definitions",
+        "tags": [
+          "beta.observability.spans"
+        ],
+        "parameters": [
+          {
+            "name": "pipeline_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Pipeline Id",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetPipelineResultFields"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request - Invalid request parameters or data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found - Resource does not exist",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          },
+          "408": {
+            "description": "Request Timeout - Operation timed out",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict - Resource conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity - Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          }
+        },
+        "description": "Get pipeline result field definitions"
+      }
+    },
+    "/v1/observability/traces/fields": {
+      "get": {
+        "operationId": "get_trace_fields_v1_observability_traces_fields_get",
+        "summary": "Get trace field definitions",
+        "tags": [
+          "beta.observability.traces"
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetTraceFields"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request - Invalid request parameters or data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found - Resource does not exist",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          },
+          "408": {
+            "description": "Request Timeout - Operation timed out",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict - Resource conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity - Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          }
+        },
+        "description": "Get trace field definitions"
+      }
+    },
+    "/v1/observability/traces/{trace_id}": {
+      "get": {
+        "operationId": "get_trace_by_id_v1_observability_traces__trace_id__get",
+        "summary": "Get trace by id",
+        "tags": [
+          "beta.observability.traces"
+        ],
+        "parameters": [
+          {
+            "name": "trace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Trace Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetTrace"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request - Invalid request parameters or data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found - Resource does not exist",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          },
+          "408": {
+            "description": "Request Timeout - Operation timed out",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict - Resource conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity - Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          }
+        },
+        "description": "Get trace by id"
+      }
+    },
+    "/v1/observability/traces/{trace_id}/spans": {
+      "get": {
+        "operationId": "get_trace_spans_v1_observability_traces__trace_id__spans_get",
+        "summary": "Get trace spans",
+        "tags": [
+          "beta.observability.traces"
+        ],
+        "parameters": [
+          {
+            "name": "trace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Trace Id"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "From"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "To"
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "title": "Page Size",
+              "maximum": 100,
+              "minimum": 0,
+              "default": 50
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetSpans"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request - Invalid request parameters or data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found - Resource does not exist",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          },
+          "408": {
+            "description": "Request Timeout - Operation timed out",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict - Resource conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity - Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          }
+        },
+        "description": "Get trace spans",
+        "x-speakeasy-max-method-params": 5
+      }
+    },
+    "/v1/observability/logs/fields": {
+      "get": {
+        "operationId": "get_log_fields_v1_observability_logs_fields_get",
+        "summary": "Get log field definitions",
+        "tags": [
+          "beta.observability.logs"
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetLogFields"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request - Invalid request parameters or data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found - Resource does not exist",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          },
+          "408": {
+            "description": "Request Timeout - Operation timed out",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict - Resource conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity - Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          }
+        },
+        "description": "Get log field definitions"
+      }
+    },
+    "/v1/observability/spans/fields": {
+      "get": {
+        "operationId": "get_span_fields_v1_observability_spans_fields_get",
+        "summary": "Get span field definitions",
+        "tags": [
+          "beta.observability.spans"
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetSpanFields"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request - Invalid request parameters or data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found - Resource does not exist",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          },
+          "408": {
+            "description": "Request Timeout - Operation timed out",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict - Resource conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity - Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          }
+        },
+        "description": "Get span field definitions"
+      }
+    },
+    "/v1/observability/spans/evaluations/fields": {
+      "get": {
+        "operationId": "get_span_evaluation_fields_v1_observability_spans_evaluations_fields_get",
+        "summary": "Get span evaluation field definitions",
+        "tags": [
+          "beta.observability.spans"
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetSpanEvaluationFields"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request - Invalid request parameters or data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found - Resource does not exist",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          },
+          "408": {
+            "description": "Request Timeout - Operation timed out",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict - Resource conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity - Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          }
+        },
+        "description": "Get span evaluation field definitions"
+      }
+    },
+    "/v1/observability/traces/fields/{field_name}/options": {
+      "get": {
+        "operationId": "get_trace_field_options_v1_observability_traces_fields__field_name__options_get",
+        "summary": "Get options for a trace field",
+        "tags": [
+          "beta.observability.traces"
+        ],
+        "parameters": [
+          {
+            "name": "field_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Field Name"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "From"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "To"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetTraceFieldOptions"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request - Invalid request parameters or data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found - Resource does not exist",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          },
+          "408": {
+            "description": "Request Timeout - Operation timed out",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict - Resource conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity - Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          }
+        },
+        "description": "Get options for a trace field"
+      }
+    },
+    "/v1/observability/logs/fields/{field_name}/options": {
+      "get": {
+        "operationId": "get_log_field_options_v1_observability_logs_fields__field_name__options_get",
+        "summary": "Get options for a log field",
+        "tags": [
+          "beta.observability.logs"
+        ],
+        "parameters": [
+          {
+            "name": "field_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Field Name"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "From"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "To"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetLogFieldOptions"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request - Invalid request parameters or data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found - Resource does not exist",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          },
+          "408": {
+            "description": "Request Timeout - Operation timed out",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict - Resource conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity - Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          }
+        },
+        "description": "Get options for a log field"
+      }
+    },
+    "/v1/observability/spans/fields/{field_name}/options": {
+      "get": {
+        "operationId": "get_span_field_options_v1_observability_spans_fields__field_name__options_get",
+        "summary": "Get options for a span field",
+        "tags": [
+          "beta.observability.spans"
+        ],
+        "parameters": [
+          {
+            "name": "field_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Field Name"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "From"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "To"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetSpanFieldOptions"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request - Invalid request parameters or data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found - Resource does not exist",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          },
+          "408": {
+            "description": "Request Timeout - Operation timed out",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict - Resource conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity - Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          }
+        },
+        "description": "Get options for a span field"
+      }
+    },
+    "/v1/observability/spans/evaluations/fields/{field_name}/options": {
+      "get": {
+        "operationId": "get_span_evaluation_field_options_v1_observability_spans_evaluations_fields__field_name__options_get",
+        "summary": "Get options for a span evaluation field",
+        "tags": [
+          "beta.observability.spans"
+        ],
+        "parameters": [
+          {
+            "name": "field_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Field Name"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "From"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "To"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetSpanEvaluationFieldOptions"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request - Invalid request parameters or data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found - Resource does not exist",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          },
+          "408": {
+            "description": "Request Timeout - Operation timed out",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict - Resource conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity - Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          }
+        },
+        "description": "Get options for a span evaluation field"
+      }
+    },
+    "/v1/observability/traces/{trace_id}/spans/{span_id}": {
+      "get": {
+        "operationId": "get_span_by_id_v1_observability_traces__trace_id__spans__span_id__get",
+        "summary": "Get span by id",
+        "tags": [
+          "beta.observability.traces"
+        ],
+        "parameters": [
+          {
+            "name": "trace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Trace Id"
+            }
+          },
+          {
+            "name": "span_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Span Id"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "From"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "To"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetSpan"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request - Invalid request parameters or data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found - Resource does not exist",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          },
+          "408": {
+            "description": "Request Timeout - Operation timed out",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict - Resource conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity - Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservabilityError"
+                }
+              }
+            }
+          }
+        },
+        "description": "Get span by id"
       }
     },
     "/v1/connectors": {
@@ -16985,6 +20011,133 @@
         "description": "The type of entity, used to share a library.",
         "x-speakeasy-unknown-values": "allow"
       },
+      "AggregationMeta": {
+        "type": "object",
+        "properties": {
+          "from_timestamp": {
+            "type": "string",
+            "title": "From Timestamp",
+            "format": "date-time"
+          },
+          "to_timestamp": {
+            "type": "string",
+            "title": "To Timestamp",
+            "format": "date-time"
+          },
+          "granularity_seconds": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Granularity Seconds"
+          }
+        },
+        "title": "AggregationMeta",
+        "required": [
+          "from_timestamp",
+          "to_timestamp"
+        ]
+      },
+      "Aggregation": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AggregationRow"
+            },
+            "title": "Data"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/AggregationMeta"
+          }
+        },
+        "title": "Aggregation",
+        "required": [
+          "data",
+          "meta"
+        ]
+      },
+      "AggregationRow": {
+        "type": "object",
+        "properties": {
+          "time_bucket": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Time Bucket"
+          },
+          "dimensions": {
+            "type": "object",
+            "title": "Dimensions",
+            "additionalProperties": true
+          },
+          "metric_name": {
+            "type": "string",
+            "title": "Metric Name"
+          },
+          "metric_value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "integer"
+              },
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Metric Value"
+          }
+        },
+        "title": "AggregationRow",
+        "required": [
+          "metric_name"
+        ]
+      },
+      "AttributeHashSampling": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "title": "Type",
+            "default": "attribute_hash",
+            "const": "attribute_hash"
+          },
+          "attribute": {
+            "type": "string",
+            "title": "Attribute",
+            "maxLength": 500,
+            "minLength": 1
+          },
+          "percentage": {
+            "exclusiveMinimum": 0,
+            "type": "number",
+            "title": "Percentage",
+            "maximum": 100
+          }
+        },
+        "title": "AttributeHashSampling",
+        "required": [
+          "attribute",
+          "percentage"
+        ]
+      },
       "BaseTaskStatus": {
         "type": "string",
         "title": "BaseTaskStatus",
@@ -16997,6 +20150,56 @@
           "CONTINUED_AS_NEW",
           "TIMED_OUT",
           "UNKNOWN"
+        ]
+      },
+      "CreatePipelineRequest": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "maxLength": 200,
+            "minLength": 1
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "selectors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PipelineConfigSelector"
+            },
+            "title": "Selectors",
+            "minItems": 1
+          },
+          "definitions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LlmJudgeReference"
+            },
+            "title": "Definitions",
+            "minItems": 1
+          },
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled",
+            "default": true
+          }
+        },
+        "title": "CreatePipelineRequest",
+        "required": [
+          "name",
+          "selectors",
+          "definitions"
         ]
       },
       "DatasetImportResult": {
@@ -17341,6 +20544,1464 @@
           "TELEMETRY_SPAN"
         ]
       },
+      "DetectionDefinitionV1": {
+        "type": "object",
+        "properties": {
+          "target_attributes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "title": "Target Attributes",
+            "minItems": 1
+          },
+          "patterns": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DetectionPattern"
+            },
+            "title": "Patterns",
+            "minItems": 1
+          }
+        },
+        "title": "DetectionDefinitionV1",
+        "required": [
+          "target_attributes",
+          "patterns"
+        ],
+        "additionalProperties": false
+      },
+      "DetectionPattern": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "maxLength": 200,
+            "minLength": 1
+          },
+          "regex": {
+            "type": "string",
+            "title": "Regex",
+            "minLength": 1
+          },
+          "category": {
+            "type": "string",
+            "title": "Category",
+            "maxLength": 200,
+            "minLength": 1
+          },
+          "confidence": {
+            "type": "string",
+            "title": "Confidence",
+            "maxLength": 50,
+            "minLength": 1
+          }
+        },
+        "title": "DetectionPattern",
+        "required": [
+          "name",
+          "regex",
+          "category",
+          "confidence"
+        ],
+        "additionalProperties": false
+      },
+      "EnumConstraints": {
+        "type": "object",
+        "properties": {
+          "options": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Options"
+          }
+        },
+        "title": "EnumConstraints"
+      },
+      "EvaluationBooleanResultSpec": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "title": "Type",
+            "default": "boolean",
+            "const": "boolean"
+          }
+        },
+        "title": "EvaluationBooleanResultSpec"
+      },
+      "EvaluationCategoricalResultSpec": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "title": "Type",
+            "default": "categorical",
+            "const": "categorical"
+          },
+          "labels": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "title": "Labels",
+            "minItems": 1
+          }
+        },
+        "title": "EvaluationCategoricalResultSpec",
+        "required": [
+          "labels"
+        ]
+      },
+      "EvaluationNumericResultSpec": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "title": "Type",
+            "default": "numeric",
+            "const": "numeric"
+          },
+          "min": {
+            "type": "number",
+            "title": "Min"
+          },
+          "max": {
+            "type": "number",
+            "title": "Max"
+          }
+        },
+        "title": "EvaluationNumericResultSpec",
+        "required": [
+          "min",
+          "max"
+        ]
+      },
+      "EvaluationResultSpec": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/EvaluationBooleanResultSpec"
+          },
+          {
+            "$ref": "#/components/schemas/EvaluationCategoricalResultSpec"
+          },
+          {
+            "$ref": "#/components/schemas/EvaluationNumericResultSpec"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "type",
+          "mapping": {
+            "boolean": "#/components/schemas/EvaluationBooleanResultSpec",
+            "categorical": "#/components/schemas/EvaluationCategoricalResultSpec",
+            "numeric": "#/components/schemas/EvaluationNumericResultSpec"
+          }
+        }
+      },
+      "ExportDefinitionV1": {
+        "type": "object",
+        "properties": {
+          "destination": {
+            "$ref": "#/components/schemas/OTLPDestination"
+          }
+        },
+        "title": "ExportDefinitionV1",
+        "required": [
+          "destination"
+        ],
+        "additionalProperties": false
+      },
+      "FloatConstraints": {
+        "type": "object",
+        "properties": {
+          "min": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min"
+          },
+          "max": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max"
+          }
+        },
+        "title": "FloatConstraints"
+      },
+      "GetLogFieldOptions": {
+        "type": "object",
+        "properties": {
+          "options": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Options"
+          }
+        },
+        "title": "GetLogFieldOptions",
+        "required": [
+          "options"
+        ]
+      },
+      "GetLogFields": {
+        "type": "object",
+        "properties": {
+          "field_definitions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OtelFieldDefinition"
+            },
+            "title": "Field Definitions"
+          }
+        },
+        "title": "GetLogFields",
+        "required": [
+          "field_definitions"
+        ]
+      },
+      "GetLog": {
+        "type": "object",
+        "properties": {
+          "customer_id": {
+            "type": "string",
+            "title": "Customer Id"
+          },
+          "organization_id": {
+            "type": "string",
+            "title": "Organization Id"
+          },
+          "workspace_id": {
+            "type": "string",
+            "title": "Workspace Id"
+          },
+          "user_id": {
+            "type": "string",
+            "title": "User Id"
+          },
+          "service_account_id": {
+            "type": "string",
+            "title": "Service Account Id",
+            "default": ""
+          },
+          "timestamp": {
+            "type": "string",
+            "title": "Timestamp",
+            "format": "date-time"
+          },
+          "trace_id": {
+            "type": "string",
+            "title": "Trace Id"
+          },
+          "span_id": {
+            "type": "string",
+            "title": "Span Id"
+          },
+          "trace_flags": {
+            "type": "integer",
+            "title": "Trace Flags"
+          },
+          "severity_text": {
+            "type": "string",
+            "title": "Severity Text"
+          },
+          "severity_number": {
+            "type": "integer",
+            "title": "Severity Number"
+          },
+          "service_name": {
+            "type": "string",
+            "title": "Service Name"
+          },
+          "body": {
+            "type": "string",
+            "title": "Body"
+          },
+          "event_name": {
+            "type": "string",
+            "title": "Event Name"
+          },
+          "resource_schema_url": {
+            "type": "string",
+            "title": "Resource Schema Url"
+          },
+          "resource_attributes": {
+            "type": "object",
+            "title": "Resource Attributes",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "scope_schema_url": {
+            "type": "string",
+            "title": "Scope Schema Url"
+          },
+          "scope_name": {
+            "type": "string",
+            "title": "Scope Name"
+          },
+          "scope_version": {
+            "type": "string",
+            "title": "Scope Version"
+          },
+          "scope_attributes": {
+            "type": "object",
+            "title": "Scope Attributes",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "log_attributes": {
+            "type": "object",
+            "title": "Log Attributes",
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        },
+        "title": "GetLog",
+        "required": [
+          "customer_id",
+          "organization_id",
+          "workspace_id",
+          "user_id",
+          "timestamp",
+          "trace_id",
+          "span_id",
+          "trace_flags",
+          "severity_text",
+          "severity_number",
+          "service_name",
+          "body",
+          "event_name",
+          "resource_schema_url",
+          "resource_attributes",
+          "scope_schema_url",
+          "scope_name",
+          "scope_version",
+          "scope_attributes",
+          "log_attributes"
+        ]
+      },
+      "GetLogs": {
+        "type": "object",
+        "properties": {
+          "logs": {
+            "$ref": "#/components/schemas/FeedResultGetLog"
+          }
+        },
+        "title": "GetLogs",
+        "required": [
+          "logs"
+        ]
+      },
+      "GetPipelineResultFields": {
+        "type": "object",
+        "properties": {
+          "field_definitions": {
+            "type": "array",
+            "items": {
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/OtelEnumFieldDefinition"
+                },
+                {
+                  "$ref": "#/components/schemas/OtelFloatFieldDefinition"
+                }
+              ],
+              "discriminator": {
+                "propertyName": "type",
+                "mapping": {
+                  "ENUM": "#/components/schemas/OtelEnumFieldDefinition",
+                  "FLOAT": "#/components/schemas/OtelFloatFieldDefinition"
+                }
+              }
+            },
+            "title": "Field Definitions"
+          }
+        },
+        "title": "GetPipelineResultFields",
+        "required": [
+          "field_definitions"
+        ]
+      },
+      "GetPipelineResults": {
+        "type": "object",
+        "properties": {
+          "pipeline_results": {
+            "$ref": "#/components/schemas/FeedResultGetPipelineResult"
+          }
+        },
+        "title": "GetPipelineResults",
+        "required": [
+          "pipeline_results"
+        ]
+      },
+      "GetSpanEvaluationFieldOptions": {
+        "type": "object",
+        "properties": {
+          "options": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Options"
+          }
+        },
+        "title": "GetSpanEvaluationFieldOptions",
+        "required": [
+          "options"
+        ]
+      },
+      "GetSpanEvaluationFields": {
+        "type": "object",
+        "properties": {
+          "field_definitions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OtelFieldDefinition"
+            },
+            "title": "Field Definitions"
+          }
+        },
+        "title": "GetSpanEvaluationFields",
+        "required": [
+          "field_definitions"
+        ]
+      },
+      "GetSpanEvaluation": {
+        "type": "object",
+        "properties": {
+          "customer_id": {
+            "type": "string",
+            "title": "Customer Id"
+          },
+          "organization_id": {
+            "type": "string",
+            "title": "Organization Id"
+          },
+          "workspace_id": {
+            "type": "string",
+            "title": "Workspace Id"
+          },
+          "user_id": {
+            "type": "string",
+            "title": "User Id"
+          },
+          "service_account_id": {
+            "type": "string",
+            "title": "Service Account Id",
+            "default": ""
+          },
+          "trace_id": {
+            "type": "string",
+            "title": "Trace Id",
+            "pattern": "^[0-9a-f]{32}$"
+          },
+          "span_id": {
+            "type": "string",
+            "title": "Span Id",
+            "pattern": "^[0-9a-f]{16}$"
+          },
+          "response_id": {
+            "type": "string",
+            "title": "Response Id"
+          },
+          "conversation_id": {
+            "type": "string",
+            "title": "Conversation Id"
+          },
+          "timestamp": {
+            "type": "string",
+            "title": "Timestamp",
+            "format": "date-time"
+          },
+          "evaluation_name": {
+            "type": "string",
+            "title": "Evaluation Name"
+          },
+          "score_value": {
+            "type": "number",
+            "title": "Score Value"
+          },
+          "score_label": {
+            "type": "string",
+            "title": "Score Label"
+          },
+          "explanation": {
+            "type": "string",
+            "title": "Explanation"
+          },
+          "metadata": {
+            "type": "object",
+            "title": "Metadata",
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        },
+        "title": "GetSpanEvaluation",
+        "required": [
+          "customer_id",
+          "organization_id",
+          "workspace_id",
+          "user_id",
+          "trace_id",
+          "span_id",
+          "response_id",
+          "conversation_id",
+          "timestamp",
+          "evaluation_name",
+          "score_value",
+          "score_label",
+          "explanation",
+          "metadata"
+        ]
+      },
+      "GetSpanEvaluations": {
+        "type": "object",
+        "properties": {
+          "span_evaluations": {
+            "$ref": "#/components/schemas/FeedResultGetSpanEvaluation"
+          }
+        },
+        "title": "GetSpanEvaluations",
+        "required": [
+          "span_evaluations"
+        ]
+      },
+      "GetSpanFieldOptions": {
+        "type": "object",
+        "properties": {
+          "options": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Options"
+          }
+        },
+        "title": "GetSpanFieldOptions",
+        "required": [
+          "options"
+        ]
+      },
+      "GetSpanFields": {
+        "type": "object",
+        "properties": {
+          "field_definitions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OtelFieldDefinition"
+            },
+            "title": "Field Definitions"
+          }
+        },
+        "title": "GetSpanFields",
+        "required": [
+          "field_definitions"
+        ]
+      },
+      "GetSpan": {
+        "type": "object",
+        "properties": {
+          "customer_id": {
+            "type": "string",
+            "title": "Customer Id"
+          },
+          "organization_id": {
+            "type": "string",
+            "title": "Organization Id"
+          },
+          "workspace_id": {
+            "type": "string",
+            "title": "Workspace Id"
+          },
+          "user_id": {
+            "type": "string",
+            "title": "User Id"
+          },
+          "service_account_id": {
+            "type": "string",
+            "title": "Service Account Id",
+            "default": ""
+          },
+          "trace_id": {
+            "type": "string",
+            "title": "Trace Id",
+            "pattern": "^[0-9a-f]{32}$"
+          },
+          "span_id": {
+            "type": "string",
+            "title": "Span Id",
+            "pattern": "^[0-9a-f]{16}$"
+          },
+          "parent_span_id": {
+            "type": "string",
+            "title": "Parent Span Id"
+          },
+          "trace_state": {
+            "type": "string",
+            "title": "Trace State"
+          },
+          "start_time": {
+            "type": "string",
+            "title": "Start Time",
+            "format": "date-time"
+          },
+          "end_time": {
+            "type": "string",
+            "title": "End Time",
+            "format": "date-time"
+          },
+          "duration_ns": {
+            "type": "integer",
+            "title": "Duration Ns"
+          },
+          "span_name": {
+            "type": "string",
+            "title": "Span Name"
+          },
+          "span_kind": {
+            "type": "string",
+            "title": "Span Kind"
+          },
+          "service_name": {
+            "type": "string",
+            "title": "Service Name"
+          },
+          "status_code": {
+            "type": "string",
+            "title": "Status Code",
+            "enum": [
+              "Error",
+              "Ok",
+              "Unset"
+            ]
+          },
+          "status_message": {
+            "type": "string",
+            "title": "Status Message"
+          },
+          "error_type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "operation_name": {
+            "type": "string",
+            "title": "Operation Name"
+          },
+          "provider_name": {
+            "type": "string",
+            "title": "Provider Name"
+          },
+          "request_model": {
+            "type": "string",
+            "title": "Request Model"
+          },
+          "response_model": {
+            "type": "string",
+            "title": "Response Model"
+          },
+          "response_id": {
+            "type": "string",
+            "title": "Response Id"
+          },
+          "output_type": {
+            "type": "string",
+            "title": "Output Type"
+          },
+          "conversation_id": {
+            "type": "string",
+            "title": "Conversation Id"
+          },
+          "data_source_id": {
+            "type": "string",
+            "title": "Data Source Id"
+          },
+          "agent_id": {
+            "type": "string",
+            "title": "Agent Id"
+          },
+          "agent_name": {
+            "type": "string",
+            "title": "Agent Name"
+          },
+          "agent_version": {
+            "type": "string",
+            "title": "Agent Version"
+          },
+          "agent_description": {
+            "type": "string",
+            "title": "Agent Description"
+          },
+          "workflow_name": {
+            "type": "string",
+            "title": "Workflow Name"
+          },
+          "prompt_name": {
+            "type": "string",
+            "title": "Prompt Name"
+          },
+          "tool_name": {
+            "type": "string",
+            "title": "Tool Name"
+          },
+          "tool_type": {
+            "type": "string",
+            "title": "Tool Type"
+          },
+          "tool_call_id": {
+            "type": "string",
+            "title": "Tool Call Id"
+          },
+          "input_messages": {
+            "type": "string",
+            "title": "Input Messages"
+          },
+          "output_messages": {
+            "type": "string",
+            "title": "Output Messages"
+          },
+          "system_instructions": {
+            "type": "string",
+            "title": "System Instructions"
+          },
+          "tool_definitions": {
+            "type": "string",
+            "title": "Tool Definitions"
+          },
+          "tool_call_arguments": {
+            "type": "string",
+            "title": "Tool Call Arguments"
+          },
+          "tool_call_result": {
+            "type": "string",
+            "title": "Tool Call Result"
+          },
+          "request_choice_count": {
+            "type": "integer",
+            "title": "Request Choice Count"
+          },
+          "request_max_tokens": {
+            "type": "integer",
+            "title": "Request Max Tokens"
+          },
+          "request_temperature": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Request Temperature"
+          },
+          "request_top_p": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Request Top P"
+          },
+          "request_top_k": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Request Top K"
+          },
+          "request_presence_penalty": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Request Presence Penalty"
+          },
+          "request_frequency_penalty": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Request Frequency Penalty"
+          },
+          "request_seed": {
+            "type": "integer",
+            "title": "Request Seed"
+          },
+          "request_stop_sequences": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "title": "Request Stop Sequences"
+          },
+          "request_encoding_formats": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "title": "Request Encoding Formats"
+          },
+          "response_finish_reasons": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "title": "Response Finish Reasons"
+          },
+          "usage_input_tokens": {
+            "type": "integer",
+            "title": "Usage Input Tokens"
+          },
+          "usage_output_tokens": {
+            "type": "integer",
+            "title": "Usage Output Tokens"
+          },
+          "usage_cache_read_input_tokens": {
+            "type": "integer",
+            "title": "Usage Cache Read Input Tokens"
+          },
+          "usage_cache_creation_input_tokens": {
+            "type": "integer",
+            "title": "Usage Cache Creation Input Tokens"
+          },
+          "resource_attributes": {
+            "type": "object",
+            "title": "Resource Attributes",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "span_attributes": {
+            "type": "object",
+            "title": "Span Attributes",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "scope_name": {
+            "type": "string",
+            "title": "Scope Name"
+          },
+          "scope_version": {
+            "type": "string",
+            "title": "Scope Version"
+          }
+        },
+        "title": "GetSpan",
+        "required": [
+          "customer_id",
+          "organization_id",
+          "workspace_id",
+          "user_id",
+          "trace_id",
+          "span_id",
+          "parent_span_id",
+          "trace_state",
+          "start_time",
+          "end_time",
+          "duration_ns",
+          "span_name",
+          "span_kind",
+          "service_name",
+          "status_code",
+          "status_message",
+          "error_type",
+          "operation_name",
+          "provider_name",
+          "request_model",
+          "response_model",
+          "response_id",
+          "output_type",
+          "conversation_id",
+          "data_source_id",
+          "agent_id",
+          "agent_name",
+          "agent_version",
+          "agent_description",
+          "workflow_name",
+          "prompt_name",
+          "tool_name",
+          "tool_type",
+          "tool_call_id",
+          "input_messages",
+          "output_messages",
+          "system_instructions",
+          "tool_definitions",
+          "tool_call_arguments",
+          "tool_call_result",
+          "request_choice_count",
+          "request_max_tokens",
+          "request_temperature",
+          "request_top_p",
+          "request_top_k",
+          "request_presence_penalty",
+          "request_frequency_penalty",
+          "request_seed",
+          "request_stop_sequences",
+          "request_encoding_formats",
+          "response_finish_reasons",
+          "usage_input_tokens",
+          "usage_output_tokens",
+          "usage_cache_read_input_tokens",
+          "usage_cache_creation_input_tokens",
+          "resource_attributes",
+          "span_attributes",
+          "scope_name",
+          "scope_version"
+        ]
+      },
+      "GetSpans": {
+        "type": "object",
+        "properties": {
+          "spans": {
+            "$ref": "#/components/schemas/FeedResultGetSpan"
+          }
+        },
+        "title": "GetSpans",
+        "required": [
+          "spans"
+        ]
+      },
+      "GetTraceFieldOptions": {
+        "type": "object",
+        "properties": {
+          "options": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Options"
+          }
+        },
+        "title": "GetTraceFieldOptions",
+        "required": [
+          "options"
+        ]
+      },
+      "GetTraceFields": {
+        "type": "object",
+        "properties": {
+          "field_definitions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OtelFieldDefinition"
+            },
+            "title": "Field Definitions"
+          }
+        },
+        "title": "GetTraceFields",
+        "required": [
+          "field_definitions"
+        ]
+      },
+      "GetTrace": {
+        "type": "object",
+        "properties": {
+          "customer_id": {
+            "type": "string",
+            "title": "Customer Id"
+          },
+          "organization_id": {
+            "type": "string",
+            "title": "Organization Id"
+          },
+          "workspace_id": {
+            "type": "string",
+            "title": "Workspace Id"
+          },
+          "user_id": {
+            "type": "string",
+            "title": "User Id"
+          },
+          "service_account_id": {
+            "type": "string",
+            "title": "Service Account Id",
+            "default": ""
+          },
+          "trace_id": {
+            "type": "string",
+            "title": "Trace Id",
+            "pattern": "^[0-9a-f]{32}$"
+          },
+          "root_span_id": {
+            "type": "string",
+            "title": "Root Span Id",
+            "pattern": "^[0-9a-f]{16}$"
+          },
+          "root_span_name": {
+            "type": "string",
+            "title": "Root Span Name"
+          },
+          "start_time": {
+            "type": "string",
+            "title": "Start Time",
+            "format": "date-time"
+          },
+          "end_time": {
+            "type": "string",
+            "title": "End Time",
+            "format": "date-time"
+          },
+          "duration_ns": {
+            "type": "integer",
+            "title": "Duration Ns"
+          },
+          "service_name": {
+            "type": "string",
+            "title": "Service Name"
+          },
+          "environment": {
+            "type": "string",
+            "title": "Environment"
+          },
+          "conversation_id": {
+            "type": "string",
+            "title": "Conversation Id"
+          },
+          "workflow_name": {
+            "type": "string",
+            "title": "Workflow Name"
+          },
+          "agent_id": {
+            "type": "string",
+            "title": "Agent Id"
+          },
+          "agent_name": {
+            "type": "string",
+            "title": "Agent Name"
+          },
+          "status_code": {
+            "type": "string",
+            "title": "Status Code",
+            "enum": [
+              "Error",
+              "Unset"
+            ]
+          },
+          "error_count": {
+            "type": "integer",
+            "title": "Error Count"
+          },
+          "span_count": {
+            "type": "integer",
+            "title": "Span Count"
+          },
+          "gen_ai_span_count": {
+            "type": "integer",
+            "title": "Gen Ai Span Count"
+          },
+          "llm_call_count": {
+            "type": "integer",
+            "title": "Llm Call Count"
+          },
+          "tool_call_count": {
+            "type": "integer",
+            "title": "Tool Call Count"
+          },
+          "retrieval_count": {
+            "type": "integer",
+            "title": "Retrieval Count"
+          },
+          "evaluation_count": {
+            "type": "integer",
+            "title": "Evaluation Count"
+          },
+          "input_tokens": {
+            "type": "integer",
+            "title": "Input Tokens"
+          },
+          "output_tokens": {
+            "type": "integer",
+            "title": "Output Tokens"
+          },
+          "cache_read_input_tokens": {
+            "type": "integer",
+            "title": "Cache Read Input Tokens"
+          },
+          "cache_creation_input_tokens": {
+            "type": "integer",
+            "title": "Cache Creation Input Tokens"
+          },
+          "models_used": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "title": "Models Used"
+          },
+          "tools_used": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "title": "Tools Used"
+          },
+          "first_turn_last_input_message": {
+            "type": "string",
+            "title": "First Turn Last Input Message"
+          },
+          "first_turn_last_output_message": {
+            "type": "string",
+            "title": "First Turn Last Output Message"
+          },
+          "last_turn_last_input_message": {
+            "type": "string",
+            "title": "Last Turn Last Input Message"
+          },
+          "last_turn_last_output_message": {
+            "type": "string",
+            "title": "Last Turn Last Output Message"
+          }
+        },
+        "title": "GetTrace",
+        "required": [
+          "customer_id",
+          "organization_id",
+          "workspace_id",
+          "user_id",
+          "trace_id",
+          "root_span_id",
+          "root_span_name",
+          "start_time",
+          "end_time",
+          "duration_ns",
+          "service_name",
+          "environment",
+          "conversation_id",
+          "workflow_name",
+          "agent_id",
+          "agent_name",
+          "status_code",
+          "error_count",
+          "span_count",
+          "gen_ai_span_count",
+          "llm_call_count",
+          "tool_call_count",
+          "retrieval_count",
+          "evaluation_count",
+          "input_tokens",
+          "output_tokens",
+          "cache_read_input_tokens",
+          "cache_creation_input_tokens",
+          "models_used",
+          "tools_used",
+          "first_turn_last_input_message",
+          "first_turn_last_output_message",
+          "last_turn_last_input_message",
+          "last_turn_last_output_message"
+        ]
+      },
+      "GetTraces": {
+        "type": "object",
+        "properties": {
+          "traces": {
+            "$ref": "#/components/schemas/FeedResultGetTrace"
+          }
+        },
+        "title": "GetTraces",
+        "required": [
+          "traces"
+        ]
+      },
+      "Granularity": {
+        "type": "string",
+        "title": "Granularity",
+        "enum": [
+          "auto",
+          "second",
+          "minute",
+          "hour",
+          "day",
+          "week",
+          "month"
+        ]
+      },
+      "JudgeDefinitionV1": {
+        "type": "object",
+        "properties": {
+          "model": {
+            "type": "string",
+            "title": "Model",
+            "maxLength": 500,
+            "minLength": 1
+          },
+          "prompt": {
+            "type": "string",
+            "title": "Prompt",
+            "maxLength": 20000,
+            "minLength": 1
+          },
+          "temperature": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 1.5,
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Temperature"
+          },
+          "top_p": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0,
+                "type": "number",
+                "maximum": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Top P"
+          },
+          "max_tokens": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Tokens"
+          },
+          "random_seed": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Random Seed"
+          },
+          "result_spec": {
+            "$ref": "#/components/schemas/EvaluationResultSpec"
+          },
+          "mapping": {
+            "type": "object",
+            "title": "Mapping",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "use_cache": {
+            "type": "boolean",
+            "title": "Use Cache",
+            "default": true
+          }
+        },
+        "title": "JudgeDefinitionV1",
+        "required": [
+          "model",
+          "prompt",
+          "result_spec"
+        ],
+        "additionalProperties": false,
+        "description": "The fully materialized LLM judge behavior stored in a pipeline config."
+      },
+      "LlmJudgeReference": {
+        "type": "object",
+        "properties": {
+          "slug": {
+            "type": "string",
+            "title": "Slug",
+            "maxLength": 200,
+            "minLength": 1,
+            "pattern": "^[a-z0-9][a-z0-9-]*$"
+          },
+          "mapping": {
+            "type": "object",
+            "title": "Mapping",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "sampling": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PipelineConfigSampling"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "title": "LlmJudgeReference",
+        "required": [
+          "slug"
+        ],
+        "additionalProperties": false,
+        "description": "The scorer selected to build a judge pipeline configuration."
+      },
+      "MetricAggregation": {
+        "type": "string",
+        "title": "MetricAggregation",
+        "enum": [
+          "count",
+          "count_distinct",
+          "sum",
+          "avg",
+          "min",
+          "max",
+          "p50",
+          "p90",
+          "p95",
+          "p99"
+        ]
+      },
+      "MetricDefinition": {
+        "type": "object",
+        "properties": {
+          "measure": {
+            "type": "string",
+            "title": "Measure"
+          },
+          "aggregation": {
+            "$ref": "#/components/schemas/MetricAggregation"
+          }
+        },
+        "title": "MetricDefinition",
+        "required": [
+          "measure",
+          "aggregation"
+        ]
+      },
+      "ModerationDefinitionV1": {
+        "type": "object",
+        "properties": {
+          "model": {
+            "type": "string",
+            "title": "Model",
+            "maxLength": 500,
+            "minLength": 1,
+            "default": "mistral-moderation-latest"
+          },
+          "target_attributes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "title": "Target Attributes",
+            "minItems": 1,
+            "default": [
+              "gen_ai.input.messages",
+              "gen_ai.output.messages"
+            ]
+          }
+        },
+        "title": "ModerationDefinitionV1",
+        "additionalProperties": false
+      },
+      "OTLPDestination": {
+        "type": "object",
+        "properties": {
+          "protocol": {
+            "type": "string",
+            "title": "Protocol",
+            "maxLength": 50,
+            "minLength": 1
+          },
+          "endpoint": {
+            "type": "string",
+            "title": "Endpoint",
+            "maxLength": 1000,
+            "minLength": 1
+          },
+          "insecure": {
+            "type": "boolean",
+            "title": "Insecure",
+            "default": false
+          },
+          "headers": {
+            "type": "object",
+            "title": "Headers",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/PipelineConfigHeader"
+            }
+          }
+        },
+        "title": "OTLPDestination",
+        "required": [
+          "protocol",
+          "endpoint"
+        ],
+        "additionalProperties": false
+      },
       "ObservabilityErrorCode": {
         "type": "string",
         "title": "ObservabilityErrorCode",
@@ -17439,6 +22100,636 @@
           "detail"
         ]
       },
+      "OrderByClause": {
+        "type": "object",
+        "properties": {
+          "field": {
+            "type": "string",
+            "title": "Field"
+          },
+          "direction": {
+            "type": "string",
+            "title": "Direction",
+            "enum": [
+              "asc",
+              "desc"
+            ],
+            "default": "asc"
+          }
+        },
+        "title": "OrderByClause",
+        "required": [
+          "field"
+        ]
+      },
+      "OtelEnumFieldDefinition": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "type": {
+            "type": "string",
+            "title": "Type",
+            "default": "ENUM",
+            "const": "ENUM"
+          },
+          "group": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Group"
+          },
+          "source_attribute_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Attribute Key",
+            "description": "Raw OpenTelemetry attribute key this field is projected from, whether a span attribute (e.g. `gen_ai.request.model` for `request_model`) or a resource attribute (e.g. `service.name` for `service_name`). None when the field is a native OTLP field (like `span_name` or `trace_id`) or a nested attribute map (like `span_attributes`)."
+          },
+          "constraints": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EnumConstraints"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "supported_operators": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "eq",
+                "neq",
+                "lt",
+                "lte",
+                "gt",
+                "gte",
+                "like",
+                "ilike",
+                "not_like",
+                "not_ilike",
+                "between",
+                "not_between",
+                "in",
+                "not_in",
+                "exists",
+                "not_exists",
+                "regexp",
+                "not_regexp",
+                "contains",
+                "not_contains",
+                "has",
+                "hasAny",
+                "hasAll",
+                "hasToken"
+              ]
+            },
+            "title": "Supported Operators",
+            "readOnly": true
+          },
+          "supported_aggregations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MetricAggregation"
+            },
+            "title": "Supported Aggregations",
+            "readOnly": true
+          }
+        },
+        "title": "OtelEnumFieldDefinition",
+        "required": [
+          "name",
+          "label",
+          "supported_operators",
+          "supported_aggregations"
+        ]
+      },
+      "OtelFieldDefinition": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "type": {
+            "type": "string",
+            "title": "Type",
+            "enum": [
+              "ENUM",
+              "TEXT",
+              "INT",
+              "FLOAT",
+              "BOOL",
+              "TIMESTAMP",
+              "ARRAY",
+              "MAP"
+            ]
+          },
+          "group": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Group"
+          },
+          "source_attribute_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Attribute Key",
+            "description": "Raw OpenTelemetry attribute key this field is projected from, whether a span attribute (e.g. `gen_ai.request.model` for `request_model`) or a resource attribute (e.g. `service.name` for `service_name`). None when the field is a native OTLP field (like `span_name` or `trace_id`) or a nested attribute map (like `span_attributes`)."
+          },
+          "supported_operators": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "eq",
+                "neq",
+                "lt",
+                "lte",
+                "gt",
+                "gte",
+                "like",
+                "ilike",
+                "not_like",
+                "not_ilike",
+                "between",
+                "not_between",
+                "in",
+                "not_in",
+                "exists",
+                "not_exists",
+                "regexp",
+                "not_regexp",
+                "contains",
+                "not_contains",
+                "has",
+                "hasAny",
+                "hasAll",
+                "hasToken"
+              ]
+            },
+            "title": "Supported Operators",
+            "readOnly": true
+          },
+          "supported_aggregations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MetricAggregation"
+            },
+            "title": "Supported Aggregations",
+            "readOnly": true
+          }
+        },
+        "title": "OtelFieldDefinition",
+        "required": [
+          "name",
+          "label",
+          "type",
+          "supported_operators",
+          "supported_aggregations"
+        ]
+      },
+      "OtelFloatFieldDefinition": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "type": {
+            "type": "string",
+            "title": "Type",
+            "default": "FLOAT",
+            "const": "FLOAT"
+          },
+          "group": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Group"
+          },
+          "source_attribute_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Attribute Key",
+            "description": "Raw OpenTelemetry attribute key this field is projected from, whether a span attribute (e.g. `gen_ai.request.model` for `request_model`) or a resource attribute (e.g. `service.name` for `service_name`). None when the field is a native OTLP field (like `span_name` or `trace_id`) or a nested attribute map (like `span_attributes`)."
+          },
+          "constraints": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FloatConstraints"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "supported_operators": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "eq",
+                "neq",
+                "lt",
+                "lte",
+                "gt",
+                "gte",
+                "like",
+                "ilike",
+                "not_like",
+                "not_ilike",
+                "between",
+                "not_between",
+                "in",
+                "not_in",
+                "exists",
+                "not_exists",
+                "regexp",
+                "not_regexp",
+                "contains",
+                "not_contains",
+                "has",
+                "hasAny",
+                "hasAll",
+                "hasToken"
+              ]
+            },
+            "title": "Supported Operators",
+            "readOnly": true
+          },
+          "supported_aggregations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MetricAggregation"
+            },
+            "title": "Supported Aggregations",
+            "readOnly": true
+          }
+        },
+        "title": "OtelFloatFieldDefinition",
+        "required": [
+          "name",
+          "label",
+          "supported_operators",
+          "supported_aggregations"
+        ]
+      },
+      "Pipeline": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id",
+            "format": "uuid"
+          },
+          "created_at": {
+            "type": "string",
+            "title": "Created At",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "title": "Updated At",
+            "format": "date-time"
+          },
+          "workspace_id": {
+            "type": "string",
+            "title": "Workspace Id",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "slug": {
+            "type": "string",
+            "title": "Slug"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "selectors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PipelineConfigSelector"
+            },
+            "title": "Selectors"
+          },
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled"
+          },
+          "creator_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Creator Id"
+          },
+          "pipeline_configs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PipelineConfig"
+            },
+            "title": "Pipeline Configs"
+          }
+        },
+        "title": "Pipeline",
+        "required": [
+          "id",
+          "created_at",
+          "updated_at",
+          "workspace_id",
+          "name",
+          "slug",
+          "description",
+          "selectors",
+          "enabled",
+          "creator_id",
+          "pipeline_configs"
+        ],
+        "description": "Pipeline response schema. Pipelines are hard-deleted — no deleted_at field."
+      },
+      "PipelineConfig": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id",
+            "format": "uuid"
+          },
+          "created_at": {
+            "type": "string",
+            "title": "Created At",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "title": "Updated At",
+            "format": "date-time"
+          },
+          "deleted_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deleted At"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/PipelineConfigScope"
+          },
+          "workspace_id": {
+            "type": "string",
+            "title": "Workspace Id",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "slug": {
+            "type": "string",
+            "title": "Slug"
+          },
+          "pipeline_kind": {
+            "$ref": "#/components/schemas/PipelineKind"
+          },
+          "selectors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PipelineConfigSelector"
+            },
+            "title": "Selectors"
+          },
+          "sampling": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PipelineConfigSampling"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled"
+          },
+          "definition": {
+            "$ref": "#/components/schemas/PipelineConfigDefinition"
+          },
+          "scorer_slug": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scorer Slug"
+          },
+          "scorer_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scorer Version"
+          }
+        },
+        "title": "PipelineConfig",
+        "required": [
+          "id",
+          "created_at",
+          "updated_at",
+          "deleted_at",
+          "scope",
+          "workspace_id",
+          "name",
+          "slug",
+          "pipeline_kind",
+          "selectors",
+          "enabled",
+          "definition"
+        ]
+      },
+      "PipelineConfigDefinition": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/DetectionDefinitionV1"
+          },
+          {
+            "$ref": "#/components/schemas/ModerationDefinitionV1"
+          },
+          {
+            "$ref": "#/components/schemas/JudgeDefinitionV1"
+          },
+          {
+            "$ref": "#/components/schemas/ExportDefinitionV1"
+          }
+        ]
+      },
+      "PipelineConfigHeader": {
+        "type": "object",
+        "properties": {
+          "value": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          }
+        },
+        "title": "PipelineConfigHeader",
+        "additionalProperties": false
+      },
+      "PipelineConfigSampling": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/ProbabilisticSampling"
+          },
+          {
+            "$ref": "#/components/schemas/AttributeHashSampling"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "type",
+          "mapping": {
+            "attribute_hash": "#/components/schemas/AttributeHashSampling",
+            "probabilistic": "#/components/schemas/ProbabilisticSampling"
+          }
+        }
+      },
+      "PipelineConfigScope": {
+        "type": "string",
+        "title": "PipelineConfigScope",
+        "enum": [
+          "workspace",
+          "shared"
+        ]
+      },
+      "PipelineConfigSelector": {
+        "type": "object",
+        "properties": {
+          "source_kind": {
+            "$ref": "#/components/schemas/SourceKind"
+          },
+          "filter": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Filter"
+          }
+        },
+        "title": "PipelineConfigSelector",
+        "required": [
+          "source_kind"
+        ]
+      },
+      "PipelineKind": {
+        "type": "string",
+        "title": "PipelineKind",
+        "enum": [
+          "detection-v1",
+          "moderation-v1",
+          "judge-v1",
+          "export-v1"
+        ]
+      },
+      "PipelinesResponse": {
+        "type": "object",
+        "properties": {
+          "pipelines": {
+            "$ref": "#/components/schemas/PaginatedResultPipeline"
+          }
+        },
+        "title": "PipelinesResponse",
+        "required": [
+          "pipelines"
+        ]
+      },
       "PrincipalType": {
         "type": "string",
         "title": "PrincipalType",
@@ -17447,6 +22738,181 @@
           "service_account",
           "user"
         ]
+      },
+      "ProbabilisticSampling": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "title": "Type",
+            "default": "probabilistic",
+            "const": "probabilistic"
+          },
+          "percentage": {
+            "exclusiveMinimum": 0,
+            "type": "number",
+            "title": "Percentage",
+            "maximum": 100
+          }
+        },
+        "title": "ProbabilisticSampling",
+        "required": [
+          "percentage"
+        ]
+      },
+      "SourceKind": {
+        "type": "string",
+        "title": "SourceKind",
+        "enum": [
+          "span",
+          "log",
+          "metric"
+        ]
+      },
+      "SpanDatasetMapping": {
+        "type": "object",
+        "properties": {
+          "target_field": {
+            "type": "string",
+            "title": "Target Field",
+            "minLength": 1,
+            "description": "Literal top-level key to create in the dataset record payload."
+          },
+          "source_field": {
+            "$ref": "#/components/schemas/SpanDatasetSourceReference"
+          }
+        },
+        "title": "SpanDatasetMapping",
+        "required": [
+          "target_field",
+          "source_field"
+        ]
+      },
+      "SpanDatasetMappingContract": {
+        "type": "object",
+        "properties": {
+          "version": {
+            "type": "integer",
+            "title": "Version",
+            "const": 1
+          },
+          "mappings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SpanDatasetMapping"
+            },
+            "title": "Mappings"
+          }
+        },
+        "title": "SpanDatasetMappingContract",
+        "required": [
+          "version",
+          "mappings"
+        ],
+        "description": "Mapping rules applied independently to every requested telemetry span.\n\nVersion 1 mappings are optional per span: a missing, null, blank-string, or empty-array\nsource omits the target key. JSON object and array strings become structured values;\nscalar-looking and malformed JSON strings remain strings."
+      },
+      "SpanDatasetSourceNamespace": {
+        "type": "string",
+        "title": "SpanDatasetSourceNamespace",
+        "enum": [
+          "span_attributes",
+          "resource_attributes"
+        ],
+        "description": "Attribute maps that may supply dataset payload values."
+      },
+      "SpanDatasetSourceReference": {
+        "type": "object",
+        "properties": {
+          "namespace": {
+            "$ref": "#/components/schemas/SpanDatasetSourceNamespace"
+          },
+          "key": {
+            "type": "string",
+            "title": "Key",
+            "minLength": 1,
+            "description": "Literal attribute dictionary key; dots do not denote a nested path."
+          }
+        },
+        "title": "SpanDatasetSourceReference",
+        "required": [
+          "namespace",
+          "key"
+        ]
+      },
+      "TelemetrySpanReference": {
+        "type": "object",
+        "properties": {
+          "trace_id": {
+            "type": "string",
+            "title": "Trace Id",
+            "pattern": "^[0-9a-f]{32}$"
+          },
+          "span_id": {
+            "type": "string",
+            "title": "Span Id",
+            "pattern": "^[0-9a-f]{16}$"
+          }
+        },
+        "title": "TelemetrySpanReference",
+        "required": [
+          "trace_id",
+          "span_id"
+        ],
+        "description": "Immutable provenance used to identify a telemetry span."
+      },
+      "TimeDimension": {
+        "type": "object",
+        "properties": {
+          "granularity": {
+            "$ref": "#/components/schemas/Granularity",
+            "default": "auto"
+          }
+        },
+        "title": "TimeDimension"
+      },
+      "UpdatePipelineRequest": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "maxLength": 200,
+            "minLength": 1
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "selectors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PipelineConfigSelector"
+            },
+            "title": "Selectors",
+            "minItems": 1
+          },
+          "definitions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LlmJudgeReference"
+            },
+            "title": "Definitions",
+            "minItems": 1
+          },
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled"
+          }
+        },
+        "title": "UpdatePipelineRequest"
       },
       "Annotations": {
         "type": "object",
@@ -32451,6 +37917,68 @@
           "share_with_uuid"
         ]
       },
+      "AggregationRequest": {
+        "type": "object",
+        "properties": {
+          "metric": {
+            "$ref": "#/components/schemas/MetricDefinition"
+          },
+          "dimensions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "title": "Dimensions",
+            "default": []
+          },
+          "time_dimension": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TimeDimension"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "search_expression": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Search Expression"
+          },
+          "order_by": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/OrderByClause"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Order By"
+          },
+          "limit": {
+            "type": "integer",
+            "title": "Limit",
+            "maximum": 10000,
+            "minimum": 1,
+            "default": 1000
+          }
+        },
+        "title": "AggregationRequest",
+        "required": [
+          "metric"
+        ]
+      },
       "ExportDatasetResponse": {
         "type": "object",
         "properties": {
@@ -32518,6 +38046,358 @@
         "required": [
           "dataset_record_ids"
         ]
+      },
+      "FeedResultGetLog": {
+        "type": "object",
+        "properties": {
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GetLog"
+            },
+            "title": "Results"
+          },
+          "next": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next"
+          },
+          "cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cursor"
+          }
+        },
+        "title": "FeedResultGetLog"
+      },
+      "FeedResultGetPipelineResult": {
+        "type": "object",
+        "properties": {
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PipelineResult"
+            },
+            "title": "Results"
+          },
+          "next": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next"
+          },
+          "cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cursor"
+          }
+        },
+        "title": "FeedResultGetPipelineResult"
+      },
+      "FeedResultGetSpanEvaluation": {
+        "type": "object",
+        "properties": {
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GetSpanEvaluation"
+            },
+            "title": "Results"
+          },
+          "next": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next"
+          },
+          "cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cursor"
+          }
+        },
+        "title": "FeedResultGetSpanEvaluation"
+      },
+      "FeedResultGetSpan": {
+        "type": "object",
+        "properties": {
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GetSpan"
+            },
+            "title": "Results"
+          },
+          "next": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next"
+          },
+          "cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cursor"
+          }
+        },
+        "title": "FeedResultGetSpan"
+      },
+      "FeedResultGetTrace": {
+        "type": "object",
+        "properties": {
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GetTrace"
+            },
+            "title": "Results"
+          },
+          "next": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next"
+          },
+          "cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cursor"
+          }
+        },
+        "title": "FeedResultGetTrace"
+      },
+      "LogsRequest": {
+        "type": "object",
+        "properties": {
+          "search_expression": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Search Expression"
+          },
+          "order": {
+            "type": "string",
+            "title": "Order",
+            "enum": [
+              "asc",
+              "desc"
+            ],
+            "default": "desc"
+          }
+        },
+        "title": "LogsRequest"
+      },
+      "PipelineResult": {
+        "type": "object",
+        "properties": {
+          "trace_id": {
+            "type": "string",
+            "title": "Trace Id",
+            "pattern": "^[0-9a-f]{32}$"
+          },
+          "span_id": {
+            "type": "string",
+            "title": "Span Id",
+            "pattern": "^[0-9a-f]{16}$"
+          },
+          "span_name": {
+            "type": "string",
+            "title": "Span Name"
+          },
+          "operation_name": {
+            "type": "string",
+            "title": "Operation Name"
+          },
+          "tool_name": {
+            "type": "string",
+            "title": "Tool Name"
+          },
+          "duration_ns": {
+            "type": "integer",
+            "title": "Duration Ns"
+          },
+          "evaluated_at": {
+            "type": "string",
+            "title": "Evaluated At",
+            "format": "date-time"
+          },
+          "judge_scores": {
+            "type": "object",
+            "title": "Judge Scores",
+            "additionalProperties": {
+              "type": "number"
+            }
+          },
+          "judge_labels": {
+            "type": "object",
+            "title": "Judge Labels",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "judge_explanations": {
+            "type": "object",
+            "title": "Judge Explanations",
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        },
+        "title": "PipelineResult",
+        "required": [
+          "trace_id",
+          "span_id",
+          "span_name",
+          "operation_name",
+          "tool_name",
+          "duration_ns",
+          "evaluated_at",
+          "judge_scores",
+          "judge_labels",
+          "judge_explanations"
+        ]
+      },
+      "PipelineResultsRequest": {
+        "type": "object",
+        "properties": {
+          "pipeline_config_slugs": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "title": "Pipeline Config Slugs",
+            "maxItems": 100,
+            "minItems": 1
+          },
+          "search_expression": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Search Expression"
+          }
+        },
+        "title": "PipelineResultsRequest",
+        "required": [
+          "pipeline_config_slugs"
+        ]
+      },
+      "SpanEvaluationsRequest": {
+        "type": "object",
+        "properties": {
+          "search_expression": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Search Expression"
+          }
+        },
+        "title": "SpanEvaluationsRequest"
+      },
+      "SpansRequest": {
+        "type": "object",
+        "properties": {
+          "search_expression": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Search Expression"
+          }
+        },
+        "title": "SpansRequest"
+      },
+      "TracesRequest": {
+        "type": "object",
+        "properties": {
+          "search_expression": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Search Expression",
+            "description": "Filter expression. Trace fields (e.g. `service_name`, `error_count`, `models_used`) are evaluated on the aggregated trace. Span attribute fields (e.g. `temporalWorkflowID`, `wf.type`, `gen_ai.provider.name`) are evaluated on the spans of the trace: a trace matches when one of its spans matches. Span attribute conditions combined with AND must hold on the same span, e.g. `temporalWorkflowID = 'wf-1' AND wf.type = 'activity'` only matches traces with a span carrying both attributes. Results are always one row per trace."
+          }
+        },
+        "title": "TracesRequest"
       },
       "PaginatedResultDatasetImportTask": {
         "type": "object",
@@ -32645,6 +38525,48 @@
           "count"
         ]
       },
+      "PaginatedResultPipeline": {
+        "type": "object",
+        "properties": {
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Pipeline"
+            },
+            "title": "Results"
+          },
+          "count": {
+            "type": "integer",
+            "title": "Count"
+          },
+          "next": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next"
+          },
+          "previous": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Previous"
+          }
+        },
+        "title": "PaginatedResultPipeline",
+        "required": [
+          "count"
+        ]
+      },
       "UpdateDatasetRequest": {
         "type": "object",
         "properties": {
@@ -32720,6 +38642,30 @@
         "title": "ImportDatasetFromPlaygroundRequest",
         "required": [
           "conversation_ids"
+        ]
+      },
+      "ImportDatasetFromSpansRequest": {
+        "type": "object",
+        "properties": {
+          "span_references": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TelemetrySpanReference"
+            },
+            "title": "Span References",
+            "maxItems": 500,
+            "minItems": 1,
+            "description": "Spans to attempt to import; unavailable references are skipped, and trace and span IDs are attached as record properties automatically."
+          },
+          "mapping_contract": {
+            "$ref": "#/components/schemas/SpanDatasetMappingContract",
+            "description": "Versioned rules for mapping span or resource attributes into top-level payload keys."
+          }
+        },
+        "title": "ImportDatasetFromSpansRequest",
+        "required": [
+          "span_references",
+          "mapping_contract"
         ]
       },
       "CreateDatasetRequest": {

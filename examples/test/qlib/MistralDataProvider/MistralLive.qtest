@@ -31,10 +31,13 @@ class MistralLiveTest inherits QUnit::Test {
             addTestCase("speech generation", \speechTest());
             foreach string action in ("list-conversations", "list-connectors",
                     "list-datasets", "list-workflow-runs", "list-workflow-schedules", "list-workflow-deployments",
-                    "list-workflow-registrations") {
+                    "list-workflow-registrations", "list-log-fields", "list-trace-fields", "list-span-fields",
+                    "list-span-evaluation-fields", "list-pipelines", "search-logs", "search-traces", "search-spans",
+                    "search-span-evaluations") {
                 string name = action;
                 addTestCase("preview: " + name, sub () { previewTest(name); });
             }
+            addTestCase("observability field options", \fieldOptionsTest());
         }
         set_return_value(main());
     }
@@ -199,6 +202,27 @@ class MistralLiveTest inherits QUnit::Test {
             "voice_id": voices.items[0].id});
         assertTrue(parse_base64_string(speech.audio_data).size() > 0);
     }
+    #! lists the trace fields through the field dropdown and the values of an enumerated one
+    private fieldOptionsTest() {
+        auto values;
+        try {
+            values = root.getChildProvider("list-trace-field-options").getReferenceData("trace-fields");
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.arg.status_code == 403 || ex.arg.status_code == 404) {
+                testSkip(sprintf("observability unavailable to this account (HTTP %d)", ex.arg.status_code));
+            }
+            rethrow;
+        }
+        assertTrue(values.size() > 0, "the trace fields are listed");
+        *hash<auto> field = (select call("list-trace-fields").field_definitions, $1.type == "ENUM")[0];
+        if (!field) {
+            testSkip("no enumerated trace field");
+        }
+        assertTrue((map $1.value, values).contains(field.name), "the dropdown offers " + field.name);
+        auto options = call("list-trace-field-options", {"field_name": field.name});
+        assertTrue(options.hasKey("options"), field.name);
+    }
+
     private previewTest(string action) {
         auto result;
         try {
