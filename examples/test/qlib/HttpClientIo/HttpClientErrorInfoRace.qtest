@@ -1,0 +1,206 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - HTTP/1.1 and HTTP/3 (QUIC) client connection errors recorded and read on other threads
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Mime
+%requires HttpServerUtil
+%requires HttpServer
+%requires HttpClientIo
+%requires ../../TestCertificates.qm
+
+%exec-class HttpClientErrorInfoRaceTest
+
+#! answers every request with "ok"
+class OkHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return makeResponse(200, "ok", {"Content-Type": MimeTypeText});
+    }
+}
+
+#! The error of an HTTP/1.1 or HTTP/3 client poll operation is read under the lock that its writer holds (issue #6428)
+/** The error was read without the operation's stream lock, while the thread that recorded it (the I/O thread, or a
+    submitting thread for an HTTP/3 submission refused by the QUIC layer) created the hash, stored it and then filled
+    its keys under that lock: a thread that read the error then got no error or a hash without all of its keys.  The
+    recording thread is held in its critical section with the "error-record" hold point of debug builds; the read
+    releases it when it finds the lock taken ("error-read"), and must wait for the error to be recorded completely; a
+    read without the lock reads the error while the recording thread is still held.
+*/
+class HttpClientErrorInfoRaceTest inherits QUnit::Test {
+    private {
+        #! the longest wait for a thread to reach a hold point: a hang guard only
+        const HoldWait = 60s;
+    }
+
+    constructor() : Test("HttpClient poll operation error read race test", "1.0") {
+        addTestCase("HTTP/1.1: an error recorded on the I/O thread is read complete", \h1Test());
+        addTestCase("HTTP/3: an error recorded on the I/O thread is read complete", \h3Test());
+        addTestCase("HTTP/3: a refused submission's error is read complete", \h3SubmitTest());
+        set_return_value(main());
+    }
+
+    h1Test() {
+        checkDebug();
+        HttpServer server(<HttpServerOptionInfo>{});
+        on_exit server.stop();
+        server.setDefaultHandler("ok", new OkHandler());
+        string url = sprintf("http://127.0.0.1:%d", server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1", "service": 0}).port);
+        ioThreadError("h1", server, url, "HTTP1-");
+    }
+
+    h3Test() {
+        checkDebug();
+        HttpServer server(<HttpServerOptionInfo>{});
+        on_exit server.stop();
+        string url = getH3Url(server);
+        ioThreadError("h3", server, url, "HTTP3-");
+    }
+
+    h3SubmitTest() {
+        checkDebug();
+        HttpServer server(<HttpServerOptionInfo>{});
+        on_exit server.stop();
+        string url = getH3Url(server);
+        HttpClientConnectionManager mgr = getManager("h3");
+        on_exit mgr.closeAll();
+        HttpClientPollOperation op = getIdleOperation(mgr, server, url);
+        Http3ClientPollOperation h3op = cast<Http3ClientPollOperation>(op);
+
+        # waited for after the held thread is released (on_exit code runs in reverse order)
+        Counter done(1);
+        bool started;
+        on_exit if (started) { done.waitForZero(); }
+        Counter reached(1);
+        Counter release(1);
+        on_exit if (release.getCount()) { release.dec(); }
+        on_exit call_function("dbg_http_hold_clear");
+        # armed for this operation: the server's operations record errors too, as the server is stopped
+        call_function("dbg_http_hold_at", "error-record", reached, release, op);
+        *hash<ExceptionInfo> submit_ex;
+        # a submitting thread records the error of a submission refused by the QUIC layer
+        background sub () {
+            on_exit done.dec();
+            try {
+                h3op.setSubmitError("QUIC-HTTP3-ERROR", "nghttp3_conn_submit_request failed: ERR_CONN_CLOSING");
+            } catch (hash<ExceptionInfo> ex) {
+                submit_ex = ex;
+            }
+            # a thread that did not reach the hold point does not leave the test thread waiting for it
+            if (reached.getCount()) {
+                reached.dec();
+            }
+        }();
+        started = True;
+        readHeldError(op, reached, release, "QUIC-HTTP3-ERROR",
+            "nghttp3_conn_submit_request failed: ERR_CONN_CLOSING");
+        done.waitForZero();
+        if (submit_ex) {
+            throw submit_ex.err, submit_ex.desc;
+        }
+    }
+
+    #! an error recorded on the I/O thread when the server closes an idle connection
+    private ioThreadError(string protocol, HttpServer server, string url, string err_prefix) {
+        checkDebug();
+        HttpClientConnectionManager mgr = getManager(protocol);
+        on_exit mgr.closeAll();
+        HttpClientPollOperation op = getIdleOperation(mgr, server, url);
+
+        # waited for after the held thread is released (on_exit code runs in reverse order)
+        Counter stopped(1);
+        bool started;
+        on_exit if (started) { stopped.waitForZero(); }
+        Counter reached(1);
+        Counter release(1);
+        on_exit if (release.getCount()) { release.dec(); }
+        on_exit call_function("dbg_http_hold_clear");
+        # armed for this operation: the server's operations record errors too, as the server is stopped
+        call_function("dbg_http_hold_at", "error-record", reached, release, op);
+        # the server closes the connection: the client's I/O thread records the error and is held there; the server
+        # is stopped in another thread, as its stop can need the async I/O threads
+        background sub () {
+            on_exit stopped.dec();
+            server.stop();
+        }();
+        started = True;
+        *hash<auto> err = readHeldError(op, reached, release);
+        assertEq(Type::String, err.err.type(), "the error code is set");
+        assertTrue(err.err.equalPartial(err_prefix), sprintf("the error code %y is an %s error", err.err,
+            err_prefix));
+    }
+
+    #! reads the error of the operation while the thread that records it is held in its critical section
+    /** @return the error read
+    */
+    private *hash<auto> readHeldError(HttpClientPollOperation op, Counter reached, Counter release, *string err,
+            *string desc) {
+        if (reached.waitForZero(HoldWait)) {
+            throw "TEST-ERROR", "no thread recorded an error";
+        }
+        # a read that finds the operation's lock taken releases the recording thread, as it then waits for it
+        call_function("dbg_http_hold_at", "error-read", release, new Counter(0), op);
+        *hash<auto> info = op.getError();
+        int held = release.getCount();
+        # a read that did not wait for the lock leaves the recording thread held
+        if (held) {
+            release.dec();
+        }
+        assertEq(0, held, "the read waited for the thread that records the error");
+        assertEq(Type::Hash, info.type(), "the error is read once it is recorded");
+        assertEq(Type::String, info.desc.type(), "the error description is set");
+        if (err) {
+            assertEq(err, info.err);
+        }
+        if (desc) {
+            assertEq(desc, info.desc);
+        }
+        assertEq(info, op.getError(), "the error read is complete");
+        return info;
+    }
+
+    #! returns the operation of an idle connection to the server, which answered a request
+    private HttpClientPollOperation getIdleOperation(HttpClientConnectionManager mgr, HttpServer server,
+            string url) {
+        server.waitForAsyncIo();
+        HttpClientStreamHandle s1 = mgr.acquireStream(url);
+        assertEq(200, s1.request("GET", "/ok").status_code);
+        HttpClientPollOperation op = s1.getConnection().getPollOperation();
+        assertEq(NOTHING, op.getError(), "the connection has no error");
+        return op;
+    }
+
+    private HttpClientConnectionManager getManager(string protocol) {
+        return new HttpClientConnectionManager(<HttpClientConnectionManagerOptions>{
+            "protocol": protocol,
+            "accept_all_certs": True,
+            "max_streams_per_connection": 1,
+        });
+    }
+
+    private string getH3Url(HttpServer server) {
+        server.setDefaultHandler("ok", new OkHandler());
+        int port;
+        try {
+            port = server.addQuicListener(<HttpListenerOptionInfo>{
+                "node": "127.0.0.1",
+                "cert": new SSLCertificate(TestCertificates::CertPem),
+                "key": new SSLPrivateKey(TestCertificates::KeyPem),
+            }).port;
+        } catch (hash<ExceptionInfo> ex) {
+            testSkip(sprintf("QUIC listener not available: %s: %s", ex.err, ex.desc));
+        }
+        return sprintf("https://127.0.0.1:%d", port);
+    }
+
+    private checkDebug() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("needs a debug build of the library (dbg_http_hold_at())");
+        }
+    }
+}

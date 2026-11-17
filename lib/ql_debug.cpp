@@ -24677,17 +24677,20 @@ namespace {
 struct DbgHttpHold {
     Counter* reached = nullptr;
     Counter* release = nullptr;
+    //! the object for which the point is armed (compared only, not referenced), or nullptr for any
+    const void* target = nullptr;
 };
 std::mutex dbg_http_hold_m;
 DbgHttpHold dbg_http_holds[static_cast<int>(QoreDbgHttpHoldPoint::Count)];
 }
 
-void qore_dbg_http_hold(QoreDbgHttpHoldPoint point) {
+void qore_dbg_http_hold(QoreDbgHttpHoldPoint point, const void* target) {
     DbgHttpHold h;
     {
         std::lock_guard<std::mutex> l(dbg_http_hold_m);
         DbgHttpHold& armed = dbg_http_holds[static_cast<int>(point)];
-        if (!armed.reached) {
+        // a point armed for an object holds only a thread that reaches it for that object
+        if (!armed.reached || (armed.target && armed.target != target)) {
             return;
         }
         // one-shot: the hold is taken over by this thread
@@ -24793,9 +24796,18 @@ static QoreValue f_dbg_hold_child_program_create_clear(const QoreListNode* param
     handed over, and the connection manager is about to replace it in its pool with the connection that took it over;
     \c "acquired": the connection manager found a connection in its pool for a request and released the pool lock;
     \c "reserve-pending": a stream of a Qore-level HTTP client connection is to be reserved, before the reservation
-    lock is taken
+    lock is taken; \c "error-record": an HTTP/1 or HTTP/3 client, HTTP/3 server, WebSocket server or client, or HTTP
+    client ping poll operation records its first error, holding the lock that protects it, before the error is stored;
+    \c "error-read": a read of the error of one of these poll operations found that lock taken, and is about to wait
+    for it (armed with the release Counter of \c "error-record" as its \a reached Counter and a release Counter of 0,
+    the read releases the thread that records the error once it is certain to wait for it); \c "value-record" and
+    \c "value-read": the same for the output of an HTTP client ping poll operation and the close reason of a
+    WebSocket server poll operation
     @param reached decremented when a thread reaches the point
     @param release the thread waits until it reaches zero
+    @param target if given, only a thread that reaches the point for this object is held: the poll operation of the
+    \c "error-record", \c "error-read", \c "value-record" and \c "value-read" points (the object is compared, not
+    referenced)
 
     @throw DBG-ARGUMENT-ERROR unknown point, or the point is already armed
 */
@@ -24820,6 +24832,14 @@ static QoreValue f_dbg_http_hold_at(const QoreListNode* params, RuntimeConfig& r
         point = static_cast<int>(QoreDbgHttpHoldPoint::Acquired);
     } else if (!strcmp(name->c_str(), "reserve-pending")) {
         point = static_cast<int>(QoreDbgHttpHoldPoint::ReservePending);
+    } else if (!strcmp(name->c_str(), "error-record")) {
+        point = static_cast<int>(QoreDbgHttpHoldPoint::ErrorRecord);
+    } else if (!strcmp(name->c_str(), "error-read")) {
+        point = static_cast<int>(QoreDbgHttpHoldPoint::ErrorRead);
+    } else if (!strcmp(name->c_str(), "value-record")) {
+        point = static_cast<int>(QoreDbgHttpHoldPoint::ValueRecord);
+    } else if (!strcmp(name->c_str(), "value-read")) {
+        point = static_cast<int>(QoreDbgHttpHoldPoint::ValueRead);
     } else {
         xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_http_hold_at(): unknown point '%s'", name->c_str());
         return QoreValue();
@@ -24841,6 +24861,8 @@ static QoreValue f_dbg_http_hold_at(const QoreListNode* params, RuntimeConfig& r
     }
     h.reached = reached.release();
     h.release = release.release();
+    QoreValue target = get_param_value(params, 3);
+    h.target = target.getType() == NT_OBJECT ? static_cast<const void*>(target.get<const QoreObject>()) : nullptr;
     return QoreValue();
 }
 
@@ -26567,9 +26589,10 @@ void init_debug_functions(QoreNamespace& qns) {
         "stream_id");
     qns.addBuiltinVariant("dbg_quic_release_stream_data", f_dbg_quic_release_stream_data, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, nothingTypeInfo);
-    qns.addBuiltinVariant("dbg_http_hold_at", f_dbg_http_hold_at, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 3,
+    qns.addBuiltinVariant("dbg_http_hold_at", f_dbg_http_hold_at, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 4,
         stringTypeInfo, QORE_PARAM_NO_ARG, "point", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "reached",
-        QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "release");
+        QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "release", objectOrNothingTypeInfo, QORE_PARAM_NO_ARG,
+        "target");
     qns.addBuiltinVariant("dbg_http_hold_clear", f_dbg_http_hold_clear, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         nothingTypeInfo);
     qns.addBuiltinVariant("dbg_http_concurrent_closes", f_dbg_http_concurrent_closes, QCF_NO_FLAGS,
