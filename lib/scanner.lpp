@@ -55,6 +55,7 @@
 #include "parser.hpp"
 
 #include <cctype>
+#include <cerrno>
 #include <climits>
 #include <cmath>
 #include <cstdio>
@@ -64,6 +65,58 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
+
+//! reads the next block of a source file for the scanner; at the end of a file whose last line is a parse directive
+//! (it starts with %) without a newline, it gives one newline, as the rules of the parse directives end with a newline
+//! ("$"), which such a directive would not match; other code is not changed, so that an error at its end keeps its
+//! location (issue #2740); returns the number of bytes read, or -1 on a read error
+static ssize_t qore_scanner_read(QoreParseState* state, FILE* in, char* buf, size_t max_size) {
+    size_t n;
+    while (true) {
+        errno = 0;
+        n = fread(buf, 1, max_size, in);
+        if (n || !ferror(in)) {
+            break;
+        }
+        // a read that a signal interrupted is read again, as by flex's own input
+        if (errno != EINTR) {
+            return -1;
+        }
+        clearerr(in);
+    }
+    if (n) {
+        // the first byte of the line that the block ends in, or -1 if the block ends with a newline
+        auto i = state->file_line_first.emplace(in, -1).first;
+        // the last newline of the block (memrchr() is not portable)
+        size_t nl = n;
+        while (nl && buf[nl - 1] != '\n') {
+            --nl;
+        }
+        if (nl) {
+            i->second = nl < n ? static_cast<unsigned char>(buf[nl]) : -1;
+        } else if (i->second == -1) {
+            i->second = static_cast<unsigned char>(buf[0]);
+        }
+        return n;
+    }
+    auto i = state->file_line_first.find(in);
+    if (i == state->file_line_first.end()) {
+        return 0;
+    }
+    // the file has ended: its entry is removed, as another file can have the same FILE* later
+    bool add_newline = i->second == '%' && max_size;
+    state->file_line_first.erase(i);
+    if (!add_newline) {
+        return 0;
+    }
+    buf[0] = '\n';
+    return 1;
+}
+
+#define YY_INPUT(buf, result, max_size) { \
+    ssize_t qore_read_rc = qore_scanner_read(yyextra, yyin, buf, max_size); \
+    if (qore_read_rc < 0) { YY_FATAL_ERROR("input in flex scanner failed"); } \
+    result = (size_t)qore_read_rc; }
 
 // a token scanned again in the generic_rescan start condition is one token: the scanner goes back to INITIAL before
 // the rule's action runs (see QORE_GENERIC_STATIC_REF_CUT())
