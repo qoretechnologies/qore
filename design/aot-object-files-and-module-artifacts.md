@@ -426,15 +426,22 @@ of the module's image:
   is the record. The linker places it in a `PT_NOTE` segment, and it is marked
   `SHF_GNU_RETAIN`, so `--gc-sections` keeps it.
 
-The record is little-endian: magic `QAMI`, format version (2), payload size,
+The record is little-endian: magic `QAMI`, format version (3), payload size,
 then the module name, the dependency count and dependencies, the optional
 module count and requests, the count and names of the modules the module was
 compiled with (every module it requires, directly or not, and every module one
 of them re-exports, which the loader checks; see `aot-linked-module-sources.md`),
 and the counts and directories of the module's own `%prepend-module-path` and
 `%append-module-path` directives (which its initialization searches, so the
-loader finds the modules it checks with them), each string as a 32-bit length
-and its bytes.  Version 2 added the last three lists. Every
+loader finds the modules it checks with them), and the count and entries of the
+restricting parse options that the module's `%requires` and `%try-module`
+directives gave its dependencies, in directive order.  Each string is a 32-bit
+length and its bytes; each parse option entry is a module name and the options
+as four 32-bit words, the low and high halves of each of the two option words.
+The loader loads those dependencies first, in that order, and adds their
+options to the restrictions that they inherit; the decoder keeps only the
+options that qcc writes, the restrictions that a loaded module inherits.  Version 2 added the compiled-with and module path
+lists, version 3 the parse option list. Every
 string is nonempty and contains no NUL; payloads are bounded to 16 MiB and
 65,536 entries per list. `QoreAOTModuleFileInfo` in
 `include/qore/intern/QoreAOTBinary.h` documents the layout.

@@ -3190,14 +3190,21 @@ struct QoreAOTModuleFileInfo {
     std::vector<std::string> prepended_module_paths;
     //! the module's own %append-module-path directories, in the order its initialization searches them
     std::vector<std::string> appended_module_paths;
+    //! the options that the module's directives gave the modules that they loaded, in directive order
+    /** The parse options that the module's Program gave each module that a directive loaded, which it inherits from
+        it (not those that relieve restrictions); the loader loads the module's dependencies with them, as the module's
+        source would (qore#6406; see qore_program_private::parse_module_restrictions)
+    */
+    std::vector<std::pair<std::string, QoreParseOptions>> dependency_restrictions;
 };
 
 //! The magic number of an AOT module metadata record: 'QAMI' little-endian
 static constexpr uint32_t QORE_AOT_MODULE_INFO_MAGIC = 0x494d4151u;
 //! The format version of AOT module metadata records
-/** version 2 added the names of the modules the module was compiled with and its own module path directories
+/** version 2 added the names of the modules the module was compiled with and its own module path directories;
+    version 3 the restrictions that its code gives the modules it requires (qore#6406)
 */
-static constexpr uint32_t QORE_AOT_MODULE_INFO_VERSION = 2u;
+static constexpr uint32_t QORE_AOT_MODULE_INFO_VERSION = 3u;
 //! The size of the header of an AOT module metadata record: magic, version and payload size
 static constexpr size_t QORE_AOT_MODULE_INFO_HEADER_SIZE = 12;
 //! The segment of the Mach-O section holding AOT module metadata

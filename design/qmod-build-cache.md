@@ -166,7 +166,7 @@ Before a cached module is used:
 4. each stored file must have the SHA-256 digest the entry records (a damaged entry is removed);
 5. the stored module must contain the AOT runtime identity of the build;
 6. the stored depfile must name the module's path (the loader uses a depfile only for the module its rule names);
-7. the stored module must have a version 2 metadata record.
+7. the stored module must have a version 3 metadata record.
 
 The depfile, the fingerprints, the paths of the optional modules (`<qmod>.d.optional`, see
 `aot-linked-module-sources.md`) and then the module are each renamed into place, and the module and depfile are
@@ -183,7 +183,7 @@ A module is stored only when qcc wrote the module, the depfile, the fingerprints
 build's identity, the depfile names the module, every source still has the size and modification time qcc recorded
 in its fingerprint and every dependency has one (a source written during the compile, or one qcc could not hash, is
 no stable input), every dependency can be covered (see
-above), and the metadata record can be read and has version 2.
+above), and the metadata record can be read and has version 3.
 
 ### The CI guard: `verify`
 

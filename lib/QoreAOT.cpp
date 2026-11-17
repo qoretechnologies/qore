@@ -26379,6 +26379,14 @@ static bool buildAOTModuleInfoRecord(const QoreAOTModuleInfo& mod_info, QoreProg
     // appendModulePathListSections() stores for it): the loader finds the modules it checks with them
     info.prepended_module_paths = pp->prepended_module_paths;
     info.appended_module_paths = pp->appended_module_paths;
+    // the options that the module's directives gave the modules that they loaded, in directive order, for its
+    // dependencies: the loader loads them in that order with these options, as the source does (qore#6406)
+    for (const auto& i : pp->parse_module_restrictions) {
+        if (std::find(mod_info.dependencies.begin(), mod_info.dependencies.end(), i.first)
+                != mod_info.dependencies.end()) {
+            info.dependency_restrictions.push_back(i);
+        }
+    }
     return qoreAOTEncodeModuleInfo(info, record, error);
 }
 
@@ -26803,9 +26811,9 @@ static void generateModuleABIV2(llvm::LLVMContext& ctx, llvm::Module& module,
     // libqore's filesystem search / dlopen path.
     //
     //   extern "C" void qore_<sanitized>_register(QoreProgram* tpgm) {
-    //       qore_aot_register_into_program(tpgm,
-    //                                      &<sanitized>_qore_module_desc,
-    //                                      "<aot-static>");
+    //       qore_aot_register_into_program_v2(tpgm,
+    //                                         &<sanitized>_qore_module_desc,
+    //                                         "<aot-static>", <record>, <record size>);
     //   }
     //
     // The `.qmod` build path doesn't need this — its entry point is the
@@ -32431,8 +32439,8 @@ static bool createStaticArchive(const std::vector<std::string>& obj_paths,
 // Phase 4 slice 7: emit the `qore_qoa_register_all(QoreProgram*)`
 // entry point into a glue module that has already been populated by
 // `generateModuleABIV2(compile_only=true)`.  Thin wrapper: delegates
-// to `qore_aot_register_into_program(pgm, <mod>_qore_module_desc,
-// "<aot-static>")`, reusing slice 3's static-registration bridge.
+// to `qore_aot_register_into_program_v2(pgm, <mod>_qore_module_desc,
+// "<aot-static>", <record>, <record size>)`, reusing slice 3's static-registration bridge.
 //
 // Per design doc §qcc flag: -a the function is named exactly
 // `qore_qoa_register_all` — no module prefix.  Multiple .qoa archives
@@ -32449,7 +32457,7 @@ static void emitQoaRegisterAllFunction(llvm::LLVMContext& ctx,
     llvm::Function* desc_fn = module.getFunction(desc_fn_name);
     assert(desc_fn && "module desc fn must be emitted before qore_qoa_register_all");
 
-    // Declare qore_aot_register_into_program bridge.
+    // Declare the qore_aot_register_into_program_v2() bridge.
     auto* bridge_fn_type = llvm::FunctionType::get(void_type,
         {ptr_type, ptr_type, ptr_type, ptr_type, i64_type}, false);
     auto bridge_fn = module.getOrInsertFunction("qore_aot_register_into_program_v2",
@@ -32859,8 +32867,8 @@ bool QoreAOT::archiveModuleFromObjects(const char* dir_path,
                 /*compile_only=*/true, &static_record);
 
             // Slice 7: single public entry point for C++ hosts.
-            // Delegates to qore_aot_register_into_program via the
-            // module's desc fn.
+            // Delegates to qore_aot_register_into_program_v2() with the
+            // module's desc fn and metadata record.
             {
                 std::string sanitized = mod_info.name;
                 for (char& c : sanitized) {

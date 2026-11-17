@@ -123,9 +123,10 @@ MAX_ENTRIES_PER_BASE = 8
 
 #: AOT module metadata record (include/qore/intern/QoreAOTBinary.h, QoreAOTModuleFileInfo)
 QAMI_MAGIC = b"QAMI"
-#: the only record version read: 2 (name, dependencies, unavailable optional modules, the names of the compile-time
-#: closure, the module's own module path directives); a module with a record of another version is never cached
-QAMI_VERSION = 2
+#: the only record version read: 3 (name, dependencies, unavailable optional modules, the names of the compile-time
+#: closure, the module's own module path directives, the parse options that its directives gave its dependencies); a
+#: module with a record of another version is never cached
+QAMI_VERSION = 3
 QAMI_MAX_PAYLOAD = 16 * 1024 * 1024
 
 FINGERPRINT_HEADER = "# qore AOT module source fingerprints 1"
@@ -325,7 +326,7 @@ class ModuleInfo:
 
 
 def parse_qami_record(data, offset):
-    """Parses a version 2 AOT module metadata record at @p offset; returns a ModuleInfo or None"""
+    """Parses a version 3 AOT module metadata record at @p offset; returns a ModuleInfo or None"""
     if offset + 12 > len(data):
         return None
     magic, version, payload_size = struct.unpack_from("<4sII", data, offset)
@@ -368,6 +369,18 @@ def parse_qami_record(data, offset):
         compiled_with, pos = read_list(pos)
         prepend, pos = read_list(pos)
         append, pos = read_list(pos)
+        # the parse options that the module's directives gave its dependencies: a name and four 32-bit words each
+        if pos + 4 > end:
+            raise ValueError
+        (count,) = struct.unpack_from("<I", data, pos)
+        pos += 4
+        if count > 65536:
+            raise ValueError
+        for _ in range(count):
+            _, pos = read_str(pos)
+            if pos + 16 > end:
+                raise ValueError
+            pos += 16
         info = ModuleInfo(name, deps, optional, compiled_with, prepend, append)
     except (ValueError, UnicodeDecodeError):
         return None
@@ -377,7 +390,7 @@ def parse_qami_record(data, offset):
 
 
 def record_version_of(data, name):
-    """The version of a metadata record for module @p name in @p data that is not version 2, or None: the header and
+    """The version of a metadata record for module @p name in @p data that is not version 3, or None: the header and
     the module name, which every version starts its payload with, are all that is read of it"""
     pos = data.find(QAMI_MAGIC)
     encoded = name.encode("utf-8")
@@ -392,7 +405,7 @@ def record_version_of(data, name):
 
 
 def read_module_info(path, name):
-    """Returns the ModuleInfo of the version 2 metadata record of the AOT module @p name
+    """Returns the ModuleInfo of the version 3 metadata record of the AOT module @p name
 
     The record is found by its magic and must parse completely and name the module; exactly one such record must be
     in the file (an ELF note or a Mach-O section holds it), or CacheError is raised.
@@ -1864,7 +1877,7 @@ class Module:
             os.chmod(tmps[""], int(entry["mode"]) & 0o777)
             if not contains_identity(tmps[""], self.identity):
                 raise CacheError("stored module lacks the AOT runtime identity %s" % self.identity)
-            # only modules with a version 2 metadata record are cached (see read_module_info())
+            # only modules with a version 3 metadata record are cached (see read_module_info())
             try:
                 read_module_info(tmps[""], self.name)
             except CacheError as e:
