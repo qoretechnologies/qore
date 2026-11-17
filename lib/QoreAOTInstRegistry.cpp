@@ -540,6 +540,7 @@ constexpr AOTOpcodeLayout aot_opcode_layouts[] = {
     {O::GtPlugin, {G::Base, G::Expr}, true},
     {O::GePlugin, {G::Base, G::Expr}, true},
     {O::HandlerReturn, {G::Base}},
+    {O::SetCodeParseOptions, {G::Base}},
 };
 
 constexpr bool aotOpcodeLayoutsIndexed() {

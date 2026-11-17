@@ -550,6 +550,11 @@ constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 //!        of them refuses the kinds
 //!      - an optional TIME_ZONE section (34) records the time zone that the code sets with %set-time-zone and whether
 //!        its directive follows the header of a module (qore#6270)
+//! v42 (batch X; one format version for the format changes of the batch, one line each):
+//!      - top-level code whose statements have different parse options sets the options of each statement where they
+//!        change with a SetCodeParseOptions instruction (QoreIROpcode::SetCodeParseOptions, 439: the options as four
+//!        32-bit ConstInt words), whose native code calls qore_rt_set_code_parse_options(); the AOT runtime identity
+//!        changes with the runtime entry (qore#6293)
 constexpr uint16_t QORE_AOT_BINARY_MIN_VERSION = 9;
 //! First format version whose function variant flags record each variant's public flag (see v25 above).
 constexpr uint16_t QORE_AOT_VARIANT_PUBLIC_VERSION = 25;
@@ -604,10 +609,12 @@ constexpr uint16_t QORE_AOT_HANDLER_RETURN_VERSION = 39;
     which readers of this format ignore), which a function with more than 255 of them overflowed (#6127).
 */
 constexpr uint16_t QORE_AOT_SHARED_HANDLER_VERSION = 41;
+//! First format version whose top-level code can set the parse options of its statements (see v42 above)
+constexpr uint16_t QORE_AOT_CODE_PARSE_OPTIONS_VERSION = 42;
 //! The current format version: the newest version of the history above, which is the newest feature version above
 //! when a reader branches on it (a merge with another format change takes the next version after the newest, here and
 //! in the history above)
-constexpr uint16_t QORE_AOT_BINARY_VERSION = QORE_AOT_SHARED_HANDLER_VERSION;
+constexpr uint16_t QORE_AOT_BINARY_VERSION = QORE_AOT_CODE_PARSE_OPTIONS_VERSION;
 //! First format version whose serialized IR functions record their handler-own local slots (see v23 above).
 constexpr uint16_t QORE_AOT_HANDLER_OWN_LOCALS_VERSION = 23;
 //! First format version whose class records have a class-flags byte (see v22 above).

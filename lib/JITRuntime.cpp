@@ -15202,6 +15202,12 @@ void qore_handler_return(QoreValue value, ExceptionSink* xsink) {
 //! Hands the value of a return statement of a handler run out of line to the function that it runs for (#6074)
 /** The native code of QoreIROpcode::HandlerReturn; \a value_bits is borrowed.  See QoreHandlerRunContext.
 */
+extern "C" DLLEXPORT void qore_rt_set_code_parse_options(int64_t w0, int64_t w1, int64_t w2, int64_t w3) {
+    uint64_t lo = (static_cast<uint64_t>(static_cast<uint32_t>(w1)) << 32) | static_cast<uint32_t>(w0);
+    uint64_t hi = (static_cast<uint64_t>(static_cast<uint32_t>(w3)) << 32) | static_cast<uint32_t>(w2);
+    set_toplevel_code_parse_options(QoreParseOptions(static_cast<int64>(lo), static_cast<int64>(hi)));
+}
+
 extern "C" DLLEXPORT void qore_rt_handler_return(uint64_t value_bits, ExceptionSink* xsink) {
     qore_handler_return(fromBits(value_bits), xsink);
 }

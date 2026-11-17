@@ -508,6 +508,13 @@ DLLLOCAL void update_runtime_statement_location(const AbstractStatement* stmt, c
 DLLLOCAL void swap_toplevel_code_parse_options(const QoreParseOptions& po, const AbstractStatement*& old_stmt,
     const QoreProgramLocation*& old_loc, QoreParseOptions& old_po);
 
+//! Sets the runtime parse options of the thread and of its RuntimeConfig for the lowered top-level code that follows
+//! (QoreIROpcode::SetCodeParseOptions, qore#6293)
+/** The options are restored by the caller of the top-level code, which saved them (TopLevelStatementBlock::execIR()
+    and the run of top-level code compiled ahead of time)
+*/
+DLLLOCAL void set_toplevel_code_parse_options(const QoreParseOptions& po);
+
 //! Restores the runtime statement, location and parse options saved by swap_toplevel_code_parse_options()
 DLLLOCAL void restore_toplevel_code_parse_options(const AbstractStatement* stmt, const QoreProgramLocation* loc,
     const QoreParseOptions& po);
