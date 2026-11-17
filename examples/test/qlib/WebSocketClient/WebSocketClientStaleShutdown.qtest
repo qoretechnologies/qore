@@ -99,6 +99,8 @@ class LifecycleWsHandler inherits WebSocketHandler {
 #! A client whose threads can be held at the steps of the connection lifecycle
 class LifecycleWsClient inherits WebSocketClient {
     public {
+        #! the action timeout set by setActionTimeoutForTest(), if any
+        *timeout action_timeout_for_test;
         #! bound of every handoff wait; only reached if the client does not run the expected step
         const HandoffTimeout = 30s;
 
@@ -319,6 +321,20 @@ class LifecycleWsClient inherits WebSocketClient {
     #! sets the connect timeout, which is also the time that a connect waits for an action in progress
     setConnectTimeoutForTest(timeout connect_timeout) {
         http_opts.connect_timeout = connect_timeout;
+    }
+
+    #! sets the time that a disconnect or reconnect waits for an action in progress, or restores the default
+    /** The action timeout is otherwise the I/O timeout, which also bounds the handshake, the I/O and the close
+        handshake of each connection: a test of the action timeout sets only the action timeout short, as those
+        can take longer under load
+    */
+    setActionTimeoutForTest(*timeout action_timeout) {
+        action_timeout_for_test = action_timeout;
+    }
+
+    #! the action timeout set by setActionTimeoutForTest(), if any
+    private timeout getActionTimeout() {
+        return action_timeout_for_test ?? WebSocketClient::getActionTimeout();
     }
 
     #! returns the action timeouts: "connect" and "other"
@@ -1960,9 +1976,11 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
     #! A connect() or disconnect() that finds an action in progress waits at most its own timeout, then raises
     #! WEBSOCKET-ACTION-TIMEOUT, and succeeds once the action ended
     actionTimeoutTest(string proto, string call) {
-        # the connections are made with a long connect timeout, as making one can take longer than 300 ms under load;
-        # the connect that waits for the action has a 300 ms connect timeout, which is its action timeout
-        LifecycleCtx ctx = makeCtx(proto, {"connect_timeout": LifecycleWsClient::HandoffTimeout, "timeout": 300});
+        # the connections are made with long connect and I/O timeouts, as making one (the connection, the WebSocket
+        # handshake) and closing one can take longer than 300 ms under load; only the action timeout of the call that
+        # waits for the action is 300 ms: the connect timeout of the connect, and the action timeout of the disconnect
+        LifecycleCtx ctx = makeCtx(proto, {"connect_timeout": LifecycleWsClient::HandoffTimeout,
+            "timeout": LifecycleWsClient::HandoffTimeout});
         connectChecked(ctx, proto);
         # a disconnect() holds the action after it took the connection
         ctx.wsc.gate_mode = "claim";
@@ -1977,6 +1995,8 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
             on_exit ctx.wsc.setConnectTimeoutForTest(LifecycleWsClient::HandoffTimeout);
             assertThrows("WEBSOCKET-ACTION-TIMEOUT", \ctx.wsc.connect());
         } else {
+            ctx.wsc.setActionTimeoutForTest(300);
+            on_exit ctx.wsc.setActionTimeoutForTest();
             assertThrows("WEBSOCKET-ACTION-TIMEOUT", \ctx.wsc.disconnect());
         }
         date elapsed = microseconds(clock_get_monotonic_us() - start);
@@ -2699,14 +2719,17 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
 
     #! A disconnect() that times out waiting for an action changes nothing: automatic reconnects stay enabled
     disconnectTimeoutKeepsReconnectTest() {
-        LifecycleCtx ctx = makeCtx(NOTHING, {"reconnect": True, "timeout": 300});
+        # only the action timeout is short: the I/O timeout also bounds the handshake and the close of each connection
+        LifecycleCtx ctx = makeCtx(NOTHING, {"reconnect": True, "timeout": LifecycleWsClient::HandoffTimeout});
         connectChecked(ctx);
         # an explicit connect holds the action
         ctx.wsc.gate_mode = "action";
         ctx.wsc.inBackground("connected", sub () { ctx.wsc.connect(); });
         assertEq("gated", ctx.wsc.events.get(LifecycleWsClient::HandoffTimeout));
         ctx.wsc.report_explicit_disconnect = True;
+        ctx.wsc.setActionTimeoutForTest(300);
         assertThrows("WEBSOCKET-ACTION-TIMEOUT", \ctx.wsc.disconnect());
+        ctx.wsc.setActionTimeoutForTest();
         assertTrue(ctx.wsc.getReconnectFlag(), "automatic reconnects stay enabled");
         ctx.wsc.gate_handshake.dec();
         # the timed-out disconnect did not run the subclass steps of an explicit disconnect
@@ -2732,7 +2755,9 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
     #! An action timeout in the automatic reconnect's preamble does not end the reconnect: it goes on with its
     #! attempts
     reconnectPreambleActionTimeoutTest(string proto) {
-        LifecycleCtx ctx = makeCtx(proto, {"reconnect": True, "timeout": 300});
+        # only the action timeout is short: the I/O timeout also bounds the handshakes of the connections (the
+        # explicit connect's, the reconnect's attempts) and their close
+        LifecycleCtx ctx = makeCtx(proto, {"reconnect": True, "timeout": LifecycleWsClient::HandoffTimeout});
         connectChecked(ctx, proto);
         # an explicit connect holds the action before it closes the connection
         ctx.wsc.gate_mode = "action";
@@ -2740,6 +2765,8 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
         assertEq("gated", ctx.wsc.events.get(LifecycleWsClient::HandoffTimeout));
         # the server closes the connection; the reconnect's preamble and first attempt time out waiting for the
         # action
+        ctx.wsc.setActionTimeoutForTest(300);
+        on_exit ctx.wsc.setActionTimeoutForTest();
         ctx.wsc.report_attempts = True;
         ctx.wsc.send("bye");
         assertEq("attempt", ctx.wsc.events.get(LifecycleWsClient::HandoffTimeout));
