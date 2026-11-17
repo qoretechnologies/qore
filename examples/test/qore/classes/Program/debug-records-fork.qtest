@@ -68,6 +68,8 @@ class DebugRecordsForkTest inherits QUnit::Test {
         const SiteDebugPrograms = 4;
         #! the change of the breakpoints of a Program (QPRS_BREAKPOINTS)
         const SiteBreakpoints = 5;
+        #! after a Program being cleared has deleted the data of a thread in it (QPRS_THREAD_DATA_DELETED)
+        const SiteThreadDataDeleted = 9;
 
         #! the code of the Programs that the test debugs
         const ProgramCode = "
@@ -83,6 +85,8 @@ int sub add(int a, int b) {
         addTestCase("the child keeps the debugger calls of the thread that called fork()", \ownCallbackTest());
         addTestCase("fork() waits for a change of the Programs of a debug program", \debugProgramsTest());
         addTestCase("fork() waits for a change of the breakpoints of a Program", \breakpointsTest());
+        addTestCase("a debugger attached to a Program being cleared does not reach the deleted data of a thread",
+            \clearedThreadDataTest());
         set_return_value(main());
     }
 
@@ -262,6 +266,66 @@ int sub add(int a, int b) {
         assertEq(0, r.status, "the child assigned and unassigned breakpoints");
         assertEq(p.getProgramId(), b.getProgram().getProgramId());
         b.unassignProgram();
+    }
+
+    #! a debugger is attached to a Program while the Program deletes the data of a thread, and the process is copied
+    /** The deletion is parked after it has deleted the data of a thread that has entered the Program; attaching a
+        debugger then marks the data of every thread in the Program, and the child of the process copied meanwhile
+        makes the Program consistent: neither must reach the deleted data (valgrind reports an access to it)
+    */
+    clearedThreadDataTest() {
+        checkAvailable();
+        Program p(PO_NEW_STYLE);
+        p.parse(ProgramCode, "cleared-thread-data");
+        ProgramControl pc = control(p);
+        ParkingDebugProgram dp();
+
+        Counter entered(1);
+        Counter go(1);
+        Counter ended(1);
+        int tid;
+        background sub () {
+            on_exit ended.dec();
+            tid = gettid();
+            p.callFunction("add", 1, 2);
+            entered.dec();
+            go.waitForZero();
+        }();
+        entered.waitForZero();
+        on_exit if (go.getCount()) {
+            go.dec();
+        }
+
+        call_function("dbg_hold_program_record_change", SiteThreadDataDeleted, p, tid);
+        on_exit call_function("dbg_hold_program_record_change_clear");
+
+        Counter deleted(1);
+        background sub () {
+            on_exit deleted.dec();
+            delete p;
+        }();
+        assertTrue(call_function("dbg_wait_program_record_held"), "the deletion deleted the data of the thread");
+
+        # marks the data of every thread in the Program
+        dp.addProgram(pc);
+        assertEq(1, dp.getAllPrograms().size());
+        dp.removeProgram(pc);
+
+        hash<auto> r = call_function("dbg_fork_while_program_record_held", NOTHING, int sub () {
+            Program p2(PO_NEW_STYLE);
+            p2.parse(ProgramCode, "cleared-thread-data-child");
+            if (p2.callFunction("add", 1, 1) != 2) {
+                return 1;
+            }
+            delete p2;
+            return 0;
+        });
+        call_function("dbg_hold_program_record_change_clear");
+        deleted.waitForZero();
+        go.dec();
+        ended.waitForZero();
+
+        assertEq(0, r.status, "the child created and deleted a Program");
     }
 
     #! returns the debugger's handle of the given Program

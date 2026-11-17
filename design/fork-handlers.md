@@ -279,8 +279,10 @@ Besides the locks:
   adds); its breakpoints and their statements and thread IDs.  A record and the references that go with it are one
   change (a thread's entry into a Program and its references to the Program and to the thread's data, a breakpoint
   and the Program's reference to it, a saved object and its reference), and a record leaves its container before
-  the reference that it holds is released (the data of a thread in a Program being cleared, the breakpoints of a
-  Program), so that the child never finds a record without its reference or with a reference that was released.
+  what it refers to is deleted or released (the data of another thread in a Program being cleared, which runs
+  destructors; the breakpoints of a Program; the value of a define), so that neither the child nor another thread
+  finds a record without its reference or one that refers to deleted data.  The clearing thread's own entry stays,
+  without data, and the thread gets new data if it enters the Program again while destructors run.
 - **Debug programs**: each debug program's lock is initialized again, its count of calls in progress keeps only the
   forking thread's, and its Programs are consistent (they and each Program's debug program are changed together
   under its stripe lock).

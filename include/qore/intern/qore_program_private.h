@@ -480,6 +480,9 @@ enum QoreProgramRecordSite {
     QPRS_THREAD_DATA_CLEAR_START = 7,
     //! after a Program being cleared has cleared the data of a thread in it (no lock held)
     QPRS_THREAD_DATA_CLEARED = 8,
+    //! after a Program being cleared has deleted the data of a thread in it, before it releases its reference to
+    //! the thread's Program data (no lock held)
+    QPRS_THREAD_DATA_DELETED = 9,
 };
 
 #ifdef DEBUG
@@ -2153,39 +2156,65 @@ public:
             tclear = q_gettid();
 
             for (auto& i : pgm_data_map) {
-                i.second->finalize(sdh);
+                if (i.second) {
+                    i.second->finalize(sdh);
+                }
             }
         }
     }
 
+    //! Deletes the data of every thread in the Program, while it is cleared (tclear is set)
+    /** No other thread changes pgm_data_map while tclear is set; the clearing thread can enter the Program again
+        while destructors run (issue #4299), which gives it new data.
+
+        The entry of another thread leaves the map before its data is deleted, which runs destructors, and before the
+        Program's reference to the thread's data is released, which can free it: the threads that look at the
+        entries (attaching a debugger, breaking threads) and a child process created with fork() (see
+        fixupAfterFork()) never find an entry whose data was deleted.  The clearing thread's own entry stays, with no
+        data, so that it is recorded as cleared; setThreadVarData() gives it new data if the thread enters the
+        Program again, which is then deleted as well.  The map is walked again after each entry, so that data added
+        meanwhile is deleted too.
+    */
     DLLLOCAL void clearProgramThreadData(ExceptionSink* xsink) {
-        // tclear is set: no other thread changes pgm_data_map; the clearing thread can add its own entry while
-        // destructors run (issue #4299), which the final clear removes as before
-        std::vector<pgm_data_map_t::value_type> entries;
-        {
-            AutoLocker al(tlock);
-            entries.assign(pgm_data_map.begin(), pgm_data_map.end());
-        }
         QORE_DBG_RECORD_CHANGE(QPRS_THREAD_DATA_CLEAR_START, this);
         ThreadProgramData* own = get_thread_program_data_if_any();
-        for (auto& i : entries) {
-            i.second->del(xsink);
-            // the entry of another thread leaves the map before the Program's reference to the thread's data is
-            // released, which can free the data: a child process created with fork() reaches the Program data of
-            // the threads in the map (see fixupAfterFork()); the clearing thread's own data stays valid
-            if (i.first != own) {
+        while (true) {
+            ThreadProgramData* tpd = nullptr;
+            ThreadLocalProgramData* tlpd = nullptr;
+            {
                 AutoLocker al(tlock);
-                pgm_data_map_t::iterator mi = pgm_data_map.find(i.first);
-                if (mi != pgm_data_map.end() && mi->second == i.second) {
+                for (pgm_data_map_t::iterator i = pgm_data_map.begin(), e = pgm_data_map.end(); i != e; ++i) {
+                    if (!i->second) {
+                        continue;
+                    }
+                    tpd = i->first;
+                    tlpd = i->second;
                     std::lock_guard<std::mutex> rl(threadContainerLock());
-                    pgm_data_map.erase(mi);
+                    if (tpd == own) {
+                        i->second = nullptr;
+                    } else {
+                        pgm_data_map.erase(i);
+                    }
+                    break;
                 }
+            }
+            if (!tpd) {
+                break;
+            }
+            if (tpd == own) {
+                // the Program leaves the thread's records first, so that the thread can enter it again as on a
+                // first entry while destructors run
+                tpd->delProgram(pgm);
+                tlpd->del(xsink);
+                continue;
             }
 #ifdef DEBUG
             // read before the data can be freed
-            int tid = i.first->gettid();
+            int tid = tpd->gettid();
 #endif
-            i.first->delProgram(pgm);
+            tlpd->del(xsink);
+            QORE_DBG_RECORD_CHANGE_TID(QPRS_THREAD_DATA_DELETED, this, tid);
+            tpd->delProgram(pgm);
             QORE_DBG_RECORD_CHANGE_TID(QPRS_THREAD_DATA_CLEARED, this, tid);
         }
     }
@@ -3904,7 +3933,7 @@ public:
             return;
 
         pgm_data_map_t::iterator i = pgm_data_map.find(td);
-        if (i != pgm_data_map.end()) {
+        if (i != pgm_data_map.end() && i->second) {
             i->second->finalize(sdh);
         }
     }
@@ -3929,7 +3958,10 @@ public:
             pgm_data_map.erase(i);
         }
 
-        tlpd->del(xsink);
+        // an entry without data was cleared (see clearProgramThreadData())
+        if (tlpd) {
+            tlpd->del(xsink);
+        }
         return 0;
     }
 
@@ -4022,7 +4054,9 @@ public:
         }
 
         pgm_data_map_t::iterator i = pgm_data_map.find(td);
-        if (i == pgm_data_map.end()) {
+        // an entry without data is the clearing thread's, whose data was deleted while the Program is cleared (see
+        // clearProgramThreadData()): the thread gets new data, as on a first entry
+        if (i == pgm_data_map.end() || !i->second) {
             // issue #4299: can be called while tclear is set; in which case the Program data will be removed safely
             // in normal Program cleanup
             // the data is recorded before it is published: an allocation that fails leaves nothing behind
@@ -4038,7 +4072,11 @@ public:
 
             {
                 std::lock_guard<std::mutex> cl(threadContainerLock());
-                pgm_data_map.append(pgm_data_map_t::value_type(td, tlpd.get()));
+                if (i == pgm_data_map.end()) {
+                    pgm_data_map.append(pgm_data_map_t::value_type(td, tlpd.get()));
+                } else {
+                    i->second = tlpd.get();
+                }
             }
             new_tlpd = tlpd.release();
 
@@ -4069,7 +4107,7 @@ public:
     DLLLOCAL const AbstractQoreZoneInfo* currentTZ(ThreadProgramData* tpd = get_thread_program_data()) const {
         AutoLocker al(tlock);
         pgm_data_map_t::const_iterator i = pgm_data_map.find(tpd);
-        if (i != pgm_data_map.end() && i->second->tz_set)
+        if (i != pgm_data_map.end() && i->second && i->second->tz_set)
             return i->second->tz;
         return TZ;
     }
@@ -4394,14 +4432,19 @@ public:
     DLLLOCAL bool setDefine(const char* name, QoreValue v, ExceptionSink* xsink, ValueHolder* old = nullptr) {
         dmap_t::iterator i = dmap.find(name);
         if (i != dmap.end()) {
-            if (old) {
-                *old = i->second;
-            } else {
-                i->second.discard(xsink);
+            QoreValue prev;
+            {
+                // defines change at run time (Program::define()): fork() waits for the change (see recordLock()); the
+                // value replaced leaves the record before it is released
+                std::lock_guard<std::mutex> rl(threadContainerLock());
+                prev = i->second;
+                i->second = v;
             }
-            // defines change at run time (Program::define()): fork() waits for the change (see recordLock())
-            std::lock_guard<std::mutex> rl(threadContainerLock());
-            i->second = v;
+            if (old) {
+                *old = prev;
+            } else {
+                prev.discard(xsink);
+            }
             return true;
         }
 
@@ -4565,15 +4608,19 @@ public:
     DLLLOCAL bool unDefine(const char* name, ExceptionSink* xsink, ValueHolder* old = nullptr) {
         dmap_t::iterator i = dmap.find(name);
         if (i != dmap.end()) {
-            if (old) {
-                *old = i->second;
-            } else {
-                i->second.discard(xsink);
+            QoreValue prev;
+            {
+                // see setDefine()
+                std::lock_guard<std::mutex> rl(threadContainerLock());
+                prev = i->second;
+                dmap.erase(i);
+                source_defines.erase(name);
             }
-            // see setDefine()
-            std::lock_guard<std::mutex> rl(threadContainerLock());
-            dmap.erase(i);
-            source_defines.erase(name);
+            if (old) {
+                *old = prev;
+            } else {
+                prev.discard(xsink);
+            }
             return true;
         }
         return false;
@@ -4847,13 +4894,19 @@ public:
         AutoLocker al(tlock);
         pgm_data_map_t::iterator i = pgm_data_map.find(tpd);
         assert(i != pgm_data_map.end());
-        i->second->setTZ(tz);
+        if (i->second) {
+            i->second->setTZ(tz);
+        }
     }
 
     DLLLOCAL const AbstractQoreZoneInfo* getThreadTZ(ThreadProgramData* tpd, bool& set) const {
         AutoLocker al(tlock);
         pgm_data_map_t::const_iterator i = pgm_data_map.find(tpd);
         assert(i != pgm_data_map.end());
+        if (!i->second) {
+            set = false;
+            return nullptr;
+        }
         set = i->second->tz_set;
         return i->second->tz;
     }
@@ -4862,7 +4915,9 @@ public:
         AutoLocker al(tlock);
         pgm_data_map_t::iterator i = pgm_data_map.find(tpd);
         assert(i != pgm_data_map.end());
-        i->second->clearTZ();
+        if (i->second) {
+            i->second->clearTZ();
+        }
     }
 
     DLLLOCAL void addStatement(AbstractStatement* s, const QoreNativeParseInfo& info = {});
@@ -5961,7 +6016,8 @@ public:
         printd(5, "qore_program_private::attachDebug, dpgm: %p, pgm_data_map: size:%d\n",
             dpgm.load(std::memory_order_relaxed), (int)(pgm_data_map.size()));
         for (auto& i : pgm_data_map) {
-            if (!i.first->canRunDebugCallbacks()) {
+            // an entry without data was cleared (see clearProgramThreadData())
+            if (!i.second || !i.first->canRunDebugCallbacks()) {
                 continue;
             }
             i.second->dbgPendingAttach();
@@ -5989,7 +6045,7 @@ public:
         printd(5, "qore_program_private::detachDebug, dpgm: %p, pgm_data_map: size:%d\n",
             dpgm.load(std::memory_order_relaxed), (int)(pgm_data_map.size()));
         for (auto& i : pgm_data_map) {
-            if (!i.first->canRunDebugCallbacks()) {
+            if (!i.second || !i.first->canRunDebugCallbacks()) {
                 continue;
             }
             i.second->dbgPendingDetach();
@@ -6025,7 +6081,8 @@ public:
         AutoLocker al(tlock);
         for (auto& i : pgm_data_map) {
             if (i.first->gettid() == tid) {
-                if (!i.first->canRunDebugCallbacks() || !in_program.count(tid)) {
+                // an entry without data was cleared (see clearProgramThreadData())
+                if (!i.second || !i.first->canRunDebugCallbacks() || !in_program.count(tid)) {
                     return -1;
                 }
                 i.second->dbgBreak();
@@ -6042,7 +6099,7 @@ public:
         AutoLocker al(tlock);
         bool rv = false;
         for (auto& i : pgm_data_map) {
-            if (!i.first->canRunDebugCallbacks() || !in_program.count(i.first->gettid())) {
+            if (!i.second || !i.first->canRunDebugCallbacks() || !in_program.count(i.first->gettid())) {
                 continue;
             }
             i.second->dbgBreak();

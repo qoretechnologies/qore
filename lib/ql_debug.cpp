@@ -18473,10 +18473,12 @@ struct ProgramRecordHold {
     bool hook_saw_held = false;
 };
 
+//! the hold; created when the library is loaded, so that a child process created with fork() never initializes it
+//! (not destroyed: a parked thread can use it while static objects are destroyed)
+ProgramRecordHold* const program_record_hold_ptr = new ProgramRecordHold;
+
 ProgramRecordHold& program_record_hold() {
-    // not destroyed: a parked thread can use it while static objects are destroyed
-    static ProgramRecordHold* h = new ProgramRecordHold;
-    return *h;
+    return *program_record_hold_ptr;
 }
 
 //! called inside a change of a record of a Program, with the lock of the change held, or after it
@@ -18559,9 +18561,10 @@ void program_record_hold_disarm(ProgramRecordHold& h) {
     Program's family, 2: a lock of the Program's parse options, 3: a feature added to the Program, 4: the Program
     added to a debug program, 5: a breakpoint assigned to the Program, 6: after a thread's first entry into the
     Program has been recorded, 7: the start of the clearing of the data of the Program's threads, 8: after the data
-    of a thread in the Program has been cleared
+    of a thread in the Program has been cleared, 9: after the data of a thread in the Program has been deleted while
+    the Program is cleared
     @param pgm the Program
-    @param tid the thread that the change concerns (site 8), or NOTHING for any
+    @param tid the thread that the change concerns (sites 8 and 9), or NOTHING for any
 
     @throw DBG-ARGUMENT-ERROR a hold is already armed, or a thread of a previous hold has not continued yet
 */
@@ -18574,7 +18577,7 @@ static QoreValue f_dbg_hold_program_record_change(const QoreListNode* params, Ru
     if (!pgm) {
         return QoreValue();
     }
-    if (site < QPRS_THREAD_PROGRAMS || site > QPRS_THREAD_DATA_CLEARED) {
+    if (site < QPRS_THREAD_PROGRAMS || site > QPRS_THREAD_DATA_DELETED) {
         xsink->raiseException("DBG-ARGUMENT-ERROR", "invalid record change %d", site);
         return QoreValue();
     }
