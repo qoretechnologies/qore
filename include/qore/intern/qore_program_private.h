@@ -554,9 +554,11 @@ public:
     // unique program location storage
     pgmloc_vec_t pgmloc;
 
-    // high water marks for atomic rollback support (used with PO_ALLOW_REPARSE)
-    size_t str_vec_hwm = 0;   // committed size of str_vec
-    size_t pgmloc_hwm = 0;    // committed size of pgmloc
+    // high water marks for atomic rollback support (used with PO_ALLOW_REPARSE): the sizes of str_vec and pgmloc
+    // when the last commit ended or when the current parse began, whichever is later; a rollback deletes only the
+    // entries above them, which the failed parse added (issue #6354); protected by runtime_metadata_lock
+    size_t str_vec_hwm = 0;
+    size_t pgmloc_hwm = 0;
 
     // temporary while parsing: to ensure unique strings in parsing
     typedef std::set<const char*, ltstr> str_set_t;
@@ -565,6 +567,14 @@ public:
     // temporary while parsing: unique locations; must be a set for performance reasons
     typedef std::set<const QoreProgramLocation*, ltpgm> loc_set_t;
     loc_set_t loc_set;
+
+    // strings and locations that code deserialized from AOT data interns, also while the Program is parsed: they are
+    // referred to by code that is not part of a parse and are never rolled back, only deleted with the Program
+    // (issue #6354); protected by runtime_metadata_lock
+    cstr_vector_t rt_str_vec;
+    str_set_t rt_str_set;
+    pgmloc_vec_t rt_pgmloc;
+    loc_set_t rt_loc_set;
 
     typedef std::set<std::string> strset_t;
     // features present in this Program object
@@ -1330,6 +1340,14 @@ public:
 #endif
 
     DLLLOCAL const QoreProgramLocation* getLocation(int sline, int eline);
+
+    //! Interns a string for code deserialized from AOT data; it is never rolled back (issue #6354)
+    DLLLOCAL const char* addRuntimeString(const char* str);
+    //! Returns a unique location for code deserialized from AOT data; it is never rolled back (issue #6354)
+    DLLLOCAL const QoreProgramLocation* getRuntimeLocation(const QoreProgramLocation& loc, int sline, int eline);
+    //! Returns a unique location with the file of the current parse location for code deserialized from AOT data;
+    //! it is never rolled back (issue #6354)
+    DLLLOCAL const QoreProgramLocation* getRuntimeLocation(int sline, int eline);
     DLLLOCAL const QoreProgramLocation* getLocation(int sline, int eline, int scol, int ecol);
     DLLLOCAL const QoreProgramLocation* getLocation(const QoreProgramLocation&, int sline, int eline);
     DLLLOCAL const QoreProgramLocation* getLocation(const QoreProgramLocation&, int sline, int eline,

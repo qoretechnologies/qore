@@ -18539,6 +18539,52 @@ static QoreValue f_dbg_program_parse_file(const QoreListNode* params, RuntimeCon
     return QoreValue();
 }
 
+//! Debug-only: returns the numbers of strings and locations that the Program holds (issue #6354)
+/** \c strings and \c locations are those of parsed code, which a rollback with PO_ALLOW_REPARSE can delete;
+    \c runtime_strings and \c runtime_locations are those of code deserialized from AOT data.  DEBUG builds only.
+*/
+static QoreValue f_dbg_program_metadata(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    const QoreObject* obj = get_param_value(params, 0).get<const QoreObject>();
+    ReferenceHolder<QoreProgram> pgm(static_cast<QoreProgram*>(obj->getReferencedPrivateData(CID_PROGRAM,
+        xsink)), xsink);
+    if (!pgm) {
+        return QoreValue();
+    }
+    qore_program_private* pp = qore_program_private::get(**pgm);
+    size_t strings, locations, rt_strings, rt_locations;
+    {
+        std::lock_guard<std::recursive_mutex> lock(pp->runtime_metadata_lock);
+        strings = pp->str_vec.size();
+        locations = pp->pgmloc.size();
+        rt_strings = pp->rt_str_vec.size();
+        rt_locations = pp->rt_pgmloc.size();
+    }
+    ReferenceHolder<QoreHashNode> h(new QoreHashNode(bigIntTypeInfo), xsink);
+    h->setKeyValue("strings", static_cast<int64>(strings), xsink);
+    h->setKeyValue("locations", static_cast<int64>(locations), xsink);
+    h->setKeyValue("runtime_strings", static_cast<int64>(rt_strings), xsink);
+    h->setKeyValue("runtime_locations", static_cast<int64>(rt_locations), xsink);
+    return h.release();
+}
+
+//! Debug-only: interns a location in the Program as code deserialized from AOT data does (issue #6354)
+/** @return the file name of the location, read back from the Program's copy.  DEBUG builds only.
+*/
+static QoreValue f_dbg_program_intern_runtime_location(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    const QoreObject* obj = get_param_value(params, 0).get<const QoreObject>();
+    ReferenceHolder<QoreProgram> pgm(static_cast<QoreProgram*>(obj->getReferencedPrivateData(CID_PROGRAM,
+        xsink)), xsink);
+    if (!pgm) {
+        return QoreValue();
+    }
+    QoreStringNodeValueHelper file(get_param_value(params, 1));
+    int line = static_cast<int>(get_param_value(params, 2).getAsBigInt());
+    QoreProgramLocation tmp(file->c_str(), line, line);
+    const QoreProgramLocation* loc = qore_program_private::get(**pgm)->getRuntimeLocation(tmp, line, line);
+    return new QoreStringNode(loc->getFile());
+}
+
 //! Debug-only: stops the next parse of the Program once it has started (issue #6206)
 /** The parse (Program::parse(), Program::parsePending() or Program::parseCommit()) stops after it has been marked
     as in progress, until dbg_release_parse_start_gate() is called; dbg_wait_parse_start_gate() waits until it has
@@ -26805,6 +26851,11 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_program_parse_file", f_dbg_program_parse_file, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         nothingTypeInfo, 2, QC_PROGRAM->getTypeInfo(), QORE_PARAM_NO_ARG, "pgm", stringTypeInfo, QORE_PARAM_NO_ARG,
         "path");
+    qns.addBuiltinVariant("dbg_program_metadata", f_dbg_program_metadata, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        hashTypeInfo, 1, QC_PROGRAM->getTypeInfo(), QORE_PARAM_NO_ARG, "pgm");
+    qns.addBuiltinVariant("dbg_program_intern_runtime_location", f_dbg_program_intern_runtime_location, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, stringTypeInfo, 3, QC_PROGRAM->getTypeInfo(), QORE_PARAM_NO_ARG, "pgm", stringTypeInfo,
+        QORE_PARAM_NO_ARG, "file", bigIntTypeInfo, QORE_PARAM_NO_ARG, "line");
     qns.addBuiltinVariant("dbg_arm_parse_start_gate", f_dbg_arm_parse_start_gate, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         nothingTypeInfo, 2, QC_PROGRAM->getTypeInfo(), QORE_PARAM_NO_ARG, "pgm", boolTypeInfo, QORE_PARAM_NO_ARG,
         "fail");
