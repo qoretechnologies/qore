@@ -308,6 +308,99 @@ qore_bundled_module_two_phase_docs("{binaries}" "{users}")
         self.assertIn(f'"{build}/User.tag=../../User/html"', config)
         self.assertNotIn("optional", config)
 
+    def configure_reference_check(self, references, warning, rc=0):
+        """Configures a bundled module whose final pass reports an unresolved reference (issue #6367): a stand-in
+        for Doxygen writes the warning to the pass's WARN_LOGFILE, and the tag files of the other modules exist"""
+        directory = tempfile.TemporaryDirectory(prefix="qore bundled doc refs ")
+        self.addCleanup(directory.cleanup)
+        root = Path(directory.name)
+        source, build = root / "source", root / "build"
+        source.mkdir()
+        (source / "warning.txt").write_text(warning + "\n")
+        (source / "fake-doxygen.py").write_text(f'''import re, sys
+from pathlib import Path
+config = Path(sys.argv[1]).read_text()
+match = re.search(r'^WARN_LOGFILE = "([^"]*)"', config, re.M)
+if match:
+    Path(match.group(1)).write_text(Path({str(source / "warning.txt")!r}).read_text())
+sys.exit({rc})
+''')
+        tag = """<?xml version='1.0' encoding='UTF-8' standalone='yes' ?>
+<tagfile><compound kind="page"><name>{name}_page</name><filename>{name}_page.html</filename></compound></tagfile>
+"""
+        (source / "CMakeLists.txt").write_text(f'''cmake_minimum_required(VERSION 3.14...3.31)
+project(BundledDocRefs NONE)
+include("{ROOT.as_posix()}/cmake/QoreMacros.cmake")
+set(DOXYGEN_FOUND TRUE)
+set(Python3_EXECUTABLE "{Path(sys.executable).as_posix()}")
+set(DOXYGEN_EXECUTABLE "${{Python3_EXECUTABLE}}" "${{CMAKE_SOURCE_DIR}}/fake-doxygen.py")
+set(QORE_QDX_COMMAND "${{CMAKE_COMMAND}}" -E true)
+add_custom_target(docs)
+foreach(name lang lib native peer User)
+    add_custom_target(docs-${{name}})
+endforeach()
+foreach(name native peer)
+    file(MAKE_DIRECTORY "${{CMAKE_BINARY_DIR}}/modules/${{name}}")
+    file(WRITE "${{CMAKE_BINARY_DIR}}/modules/${{name}}/Doxyfile" "# ${{name}}\\n")
+endforeach()
+file(WRITE "${{CMAKE_BINARY_DIR}}/modules/peer/peer.tag" [=[{tag.format(name="peer")}]=])
+file(WRITE "${{CMAKE_BINARY_DIR}}/User.tag" [=[{tag.format(name="User")}]=])
+set(QORE_DOC_REFERENCE_MODULES_native {references})
+qore_bundled_module_two_phase_docs("native;peer" "User")
+''')
+        result = subprocess.run([CMAKE, "-S", str(source), "-B", str(build)],
+                                text=True, capture_output=True, timeout=30)
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+        config = (build / "modules/native/Doxyfile.final").read_text()
+        self.assertIn(f'WARN_LOGFILE = "{build}/modules/native/doc-final-warnings.log"', config)
+        return build
+
+    def build_final(self, build, module="native"):
+        return subprocess.run([CMAKE, "--build", str(build), "--target", f"docs-{module}-final"],
+                              text=True, capture_output=True, timeout=60)
+
+    def test_bundled_module_reference_to_an_unlisted_module_fails(self):
+        warning = "/src/native.dox:3: warning: unable to resolve reference to 'peer_page' for \\ref command"
+        for references, owner in (("User", "peer"), ("peer", "User")):
+            with self.subTest(references=references):
+                target = f"{owner}_page"
+                build = self.configure_reference_check(references, warning.replace("peer_page", target))
+                result = self.build_final(build)
+                self.assertNotEqual(0, result.returncode, result.stdout + result.stderr)
+                output = " ".join((result.stdout + result.stderr).split())
+                self.assertIn(f"refers to '{target}' of module {owner}, which is not in "
+                              "QORE_DOC_REFERENCE_MODULES_native", output)
+
+    def test_bundled_module_reference_to_a_listed_module_passes(self):
+        warning = "/src/native.dox:3: warning: unable to resolve reference to 'peer_page' for \\ref command"
+        build = self.configure_reference_check("peer User", warning)
+        result = self.build_final(build)
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+        # the warning is still shown
+        self.assertIn("unable to resolve reference to 'peer_page'", result.stdout + result.stderr)
+
+    def test_bundled_module_failed_doxygen_shows_its_errors(self):
+        # with WARN_LOGFILE, Doxygen writes its errors only to the log, which the check prints
+        error = "error: tag OUTPUT_DIRECTORY: Output directory cannot be created"
+        build = self.configure_reference_check("User", error, rc=1)
+        result = self.build_final(build)
+        self.assertNotEqual(0, result.returncode, result.stdout + result.stderr)
+        self.assertIn(error, result.stdout + result.stderr)
+
+    def test_bundled_module_unknown_reference_passes(self):
+        # a reference that no module defines is a documentation error for Doxygen to report, not a missing import
+        build = self.configure_reference_check(
+            "User", "/src/native.dox:3: warning: unable to resolve reference to 'nowhere' for \\ref command")
+        result = self.build_final(build)
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+
+    def test_bundled_module_final_pass_writes_its_warnings_for_the_check(self):
+        # Python is found by the function itself, and the check script is the one of the source tree of the macros
+        build, result = self.configure_bundled("User")
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+        config = (build / "modules/native/Doxyfile.final").read_text()
+        self.assertIn(f'WARN_LOGFILE = "{build}/modules/native/doc-final-warnings.log"', config)
+
     def test_bundled_module_listing_itself_is_an_error(self):
         with tempfile.TemporaryDirectory(prefix="qore bundled docs ") as directory:
             root = Path(directory)
