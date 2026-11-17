@@ -129,11 +129,10 @@ x=null@endverbatim
 
     Note that the second time the local variable is accessed in the background thread, it has no value.
 
-    Due to the way %Qore's local variables work, it is illegal to declare a top-level local variable after first block
-    is parsed in the program; that is; if any call to @ref Qore::parse() "parse()" or
-    @ref Qore::Program::parse() "Program::parse()" is made in an existing program (where a top-level block already
-    exists), and an attempt to declare a new top-level local variable is made, then an
-    \c ILLEGAL-TOP-LEVEL-LOCAL-VARIABLE parse exception will be raised.
+    Top-level local variables are declared by the parse that a %Program commits first; a parse that fails does not
+    count, and the variables that it declared are rolled back.  A %Program can be parsed only once unless it has
+    @ref Qore::PO_ALLOW_REPARSE "PO_ALLOW_REPARSE", whose later parses can declare top-level local variables as
+    well.
 
     Access to global variables in qore is wrapped in mutual-exclusion locks to guarantee safe access to global
     variable data in a multithreaded context. Local variables are thread-local and therefore not locked, except when

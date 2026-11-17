@@ -120,7 +120,7 @@ public hashdecl HttpClientConnectionManagerOptions {
     int max_connections_per_host = DefaultMaxConnectionsPerHost;
     int max_streams_per_connection = DefaultMaxStreamsPerConnection;
     timeout idle_timeout = DefaultConnectionIdleTimeout;
-    timeout connect_timeout = DefaultConnectTimeout;   # also used as stale detection timeout for reused connections
+    timeout connect_timeout = DefaultConnectTimeout;   # bound of each connection's connect phase
     timeout request_timeout = DefaultRequestTimeout;
     *int ssl_verify_mode;
     bool accept_all_certs = False;
@@ -469,15 +469,29 @@ Dead connections are detected at two levels:
    This is the same approach as curl's `cf_socket_conn_is_alive()` but driven by the async event
    loop instead of a zero-timeout `poll()` call (which would conflict with epoll fd ownership).
 
-2. **Timeout detection (half-open):** If the server goes completely silent (no FIN, no RST — e.g.
-   process crash, network partition), there is no kernel-level signal.  For reused pooled connections,
-   the connection manager uses `connect_timeout` (not `request_timeout`) as the request deadline.
-   If the server doesn't respond within `connect_timeout`, the connection is assumed stale — the
-   manager closes it, evicts dead connections, and retries once on a fresh connection.  This provides
-   fast stale detection (typically 2-5s) instead of waiting the full `request_timeout` (30-60s).
+2. **Inactivity detection (half-open):** If the server goes completely silent (no FIN, no RST — e.g.
+   process crash, network partition), there is no kernel-level signal.  A request on a reused pooled
+   connection that fails on its `io_timeout` (no data received) was submitted on a connection that
+   was ready: the manager closes it, evicts dead connections, and sends the request again once on a
+   fresh connection, within the request's remaining time.  `tcp_user_timeout` and TCP keepalive
+   catch the TCP-level cases.
 
-For fresh connections (not from the pool), the full `request_timeout` is used — a timeout on a new
-connection means the server is genuinely slow or unreachable, not stale.
+The request's timeout is a hard deadline for the whole request (#6429): the acquisition of its
+connection, the wait for the connection to become ready, the wait for the response and every resend
+share it, and no attempt starts once it has run out.  Without `io_timeout`, a half-open connection
+therefore ends the request with `HTTPCLIENT-TIMEOUT`.  A timeout on a fresh connection, or on a
+connection that never became ready (a pending connection that other requests may also wait for), is
+never retried.
+
+The deadline belongs to the request, not to the connection: a request whose time runs out while its
+connection is still connecting releases only its own stream reservation, and the connection keeps
+connecting, bounded by `connect_timeout`, for other waiters and later requests.  A synchronous
+happy-eyeballs race that the caller's deadline cuts off goes on in a background thread (counted in
+`in_flight`, its candidates closed by `closeAll()`), with the creation of the key still claimed, and its
+winner is pooled; so a link slower than the request timeout still gets a connection.  Deadlines are on
+the monotonic clock (`clock_get_monotonic_us()`), and waits are rounded up to milliseconds; whether a
+request may be sent again is decided by the stream's `requestDeadlineExpired()` flag, not by comparing
+clocks after a wait.
 
 ## Module Registration
 

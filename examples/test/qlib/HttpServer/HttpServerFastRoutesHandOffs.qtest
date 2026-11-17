@@ -1,0 +1,207 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - fast-route responses sent by the async I/O threads without a hand-off to a callback worker
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires HttpServer
+%requires HttpServerUtil
+
+%exec-class HttpServerFastRoutesHandOffsTest
+
+class FastRouteCountingHandler inherits AbstractHttpRequestHandler {
+    public {
+        #! the number of requests that the handler answered
+        Counter calls();
+    }
+
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
+            *data body) {
+        calls.inc();
+        return <HttpResponseInfo>{"code": 200, "body": "{}", "hdr": {"Content-Type": "application/json"}};
+    }
+}
+
+#! Checks that the HTTP server's fast routes answer requests without the handler machinery
+/** A client sends requests, alternately to a fast route and to the handler with the same response, and the test
+    counts the work that each path causes: the handler's calls, the requests that the fast route answered and (with a
+    debug build of the library) the completions that the async I/O controller handed off to a callback worker
+    (\c dbg_async_io_on_complete_dispatched()).  Every count is taken after the responses it covers were received, and
+    each hand-off or call that it counts happens before the response is sent (or, for a connection that the server
+    closes, before the connection is closed, which the client waits for), so the counts do not depend on the load of
+    the host or on the speed of the build (qore#6425).  A fast route that is no longer answered on the async I/O thread
+    (a hand-off to a worker is back) or that reaches the handler fails the counts.  See
+    design/http-server-fast-routes.md.
+*/
+class HttpServerFastRoutesHandOffsTest inherits QUnit::Test {
+    public {
+        #! the requests per path on one keep-alive connection
+        const Requests = 200;
+
+        #! the requests per path, each on a connection of its own
+        const NewConnectionRequests = 50;
+
+        #! the hand-offs to a worker of a connection of its own that are not for its request: its accept and its end
+        const ConnectionHandOffs = 2;
+
+        const Timeout = 30s;
+    }
+
+    private {
+        HttpServer hs;
+        FastRouteCountingHandler handler();
+        int port;
+
+        #! the keep-alive connection; closed in globalTearDown(): the server hands off the end of a connection that
+        #! the client closes after the client has closed it, which no count taken here could wait for
+        *Socket keep_alive;
+    }
+
+    constructor() : QUnit::Test("HttpServerFastRoutesHandOffsTest", "1.0", \ARGV) {
+        addTestCase("fast route vs handler", \testKeepAlive());
+        addTestCase("fast route vs handler, a connection per request", \testNewConnection());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        hs = new HttpServer();
+        hs.setDefaultHandler("handler", handler);
+        port = hs.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+        hs.addFastRoute("/fast", {"public": True, "response": {"code": 200, "body": "{}",
+            "content_type": "application/json"}});
+    }
+
+    globalTearDown() {
+        if (keep_alive) {
+            keep_alive.close();
+        }
+        hs.stop();
+        delete hs;
+    }
+
+    #! the work done so far: handler calls, fast-route answers and worker hand-offs (-1 without a debug library)
+    private hash<string, int> counts() {
+        return {
+            "handler": handler.calls.getCount(),
+            "fast": hs.getFastRouteInfo().routes."/fast" ?? 0,
+            "handoffs": Option::HAVE_LIBRARY_DEBUGGING ? call_function("dbg_async_io_on_complete_dispatched") : -1,
+        };
+    }
+
+    #! returns the work done since \a start
+    private hash<string, int> since(hash<string, int> start) {
+        hash<string, int> now = counts();
+        return map {$1.key: $1.value - start{$1.key}}, now.pairIterator();
+    }
+
+    #! reads the response to a request for \a path and checks it
+    private readResponse(Socket c, string path) {
+        hash<auto> h = c.readHTTPHeader(Timeout);
+        if (h.status_code != 200) {
+            throw "TEST-ERROR", sprintf("unexpected status %d for %s", h.status_code, path);
+        }
+        int len = (h."content-length" ?? 0).toInt();
+        if (len) {
+            c.recv(len, Timeout);
+        }
+    }
+
+    #! sends n requests for path on the connection
+    private run(Socket c, string path, int n) {
+        string req = sprintf("GET %s HTTP/1.1\r\nHost: x\r\n\r\n", path);
+        for (int i = 0; i < n; ++i) {
+            c.send(req);
+            readResponse(c, path);
+        }
+    }
+
+    #! sends n requests for path, each on a new connection that the server closes after its response
+    /** The client waits until the server has closed the connection (its side of it, for the handler): the hand-offs
+        before the close are then counted.  The handler's connection ends with a lingering close, whose completion
+        comes after the client has closed its side, so a hand-off of the handler can be counted later; it can only
+        add to the counts of later requests, so the fast route's requests are sent first, and a test case that comes
+        after this one must not count hand-offs
+    */
+    private runNewConnections(string path, int n) {
+        # like a Kubernetes probe: a connection for each request, with Connection: close
+        string req = sprintf("GET %s HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n", path);
+        for (int i = 0; i < n; ++i) {
+            Socket c();
+            c.connect("127.0.0.1:" + port);
+            c.send(req);
+            readResponse(c, path);
+            try {
+                c.recv(1, Timeout);
+                throw "TEST-ERROR", sprintf("data received after the response for %s", path);
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err != "SOCKET-CLOSED") {
+                    rethrow;
+                }
+            }
+            c.close();
+        }
+    }
+
+    testKeepAlive() {
+        Socket c = keep_alive = new Socket();
+        c.connect("127.0.0.1:" + port);
+        # the first response comes after the completion of the connection's accept, which is then counted; the
+        # handler's responses are sent by the operation that reads the next request, so none of its hand-offs comes
+        # after a response
+        run(c, "/fast", 1);
+        run(c, "/normal", 1);
+
+        hash<string, int> start = counts();
+        run(c, "/fast", Requests);
+        hash<string, int> fast = since(start);
+
+        start = counts();
+        run(c, "/normal", Requests);
+        hash<string, int> normal = since(start);
+
+        if (m_options.verbose) {
+            printf("keep-alive, %d requests: fast route: %y, handler: %y\n", Requests, fast, normal);
+        }
+        assertEq(Requests, fast.fast, "the fast route answers each of its requests");
+        assertEq(0, fast.handler, "the fast route never reaches the handler");
+        assertEq(0, normal.fast, "the fast route does not answer other paths");
+        assertEq(Requests, normal.handler, "the handler answers each of its requests");
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("needs a debug build of the library for dbg_async_io_on_complete_dispatched()");
+        }
+        assertEq(0, fast.handoffs, "the fast route is answered on the I/O thread, with no hand-off to a worker");
+        assertGe(Requests, normal.handoffs, "each request of the handler is handed off to a worker");
+    }
+
+    testNewConnection() {
+        hash<string, int> start = counts();
+        runNewConnections("/fast", NewConnectionRequests);
+        hash<string, int> fast = since(start);
+
+        start = counts();
+        runNewConnections("/normal", NewConnectionRequests);
+        hash<string, int> normal = since(start);
+
+        if (m_options.verbose) {
+            printf("a connection per request, %d requests: fast route: %y, handler: %y\n", NewConnectionRequests,
+                fast, normal);
+        }
+        assertEq(NewConnectionRequests, fast.fast, "the fast route answers the first request of each connection");
+        assertEq(0, fast.handler, "the fast route never reaches the handler");
+        assertEq(0, normal.fast, "the fast route does not answer other paths");
+        assertEq(NewConnectionRequests, normal.handler, "the handler answers each of its requests");
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("needs a debug build of the library for dbg_async_io_on_complete_dispatched()");
+        }
+        # the accept and the end of a connection are handed off to a worker on either path; the request itself only on
+        # the handler's path: its header and the completion of the send of its response come before the server closes
+        # its side, and so the accept, the header and the send are counted for each connection
+        assertLe(NewConnectionRequests * ConnectionHandOffs, fast.handoffs,
+            "the request of a new connection is answered on the I/O thread, with no hand-off of its own");
+        assertGe(NewConnectionRequests * (ConnectionHandOffs + 1), normal.handoffs,
+            "the request of a new connection to the handler is handed off to a worker");
+    }
+}

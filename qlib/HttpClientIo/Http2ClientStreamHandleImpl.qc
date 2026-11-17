@@ -172,7 +172,7 @@ public class Http2ClientStreamHandle inherits HttpClientStreamHandle {
                 throw "HTTPCLIENT-NOT-READY",
                     "connection is not ready for async streaming request";
             }
-            if (!conn.waitForReady(timeout_ms: getConnectWait())) {
+            if (!conn.waitForReady(timeout_ms: getReadyWait())) {
                 {
                     AutoLock al(lock);
                     state = HttpClientStreamState::Pending;
@@ -180,7 +180,8 @@ public class Http2ClientStreamHandle inherits HttpClientStreamHandle {
                     request_body_streaming = False;
                     delete data_channel;
                 }
-                throw "HTTPCLIENT-TIMEOUT", "connection establishment timed out";
+                # the reservation is released; the connection keeps connecting for other waiters (#6429, #6430)
+                throwConnectWaitExpired();
             }
         }
 
@@ -229,13 +230,14 @@ public class Http2ClientStreamHandle inherits HttpClientStreamHandle {
 
         # Wait for connection to become ready if not already
         if (!conn.isReady()) {
-            if (!conn.waitForReady(timeout_ms: getConnectWait())) {
+            if (!conn.waitForReady(timeout_ms: getReadyWait())) {
                 {
                     AutoLock al(lock);
                     state = HttpClientStreamState::Pending;
                     streaming = False;
                 }
-                throw "HTTPCLIENT-TIMEOUT", "connection establishment timed out";
+                # the reservation is released; the connection keeps connecting for other waiters (#6429, #6430)
+                throwConnectWaitExpired();
             }
         }
 

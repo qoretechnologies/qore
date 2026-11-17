@@ -17,7 +17,7 @@
 
 %exec-class JITLargeFunctionBlocksPart3
 
-#! runs part 3 of 4 of the cases of JITLargeFunctionBlocksBase
+#! runs part 3 of 7 of the cases of JITLargeFunctionBlocksBase
 class JITLargeFunctionBlocksPart3 inherits JITLargeFunctionBlocksBase {
     constructor() : JITLargeFunctionBlocksBase("JITLargeFunctionBlocksPart3", 3) {
     }

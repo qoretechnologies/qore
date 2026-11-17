@@ -7,8 +7,8 @@
 %requires ../../../TestInterpreter.qm
 
 #! The cases of the ParseStackBoundary-<n>.qtest tests: each runs one part of them, so that each takes a short time,
-#! and together they run every case (see addPartCase()); parts 1 and 3 parse code in a single Program, part 2 loads
-#! modules
+#! and together they run every case (see addPartCase()); parts 1, 3 and 4 parse code in a single Program, parts 2 and 5
+#! load modules
 #! Parsing that runs short of stack in a foreign thread fails with a parse exception at every stack size (issue #6047)
 /** The fixture parses nested code in foreign threads with stack sizes from 160KB to 640KB in 4KB steps; each level of
     the code is an expression that inspects the expression it contains after parse-initializing it (a list assignment
@@ -26,15 +26,15 @@ public class ParseStackBoundaryBase inherits QUnit::Test {
     constructor(string name, int part) : Test(name, "1.0") {
         self.part = part;
         addPartCase(1, "parse-time stack boundary", \check());
-        addPartCase(1, "class inheritance chain", \classChainCheck());
+        addPartCase(4, "class inheritance chain", \classChainCheck());
         addPartCase(3, "class inheritance chain with methods", \classMethodChainCheck());
-        addPartCase(3, "class inheritance chain with methods, most derived class first", \classMethodChainCheck(),
+        addPartCase(4, "class inheritance chain with methods, most derived class first", \classMethodChainCheck(),
             True);
         addPartCase(1, "hashdecl inheritance chain", \hashdeclChainCheck());
         addPartCase(2, "nested module loads", \moduleCheck());
         addPartCase(2, "nested optional module loads", \tryModuleCheck());
-        addPartCase(2, "nested optional AOT module loads", \aotModuleCheck());
-        addPartCase(2, "AOT module compiled without an optional module that is available now",
+        addPartCase(5, "nested optional AOT module loads", \aotModuleCheck());
+        addPartCase(5, "AOT module compiled without an optional module that is available now",
             \aotOptionalAvailableCheck());
         addPartCase(2, "module initialization that recurses without end", \runawayInitCheck());
         addPartCase(2, "module initialization deeper than a small stack", \deepInitCheck());
@@ -167,24 +167,22 @@ public class ParseStackBoundaryBase inherits QUnit::Test {
                 "}\n",
                 i + 1 < ChainLength ? sprintf("%%requires StackChain%d\n", i + 1) : "", i, i));
         }
-        int parsed;
-        int stack_errors;
         # from 128KB, or the platform's minimum stack size if it is larger (see getSweepStartKb())
-        for (int kb = max(128, getSweepStartKb(exe, libdir, 32)); kb <= 1024; kb += 32) {
+        int start_kb = max(128, getSweepStartKb(exe, libdir, 32));
+        hash<string, string> results = sweep(start_kb, 1024, 32, string sub (int kb) {
             int status;
             string output = backquote("LD_LIBRARY_PATH=" + quote(libdir) + " DYLD_LIBRARY_PATH=" + quote(libdir)
                 + " QORE_MODULE_DIR=" + quote(mdir) + " " + quote(exe) + " StackChain0 " + kb + " 2>&1", \status);
             string label = sprintf("%dK", kb);
             assertEq(0, status, label + ": " + output);
             if (output == "parsed\n") {
-                ++parsed;
-            } else {
-                assertEq("stack error\n", output, label);
-                ++stack_errors;
+                return "parsed";
             }
-        }
-        assertGt(0, parsed, "the chain is parsed with a large stack");
-        assertGt(0, stack_errors, "the chain runs short of a small stack");
+            assertEq("stack error\n", output, label);
+            return "stack error";
+        });
+        assertGt(0, count(results, "parsed"), "the chain is parsed with a large stack");
+        assertGt(0, count(results, "stack error"), "the chain runs short of a small stack");
     }
 
     #! the smallest stack size of the sweeps of runSource() and deepInitCheck() in KB, where the platform allows it
@@ -212,8 +210,49 @@ public class ParseStackBoundaryBase inherits QUnit::Test {
         return max(MinSweepKb, rv);
     }
 
-    #! runs the fixture on a source file in a foreign thread with each stack size from 96KB (or the platform's minimum)
-    #! to max_kb (1MB by default) in 16KB steps
+    #! the ratio of the coarse step of a sweep to its step (see sweep())
+    const SweepCoarseFactor = 4;
+
+    #! Runs a check at the stack sizes of a sweep, and returns the result of each size that it ran, by size in KB
+    /** Each size starts a process, so a sweep runs its check at every \a SweepCoarseFactor-th size of its range and at
+        its largest size, then at every size between two of these whose results differ (qore#6420): each change of
+        the result (from the stack error to code that runs short of stack when it runs, or to code that is parsed),
+        where the parse runs short of stack at different points of the code, is run at the step of the sweep, and
+        the sizes between two sizes with the same result are left out
+
+        @param start_kb the smallest size
+        @param max_kb the largest size; the sizes are those from \a start_kb up to it in steps of \a step_kb
+        @param step_kb the step
+        @param check the check of a size: runs the size, checks its output and returns its result
+    */
+    private static hash<string, string> sweep(int start_kb, int max_kb, int step_kb, code check) {
+        list<int> sizes = ();
+        for (int kb = start_kb; kb <= max_kb; kb += step_kb * SweepCoarseFactor) {
+            sizes += kb;
+        }
+        # the largest size of the sweep
+        int last_kb = start_kb + (max_kb - start_kb) / step_kb * step_kb;
+        if (sizes.last() != last_kb) {
+            sizes += last_kb;
+        }
+        hash<string, string> results = map {$1: check($1)}, sizes;
+        for (int i = 0; i + 1 < sizes.size(); ++i) {
+            if (results{sizes[i]} != results{sizes[i + 1]}) {
+                for (int kb = sizes[i] + step_kb; kb < sizes[i + 1]; kb += step_kb) {
+                    results{kb} = check(kb);
+                }
+            }
+        }
+        return results;
+    }
+
+    #! returns the number of sizes of a sweep with the given result
+    private static int count(hash<string, string> results, string result) {
+        return (select results.values(), $1 == result).size();
+    }
+
+    #! runs the fixture on a source file in a foreign thread with stack sizes from 96KB (or the platform's minimum) to
+    #! max_kb (1MB by default) in 16KB steps: every 64KB, and every 16KB where the result changes (see sweep())
     /** Each run must parse the source and return the expected value from its run() function, or fail with the parse
         stack error; both must occur within the range of sizes.  Code that was parsed can still run short of stack
         when it runs (\c STACK-LIMIT-EXCEEDED).  A process loads a module once, so each size runs in a process of its
@@ -230,12 +269,9 @@ public class ParseStackBoundaryBase inherits QUnit::Test {
     */
     private runSource(string exe, string libdir, string source, int expected, *string mdir, int max_kb = 1024,
             bool require_parse = True) {
-        int parsed;
-        int stack_errors;
-        int run_stack_errors;
         int start_kb = getSweepStartKb(exe, libdir, 16);
         assertGt(start_kb, max_kb, basename(source) + ": the sweep has more than one size");
-        for (int kb = start_kb; kb <= max_kb; kb += 16) {
+        hash<string, string> results = sweep(start_kb, max_kb, 16, string sub (int kb) {
             int status;
             string output = backquote("LD_LIBRARY_PATH=" + quote(libdir) + " DYLD_LIBRARY_PATH=" + quote(libdir)
                 + (mdir ? " QORE_MODULE_DIR=" + quote(mdir) : "") + " " + quote(exe) + " --source " + quote(source)
@@ -245,21 +281,18 @@ public class ParseStackBoundaryBase inherits QUnit::Test {
             # the result is the last line: a debug build of the library can write diagnostics before it, such as a
             # constant initializer of an AOT module that could not run
             *string result = (output =~ x/([^\n]*)\n$/)[0];
-            if (result == "stack error") {
-                ++stack_errors;
-            } else if (result == "run stack error") {
-                ++run_stack_errors;
-            } else {
-                # a load that leaves out a module, or code that is parsed with only part of its classes, is never
-                # the result of a parse in a small stack
-                assertEq(sprintf("parsed %d", expected), result, label + ": " + output);
-                ++parsed;
+            if (result == "stack error" || result == "run stack error") {
+                return result;
             }
-        }
+            # a load that leaves out a module, or code that is parsed with only part of its classes, is never the
+            # result of a parse in a small stack
+            assertEq(sprintf("parsed %d", expected), result, label + ": " + output);
+            return "parsed";
+        });
         if (require_parse) {
-            assertGt(0, parsed, basename(source) + ": the code is parsed with a large stack");
+            assertGt(0, count(results, "parsed"), basename(source) + ": the code is parsed with a large stack");
         }
-        assertGt(0, stack_errors, basename(source) + ": the code runs short of a small stack");
+        assertGt(0, count(results, "stack error"), basename(source) + ": the code runs short of a small stack");
     }
 
     #! writes a file
@@ -648,8 +681,7 @@ public class ParseStackBoundaryBase inherits QUnit::Test {
         int start_kb = getSweepStartKb(exe, libdir, 32);
         foreach hash<auto> i in ({"source": try_source, "expected": DeepInitDepth},
                 {"source": child_source, "expected": 1}) {
-            int stack_errors;
-            for (int kb = start_kb; kb <= 512; kb += 32) {
+            hash<string, string> results = sweep(start_kb, 512, 32, string sub (int kb) {
                 # a small stack, then the default size in the same process
                 int status;
                 string output = backquote("LD_LIBRARY_PATH=" + quote(libdir) + " DYLD_LIBRARY_PATH=" + quote(libdir)
@@ -660,15 +692,15 @@ public class ParseStackBoundaryBase inherits QUnit::Test {
                 # the results are the last two lines (see runSource())
                 list<string> lines = (map $1, output.split("\n"), $1 =~ /^(parsed|stack error|run stack error)/);
                 assertEq(2, lines.size(), label + ": " + output);
-                if (lines[0] == "stack error") {
-                    ++stack_errors;
-                } else {
+                if (lines[0] != "stack error") {
                     assertEq(sprintf("parsed %d", i.expected), lines[0], label + ": " + output);
                 }
                 assertEq(sprintf("parsed %d", i.expected), lines[1], label + " then the default stack size: "
                     + output);
-            }
-            assertGt(0, stack_errors, basename(i.source) + ": the module runs short of a small stack");
+                return lines[0] ?? "";
+            });
+            assertGt(0, count(results, "stack error"), basename(i.source)
+                + ": the module runs short of a small stack");
         }
     }
 

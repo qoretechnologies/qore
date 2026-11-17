@@ -11,7 +11,7 @@
 
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
-# an element type that allows NOTHING: a range past the end of a list<int> raises a type error with %broken-list-range (qore#5757)
+# an element type that allows NOTHING, which a range past the end of the list gives with %broken-list-range
 list<*int> l = (10, 11, 12, 13);
 
 #! records an evaluation of a selector
