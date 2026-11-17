@@ -2025,6 +2025,9 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - when more than one class of a hierarchy declares a member with an initialization expression, the value that a
+      later one replaces is released, so that an object that a base class stored there is destroyed (see
+      @ref member_initialization; issue #6411)
     - a sleep with @ref Qore::usleep() "usleep()" or @ref Qore::sleep() "sleep()" that a signal interrupted while
       it slept with \c nanosleep() (2) slept its whole time again instead of the time that was left (issue #6364)
     - an out-of-line method definition in a namespace block resolves its class path relative to that namespace
