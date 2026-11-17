@@ -607,6 +607,10 @@
     Use old pre-2.0 broken list range operator where out-of-range values would result in returning @ref NOTHING
     values, breaking strongly-typed lists and contrary to the behavior of the same operator on a string
 
+    A range of a list that reaches outside of the list gives a list whose element type allows @ref NOTHING (ex:
+    <tt>list&lt;*int&gt;</tt> for a <tt>list&lt;int&gt;</tt>), which is also the type of the range expression of a list
+    with this option
+
     This option cannot be set while @ref modern "%modern" is in effect, and @ref modern "%modern" cannot be set while it is in effect, unless the application set it as a default for legacy code, which a @ref modern "%modern" directive resets (see @ref modern_option_consistency).
 
     @see @ref correct-list-range "%correct-list-range"

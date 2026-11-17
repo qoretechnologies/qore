@@ -237,6 +237,8 @@ class ExecModeMarkerTest(unittest.TestCase):
         #   under valgrind
         # - float-int-conversion (#6181): its probes run in child processes that set their own --exec-mode and in qcc
         #   executables
+        # - broken-list-range-past-end (#5757): its check runs a legacy script, which only the AST interpreter runs,
+        #   in a child process with --exec-mode=ast
         # - AOTModuleInitException (#6217): its checks run in child processes of the interpreter and of qcc
         #   executables
         # - deleted-object-generic-variant (#6152): its probes run in child processes that set their own --exec-mode
@@ -295,6 +297,7 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/qore/operators/UndefinedArithmetic-1.qtest",
                                  "examples/test/qore/operators/UndefinedArithmetic-2.qtest",
                                  "examples/test/qore/operators/UndefinedArithmetic-3.qtest",
+                                 "examples/test/qore/lists/broken-list-range-past-end.qtest",
                                  "examples/test/qore/threads/unhandled-exception-report.qtest",
                                  "examples/test/qore/functions/float-conversion-edges.qtest",
                                  "examples/test/qore/classes/AsyncIoController/asyncio_callback_exception_stderr.qtest",
