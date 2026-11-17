@@ -3440,6 +3440,12 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
 
     //printd(5, "QoreModuleManager::loadModuleIntern() this: %p name: %s not found\n", this, name);
 
+    // a blacklisted module is refused before any of its forms is looked for: none of them is loaded, and a binary
+    // module that is refused does not fall back to its source
+    if (checkBlacklist(xsink, name)) {
+        return nullptr;
+    }
+
     // see if we are loading a user module from an explicit source
     if (src) {
         QoreString modulePath;
@@ -4223,6 +4229,12 @@ QoreAbstractModule* QoreModuleManager::loadSeparatedModule(ExceptionSink& xsink,
     printd(5, "QoreModuleManager::loadSeparatedModule() path: %s, feature: %s, pgm: %p, reexport: %d, mpgm: %p, "
         "path_pgm: %p, load_opt: %d warning_mask: %d\n", path, feature, pgm, reexport, mpgm, path_pgm,
         load_opt, warning_mask);
+
+    // checked as by the other module loaders, before anything is read
+    if (checkBlacklist(xsink, feature)) {
+        return nullptr;
+    }
+
     if (module_load_check(feature)) {
         xsink.raiseException("LOAD-MODULE-ERROR", "cannot load user module '%s'; recursive module dependency "
             "detected", feature);

@@ -1,0 +1,325 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - module loading from module directories and of AOT modules (shared libraries) by the module loader
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: LGPL-2.1-or-later
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../TestInterpreter.qm
+
+%exec-class SeparatedModuleBlacklistTest
+
+#! The module blacklist applies to a separated (directory) module on every route that loads it
+/** A blacklisted module is refused before its source is parsed, whether it is found by name in the module path, named
+    by the path of its main source, of its directory or of an AOT module in its directory, or required by another
+    module.  An AOT module of a blacklisted module is refused without a fallback to its source.
+
+    The fixture modules are written to a temporary directory: each route has a module of its own, as the blacklist is
+    process-wide and a module that a route loaded by mistake would satisfy the routes after it.
+*/
+class SeparatedModuleBlacklistTest inherits QUnit::Test {
+    public {
+        #! the reason given to the blacklist, which the error of a refused module names
+        const Reason = "by the separated module blacklist test";
+    }
+
+    private {
+        #! the temporary module directory with the fixture modules
+        string dir;
+    }
+
+    constructor() : QUnit::Test("SeparatedModuleBlacklistTest", "1.0") {
+        dir = make_tmp_dir("qore-separated-module-blacklist-");
+
+        addTestCase("by name", \testByName());
+        addTestCase("by the path of the main source", \testByMainSourcePath());
+        addTestCase("by the directory path", \testByDirectoryPath());
+        addTestCase("by the path of an AOT module that cannot be loaded", \testByQmodPathFallback());
+        addTestCase("by name with an AOT module in the module directory", \testByNameWithQmod());
+        addTestCase("by the path of an AOT module", \testByAotModule());
+        addTestCase("through a module that requires it", \testRequires());
+        addTestCase("through two levels of modules", \testNestedRequires());
+        addTestCase("by load_module() at run time", \testRuntimeLoad());
+        addTestCase("a separated module that is not blacklisted", \testNotBlacklisted());
+        addTestCase("a flat module", \testFlatModule());
+        addTestCase("a loaded separated module", \testLoadedModule());
+        set_return_value(main());
+    }
+
+    destructor() {
+        remove_tree(dir);
+    }
+
+    #! Writes a file
+    private write(string path, string body) {
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(body);
+    }
+
+    #! Writes a separated module: its main source and a component source with a function that returns \a value
+    /** @return the path of the module directory
+    */
+    private string writeSeparated(string name, int value) {
+        string module_dir = dir + DirSep + name;
+        mkdir(module_dir, 0755);
+        write(module_dir + DirSep + name + ".qm", sprintf("%%modern
+module %s {
+    version = \"1.0\";
+    desc = \"separated module blacklist test fixture\";
+    author = \"Qore Technologies, s.r.o.\";
+    url = \"https://qore.org\";
+    license = \"MIT\";
+}
+", name));
+        write(module_dir + DirSep + name + "Value.qc", sprintf("public namespace %s {
+    public int sub value() {
+        return %d;
+    }
+}
+", name, value));
+        return module_dir;
+    }
+
+    #! Writes a flat module that requires \a requires
+    /** @return the path of the module
+    */
+    private string writeFlat(string name, *string requires) {
+        string path = dir + DirSep + name + ".qm";
+        write(path, sprintf("%%modern
+%s
+module %s {
+    version = \"1.0\";
+    desc = \"separated module blacklist test fixture\";
+    author = \"Qore Technologies, s.r.o.\";
+    url = \"https://qore.org\";
+    license = \"MIT\";
+}
+
+public namespace %s {
+    public int sub value() {
+        return 1;
+    }
+}
+", requires ? "%requires " + requires : "", name, name));
+        return path;
+    }
+
+    #! Blacklists a module
+    private blacklist(string name) {
+        assertEq(0, qore_add_module_to_blacklist(name, Reason));
+    }
+
+    #! Returns a Program that finds the fixture modules by name
+    private Program getProgram() {
+        Program p(PO_NEW_STYLE);
+        p.disableParseOptions(PO_NO_TOP_LEVEL_STATEMENTS);
+        p.parsePending("%prepend-module-path " + dir + "\n", "separated-module-blacklist-path");
+        return p;
+    }
+
+    #! Asserts that \a load raises the blacklist error of \a name alone, and that the module was not loaded
+    /** The error is the only one: a refused AOT module did not fall back to its source, and nothing was parsed
+    */
+    private assertRefused(string label, string name, code load) {
+        *hash<ExceptionInfo> ex;
+        try {
+            load();
+        } catch (hash<ExceptionInfo> e) {
+            ex = e;
+        }
+        assertEq("LOAD-MODULE-ERROR", ex.err, label);
+        assertEq(sprintf("module '%s' was blacklisted %s", name, Reason), ex.desc, label);
+        assertEq(NOTHING, ex.next, label + ": no other error follows the blacklist error");
+        assertEq(False, get_module_hash().hasKey(name), label + ": the module is not loaded");
+    }
+
+    testByName() {
+        writeSeparated("SepBlName", 1);
+        blacklist("SepBlName");
+        assertRefused("%requires", "SepBlName", sub () {
+            Program p = getProgram();
+            p.parse("%requires SepBlName\n", "by-name");
+        });
+        assertRefused("Program::loadModule()", "SepBlName", sub () {
+            Program p = getProgram();
+            p.loadModule("SepBlName");
+        });
+    }
+
+    testByMainSourcePath() {
+        string module_dir = writeSeparated("SepBlQm", 2);
+        blacklist("SepBlQm");
+        string path = module_dir + DirSep + "SepBlQm.qm";
+        assertRefused("load_module()", "SepBlQm", sub () { load_module(path); });
+        assertRefused("%requires", "SepBlQm", sub () {
+            Program p = getProgram();
+            p.parse("%requires " + path + "\n", "by-main-source-path");
+        });
+    }
+
+    testByDirectoryPath() {
+        string module_dir = writeSeparated("SepBlDir", 3);
+        blacklist("SepBlDir");
+        assertRefused("load_module()", "SepBlDir", sub () { load_module(module_dir); });
+        assertRefused("%requires", "SepBlDir", sub () {
+            Program p = getProgram();
+            p.parse("%requires " + module_dir + "\n", "by-directory-path");
+        });
+    }
+
+    #! an AOT module that cannot be loaded falls back to the source next to it; a blacklisted one does not
+    testByQmodPathFallback() {
+        string module_dir = writeSeparated("SepBlQmod", 4);
+        string qmod = module_dir + DirSep + "SepBlQmod.qmod";
+        write(qmod, "not an AOT module\n");
+        blacklist("SepBlQmod");
+        assertRefused("load_module()", "SepBlQmod", sub () { load_module(qmod); });
+        assertRefused("%requires", "SepBlQmod", sub () {
+            Program p = getProgram();
+            p.parse("%requires " + qmod + "\n", "by-qmod-path");
+        });
+    }
+
+    #! the module search prefers the AOT module in the directory of a separated module to its source
+    testByNameWithQmod() {
+        string module_dir = writeSeparated("SepBlQmodName", 5);
+        write(module_dir + DirSep + "SepBlQmodName.qmod", "not an AOT module\n");
+        blacklist("SepBlQmodName");
+        assertRefused("%requires", "SepBlQmodName", sub () {
+            Program p = getProgram();
+            p.parse("%requires SepBlQmodName\n", "by-name-with-qmod");
+        });
+    }
+
+    #! a real AOT module of a separated module, compiled with qcc
+    testByAotModule() {
+        *string qcc = TestInterpreter::qcc_compiler();
+        if (!qcc) {
+            testSkip("qcc is not available");
+        }
+        # a module that is not blacklisted shows that the AOT module loads, so that the other is refused by the
+        # blacklist
+        *string ok_qmod = compileSeparated(qcc, "SepAotOk", 6);
+        *string qmod = compileSeparated(qcc, "SepBlAot", 7);
+        if (!ok_qmod || !qmod) {
+            testSkip("qcc cannot compile a separated module");
+        }
+
+        load_module(ok_qmod);
+        assertEq(ok_qmod, get_module_hash().SepAotOk.filename);
+
+        blacklist("SepBlAot");
+        assertRefused("load_module()", "SepBlAot", sub () { load_module(qmod); });
+        assertRefused("%requires by name", "SepBlAot", sub () {
+            Program p = getProgram();
+            p.parse("%requires SepBlAot\n", "by-name-aot");
+        });
+    }
+
+    #! Writes a separated module and compiles it with qcc
+    /** @return the path of the AOT module, or NOTHING if qcc did not compile it
+    */
+    private *string compileSeparated(string qcc, string name, int value) {
+        string module_dir = writeSeparated(name, value);
+        string qmod = module_dir + DirSep + name + ".qmod";
+        string qore = TestInterpreter::qore_interpreter();
+        string libdir = ENV.QORE_LIBDIR ?? dirname(qore);
+        string out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s %s --module -o %s %s 2>&1", libdir, libdir,
+            qcc, qmod, module_dir + DirSep + name + ".qm"));
+        if (!is_file(qmod)) {
+            if (m_options.verbose) {
+                printf("qcc could not compile %s: %s\n", name, out);
+            }
+            return;
+        }
+        return qmod;
+    }
+
+    testRequires() {
+        writeSeparated("SepBlReq", 8);
+        blacklist("SepBlReq");
+        string by_name = writeFlat("SepBlReqByName", "SepBlReq");
+        string by_dir = writeFlat("SepBlReqByDir", dir + DirSep + "SepBlReq");
+        assertRefusedThrough("SepBlReqByName", by_name, "SepBlReq");
+        assertRefusedThrough("SepBlReqByDir", by_dir, "SepBlReq");
+    }
+
+    testNestedRequires() {
+        writeSeparated("SepBlNested", 9);
+        blacklist("SepBlNested");
+        writeFlat("SepBlNestedMid", "SepBlNested");
+        string outer = writeFlat("SepBlNestedOuter", "SepBlNestedMid");
+        assertRefusedThrough("SepBlNestedOuter", outer, "SepBlNested");
+        assertEq(False, get_module_hash().hasKey("SepBlNestedMid"));
+    }
+
+    #! Asserts that a module that requires a blacklisted module fails with its error and is not loaded
+    private assertRefusedThrough(string name, string path, string blacklisted) {
+        *hash<ExceptionInfo> ex;
+        try {
+            Program p = getProgram();
+            p.parse("%requires " + path + "\n", "requires-" + name);
+        } catch (hash<ExceptionInfo> e) {
+            ex = e;
+        }
+        assertEq(True, exists ex, name);
+        # the blacklist error is in the chain of errors of the requiring module
+        bool found;
+        for (*hash<ExceptionInfo> e = ex; e; e = e.next) {
+            # the error names the modules whose load it ended after the reason
+            if (e.err == "LOAD-MODULE-ERROR" && e.arg == blacklisted
+                && e.desc.equalPartial(sprintf("module '%s' was blacklisted %s (while loading user module \"%s\"",
+                    blacklisted, Reason, name == "SepBlNestedOuter" ? "SepBlNestedMid" : name))) {
+                found = True;
+                break;
+            }
+        }
+        assertEq(True, found, sprintf("%s: %y", name, ex));
+        assertEq(False, get_module_hash().hasKey(blacklisted), name + ": the blacklisted module is not loaded");
+        assertEq(False, get_module_hash().hasKey(name), name + ": the requiring module is not loaded");
+    }
+
+    testRuntimeLoad() {
+        writeSeparated("SepBlRuntime", 10);
+        blacklist("SepBlRuntime");
+        Program p = getProgram();
+        p.parse("sub load() { load_module(\"SepBlRuntime\"); }\n", "runtime-load");
+        assertRefused("load_module() by name", "SepBlRuntime", sub () { p.callFunction("load"); });
+        # and once more: a refused module is not recorded as loaded or as failed
+        assertRefused("load_module() by name again", "SepBlRuntime", sub () { p.callFunction("load"); });
+    }
+
+    #! negative case: the blacklist of other modules does not refuse a separated module
+    testNotBlacklisted() {
+        string module_dir = writeSeparated("SepOk", 11);
+        Program p = getProgram();
+        p.parse("%requires " + module_dir + "\nint sub get() { return SepOk::value(); }\n", "not-blacklisted");
+        assertEq(11, p.callFunction("get"));
+        assertEq(module_dir + DirSep + "SepOk.qm", get_module_hash().SepOk.filename);
+    }
+
+    #! a flat module is refused as before
+    testFlatModule() {
+        string path = writeFlat("FlatBl");
+        blacklist("FlatBl");
+        assertRefused("load_module() by path", "FlatBl", sub () { load_module(path); });
+        assertRefused("%requires by name", "FlatBl", sub () {
+            Program p = getProgram();
+            p.parse("%requires FlatBl\n", "flat-by-name");
+        });
+    }
+
+    #! a module that is already loaded cannot be blacklisted
+    testLoadedModule() {
+        string module_dir = writeSeparated("SepLoaded", 12);
+        load_module(module_dir);
+        assertEq(-1, qore_add_module_to_blacklist("SepLoaded", Reason));
+        assertThrows("BLACKLIST-ERROR", \qore_add_module_to_blacklist_ex(), ("SepLoaded", Reason));
+        assertEq(True, get_module_hash().hasKey("SepLoaded"));
+    }
+}
