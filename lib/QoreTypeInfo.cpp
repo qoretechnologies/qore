@@ -723,26 +723,29 @@ public:
                 by_type[ti].insert(cache);
             }
         }
-        empty.store(by_type.empty(), std::memory_order_release);
+        updateEmpty();
+        insert_entry();
+    }
+
+    //! Registers the types of an entry that does not keep its types named (see qore_generic_cache_insert_weak())
+    void insertWeak(QoreGenericTypeCache* cache, const std::vector<const QoreTypeInfo*>& types,
+            const std::function<void()>& insert_entry) {
+        std::lock_guard<std::mutex> lock(m);
+        std::unordered_set<const QoreTypeInfo*>& cache_types = weak_by_cache[cache];
+        for (const QoreTypeInfo* ti : types) {
+            if (ti && cache_types.insert(ti).second) {
+                weak_by_type[ti].insert(cache);
+            }
+        }
+        updateEmpty();
         insert_entry();
     }
 
     void unregister(QoreGenericTypeCache* cache) {
         std::lock_guard<std::mutex> lock(m);
-        auto i = by_cache.find(cache);
-        if (i == by_cache.end()) {
-            return;
-        }
-        for (const QoreTypeInfo* ti : i->second) {
-            auto t = by_type.find(ti);
-            assert(t != by_type.end());
-            t->second.erase(cache);
-            if (t->second.empty()) {
-                by_type.erase(t);
-            }
-        }
-        by_cache.erase(i);
-        empty.store(by_type.empty(), std::memory_order_release);
+        unregisterIntern(cache, by_cache, by_type);
+        unregisterIntern(cache, weak_by_cache, weak_by_type);
+        updateEmpty();
     }
 
     size_t registeredTypeCount() {
@@ -773,40 +776,78 @@ public:
         std::unordered_set<QoreGenericTypeCache*> caches;
         try {
             for (const QoreTypeInfo* ti : dead) {
-                auto t = by_type.find(ti);
-                if (t != by_type.end()) {
-                    caches.insert(t->second.begin(), t->second.end());
+                for (const type_map_t* tm : {&by_type, &weak_by_type}) {
+                    auto t = tm->find(ti);
+                    if (t != tm->end()) {
+                        caches.insert(t->second.begin(), t->second.end());
+                    }
                 }
             }
         } catch (std::bad_alloc&) {
             return;
         }
-        for (const QoreTypeInfo* ti : dead) {
-            auto t = by_type.find(ti);
-            if (t == by_type.end()) {
-                continue;
-            }
-            for (QoreGenericTypeCache* cache : t->second) {
-                auto c = by_cache.find(cache);
-                assert(c != by_cache.end());
-                c->second.erase(ti);
-            }
-            by_type.erase(t);
-        }
+        evictTypes(dead, by_cache, by_type);
+        evictTypes(dead, weak_by_cache, weak_by_type);
         for (QoreGenericTypeCache* cache : caches) {
             cache->evictDeadTypes(dead, release);
         }
-        empty.store(by_type.empty(), std::memory_order_release);
+        updateEmpty();
     }
 
 private:
+    typedef std::unordered_map<const QoreTypeInfo*, std::unordered_set<QoreGenericTypeCache*>> type_map_t;
+    typedef std::unordered_map<QoreGenericTypeCache*, std::unordered_set<const QoreTypeInfo*>> cache_map_t;
+
     std::mutex m;
     //! the caches that have an entry whose key names each type
-    std::unordered_map<const QoreTypeInfo*, std::unordered_set<QoreGenericTypeCache*>> by_type;
+    type_map_t by_type;
     //! the types that each cache registered
-    std::unordered_map<QoreGenericTypeCache*, std::unordered_set<const QoreTypeInfo*>> by_cache;
+    cache_map_t by_cache;
+    //! the caches that have an entry that identifies each type without naming it (qore_generic_cache_insert_weak()):
+    //! evicted like the others, but they do not keep the declaration of the type (hasType() does not see them)
+    type_map_t weak_by_type;
+    //! the types that each cache registered weakly
+    cache_map_t weak_by_cache;
     //! true while no type is registered
     std::atomic<bool> empty{true};
+
+    //! the caller holds the lock
+    void updateEmpty() {
+        empty.store(by_type.empty() && weak_by_type.empty(), std::memory_order_release);
+    }
+
+    //! the caller holds the lock
+    static void unregisterIntern(QoreGenericTypeCache* cache, cache_map_t& cm, type_map_t& tm) {
+        auto i = cm.find(cache);
+        if (i == cm.end()) {
+            return;
+        }
+        for (const QoreTypeInfo* ti : i->second) {
+            auto t = tm.find(ti);
+            assert(t != tm.end());
+            t->second.erase(cache);
+            if (t->second.empty()) {
+                tm.erase(t);
+            }
+        }
+        cm.erase(i);
+    }
+
+    //! removes the registrations of the dead types; the caller holds the lock
+    static void evictTypes(const std::set<const QoreTypeInfo*>& dead, cache_map_t& cm, type_map_t& tm) {
+        for (const QoreTypeInfo* ti : dead) {
+            auto t = tm.find(ti);
+            if (t == tm.end()) {
+                continue;
+            }
+            for (QoreGenericTypeCache* cache : t->second) {
+                auto c = cm.find(cache);
+                assert(c != cm.end());
+                c->second.erase(ti);
+            }
+            tm.erase(t);
+        }
+    }
 };
 
 //! the generic cache registry; never destroyed, as caches unregister during library cleanup
@@ -819,6 +860,11 @@ QoreGenericCacheRegistry& qore_generic_cache_registry() {
 void qore_generic_cache_insert(QoreGenericTypeCache* cache, const std::vector<const QoreTypeInfo*>& types,
         const std::function<void()>& insert) {
     qore_generic_cache_registry().insert(cache, types, insert);
+}
+
+void qore_generic_cache_insert_weak(QoreGenericTypeCache* cache, const std::vector<const QoreTypeInfo*>& types,
+        const std::function<void()>& insert) {
+    qore_generic_cache_registry().insertWeak(cache, types, insert);
 }
 
 std::atomic<int64_t> qore_live_generic_specializations{0};
