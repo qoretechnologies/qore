@@ -554,8 +554,10 @@ static bool expressionMayCreateNodeTemp(const QoreValue& val) {
 template <typename F>
 static bool anyOperandMayCreateTemp(const QoreValue& val, F operand_may_create_temp) {
     const AbstractQoreNode* node = val.getInternalNode();
+    // an implicit argument ($1, $#) has no operands either
     if (!node || val.isValue() || dynamic_cast<const VarRefNode*>(node)
-            || qore_get_runtime_constant_ref_node(node)) {
+            || qore_get_runtime_constant_ref_node(node) || dynamic_cast<const QoreImplicitArgumentNode*>(node)
+            || dynamic_cast<const QoreImplicitElementNode*>(node)) {
         return false;
     }
     // the conservative answer, as for an unknown kind of expression: a temp scope is created
@@ -970,6 +972,52 @@ static bool isSharedVar(const VarRefNode* var) {
 }
 
 static bool qore_ir_type_may_hold_object(const QoreTypeInfo* ti, int depth = 0);
+
+//! Returns true if evaluating \a val may create a temporary besides its value whose release can be observed
+/** A value made by a call or a construction, and a value that can hold an object read from a variable that other code
+    can change while the expression runs - a global, thread-local or closure-bound variable, a local that a closure
+    uses or that a reference is taken of, a variable that holds a reference, a static class variable or a member of
+    the current object - which the AST interpreter holds as a temporary (see temporary_lifetime): its release is the
+    last one when the variable is changed, which a destructor can observe (qore#6288).  A read of another local, of
+    an element or of the implicit argument holds a reference only.
+*/
+static bool expressionMayCreateIntermediateObservableTemp(const QoreValue& val) {
+    return anyOperandMayCreateTemp(val, [](const QoreValue& operand) {
+        const AbstractQoreNode* node = operand.getInternalNode();
+        if (!node || operand.isValue()) {
+            return false;
+        }
+        if (dynamic_cast<const FunctionCallBase*>(node) || dynamic_cast<const QoreDotEvalOperatorNode*>(node)
+                || dynamic_cast<const CallReferenceCallNode*>(node)
+                || dynamic_cast<const ScopedObjectCallNode*>(node) || dynamic_cast<const NewObjectCallNode*>(node)) {
+            return true;
+        }
+        if (auto* var = dynamic_cast<const VarRefNode*>(node)) {
+            const QoreTypeInfo* ti = var->getTypeInfo();
+            return (isSharedVar(var) || QoreTypeInfo::isReference(ti)) && qore_ir_type_may_hold_object(ti);
+        }
+        if (dynamic_cast<const SelfVarrefNode*>(node) || dynamic_cast<const StaticClassVarRefNode*>(node)) {
+            return qore_ir_type_may_hold_object(getExprTypeInfo(operand));
+        }
+        return expressionMayCreateIntermediateObservableTemp(operand);
+    });
+}
+
+// documented in QoreStatementTemps.h
+bool qore_expr_may_create_observable_temp(const QoreValue& expr) {
+    const AbstractQoreNode* node = expr.getInternalNode();
+    if (node && !expr.isValue()) {
+        // the expression's own value read from such a variable is held as a temporary as well
+        if (auto* var = dynamic_cast<const VarRefNode*>(node)) {
+            const QoreTypeInfo* ti = var->getTypeInfo();
+            return (isSharedVar(var) || QoreTypeInfo::isReference(ti)) && qore_ir_type_may_hold_object(ti);
+        }
+        if (dynamic_cast<const SelfVarrefNode*>(node) || dynamic_cast<const StaticClassVarRefNode*>(node)) {
+            return qore_ir_type_may_hold_object(getExprTypeInfo(expr));
+        }
+    }
+    return expressionMayCreateIntermediateObservableTemp(expr);
+}
 
 // documented in QoreIRLowering.h
 bool QoreIRLowering::expressionReadsWeakCapableLocal(const QoreValue& expr) const {
@@ -9173,6 +9221,17 @@ QoreIRValue QoreIRLowering::lowerMutationOperand(const QoreValue& lvalue, const 
         if (assignment || isImmediateCleanupFreeType(var->getTypeInfo())) {
             return lowerExpression(expr, error);
         }
+    }
+    return lowerExpressionInTempScope(expr, loc, error);
+}
+
+// documented in QoreIRLowering.h
+QoreIRValue QoreIRLowering::lowerElementExpression(const QoreValue& expr, const QoreProgramLocation* loc,
+        std::string& error) {
+    // only a temporary whose release can be observed (a destructor) needs the scope; the others hold references only,
+    // and a scope would hide the expression's value from the loop's optimizations
+    if (!expressionMayCreateIntermediateObservableTemp(expr)) {
+        return lowerExpression(expr, error);
     }
     return lowerExpressionInTempScope(expr, loc, error);
 }
@@ -19656,7 +19715,7 @@ QoreIRValue QoreIRLowering::lowerMapNative(const QoreMapOperatorNode* map, const
                     if (!need_result) {
                         builder.createPushTempMark(map->loc);
                     }
-                    QoreIRValue value = lowerExpression(map->getLeft(), error);
+                    QoreIRValue value = (need_result ? lowerElementExpression(map->getLeft(), map->loc, error) : lowerExpression(map->getLeft(), error));
                     if (!value.isValid()) {
                         if (!need_result) {
                             builder.abandonTempScope();
@@ -19682,7 +19741,7 @@ QoreIRValue QoreIRLowering::lowerMapNative(const QoreMapOperatorNode* map, const
         if (!need_result) {
             builder.createPushTempMark(map->loc);
         }
-        QoreIRValue expr_result = lowerExpression(map->getLeft(), error);
+        QoreIRValue expr_result = (need_result ? lowerElementExpression(map->getLeft(), map->loc, error) : lowerExpression(map->getLeft(), error));
         virtual_implicit = saved;
         if (!need_result) {
             createDiscardTemps(map->loc);
@@ -19878,7 +19937,7 @@ QoreIRValue QoreIRLowering::lowerMapNative(const QoreMapOperatorNode* map, const
                     if (!need_result) {
                         builder.createPushTempMark(map->loc);
                     }
-                    QoreIRValue value = lowerExpression(map->getLeft(), error);
+                    QoreIRValue value = (need_result ? lowerElementExpression(map->getLeft(), map->loc, error) : lowerExpression(map->getLeft(), error));
                     if (!value.isValid()) {
                         if (!need_result) {
                             builder.abandonTempScope();
@@ -19909,7 +19968,7 @@ QoreIRValue QoreIRLowering::lowerMapNative(const QoreMapOperatorNode* map, const
                 builder.createPushTempMark(map->loc);
             }
             expr_result = invariant_typed_scalar
-                ? invariant_map_value : lowerExpression(map->getLeft(), error);
+                ? invariant_map_value : (need_result ? lowerElementExpression(map->getLeft(), map->loc, error) : lowerExpression(map->getLeft(), error));
 
             // Restore virtual context
             virtual_implicit = saved;
@@ -20117,7 +20176,7 @@ QoreIRValue QoreIRLowering::lowerMapNative(const QoreMapOperatorNode* map, const
                 if (!need_result) {
                     builder.createPushTempMark(map->loc);
                 }
-                QoreIRValue value = lowerExpression(map->getLeft(), error);
+                QoreIRValue value = (need_result ? lowerElementExpression(map->getLeft(), map->loc, error) : lowerExpression(map->getLeft(), error));
                 if (!value.isValid()) {
                     if (!need_result) {
                         builder.abandonTempScope();
@@ -20147,7 +20206,7 @@ QoreIRValue QoreIRLowering::lowerMapNative(const QoreMapOperatorNode* map, const
         if (!need_result) {
             builder.createPushTempMark(map->loc);
         }
-        expr_result = lowerExpression(map->getLeft(), error);
+        expr_result = (need_result ? lowerElementExpression(map->getLeft(), map->loc, error) : lowerExpression(map->getLeft(), error));
 
         // Restore virtual context
         virtual_implicit = saved;
@@ -20377,7 +20436,7 @@ QoreIRValue QoreIRLowering::lowerSelectNative(const QoreSelectOperatorNode* sele
             // (qore#5680)
             predicate_bool = lowerWithImplicitContext(element_val, index_val, select->loc, nullptr, error,
                 [&]() -> QoreIRValue {
-                    QoreIRValue predicate_result = lowerExpression(select->getRight(), error);
+                    QoreIRValue predicate_result = lowerElementExpression(select->getRight(), select->loc, error);
                     if (!predicate_result.isValid()) {
                         return QoreIRValue();
                     }
@@ -20401,7 +20460,7 @@ QoreIRValue QoreIRLowering::lowerSelectNative(const QoreSelectOperatorNode* sele
             virtual_implicit.active = true;
             virtual_implicit.runtime = false;
 
-            QoreIRValue predicate_result = lowerExpression(select->getRight(), error);
+            QoreIRValue predicate_result = lowerElementExpression(select->getRight(), select->loc, error);
 
             // Restore virtual context
             virtual_implicit = saved;
@@ -20611,7 +20670,7 @@ QoreIRValue QoreIRLowering::lowerSelectNative(const QoreSelectOperatorNode* sele
     // thread-local stack also holds when it needs them (qore#5680), and is converted to a bool; see
     // lowerWithImplicitContext()
     auto lower_predicate = [&]() -> QoreIRValue {
-        QoreIRValue predicate_result = lowerExpression(select->getRight(), error);
+        QoreIRValue predicate_result = lowerElementExpression(select->getRight(), select->loc, error);
         if (!predicate_result.isValid()) {
             return QoreIRValue();
         }
@@ -20862,7 +20921,7 @@ QoreIRValue QoreIRLowering::lowerFoldlNative(const QoreFoldlOperatorNode* foldl,
         QoreIRValue fold_result;
         if (qore_ir_body_needs_implicit_context(foldl->getLeft(), 2)) {
             fold_result = lowerWithImplicitArgs(accum_val, element_val, QoreIRValue(), foldl->loc, nullptr, error,
-                [&]() { return lowerExpression(foldl->getLeft(), error); });
+                [&]() { return lowerElementExpression(foldl->getLeft(), foldl->loc, error); });
         } else {
             VirtualImplicitContext saved = virtual_implicit;
             virtual_implicit.arg0 = accum_val;
@@ -20870,7 +20929,7 @@ QoreIRValue QoreIRLowering::lowerFoldlNative(const QoreFoldlOperatorNode* foldl,
             virtual_implicit.element = QoreIRValue();
             virtual_implicit.active = true;
             virtual_implicit.runtime = false;
-            fold_result = lowerExpression(foldl->getLeft(), error);
+            fold_result = lowerElementExpression(foldl->getLeft(), foldl->loc, error);
             virtual_implicit = saved;
         }
         if (!fold_result.isValid()) {
@@ -20982,7 +21041,7 @@ QoreIRValue QoreIRLowering::lowerFoldlNative(const QoreFoldlOperatorNode* foldl,
     QoreIRValue fold_result;
     if (qore_ir_body_needs_implicit_context(foldl->getLeft(), 2)) {
         fold_result = lowerWithImplicitArgs(accum_val, element_val, QoreIRValue(), foldl->loc, nullptr, error,
-            [&]() { return lowerExpression(foldl->getLeft(), error); });
+            [&]() { return lowerElementExpression(foldl->getLeft(), foldl->loc, error); });
     } else {
         VirtualImplicitContext saved = virtual_implicit;
         virtual_implicit.arg0 = accum_val;
@@ -20990,7 +21049,7 @@ QoreIRValue QoreIRLowering::lowerFoldlNative(const QoreFoldlOperatorNode* foldl,
         virtual_implicit.element = QoreIRValue();
         virtual_implicit.active = true;
         virtual_implicit.runtime = false;
-        fold_result = lowerExpression(foldl->getLeft(), error);
+        fold_result = lowerElementExpression(foldl->getLeft(), foldl->loc, error);
         virtual_implicit = saved;
     }
     if (!fold_result.isValid()) {
@@ -21141,7 +21200,7 @@ QoreIRValue QoreIRLowering::lowerFoldrNativeValue(const QoreFoldrOperatorNode* f
         QoreIRValue fold_result;
         if (qore_ir_body_needs_implicit_context(foldr->getLeft(), 2)) {
             fold_result = lowerWithImplicitArgs(accum_val, element_val, QoreIRValue(), foldr->loc, nullptr, error,
-                [&]() { return lowerExpression(foldr->getLeft(), error); });
+                [&]() { return lowerElementExpression(foldr->getLeft(), foldr->loc, error); });
         } else {
             VirtualImplicitContext saved = virtual_implicit;
             virtual_implicit.arg0 = accum_val;
@@ -21149,7 +21208,7 @@ QoreIRValue QoreIRLowering::lowerFoldrNativeValue(const QoreFoldrOperatorNode* f
             virtual_implicit.element = QoreIRValue();
             virtual_implicit.active = true;
             virtual_implicit.runtime = false;
-            fold_result = lowerExpression(foldr->getLeft(), error);
+            fold_result = lowerElementExpression(foldr->getLeft(), foldr->loc, error);
             virtual_implicit = saved;
         }
         if (!fold_result.isValid()) {
@@ -21252,7 +21311,7 @@ QoreIRValue QoreIRLowering::lowerFoldrNativeValue(const QoreFoldrOperatorNode* f
     QoreIRValue fold_result;
     if (qore_ir_body_needs_implicit_context(foldr->getLeft(), 2)) {
         fold_result = lowerWithImplicitArgs(accum_val, element_val, QoreIRValue(), foldr->loc, nullptr, error,
-            [&]() { return lowerExpression(foldr->getLeft(), error); });
+            [&]() { return lowerElementExpression(foldr->getLeft(), foldr->loc, error); });
     } else {
         VirtualImplicitContext saved = virtual_implicit;
         virtual_implicit.arg0 = accum_val;
@@ -21260,7 +21319,7 @@ QoreIRValue QoreIRLowering::lowerFoldrNativeValue(const QoreFoldrOperatorNode* f
         virtual_implicit.element = QoreIRValue();
         virtual_implicit.active = true;
         virtual_implicit.runtime = false;
-        fold_result = lowerExpression(foldr->getLeft(), error);
+        fold_result = lowerElementExpression(foldr->getLeft(), foldr->loc, error);
         virtual_implicit = saved;
     }
     if (!fold_result.isValid()) {
@@ -21486,7 +21545,7 @@ QoreIRValue QoreIRLowering::lowerMapSelectNative(const QoreMapSelectOperatorNode
         // releasePredicateValue())
         QoreIRValue predicate_value;
         auto lower_predicate = [&]() -> QoreIRValue {
-            QoreIRValue predicate_result = lowerExpression(ms->get(2), error);
+            QoreIRValue predicate_result = lowerElementExpression(ms->get(2), ms->loc, error);
             if (!predicate_result.isValid()) {
                 return QoreIRValue();
             }
@@ -21498,7 +21557,7 @@ QoreIRValue QoreIRLowering::lowerMapSelectNative(const QoreMapSelectOperatorNode
             if (!need_result) {
                 builder.createPushTempMark(ms->loc);
             }
-            QoreIRValue value = lowerExpression(ms->get(0), error);
+            QoreIRValue value = (need_result ? lowerElementExpression(ms->get(0), ms->loc, error) : lowerExpression(ms->get(0), error));
             if (!value.isValid()) {
                 if (!need_result) {
                     builder.abandonTempScope();
@@ -21766,7 +21825,7 @@ QoreIRValue QoreIRLowering::lowerMapSelectNative(const QoreMapSelectOperatorNode
     // releasePredicateValue())
     QoreIRValue predicate_value;
     auto lower_predicate = [&]() -> QoreIRValue {
-        QoreIRValue predicate_result = lowerExpression(ms->get(2), error);
+        QoreIRValue predicate_result = lowerElementExpression(ms->get(2), ms->loc, error);
         if (!predicate_result.isValid()) {
             return QoreIRValue();
         }
@@ -21779,7 +21838,7 @@ QoreIRValue QoreIRLowering::lowerMapSelectNative(const QoreMapSelectOperatorNode
         if (!need_result) {
             builder.createPushTempMark(ms->loc);
         }
-        QoreIRValue value = lowerExpression(ms->get(0), error);
+        QoreIRValue value = (need_result ? lowerElementExpression(ms->get(0), ms->loc, error) : lowerExpression(ms->get(0), error));
         if (!value.isValid()) {
             if (!need_result) {
                 builder.abandonTempScope();
@@ -22038,11 +22097,11 @@ QoreIRValue QoreIRLowering::lowerHashMapNative(const QoreHashMapOperatorNode* hm
         // lowerWithImplicitContext(); qore#5691)
         QoreIRValue next_type_state;
         auto lower_body = [&]() -> QoreIRValue {
-            QoreIRValue key_result = lowerExpression(hm->get(0), error);
+            QoreIRValue key_result = lowerElementExpression(hm->get(0), hm->loc, error);
             if (!key_result.isValid()) {
                 return QoreIRValue();
             }
-            QoreIRValue value_result = lowerExpression(hm->get(1), error);
+            QoreIRValue value_result = lowerElementExpression(hm->get(1), hm->loc, error);
             if (!value_result.isValid()) {
                 return QoreIRValue();
             }
@@ -22197,11 +22256,11 @@ QoreIRValue QoreIRLowering::lowerHashMapNative(const QoreHashMapOperatorNode* hm
     // FunctionalLoopExceptionCleanup::finish())
     QoreIRValue key_result, value_result;
     auto lower_body = [&]() -> QoreIRValue {
-        key_result = lowerExpression(hm->get(0), error);
+        key_result = lowerElementExpression(hm->get(0), hm->loc, error);
         if (!key_result.isValid()) {
             return QoreIRValue();
         }
-        value_result = lowerExpression(hm->get(1), error);
+        value_result = lowerElementExpression(hm->get(1), hm->loc, error);
         if (!value_result.isValid()) {
             return QoreIRValue();
         }
@@ -22397,7 +22456,7 @@ QoreIRValue QoreIRLowering::lowerHashMapSelectNative(const QoreHashMapSelectOper
             return rv;
         };
         auto lower_predicate = [&]() -> QoreIRValue {
-            QoreIRValue predicate_result = lowerExpression(hms->get(3), error);
+            QoreIRValue predicate_result = lowerElementExpression(hms->get(3), hms->loc, error);
             if (!predicate_result.isValid()) {
                 return QoreIRValue();
             }
@@ -22405,11 +22464,11 @@ QoreIRValue QoreIRLowering::lowerHashMapSelectNative(const QoreHashMapSelectOper
         };
         QoreIRValue inserted_type_state;
         auto lower_insert = [&]() -> QoreIRValue {
-            QoreIRValue key_result = lowerExpression(hms->get(0), error);
+            QoreIRValue key_result = lowerElementExpression(hms->get(0), hms->loc, error);
             if (!key_result.isValid()) {
                 return QoreIRValue();
             }
-            QoreIRValue value_result = lowerExpression(hms->get(1), error);
+            QoreIRValue value_result = lowerElementExpression(hms->get(1), hms->loc, error);
             if (!value_result.isValid()) {
                 return QoreIRValue();
             }
@@ -22603,7 +22662,7 @@ QoreIRValue QoreIRLowering::lowerHashMapSelectNative(const QoreHashMapSelectOper
         return rv;
     };
     auto lower_predicate = [&]() -> QoreIRValue {
-        QoreIRValue predicate_result = lowerExpression(hms->get(3), error);
+        QoreIRValue predicate_result = lowerElementExpression(hms->get(3), hms->loc, error);
         if (!predicate_result.isValid()) {
             return QoreIRValue();
         }
@@ -22614,11 +22673,11 @@ QoreIRValue QoreIRLowering::lowerHashMapSelectNative(const QoreHashMapSelectOper
     // FunctionalLoopExceptionCleanup::finish())
     QoreIRValue key_result, value_result;
     auto lower_insert = [&]() -> QoreIRValue {
-        key_result = lowerExpression(hms->get(0), error);
+        key_result = lowerElementExpression(hms->get(0), hms->loc, error);
         if (!key_result.isValid()) {
             return QoreIRValue();
         }
-        value_result = lowerExpression(hms->get(1), error);
+        value_result = lowerElementExpression(hms->get(1), hms->loc, error);
         if (!value_result.isValid()) {
             return QoreIRValue();
         }
@@ -22771,7 +22830,7 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineStage(const QoreValue& stage_expr,
     // is kept when its temporaries are released
     if (q_env_is_set("QORE_DISABLE_IR_FUSED_VIRTUAL_IMPLICIT") || qore_ir_body_needs_implicit_context(stage_expr, 1)) {
         return lowerWithImplicitContext(element, index, stage_loc, nullptr, error,
-            [&]() { return lowerExpression(stage_expr, error); });
+            [&]() { return lowerElementExpression(stage_expr, stage_loc, error); });
     }
 
     // the stage reads the implicit arguments only as the element and its index (see
@@ -22783,7 +22842,9 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineStage(const QoreValue& stage_expr,
     virtual_implicit.active = true;
     virtual_implicit.runtime = false;
 
-    QoreIRValue result = lowerExpression(stage_expr, error);
+    // the temporaries of an element's stage are released when its value is computed, as in the AST interpreter's
+    // functional iterators (qore#6288)
+    QoreIRValue result = lowerElementExpression(stage_expr, stage_loc, error);
     virtual_implicit = saved;
     return result;
 }
@@ -23002,7 +23063,7 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
         assert(root.fold_expr);
         if (fold_expr_needs_context) {
             return lowerWithImplicitArgs(accum_val, element_val, QoreIRValue(), loc, nullptr, error,
-                [&]() { return lowerExpression(*root.fold_expr, error); });
+                [&]() { return lowerElementExpression(*root.fold_expr, loc, error); });
         }
 
         VirtualImplicitContext saved = virtual_implicit;
@@ -23012,7 +23073,7 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
         virtual_implicit.active = true;
         virtual_implicit.runtime = false;
 
-        QoreIRValue fold_result = lowerExpression(*root.fold_expr, error);
+        QoreIRValue fold_result = lowerElementExpression(*root.fold_expr, loc, error);
 
         virtual_implicit = saved;
         return fold_result;
@@ -23795,9 +23856,9 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
     // a fold's stage value read from a local of the function that no code in the loop assigns is not released: the local holds
     // the value, so its release cannot be observed, and the IR interpreter, whose read takes a reference of its own,
     // keeps the one that it has when the next element's read gives the same value; one that the loop's code assigns
-    // (a select stage's predicate) can hold the last reference, which the AST interpreter releases with the element.
-    // A write through a reference (\x) or by a closure is not one: the AST interpreter keeps the value read then
-    // until the next element (qore#5883)
+    // (a select stage's predicate) can hold the last reference, which the AST interpreter releases with the element,
+    // and so can one that a reference (\x) or a closure can change: the AST interpreter releases the value read with
+    // the element too (qore#6288; before, it kept it until the next element, qore#5883)
     if (!fold_local_reads.empty()) {
         std::unordered_set<const LocalVar*> written;
         const auto& blocks = builder.getFunction()->blocks;
@@ -23815,7 +23876,7 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
         }
         stage_values.erase(std::remove_if(stage_values.begin(), stage_values.end(), [&](const QoreIRValue& v) {
             auto it = fold_local_reads.find(v.id);
-            return it != fold_local_reads.end() && !written.count(it->second);
+            return it != fold_local_reads.end() && !written.count(it->second) && !it->second->closureUse();
         }), stage_values.end());
     }
     next_inst->release_values = stage_values;
@@ -24949,7 +25010,8 @@ QoreIRValue QoreIRLowering::lowerStreamingNative(const QoreStreamingOperatorNode
         }
         return lowerWithImplicitContext(element_val, index_val, loc, stream_cleanup.get(), error,
             [&]() -> QoreIRValue {
-                QoreIRValue pred = lowerExpression(op->getPredicate(), error);
+                // the temporaries of an element's predicate are released with the element (qore#6288)
+                QoreIRValue pred = lowerElementExpression(op->getPredicate(), loc, error);
                 if (!pred.isValid()) {
                     return QoreIRValue();
                 }

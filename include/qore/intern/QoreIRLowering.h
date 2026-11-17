@@ -753,6 +753,14 @@ private:
     */
     QoreIRValue lowerExpressionInTempScope(const QoreValue& expr, const QoreProgramLocation* loc,
         std::string& error, bool containers_only = false);
+    //! Lowers an expression that a functional operator evaluates for an element, as a statement of its own
+    /** The temporaries of an element are released when its value has been computed, before the next element, as in
+        the AST interpreter (qore#6288): the expression is lowered with lowerExpressionInTempScope() when it can create
+        a temporary besides its value whose release a destructor can observe (a call's or a construction's value, an
+        object-holding read of a variable that other code can change), and directly otherwise, so that a loop of plain
+        reads keeps its optimizations.
+    */
+    QoreIRValue lowerElementExpression(const QoreValue& expr, const QoreProgramLocation* loc, std::string& error);
     QoreIRBasicBlock* getCurrentExceptionTarget() const;
     QoreIRBasicBlock* getGuardExceptionTarget() const;
     //! Gives an instruction that can raise an exception the active handler

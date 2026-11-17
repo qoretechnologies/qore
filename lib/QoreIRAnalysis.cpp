@@ -11801,10 +11801,12 @@ private:
         }
     }
 
-    //! true for an opcode whose result is an element of its first operand (a list's or a hash's), which holds what the
-    //! operand holds
+    //! true for an opcode whose result is an element of its first operand (a list's or a hash's), or its value, which
+    //! holds what the operand holds
     static bool isElementOpcode(QoreIROpcode opcode) {
         switch (opcode) {
+            // the value of an expression lowered as a statement of its own: its operand's (qore#6288)
+            case QoreIROpcode::DiscardTempsKeep:
             case QoreIROpcode::ListGetInt:
             case QoreIROpcode::ListGetValue:
             case QoreIROpcode::ListGetValueNoRef:
