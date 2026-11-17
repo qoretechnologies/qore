@@ -268,6 +268,7 @@ class ExecModeMarkerTest(unittest.TestCase):
         #   executables and in a qcc-compiled module
         # - entry-cpp-exception (#6255): its checks run in child processes that set their own --exec-mode and in qcc
         #   executables, which arm a debug hook
+        # - test-interpreter-options (#6250): its checks run in child interpreters started with options of their own
         self.assertEqual(sorted(["examples/test/ir/AOTConstantImportStale.qtest",
                                  "examples/test/ir/JITFinalizeCancellation.qtest",
                                  "examples/test/ir/AOTInitParseOptions.qtest",
@@ -297,6 +298,7 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/module-cpp-api/parse-load-module-location/"
                                  "parse-load-module-location.qtest",
                                  "examples/test/qore/operators/relative-date-overflow.qtest",
+                                 "examples/test/qore/misc/test-interpreter-options/test-interpreter-options.qtest",
                                  "examples/test/qore/operators/relative-date-multiply.qtest",
                                  "examples/test/qore/functions/generic-call-parse-type.qtest",
                                  "examples/test/qore/classes/generic-method-hashdecl-paths.qtest",
