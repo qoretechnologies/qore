@@ -550,7 +550,7 @@ constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 //!        of them refuses the kinds
 //!      - an optional TIME_ZONE section (34) records the time zone that the code sets with %set-time-zone and whether
 //!        its directive follows the header of a module (qore#6270)
-//! v42 (one format version for the format changes of its batch, one line each):
+//! v42 (batch AA; one format version for the format changes of the batch, one line each):
 //!      - the serialized IR of an LValuePath instruction has a u8 after its ternary operator: 1 if the value of the
 //!        operation is used (ref_rv), 0 if not, so that an unused post increment or decrement copies no old value and
 //!        an unused remove or delete releases its value in the operation in the IR rebuilt from the image (debug IR,
