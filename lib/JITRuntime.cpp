@@ -18269,6 +18269,11 @@ static uint64_t qore_rt_lv_path_binary_mut_impl(QoreIRLValuePathInstruction* ins
             } else {
                 qore_list_private::insertCanonical(*l, rhs_holder.release(), xsink);
             }
+            // the value of the operator is the list, as in the AST and the IR interpreter: an expression that holds
+            // it keeps the list alive when the variable is assigned another value (#6244)
+            if (!*xsink && inst->ref_rv) {
+                res = l->refSelf();
+            }
             break;
         }
         case LVBinaryMutOp::RegexSubst: {

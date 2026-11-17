@@ -13047,7 +13047,7 @@ QoreIRValue QoreIRLowering::lowerUnshift(const QoreValue& expr, std::string& err
     // Invoke(UnshiftLValue), which has no source-free AOT lowering.
     QoreIRValue path_result = tryEmitLValuePathOp(QoreIROpcode::LValuePathBinaryMut,
         lvalue, &right, op->loc, error, AssignmentMode::Normal, LVCompoundOp::AddAssign,
-        LVUnaryOp::PreInc, LVBinaryMutOp::Unshift);
+        LVUnaryOp::PreInc, LVBinaryMutOp::Unshift, QoreValue(), op->needsReturnValue());
     if (path_result.isValid()) {
         return path_result;
     }
@@ -13178,7 +13178,7 @@ QoreIRValue QoreIRLowering::lowerPush(const QoreValue& expr, std::string& error)
         }
         QoreIRValue path_result = tryEmitLValuePathOp(QoreIROpcode::LValuePathBinaryMut,
             left_expr, &push_val, op->loc, error, AssignmentMode::Normal, LVCompoundOp::AddAssign,
-            LVUnaryOp::PreInc, LVBinaryMutOp::Push);
+            LVUnaryOp::PreInc, LVBinaryMutOp::Push, QoreValue(), op->needsReturnValue());
         if (path_result.isValid()) {
             return path_result;
         }

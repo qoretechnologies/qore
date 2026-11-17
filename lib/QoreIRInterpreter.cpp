@@ -11734,6 +11734,11 @@ dispatch_folded_step_host:
                 }
                 if (xsink && *xsink) {
                     result.discard(xsink);
+                    // an exception raised by the push, or one that an earlier instruction left in the sink (a
+                    // destructor of a value that a store released), goes to the instruction's handler (#6244)
+                    if (branchToExceptionTarget(inst)) {
+                        break;
+                    }
                     unwindForException();
                     cleanupLocalCaches();
                     return exitAfterUnwind();
@@ -15407,6 +15412,12 @@ load_local_done:
                         local_init_slots[local_inst->slot_id] = UINT32_MAX;
                     }
                     markParentLocalStoreDirty(local_inst);
+                    // a destructor of the value replaced raises its exception at the store, which goes to the store's
+                    // handler, as the other paths of the store take it (#6244); an instruction after it without a
+                    // handler of its own would otherwise take it out of the frame
+                    if (xsink && *xsink && branchToExceptionTarget(inst)) {
+                        break;
+                    }
                     ++ip;
                     break;
                 }
