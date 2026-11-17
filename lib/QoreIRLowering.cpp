@@ -9567,7 +9567,12 @@ QoreIRValue QoreIRLowering::lowerMinusEquals(const QoreValue& expr, std::string&
                 || get_or_nothing_base_type(ti) != ti
                 || QoreTypeInfo::equal(ti, timeoutTypeInfo)
                 // an enum lvalue refuses the result (see qore_ir_is_enum_lvalue_type())
-                || qore_ir_is_enum_lvalue_type(ti)) {
+                || qore_ir_is_enum_lvalue_type(ti)
+                // an lvalue of a soft type that converts the difference that it is assigned (ex: softstring,
+                // softbool, softlist) holds the converted value, while the operator gives the difference that it
+                // computes (doMinusEqualsOnLValue()), also for a NOTHING operand: the AST operator on its lvalue path
+                // gives both (qore#6304)
+                || qore_lvalue_converts_result(ti, NT_INT)) {
             left_var = nullptr;
         }
     }
