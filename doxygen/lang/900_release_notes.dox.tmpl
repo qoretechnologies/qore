@@ -1252,6 +1252,12 @@
     whoever configures a datasource decides what its options may do; see @ref sandbox_datasource_options
     (<a href="https://github.com/qoretechnologies/qore/issues/5741">issue 5741</a>).
 
+    @par C++ API: DBI Drivers Judge a Connection by the Code That Chose It
+    A driver reads the code that created a datasource and set its connection values with the new
+    \c Datasource::getConnectChoosers() and judges a connection by it, not by the code that opens it (a behaviour
+    change for such drivers); see @ref sandbox_datasource_connect_choosers
+    (<a href="https://github.com/qoretechnologies/qore/issues/6142">issue 6142</a>).
+
     @par Asking Whether a Sandbox Restricts Anything
     @ref Qore::SandboxManager::restricts() "SandboxManager::restricts()", \c networkRestricts(), \c filesystemRestricts()
     and \c limitsRestrict() tell whether a sandbox manager restricts network access, filesystem access or resource
@@ -3076,6 +3082,10 @@
       @ref Qore::SQL::DatasourcePool "DatasourcePool" losing driver option types and splitting option values; data
       serialized by %Qore 3.0 cannot be deserialized by earlier versions
     - fixed \c Datasource configuration and option methods releasing the transaction lock of an open transaction
+    - concurrent configuration and copy of a @ref Qore::SQL::Datasource "Datasource" no longer race: a copy, the
+      configuration hash and string, serialization and a reopen in a child process created with @ref Qore::fork()
+      "fork()" read the connection values while another thread could be changing them, which could read freed
+      memory (<a href="https://github.com/qoretechnologies/qore/issues/6142">issue 6142</a>)
     - fixed the \c rest command sending a URL fragment in the request path, exiting with status 0 after a failed
       request, and not resolving an endpoint path against the URL of a schema
     - fixed the C++ API \c QoreHashNode::getKeyValueExistence() leaving \c exists unset when it raises an exception,
