@@ -2922,6 +2922,10 @@ add_executable(qore-aot-ir-instruction-test examples/test/ir/aot_ir_instruction_
 target_include_directories(qore-aot-ir-instruction-test PRIVATE
     ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include)
 target_link_libraries(qore-aot-ir-instruction-test PRIVATE libqore)
+add_executable(qore-aot-ir-value-ids-test examples/test/ir/aot_ir_value_ids.cpp)
+target_include_directories(qore-aot-ir-value-ids-test PRIVATE
+    ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include)
+target_link_libraries(qore-aot-ir-value-ids-test PRIVATE libqore)
 add_executable(qore-aot-lvalue-path-ref-rv-test examples/test/ir/aot_lvalue_path_ref_rv.cpp)
 target_include_directories(qore-aot-lvalue-path-ref-rv-test PRIVATE
     ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include)
@@ -3085,6 +3089,10 @@ endif()
 add_executable(qore-xxhash-compat-test EXCLUDE_FROM_ALL
     examples/test/hash/xxhash_compat.cpp lib/xxhash.cpp)
 target_include_directories(qore-xxhash-compat-test PRIVATE ${CMAKE_SOURCE_DIR}/include)
+
+# Sets the checksum of the AOT metadata of a module again after a test patched it (qore#6451).
+add_executable(qore-aot-reseal examples/test/ir/aot_reseal.cpp lib/xxhash.cpp)
+target_include_directories(qore-aot-reseal PRIVATE ${CMAKE_SOURCE_DIR}/include)
 
 add_executable(qore-ir-plugin-registry-smoke EXCLUDE_FROM_ALL
     examples/test/ir/plugin_registry_smoke.cpp

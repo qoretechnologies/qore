@@ -2434,7 +2434,20 @@ static size_t getAOTMaxCompressedMetadataSize() {
 }
 
 //! Compresses AOT metadata as the compression policy wants
+static void finalizeAOTMetadataCompressionIntern(std::vector<uint8_t>& metadata, bool include_source,
+        bool report_metadata, const QoreAOTBinaryWriter& writer);
+
+//! Compresses the metadata as the policy says; its checksum is computed again over the new encoding (qore#6451)
 static void finalizeAOTMetadataCompression(std::vector<uint8_t>& metadata, bool include_source,
+        bool report_metadata, const QoreAOTBinaryWriter& writer) {
+    bool sealed = qore_aot_unseal_metadata(metadata);
+    finalizeAOTMetadataCompressionIntern(metadata, include_source, report_metadata, writer);
+    if (sealed) {
+        qore_aot_seal_metadata(metadata);
+    }
+}
+
+static void finalizeAOTMetadataCompressionIntern(std::vector<uint8_t>& metadata, bool include_source,
         bool report_metadata, const QoreAOTBinaryWriter& writer) {
     static constexpr uint32_t AOT_HEADER_BYTES = 60;
     static constexpr size_t AOT_HEADER_COMPRESSION_OFFSET = 34;

@@ -42,6 +42,8 @@
 #include "qore/intern/QoreModuleSourceFingerprints.h"
 
 #include <algorithm>
+#include <functional>
+#include <string_view>
 #include <cctype>
 #include <cstdio>
 #include <cstdint>
@@ -1857,7 +1859,24 @@ static uint32_t read_u32_le(const uint8_t* p) {
         | (static_cast<uint32_t>(p[3]) << 24);
 }
 
+static bool find_aot_metadata_length_intern(const uint8_t* data, size_t avail, size_t& len);
+
+//! Returns the length of the encoded AOT metadata at \a data, with its checksum (QORE_AOT_METADATA_CHECKSUM_VERSION)
 static bool find_aot_metadata_length(const uint8_t* data, size_t avail, size_t& len) {
+    if (!find_aot_metadata_length_intern(data, avail, len)) {
+        return false;
+    }
+    if (read_u16_le(data + 4) >= QORE_AOT_METADATA_CHECKSUM_VERSION) {
+        // the checksum follows the metadata (qore#6451)
+        if (len + QORE_AOT_METADATA_CHECKSUM_SIZE > avail) {
+            return false;
+        }
+        len += QORE_AOT_METADATA_CHECKSUM_SIZE;
+    }
+    return true;
+}
+
+static bool find_aot_metadata_length_intern(const uint8_t* data, size_t avail, size_t& len) {
     len = 0;
     if (avail < QORE_AOT_HEADER_SIZE) {
         return false;
@@ -2027,10 +2046,19 @@ static bool add_aot_metadata_blob(std::vector<AOTDumpMetadataBlob>& blobs,
     }
     QoreAOTBinaryReader reader;
     std::string error;
+    std::string key;
     if (!reader.open(bytes.data(), static_cast<uint32_t>(bytes.size()), error)) {
-        return false;
+        // bytes that only look like a header are skipped; metadata that does not match its checksum was changed
+        // after it was written: it is kept, so that its reader reports it (qore#6451)
+        if (!reader.checksumMismatch()) {
+            return false;
+        }
+        std::string_view view(reinterpret_cast<const char*>(bytes.data()), bytes.size());
+        key = "checksum mismatch " + std::to_string(bytes.size()) + " "
+            + std::to_string(std::hash<std::string_view>()(view));
+    } else {
+        key = aot_metadata_key(reader, bytes.size());
     }
-    std::string key = aot_metadata_key(reader, bytes.size());
     if (!seen.insert(key).second) {
         return true;
     }
@@ -4141,8 +4169,9 @@ static void dump_aot_metadata_blob(const AOTDumpMetadataBlob& blob, size_t index
     printf("    kind:%s%s\n",
         (hdr.flags & QORE_AOT_FLAG_IS_MODULE) ? " module" : "",
         (hdr.flags & QORE_AOT_FLAG_HAS_TOPLEVEL) ? " toplevel" : "");
-    printf("    format: %u (current %u)%s\n", hdr.version, QORE_AOT_BINARY_VERSION,
-        hdr.version == QORE_AOT_BINARY_VERSION ? "" : " MISMATCH");
+    printf("    format: %u (current %u)%s%s\n", hdr.version, QORE_AOT_BINARY_VERSION,
+        hdr.version == QORE_AOT_BINARY_VERSION ? "" : " MISMATCH",
+        (hdr.flags & QORE_AOT_FLAG_METADATA_CHECKSUM) ? ", checksum verified" : "");
     printf("    compiled qore: %u.%u.%u (runtime %s)\n",
         hdr.qore_version_major, hdr.qore_version_minor, hdr.qore_version_patch,
         qore_version_string);

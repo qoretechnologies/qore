@@ -178,6 +178,7 @@
 #include <typeinfo>
 #include <unordered_set>
 #include <zlib.h>
+#include "qore/intern/xxhash.h"
 #include <zstd.h>
 
 static thread_local std::string qore_aot_expr_serialization_error;
@@ -4347,6 +4348,40 @@ bool QoreAOTBinaryWriter::writeValue(const QoreValue& v) {
     }
 }
 
+uint64_t qore_aot_metadata_checksum(const uint8_t* data, size_t size) {
+    return XXH64(data, size, 0);
+}
+
+//! Returns the format version of encoded AOT metadata, or 0 if it has no header
+static uint16_t qore_aot_metadata_version(const std::vector<uint8_t>& metadata) {
+    if (metadata.size() < QORE_AOT_HEADER_SIZE) {
+        return 0;
+    }
+    return static_cast<uint16_t>(metadata[4] | (metadata[5] << 8));
+}
+
+void qore_aot_seal_metadata(std::vector<uint8_t>& metadata) {
+    if (qore_aot_metadata_version(metadata) < QORE_AOT_METADATA_CHECKSUM_VERSION) {
+        return;
+    }
+    // the flag is set before the checksum is computed, which covers the header too
+    metadata[6] |= static_cast<uint8_t>(QORE_AOT_FLAG_METADATA_CHECKSUM & 0xff);
+    metadata[7] |= static_cast<uint8_t>(QORE_AOT_FLAG_METADATA_CHECKSUM >> 8);
+    uint64_t checksum = qore_aot_metadata_checksum(metadata.data(), metadata.size());
+    for (unsigned i = 0; i < QORE_AOT_METADATA_CHECKSUM_SIZE; ++i) {
+        metadata.push_back(static_cast<uint8_t>((checksum >> (i * 8)) & 0xff));
+    }
+}
+
+bool qore_aot_unseal_metadata(std::vector<uint8_t>& metadata) {
+    if (qore_aot_metadata_version(metadata) < QORE_AOT_METADATA_CHECKSUM_VERSION
+            || metadata.size() < QORE_AOT_HEADER_SIZE + QORE_AOT_METADATA_CHECKSUM_SIZE) {
+        return false;
+    }
+    metadata.resize(metadata.size() - QORE_AOT_METADATA_CHECKSUM_SIZE);
+    return true;
+}
+
 bool QoreAOTBinaryWriter::finalize(const QoreAOTBinaryHeader& in_header, std::vector<uint8_t>& output) {
     // Make a mutable copy so we can fill in section count
     QoreAOTBinaryHeader header = in_header;
@@ -4437,15 +4472,18 @@ bool QoreAOTBinaryWriter::finalize(const QoreAOTBinaryHeader& in_header, std::ve
     // Write data area
     output.insert(output.end(), buffer.begin(), buffer.end());
 
+    // the checksum of the metadata follows it (qore#6451)
+    qore_aot_seal_metadata(output);
     return true;
 }
 
 // ---- QoreAOTBinaryReader ----
 
-bool QoreAOTBinaryReader::open(const uint8_t* in_data, uint32_t in_size, std::string& error) {
+bool QoreAOTBinaryReader::open(const uint8_t* in_data, uint32_t in_size, std::string& error, bool verify_checksum) {
     section_stored_sizes.clear();
     decompressed_sections.clear();
     decompressed_string_pool.clear();
+    checksum_mismatch = false;
     data = in_data;
     total_size = in_size;
     input_data = in_data;
@@ -4512,6 +4550,29 @@ bool QoreAOTBinaryReader::open(const uint8_t* in_data, uint32_t in_size, std::st
               + std::to_string(QORE_AOT_BINARY_VERSION) + ")"
               + "; please update your Qore installation";
         return false;
+    }
+
+    // the metadata is checked against its checksum before anything else is read from it (qore#6451)
+    if (header.version >= QORE_AOT_METADATA_CHECKSUM_VERSION) {
+        if (!(header.flags & QORE_AOT_FLAG_METADATA_CHECKSUM)
+                || in_size < header_size + QORE_AOT_METADATA_CHECKSUM_SIZE) {
+            error = "the AOT metadata has no checksum";
+            checksum_mismatch = true;
+            return false;
+        }
+        in_size -= QORE_AOT_METADATA_CHECKSUM_SIZE;
+        uint64_t stored = 0;
+        for (unsigned i = 0; i < QORE_AOT_METADATA_CHECKSUM_SIZE; ++i) {
+            stored |= static_cast<uint64_t>(in_data[in_size + i]) << (i * 8);
+        }
+        if (verify_checksum && stored != qore_aot_metadata_checksum(in_data, in_size)) {
+            error = "the AOT metadata does not match its checksum: it was changed after it was written";
+            checksum_mismatch = true;
+            return false;
+        }
+        // the checksum is not part of the metadata that is read; the input keeps it (getInputData()/getInputSize()),
+        // so that a copy of the input can be opened again
+        total_size = in_size;
     }
 
     // Validate opcode compatibility

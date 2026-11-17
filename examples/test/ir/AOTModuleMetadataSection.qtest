@@ -128,10 +128,10 @@ public namespace MetaMod {
     }
 
     #! compiles MetaMod.qm to a qmod in the artifact directory and returns its path
-    private string compileMeta(string name = "MetaMod.qmod") {
+    private string compileMeta(string name = "MetaMod.qmod", string opts = "") {
         string qmod = art_dir + "/" + name;
-        string out = run(sprintf("%s QORE_MODULE_DIR=%s %s -m -o %s %s", env, src_dir, qcc_bin, qmod,
-            src_dir + "/MetaMod.qm"));
+        string out = run(sprintf("%s QORE_MODULE_DIR=%s %s -m %s-o %s %s", env, src_dir, qcc_bin,
+            opts ? opts + " " : "", qmod, src_dir + "/MetaMod.qm"));
         assertTrue(is_file(qmod), "compiled " + name + ": " + out);
         return qmod;
     }
@@ -588,8 +588,14 @@ public namespace MetaMod {
     #! a module compiled by a newer qcc, whose IR may use opcodes that this runtime does not know, is refused with an
     #! error that asks for a newer Qore (qore#5911 added opcodes 432-437)
     newerOpcodeTest() {
+        # the checksum of the patched metadata is set again with qore-aot-reseal, which handles uncompressed metadata
+        # (qore#6451)
+        string reseal_bin = ENV.QORE_AOT_RESEAL ?? dirname(qore_bin) + "/qore-aot-reseal";
+        if (!is_file(reseal_bin)) {
+            testSkip("qore-aot-reseal is not available at " + reseal_bin);
+        }
         TmpDir tmp = initDirs();
-        string qmod = compileMeta();
+        string qmod = compileMeta("MetaMod.qmod", "--aot-metadata-compression=none");
         binary orig = readFile(qmod);
         # the header of the module's QORD code: the magic "QORD", the format version (u16 at offset 4) and the highest
         # IR opcode ID that the code may use (u16 at offset 28)
@@ -598,6 +604,9 @@ public namespace MetaMod {
         int max_opcode = getLe32(orig, qord + 28) & 0xffff;
         assertTrue(max_opcode > 0, "the QORD header gives the highest opcode ID");
         patch(qmod, qord + 28, le32(max_opcode + 1).substr(0, 2));
+        int reseal_rc;
+        string reseal_out = backquote(sprintf("%s %s 2>&1", reseal_bin, qmod), \reseal_rc);
+        assertEq(0, reseal_rc, "the checksum of the patched metadata is set again: " + reseal_out);
         if (PlatformOS == "Darwin") {
             signAdHoc(qmod, "module with newer opcodes");
         }
