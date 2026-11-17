@@ -1,0 +1,209 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - threads of another Program that call into a debugged Program
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%allow-debugger
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class DebuggerDontAttachTest
+
+#! counts the attach and detach events per thread, and does not want the threads given
+class AttachCounter inherits DebugProgram {
+    public {
+        hash<string, int> attached = {};
+        hash<string, int> detached = {};
+        hash<string, bool> unwanted = {};
+        Mutex m();
+    }
+
+    onAttach(ProgramControl pgm, reference rs, reference rts) {
+        string tid = gettid().toString();
+        m.lock();
+        on_exit m.unlock();
+        ++attached{tid};
+        rs = unwanted{tid} ? DebugDontAttach : DebugRun;
+    }
+    onDetach(ProgramControl pgm, reference rs, reference rts) {
+        m.lock();
+        on_exit m.unlock();
+        ++detached{gettid().toString()};
+    }
+    onStep(ProgramControl pgm, int bid, *int sid, *int bkid, reference flow, reference rs, reference rts) {
+    }
+    onFunctionEnter(ProgramControl pgm, int sid, reference rs, reference rts) {
+    }
+    onFunctionExit(ProgramControl pgm, int sid, reference result, reference rs, reference rts) {
+    }
+    onException(ProgramControl pgm, int sid, hash<auto> ex, reference dismiss, reference rs, reference rts) {
+    }
+    onExit(ProgramControl pgm, int sid, reference result, reference rs, reference rts) {
+    }
+
+    int attachCount(int tid) {
+        m.lock();
+        on_exit m.unlock();
+        return attached{tid.toString()} ?? 0;
+    }
+
+    int detachCount(int tid) {
+        m.lock();
+        on_exit m.unlock();
+        return detached{tid.toString()} ?? 0;
+    }
+}
+
+#! a thread of this Program that calls a function of the debugged Program on request
+class Caller {
+    public {
+        Queue requests();
+        Queue replies();
+        int tid;
+    }
+
+    constructor(Program pgm) {
+        Queue started();
+        background sub () {
+            started.push(gettid());
+            while (True) {
+                auto req = requests.get();
+                if (req === NOTHING) {
+                    break;
+                }
+                for (int i = 0; i < req; ++i) {
+                    pgm.callFunction("f");
+                }
+                replies.push(True);
+            }
+            replies.push(False);
+        }();
+        tid = started.get();
+    }
+
+    #! makes the given number of calls
+    call(int n) {
+        requests.push(n);
+        replies.get();
+    }
+
+    #! ends the thread
+    end() {
+        requests.push(NOTHING);
+        replies.get();
+    }
+}
+
+#! A debugger can decline a thread for good: it is not offered again on its next entries (#3293)
+/** A thread of another Program that calls into the debugged Program (a callback, a logger) was offered to the
+    debugger (onAttach()) on every call, and detached when it left.  A debugger can set DebugDontAttach as the run
+    state: the thread is then not offered again until DebugProgram::attachThread(), or until the program's debugger
+    changes; the mark ends with the thread.
+*/
+class DebuggerDontAttachTest inherits QUnit::Test {
+    constructor() : QUnit::Test("DebuggerDontAttachTest", "1.0") {
+        addTestCase("a thread is offered on each entry", \offeredTest());
+        addTestCase("a declined thread is not offered again", \declinedTest());
+        addTestCase("attachThread() offers a declined thread again", \attachThreadTest());
+        addTestCase("a new thread is offered, whatever its thread ID", \newThreadTest());
+        addTestCase("attachThread() for a thread or program that the debugger does not know", \unknownTest());
+        set_return_value(main());
+    }
+
+    private Program makeProgram() {
+        Program pgm(PO_NEW_STYLE | PO_ALLOW_DEBUGGER);
+        pgm.parse("int sub f() { return 1; }", "dont-attach");
+        return pgm;
+    }
+
+    offeredTest() {
+        Program pgm = makeProgram();
+        AttachCounter d();
+        d.addProgram(pgm.getProgram());
+        on_exit d.removeProgram(pgm.getProgram());
+        Caller c(pgm);
+        on_exit c.end();
+        c.call(10);
+        assertEq(10, d.attachCount(c.tid), "offered on each entry");
+        assertEq(10, d.detachCount(c.tid), "detached on each exit");
+    }
+
+    declinedTest() {
+        Program pgm = makeProgram();
+        AttachCounter d();
+        d.addProgram(pgm.getProgram());
+        on_exit d.removeProgram(pgm.getProgram());
+        Caller c(pgm);
+        on_exit c.end();
+        d.unwanted{c.tid.toString()} = True;
+        c.call(10);
+        assertEq(1, d.attachCount(c.tid), "offered once");
+        assertEq(0, d.detachCount(c.tid), "never attached, so never detached");
+    }
+
+    attachThreadTest() {
+        Program pgm = makeProgram();
+        AttachCounter d();
+        d.addProgram(pgm.getProgram());
+        on_exit d.removeProgram(pgm.getProgram());
+        Caller c(pgm);
+        on_exit c.end();
+        d.unwanted{c.tid.toString()} = True;
+        c.call(5);
+        assertEq(1, d.attachCount(c.tid));
+        # the debugger takes the thread back, and it is offered on its next entry
+        delete d.unwanted{c.tid.toString()};
+        assertTrue(d.attachThread(pgm.getProgram(), c.tid));
+        c.call(3);
+        assertEq(4, d.attachCount(c.tid), "offered again after attachThread()");
+        # a new debugger is offered every thread too
+        d.unwanted{c.tid.toString()} = True;
+        c.call(1);
+        int n = d.attachCount(c.tid);
+        d.removeProgram(pgm.getProgram());
+        AttachCounter d2();
+        d2.addProgram(pgm.getProgram());
+        on_exit d2.removeProgram(pgm.getProgram());
+        c.call(1);
+        assertEq(1, d2.attachCount(c.tid), "a new debugger is offered the thread");
+        assertEq(n, d.attachCount(c.tid));
+    }
+
+    newThreadTest() {
+        Program pgm = makeProgram();
+        AttachCounter d();
+        d.addProgram(pgm.getProgram());
+        on_exit d.removeProgram(pgm.getProgram());
+        Caller c(pgm);
+        d.unwanted{c.tid.toString()} = True;
+        c.call(3);
+        int tid = c.tid;
+        c.end();
+        delete d.unwanted{tid.toString()};
+        # the mark ends with the thread: a new thread, also one with the same thread ID, is offered
+        Caller c2(pgm);
+        on_exit c2.end();
+        int before = d.attachCount(c2.tid);
+        c2.call(2);
+        assertEq(before + 2, d.attachCount(c2.tid), sprintf("a new thread (TID %d, previous %d) is offered", c2.tid,
+            tid));
+    }
+
+    unknownTest() {
+        Program pgm = makeProgram();
+        AttachCounter d();
+        d.addProgram(pgm.getProgram());
+        on_exit d.removeProgram(pgm.getProgram());
+        # a thread that has not entered the program
+        assertFalse(d.attachThread(pgm.getProgram(), 999999));
+        # a program that is not a debug target of this debugger
+        Program other = makeProgram();
+        Caller c(other);
+        on_exit c.end();
+        c.call(1);
+        assertFalse(d.attachThread(other.getProgram(), c.tid));
+    }
+}
