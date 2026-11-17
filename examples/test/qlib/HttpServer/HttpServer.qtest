@@ -278,6 +278,93 @@ class TestWsHandler inherits WebSocketHandler {
     }
 }
 
+#! An HTTP/1.1 server that answers the first request on its first connection and then goes silent on it without
+#! closing it (a half-open connection); it answers every request on later connections
+class HalfOpenH1Server {
+    private {
+        Socket listener();
+        int port;
+        Counter done(1);
+        bool stop_flag = False;
+        Mutex m();
+        int conn_count = 0;
+        #! the silent connection, kept open until the server is stopped
+        *Socket stalled_client;
+    }
+
+    constructor() {
+        listener.bind("127.0.0.1:0");
+        listener.listen();
+        port = listener.getSocketInfo().port;
+        background run();
+    }
+
+    string getUrl() {
+        return "http://127.0.0.1:" + port;
+    }
+
+    int getConnectionCount() {
+        AutoLock al(m);
+        return conn_count;
+    }
+
+    stop() {
+        stop_flag = True;
+        listener.close();
+        done.waitForZero(30s);
+        if (stalled_client) {
+            stalled_client.close();
+        }
+    }
+
+    private run() {
+        on_exit done.dec();
+        try {
+            while (!stop_flag) {
+                *Socket client = listener.accept(500ms);
+                if (!client) {
+                    continue;
+                }
+                int n;
+                {
+                    AutoLock al(m);
+                    n = ++conn_count;
+                }
+                if (n == 1) {
+                    # the first connection: the first request is answered, then the connection goes silent
+                    *hash<auto> hdr = client.readHTTPHeader(2s);
+                    if (hdr) {
+                        client.send(makeResponse());
+                    }
+                    stalled_client = client;
+                    continue;
+                }
+                # later connections: every request is answered
+                while (!stop_flag) {
+                    *hash<auto> hdr;
+                    try {
+                        hdr = client.readHTTPHeader(1s);
+                    } catch () {
+                        break;
+                    }
+                    if (!hdr) {
+                        break;
+                    }
+                    client.send(makeResponse());
+                }
+                client.close();
+            }
+        } catch () {
+        }
+    }
+
+    private static string makeResponse() {
+        string body = "{\"ok\": true}";
+        return sprintf("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: %d\r\n"
+            "Connection: keep-alive\r\n\r\n%s", body.size(), body);
+    }
+}
+
 class CapturingLoggerAppender inherits LoggerAppenderWithLayout {
     private {
         Mutex m();
@@ -4179,121 +4266,80 @@ public class HttpServerTest inherits QUnit::Test {
         # to the first request, then goes silent.  The client sends a second
         # request but gets no response and no close notification.
         #
-        # Recovery model (curl-aligned, post-conn-mgr-hardening): no in-band
-        # stale-detect timer.  The half-open silence is caught by the
-        # application-level request_timeout (15s here), which surfaces as
-        # HTTPCLIENT-TIMEOUT.  isConnectionErrorStatic recognises that error
-        # as retryable, so the conn-mgr replays the request on a fresh
-        # connection (conn 2) which the server handles normally.  Total
-        # elapsed: request_timeout + retry overhead ≈ 16s on a healthy host.
-        #
-        # This is curl's Curl_retry_request model — slower fast-fail than the
-        # old 5s in-band timer but doesn't mistake slow legitimate responses
-        # for dead connections (the bug that motivated this rework).
+        # The request's timeout is a hard deadline for the whole request (#6429): the
+        # half-open silence is caught by it, and the request raises HTTPCLIENT-TIMEOUT;
+        # it is not sent again on a fresh connection, as no attempt starts once the
+        # request's time has run out.  A stale connection is recovered within the
+        # request's time with io_timeout (scenario 4c).
         {
-            bool srv4_stop = False;
-            Socket srv4_listener();
-            srv4_listener.bind("127.0.0.1:0");
-            srv4_listener.listen();
-            int srv4_port = srv4_listener.getSocketInfo().port;
+            HalfOpenH1Server srv();
+            on_exit srv.stop();
 
-            Counter srv4Done(1);
-            *Socket srv4_stalled_client;
-            background sub () {
-                on_exit srv4Done.dec();
-                try {
-                    int conn_num = 0;
-                    while (!srv4_stop) {
-                        *Socket client = srv4_listener.accept(500ms);
-                        if (!client) {
-                            continue;
-                        }
-                        ++conn_num;
-                        if (conn_num == 1) {
-                            # First connection: respond to first request, then stall
-                            *hash<auto> hdr = client.readHTTPHeader(2s);
-                            if (hdr) {
-                                string body = "{\"ok\": true}";
-                                string resp = sprintf(
-                                    "HTTP/1.1 200 OK\r\n"
-                                    "Content-Type: application/json\r\n"
-                                    "Content-Length: %d\r\n"
-                                    "Connection: keep-alive\r\n"
-                                    "\r\n"
-                                    "%s", body.size(), body);
-                                client.send(resp);
-                            }
-                            # Hold the socket open (no close, no FIN) —
-                            # srv4_stalled_client keeps the reference alive so
-                            # the socket stays open without blocking the accept loop
-                            srv4_stalled_client = client;
-                        } else {
-                            # Subsequent connections: respond normally
-                            while (!srv4_stop) {
-                                *hash<auto> hdr;
-                                try {
-                                    hdr = client.readHTTPHeader(1s);
-                                } catch () {
-                                    break;
-                                }
-                                if (!hdr) {
-                                    break;
-                                }
-                                string body = "{\"ok\": true}";
-                                string resp = sprintf(
-                                    "HTTP/1.1 200 OK\r\n"
-                                    "Content-Type: application/json\r\n"
-                                    "Content-Length: %d\r\n"
-                                    "Connection: keep-alive\r\n"
-                                    "\r\n"
-                                    "%s", body.size(), body);
-                                client.send(resp);
-                            }
-                            client.close();
-                        }
-                    }
-                } catch () {}
-            }();
-
-            on_exit {
-                srv4_stop = True;
-                srv4_listener.close();
-                srv4Done.waitForZero(5s);
-            }
-
+            CapturingLoggerAppender appender();
+            Logger logger("scenario4", LoggerLevel::getLevelDebug());
+            logger.addAppender(appender);
             RestClientIo rc({
-                "url": "http://127.0.0.1:" + srv4_port,
+                "url": srv.getUrl(),
                 "data": "json",
                 "connect_timeout": 5s,
-                "timeout": 15s,
+                "timeout": 3s,
+                "logger": logger,
             });
 
             # First request succeeds
             rc.restGet("/health");
 
-            # Second request: server stalls (no response, no close on conn 1).
-            # request_timeout (15s) fires, HTTPCLIENT-TIMEOUT is treated as
-            # a retryable connection error, the conn-mgr retries on a fresh
-            # connection (conn 2) which the server handles normally.
             date start = now_us();
-            bool recovered = False;
+            *hash<ExceptionInfo> err;
             try {
                 rc.restGet("/health");
-                recovered = True;
             } catch (hash<ExceptionInfo> ex) {
-                if (m_options.verbose > 1) {
-                    printf("scenario4: %s: %s\n", ex.err, ex.desc);
-                }
+                err = ex;
             }
             date elapsed = now_us() - start;
-            assertTrue(recovered, "scenario4: retry on fresh connection must succeed");
-            # Bound: request_timeout (15s) + retry overhead (~1s typical,
-            # generous headroom for slow CI).  The assertion guards against
-            # the retry NOT firing (which would manifest as elapsed >= 30s
-            # — two full request_timeout windows — or the test failing on
-            # `recovered` above).
-            assertTrue(elapsed < 18s,
-                sprintf("scenario4: took %y, expected < 18s", elapsed));
+            assertEq("HTTPCLIENT-TIMEOUT", err.err, sprintf("scenario4: the request times out; got %s: %s",
+                err.err, err.desc));
+            assertFalse(appender.hasMessageContaining("evicting stale connection and retrying"),
+                "scenario4: the request is not sent again after its time ran out");
+            assertEq(1, srv.getConnectionCount(), "scenario4: no fresh connection is made");
+            # a guard against the old retry path, which took a second full timeout after the first one; generous
+            # enough for a loaded host or valgrind
+            assertTrue(elapsed < 13s, sprintf("scenario4: took %y, expected < 13s (timeout + 10s)", elapsed));
+        }
+
+        # --- Scenario 4c: the same half-open server, recovered through io_timeout ---
+        # io_timeout (1s) is shorter than the request's timeout: the stale attempt fails
+        # on its inactivity timeout, and the request is sent again once on a fresh
+        # connection within its remaining time, which the server answers.
+        {
+            HalfOpenH1Server srv();
+            on_exit srv.stop();
+
+            CapturingLoggerAppender appender();
+            Logger logger("scenario4c", LoggerLevel::getLevelDebug());
+            logger.addAppender(appender);
+            RestClientIo rc({
+                "url": srv.getUrl(),
+                "data": "json",
+                "connect_timeout": 5s,
+                "timeout": 30s,
+                "io_timeout": 1s,
+                "logger": logger,
+            });
+
+            rc.restGet("/health");
+
+            *hash<ExceptionInfo> err;
+            try {
+                rc.restGet("/health");
+            } catch (hash<ExceptionInfo> ex) {
+                err = ex;
+            }
+            assertEq(NOTHING, err ? sprintf("%s: %s", err.err, err.desc) : NOTHING,
+                "scenario4c: the request recovers on a fresh connection");
+            assertTrue(appender.hasMessageContaining("evicting stale connection and retrying"),
+                "scenario4c: the stale connection is retried");
+            assertEq(2, srv.getConnectionCount(), "scenario4c: one fresh connection is made");
         }
 
         # --- Scenario 4b: server reads request then closes (FIN delivered) ---

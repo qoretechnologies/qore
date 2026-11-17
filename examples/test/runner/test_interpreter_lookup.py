@@ -10,6 +10,12 @@ and it stops a compiled test that its own child process runs again.
 These tests fail when the code of a test source (not its strings or comments) reads QORE_ARGV[0] or one of those
 environment variables, except in TestInterpreter.qm and in the sources listed in ALLOWED with the reason.
 
+A test also takes the interpreter options of its own process from TestInterpreter::interpreter_options() (and its
+execution mode from TestInterpreter::exec_mode()), never from the rest of QORE_ARGV: the arguments after the script are
+the test's own (the -v of run_tests.sh -v), and a child interpreter given them as options refuses them (issue #6250).
+These tests fail when the code of a test source reads QORE_ARGV other than QORE_ARGV[0], except in TestInterpreter.qm
+and in the sources listed in ARGV_ALLOWED with the reason.
+
 Copyright (C) 2026 Qore Technologies, s.r.o.
 """
 
@@ -38,6 +44,18 @@ INTERPRETER_MODULE = TESTS / "TestInterpreter.qm"
 ALLOWED = {
     # it checks the environment that run_tests.sh exports to the tests, which includes QORE_BINARY
     "examples/test/bin/run_tests/run-tests-credentials.qtest": "checks the variables that run_tests.sh exports",
+}
+
+
+#: the reads of QORE_ARGV other than QORE_ARGV[0], which only TestInterpreter.qm makes
+ARGV_READ = re.compile(r"\bQORE_ARGV\b(?!\s*\[\s*0\s*\])")
+
+#: the sources that read QORE_ARGV themselves, with the reason
+ARGV_ALLOWED = {
+    # qcc initializes the module when it compiles a test that requires it, without a command line
+    "examples/test/QoreBuildTree.qm": "checks whether there is a command line at all",
+    # its worker is the test itself, run with its whole command line (the script's own arguments after the script)
+    "examples/test/qlib/DataProvider/PipelineMemory.qtest": "runs itself as its worker with its own command line",
 }
 
 
@@ -77,12 +95,12 @@ def code_spans(text):
         yield (start, n)
 
 
-def lookups(text):
+def lookups(text, pattern=LOOKUP):
     """Returns the line numbers and the text of the lookups in the code of a source (that start in code: the name that
     getenv() is given is a string)"""
     starts = list(code_spans(text))
     found = []
-    for match in LOOKUP.finditer(text):
+    for match in pattern.finditer(text):
         if any(start <= match.start() < end for start, end in starts):
             found.append((text.count("\n", 0, match.start()) + 1, match.group(0)))
     return found
@@ -99,6 +117,37 @@ class InterpreterLookupTest(unittest.TestCase):
                 errors.append("%s:%d: %s: take the interpreter from TestInterpreter::qore_interpreter() and qcc from "
                               "TestInterpreter::qcc_compiler() (examples/test/TestInterpreter.qm)" % (rel, line, text))
         self.assertEqual([], errors, "\n".join(errors))
+
+    def test_tests_take_interpreter_options_from_test_interpreter(self):
+        errors = []
+        for path in sources():
+            rel = str(path.relative_to(ROOT))
+            if path == INTERPRETER_MODULE or rel in ARGV_ALLOWED:
+                continue
+            for line, text in lookups(path.read_text(errors="replace"), ARGV_READ):
+                errors.append("%s:%d: %s: take the interpreter options from TestInterpreter::interpreter_options() and "
+                              "the execution mode from TestInterpreter::exec_mode() "
+                              "(examples/test/TestInterpreter.qm): the arguments after the script are the test's own "
+                              "(issue #6250)" % (rel, line, text))
+        self.assertEqual([], errors, "\n".join(errors))
+
+    def test_argv_allowed_sources_exist_and_need_it(self):
+        for rel in ARGV_ALLOWED:
+            path = ROOT / rel
+            self.assertTrue(path.is_file(), "%s is listed in ARGV_ALLOWED but does not exist" % rel)
+            self.assertTrue(lookups(path.read_text(errors="replace"), ARGV_READ), "%s is listed in ARGV_ALLOWED but "
+                            "does not read QORE_ARGV" % rel)
+
+    def test_argv_check_finds_reads_in_code_only(self):
+        sample = "\n".join([
+            "list<string> opts = map $1, QORE_ARGV[1..], $1 =~ /^-/;",
+            "for (int i = 0; i < QORE_ARGV.size(); ++i) {}",
+            "string a = QORE_ARGV[0];",
+            "# QORE_ARGV[1] in a comment",
+            "string b = \"QORE_ARGV in a string\";",
+            "foreach string arg in (QORE_ARGV) {}",
+        ])
+        self.assertEqual([(1, "QORE_ARGV"), (2, "QORE_ARGV"), (6, "QORE_ARGV")], lookups(sample, ARGV_READ))
 
     def test_allowed_sources_exist_and_need_it(self):
         for rel in ALLOWED:

@@ -461,11 +461,49 @@ DLLLOCAL int64 qore_dbg_get_batch_collection_refusals();
 DLLLOCAL void qore_dbg_batch_collection_refused(const std::string& root);
 #endif
 
+//! the changes of records that a test can hold a thread inside of (debug builds; see dbg_hold_program_record_change())
+enum QoreProgramRecordSite {
+    //! a thread's first entry into a Program, as the Program is added to the thread's Programs (ThreadProgramData)
+    QPRS_THREAD_PROGRAMS = 0,
+    //! a thread's first thread-local data in a Program family, as it is added to the thread's data
+    QPRS_THREAD_DATA = 1,
+    //! a lock of a Program's parse options (QoreProgram::lockOptions()), under the Program's options mutex
+    QPRS_PARSE_OPTION_LOCK = 2,
+    //! a feature added to a Program (a module loaded into it)
+    QPRS_FEATURES = 3,
+    //! a Program added to a debug program
+    QPRS_DEBUG_PROGRAMS = 4,
+    //! a breakpoint assigned to a Program
+    QPRS_BREAKPOINTS = 5,
+    //! after a thread's first entry into a Program has been recorded, with its references (no lock held)
+    QPRS_THREAD_PROGRAMS_DONE = 6,
+    //! when a Program being cleared starts clearing the data of its threads (no lock held)
+    QPRS_THREAD_DATA_CLEAR_START = 7,
+    //! after a Program being cleared has cleared the data of a thread in it (no lock held)
+    QPRS_THREAD_DATA_CLEARED = 8,
+    //! after a Program being cleared has deleted the data of a thread in it, before it releases its reference to
+    //! the thread's Program data (no lock held)
+    QPRS_THREAD_DATA_DELETED = 9,
+    //! a call into a debug program, before it is counted (no lock held)
+    QPRS_DEBUG_CALL_UNCOUNTED = 10,
+};
+
+#ifdef DEBUG
+//! calls the test hook of a change of a record of a Program; see qore_program_private_base::dbgRecordChange()
+#define QORE_DBG_RECORD_CHANGE(site, pp) qore_program_private_base::dbgRecordChange(site, pp, -1)
+//! as QORE_DBG_RECORD_CHANGE() for a change that concerns a given thread
+#define QORE_DBG_RECORD_CHANGE_TID(site, pp, tid) qore_program_private_base::dbgRecordChange(site, pp, tid)
+#else
+#define QORE_DBG_RECORD_CHANGE(site, pp)
+#define QORE_DBG_RECORD_CHANGE_TID(site, pp, tid)
+#endif
+
 class qore_program_private_base {
     friend class QoreProgramAccessHelper;
 
 public:
-    //! Protects Program-owned local, string, location, and AOT signature metadata.
+    //! Protects Program-owned local, string, and AOT signature metadata (the unique locations are protected by the
+    //! stripe lock alone; see getLocation()).
     /** Recursive because signature interning allocates locals through createLocalVar().
         Hold only around metadata operations, never namespace lookup or user execution.
     */
@@ -551,7 +589,7 @@ public:
     // file name and unique string storage
     cstr_vector_t str_vec;
 
-    // unique program location storage
+    // unique program location storage; protected by the stripe lock (threadContainerLock()), as loc_set
     pgmloc_vec_t pgmloc;
 
     // high water marks for atomic rollback support (used with PO_ALLOW_REPARSE)
@@ -562,7 +600,8 @@ public:
     typedef std::set<const char*, ltstr> str_set_t;
     str_set_t str_set;
 
-    // temporary while parsing: unique locations; must be a set for performance reasons
+    // temporary while parsing: unique locations; must be a set for performance reasons; protected by the stripe
+    // lock (threadContainerLock()) alone, which getLocation() takes once (see recordLock())
     typedef std::set<const QoreProgramLocation*, ltpgm> loc_set_t;
     loc_set_t loc_set;
 
@@ -869,7 +908,18 @@ public:
     // ("program_thread_containers"; QFLM_STRIPED), so that the child never gets one of them in the middle of a
     // change.  An update of a value in place (a thread's count) changes no structure and needs no stripe lock.
     //
-    // Each stripe lock is a LEAF lock: it is taken with the Program's own lock held, and nothing else is acquired
+    // The same stripes protect the other records that other threads change at run time under locks that a child only
+    // initializes again (see recordLock()): the records of a thread's Program data (ThreadProgramData: the Programs
+    // that the thread has data in and its thread-local data in each family, under its pslock), the records of a Program
+    // that change at run time and at module load (the feature lists under featureLock; the strings and local variables
+    // of runtime_metadata_lock; the unique locations, which the stripe lock alone protects; the list of the user
+    // variants; the IR and plugin fallback records; the external data, the saved objects, the defines, the expressions
+    // parsed at run time, the statement IDs and the debug blocks under plock), its breakpoints (under lck_breakpoint),
+    // and the Programs of a debug program (qore_debug_program_private).  A record and the references that go with it
+    // are changed together, and a record leaves its container before the reference that it holds is released, so that a
+    // child never finds a record without its reference, or with one that was released.
+    //
+    // Each stripe lock is a LEAF lock: it is taken with the owner's own lock held, and nothing else is acquired
     // while it is held (including another stripe's lock); it is held only around the change itself, never across a
     // wait or a call into other code.
     //! one stripe of the thread container locks, on its own cache line
@@ -880,11 +930,16 @@ public:
     static constexpr unsigned ThreadContainerShardBits = 6;
     DLLLOCAL static ThreadContainerShard thread_container_shards[1u << ThreadContainerShardBits];
 
+    //! returns the stripe lock of the records of the object at the given address; see thread_container_shards
+    DLLLOCAL static std::mutex& recordLock(const void* owner) {
+        // Fibonacci hashing, as for the opaque target registry
+        uint64_t h = static_cast<uint64_t>(reinterpret_cast<uintptr_t>(owner)) * 0x9E3779B97F4A7C15ull;
+        return thread_container_shards[h >> (64 - ThreadContainerShardBits)].lock;
+    }
+
     //! returns the lock of this Program's stripe; see thread_container_shards
     DLLLOCAL std::mutex& threadContainerLock() const {
-        // Fibonacci hashing, as for the opaque target registry
-        uint64_t h = static_cast<uint64_t>(reinterpret_cast<uintptr_t>(this)) * 0x9E3779B97F4A7C15ull;
-        return thread_container_shards[h >> (64 - ThreadContainerShardBits)].lock;
+        return recordLock(this);
     }
 
 #ifdef DEBUG
@@ -893,6 +948,19 @@ public:
     */
     typedef void (*dbg_thread_container_hook_t)(const qore_program_private_base* pp);
     DLLLOCAL static std::atomic<dbg_thread_container_hook_t> dbg_thread_container_hook;
+
+    //! a test hook called inside or after a change of a record of a Program (see QoreProgramRecordSite)
+    /** See dbg_hold_program_record_change() in ql_debug.cpp; \a tid is the thread that the change concerns, or -1
+    */
+    typedef void (*dbg_record_hook_t)(int site, const qore_program_private_base* pp, int tid);
+    DLLLOCAL static std::atomic<dbg_record_hook_t> dbg_record_hook;
+
+    //! calls the record change test hook, if one is set
+    DLLLOCAL static void dbgRecordChange(int site, const qore_program_private_base* pp, int tid) {
+        if (dbg_record_hook_t hook = dbg_record_hook.load(std::memory_order_acquire)) {
+            hook(site, pp, tid);
+        }
+    }
 #endif
 
     struct PluginFallbackSiteInfo {
@@ -912,6 +980,8 @@ public:
             return;
         }
         AutoLocker al(plugin_fallback_lock);
+        // fork() waits for the change (see recordLock())
+        std::lock_guard<std::mutex> rl(threadContainerLock());
         if (plugin_fallback_sites.size() >= limit) {
             size_t drop = plugin_fallback_sites.size() - limit + 1;
             plugin_fallback_sites.erase(plugin_fallback_sites.begin(), plugin_fallback_sites.begin() + drop);
@@ -926,6 +996,7 @@ public:
 
     DLLLOCAL void clearPluginFallbackSites() const {
         AutoLocker al(plugin_fallback_lock);
+        std::lock_guard<std::mutex> rl(threadContainerLock());
         plugin_fallback_sites.clear();
     }
 
@@ -1004,6 +1075,8 @@ public:
         // every fallback event without needing the C++ API.
         if (ir_fallback_report) {
             AutoLocker al(ir_fallback_lock);
+            // fork() waits for the change (see recordLock())
+            std::lock_guard<std::mutex> rl(threadContainerLock());
             ir_fallback_counts[reason]++;
         }
         if (q_env_is_set("QORE_IR_TRACE_FALLBACK")) {
@@ -1127,8 +1200,12 @@ public:
     // structure is changed under the stripe lock as well (see threadContainerLock())
     pgm_data_map_t pgm_data_map;
 
-    // time zone setting for the program
-    const AbstractQoreZoneInfo* TZ;
+    //! the time zone of the Program
+    /** atomic: TimeZone::set*() changes it in one thread while the Program's other threads read it (currentTZ(),
+        currentTZIntern(): now(), date(), ...); the zone objects are not changed once published, so a reader that
+        loads the pointer with acquire semantics sees the whole zone (qore#6346)
+    */
+    std::atomic<const AbstractQoreZoneInfo*> TZ{nullptr};
 
     //! the argument of the last %set-time-zone directive (a region name or a UTC offset), or empty if none
     /** qcc records it in the AOT image, whose loader sets the time zone of the Program with it (qore#6270)
@@ -1275,7 +1352,7 @@ public:
         if (p_pgm) {
             setParent(p_pgm, n_parse_options, p_parse_options);
         } else {
-            TZ = QTZM.getLocalZoneInfo();
+            TZ.store(QTZM.getLocalZoneInfo(), std::memory_order_release);
             newProgram();
         }
         // Apply parse-option implications once pwo.parse_options is fully populated
@@ -1330,6 +1407,8 @@ public:
     DLLLOCAL const QoreProgramLocation* getLocation(const QoreProgramLocation&, int sline, int eline);
     DLLLOCAL const QoreProgramLocation* getLocation(const QoreProgramLocation&, int sline, int eline,
         int scol, int ecol);
+    //! returns the unique location equal to \a loc, which is added if it is not there yet
+    DLLLOCAL const QoreProgramLocation* getLocationIntern(const QoreProgramLocation& loc);
 
     //! Returns true if the parse options have every option of %modern (PO_MODERN)
     DLLLOCAL static bool isModern(const QoreParseOptions& po) {
@@ -1791,6 +1870,76 @@ public:
 
 class qore_debug_program_private;
 
+//! a hold of a counter of other threads' holds that a child process created with fork() keeps for the forking thread
+/** A counter that counts the holds of threads (the calls in progress into a debug program, the copies in progress of
+    a Program's external data) and that a thread waits on to reach zero would never reach it in a child created with
+    fork() while other threads held it, as these threads do not exist there.  Each thread therefore records its own
+    holds in a list of its own, which links objects on its stack (nothing is allocated), and the fork fixup sets each
+    such counter to the number of holds of the forking thread (countOwn()), which runs the child handlers.
+*/
+class QoreForkCountedHold {
+public:
+    DLLLOCAL QoreForkCountedHold() = default;
+
+    DLLLOCAL ~QoreForkCountedHold() {
+        release();
+    }
+
+    //! records a hold of the given counter by the current thread
+    DLLLOCAL void hold(const void* c) {
+        assert(!counter);
+        counter = c;
+        next = top;
+        top = this;
+    }
+
+    //! removes the hold, if any
+    DLLLOCAL void release() {
+        if (!counter) {
+            return;
+        }
+#ifndef NDEBUG
+        bool found = false;
+#endif
+        for (QoreForkCountedHold** p = &top; *p; p = &(*p)->next) {
+            if (*p == this) {
+                *p = next;
+#ifndef NDEBUG
+                found = true;
+#endif
+                break;
+            }
+        }
+        // a hold is released by the thread that made it
+        assert(found);
+        counter = nullptr;
+        next = nullptr;
+    }
+
+    //! returns the number of holds of the given counter by the current thread
+    DLLLOCAL static unsigned countOwn(const void* c) {
+        unsigned rv = 0;
+        for (const QoreForkCountedHold* h = top; h; h = h->next) {
+            if (h->counter == c) {
+                ++rv;
+            }
+        }
+        return rv;
+    }
+
+private:
+    //! the counter held, or nullptr
+    const void* counter = nullptr;
+    //! the next hold of the thread
+    QoreForkCountedHold* next = nullptr;
+    //! the last hold of the thread
+    DLLLOCAL static thread_local QoreForkCountedHold* top;
+
+    QoreForkCountedHold(const QoreForkCountedHold&) = delete;
+    QoreForkCountedHold& operator=(const QoreForkCountedHold&) = delete;
+};
+
+//! counts a call in progress into a debug program; see QoreForkCountedHold
 class AutoQoreCounterDec {
 public:
     DLLLOCAL AutoQoreCounterDec(QoreCounter* n_cnt, bool incNow = true): cnt(n_cnt), incFlag(false) {
@@ -1801,18 +1950,22 @@ public:
 
     DLLLOCAL ~AutoQoreCounterDec() {
         if (incFlag) {
+            fork_hold.release();
             cnt->dec();
         }
     }
 
     DLLLOCAL void inc() {
         cnt->inc();
+        fork_hold.hold(cnt);
         incFlag = true;
     }
 
 private:
     QoreCounter* cnt;
     bool incFlag;
+    //! the hold that a child created with fork() keeps for the forking thread
+    QoreForkCountedHold fork_hold;
 
     DLLLOCAL AutoQoreCounterDec() {}
 };
@@ -2038,15 +2191,82 @@ public:
             tclear = q_gettid();
 
             for (auto& i : pgm_data_map) {
-                i.second->finalize(sdh);
+                if (i.second) {
+                    i.second->finalize(sdh);
+                }
             }
         }
     }
 
+    //! Deletes the data of every thread in the Program, while it is cleared (tclear is set)
+    /** No other thread changes pgm_data_map while tclear is set; the clearing thread can enter the Program again
+        while destructors run (issue #4299), which gives it new data.
+
+        The data of an entry leaves it before it is deleted, which runs destructors: the threads that look at the
+        entries (attaching a debugger, breaking threads) and a child process created with fork() (see
+        fixupAfterFork()) never find data that was deleted.  The entry of another thread stays, without data, while
+        its data is deleted, as it still records the Program's references to the thread's Program data; it leaves the
+        map right before the references are released, which can free the thread's Program data.  The clearing
+        thread's own entry stays, without data; setThreadVarData() gives it new data if the thread enters the Program
+        again, which is then deleted as well.  The map is walked again after each entry, so that data added meanwhile
+        is deleted too.  A child process created with fork() while another thread clears a Program does not finish
+        the clear (see design/fork-handlers.md, "What is not covered").
+    */
     DLLLOCAL void clearProgramThreadData(ExceptionSink* xsink) {
-        for (auto& i : pgm_data_map) {
-            i.second->del(xsink);
-            i.first->delProgram(pgm);
+        QORE_DBG_RECORD_CHANGE(QPRS_THREAD_DATA_CLEAR_START, this);
+        ThreadProgramData* own = get_thread_program_data_if_any();
+        while (true) {
+            ThreadProgramData* tpd = nullptr;
+            ThreadLocalProgramData* tlpd = nullptr;
+            {
+                AutoLocker al(tlock);
+                for (pgm_data_map_t::iterator i = pgm_data_map.begin(), e = pgm_data_map.end(); i != e; ++i) {
+                    if (!i->second) {
+                        continue;
+                    }
+                    tpd = i->first;
+                    tlpd = i->second;
+                    // the entry stays, without data, while the data is deleted, so that it still records the thread
+                    // and the references that go with it (see below)
+                    std::lock_guard<std::mutex> rl(threadContainerLock());
+                    i->second = nullptr;
+                    break;
+                }
+            }
+            // The loop ends when no entry has data: an entry of another thread is removed below, and no other thread
+            // adds one while tclear is set; only the clearing thread's own entry can get data again, when the thread
+            // enters the Program again from a destructor run while its data is deleted.  It runs forever only if
+            // destructors enter the Program again forever, whose data was left behind before.
+            if (!tpd) {
+                break;
+            }
+            if (tpd == own) {
+                // the cached data of a Program with module lifetime is deleted below
+                own->forgetModuleProgramData(pgm);
+                // the Program leaves the thread's records first, so that the thread can enter it again as on a
+                // first entry while destructors run
+                tpd->delProgram(pgm);
+                tlpd->del(xsink);
+                continue;
+            }
+#ifdef DEBUG
+            // read before the data can be freed
+            int tid = tpd->gettid();
+#endif
+            tlpd->del(xsink);
+            QORE_DBG_RECORD_CHANGE_TID(QPRS_THREAD_DATA_DELETED, this, tid);
+            // the entry leaves the map right before the Program releases its references to the thread's Program data,
+            // which can free it: no code runs in between, and a child process created with fork() never finds an
+            // entry whose Program data was freed (see fixupAfterFork())
+            {
+                AutoLocker al(tlock);
+                pgm_data_map_t::iterator mi = pgm_data_map.find(tpd);
+                assert(mi != pgm_data_map.end() && !mi->second);
+                std::lock_guard<std::mutex> rl(threadContainerLock());
+                pgm_data_map.erase(mi);
+            }
+            tpd->delProgram(pgm);
+            QORE_DBG_RECORD_CHANGE_TID(QPRS_THREAD_DATA_CLEARED, this, tid);
         }
     }
 
@@ -3555,7 +3775,12 @@ public:
                 pp.warnSink = nullptr;
                 // an expression parsed before the exception is not returned
                 if (pp.new_expression) {
-                    pp.exp_set.erase(pp.new_expression);
+                    {
+                        // expressions are parsed and deleted at run time: fork() waits for the change (see
+                        // recordLock())
+                        std::lock_guard<std::mutex> rl(pp.threadContainerLock());
+                        pp.exp_set.erase(pp.new_expression);
+                    }
                     delete pp.new_expression;
                     pp.new_expression = nullptr;
                 }
@@ -3710,7 +3935,10 @@ public:
         q_exp_t rv = new_expression;
         if (new_expression) {
             if (*xsink) {
-                exp_set.erase(new_expression);
+                {
+                    std::lock_guard<std::mutex> rl(threadContainerLock());
+                    exp_set.erase(new_expression);
+                }
                 delete new_expression;
                 rv = nullptr;
             }
@@ -3875,7 +4103,7 @@ public:
             return;
 
         pgm_data_map_t::iterator i = pgm_data_map.find(td);
-        if (i != pgm_data_map.end()) {
+        if (i != pgm_data_map.end() && i->second) {
             i->second->finalize(sdh);
         }
     }
@@ -3900,7 +4128,10 @@ public:
             pgm_data_map.erase(i);
         }
 
-        tlpd->del(xsink);
+        // an entry without data was cleared (see clearProgramThreadData())
+        if (tlpd) {
+            tlpd->del(xsink);
+        }
         return 0;
     }
 
@@ -3993,7 +4224,9 @@ public:
         }
 
         pgm_data_map_t::iterator i = pgm_data_map.find(td);
-        if (i == pgm_data_map.end()) {
+        // an entry without data is the clearing thread's, whose data was deleted while the Program is cleared (see
+        // clearProgramThreadData()): the thread gets new data, as on a first entry
+        if (i == pgm_data_map.end() || !i->second) {
             // issue #4299: can be called while tclear is set; in which case the Program data will be removed safely
             // in normal Program cleanup
             // the data is recorded before it is published: an allocation that fails leaves nothing behind
@@ -4009,7 +4242,11 @@ public:
 
             {
                 std::lock_guard<std::mutex> cl(threadContainerLock());
-                pgm_data_map.append(pgm_data_map_t::value_type(td, tlpd.get()));
+                if (i == pgm_data_map.end()) {
+                    pgm_data_map.append(pgm_data_map_t::value_type(td, tlpd.get()));
+                } else {
+                    i->second = tlpd.get();
+                }
             }
             new_tlpd = tlpd.release();
 
@@ -4040,13 +4277,13 @@ public:
     DLLLOCAL const AbstractQoreZoneInfo* currentTZ(ThreadProgramData* tpd = get_thread_program_data()) const {
         AutoLocker al(tlock);
         pgm_data_map_t::const_iterator i = pgm_data_map.find(tpd);
-        if (i != pgm_data_map.end() && i->second->tz_set)
+        if (i != pgm_data_map.end() && i->second && i->second->tz_set)
             return i->second->tz;
-        return TZ;
+        return TZ.load(std::memory_order_acquire);
     }
 
     DLLLOCAL void setTZ(const AbstractQoreZoneInfo* n_TZ) {
-        TZ = n_TZ;
+        TZ.store(n_TZ, std::memory_order_release);
     }
 
     DLLLOCAL void exportFunction(ExceptionSink* xsink, qore_program_private* p, const char* name, const char* new_name = nullptr, bool inject = false) {
@@ -4396,7 +4633,7 @@ public:
         // note that tz may be NULL in case the offset is UTC (ie 0)
         assert(tz || ((*zone == '-' || *zone == '+')));
 
-        TZ = tz;
+        TZ.store(tz, std::memory_order_release);
         time_zone_directive = zone;
         return 0;
     }
@@ -4450,15 +4687,23 @@ public:
     DLLLOCAL bool setDefine(const char* name, QoreValue v, ExceptionSink* xsink, ValueHolder* old = nullptr) {
         dmap_t::iterator i = dmap.find(name);
         if (i != dmap.end()) {
-            if (old) {
-                *old = i->second;
-            } else {
-                i->second.discard(xsink);
+            QoreValue prev;
+            {
+                // defines change at run time (Program::define()): fork() waits for the change (see recordLock()); the
+                // value replaced leaves the record before it is released
+                std::lock_guard<std::mutex> rl(threadContainerLock());
+                prev = i->second;
+                i->second = v;
             }
-            i->second = v;
+            if (old) {
+                *old = prev;
+            } else {
+                prev.discard(xsink);
+            }
             return true;
         }
 
+        std::lock_guard<std::mutex> rl(threadContainerLock());
         dmap[name] = v;
         return false;
     }
@@ -4618,13 +4863,19 @@ public:
     DLLLOCAL bool unDefine(const char* name, ExceptionSink* xsink, ValueHolder* old = nullptr) {
         dmap_t::iterator i = dmap.find(name);
         if (i != dmap.end()) {
-            if (old) {
-                *old = i->second;
-            } else {
-                i->second.discard(xsink);
+            QoreValue prev;
+            {
+                // see setDefine()
+                std::lock_guard<std::mutex> rl(threadContainerLock());
+                prev = i->second;
+                dmap.erase(i);
+                source_defines.erase(name);
             }
-            dmap.erase(i);
-            source_defines.erase(name);
+            if (old) {
+                *old = prev;
+            } else {
+                prev.discard(xsink);
+            }
             return true;
         }
         return false;
@@ -4681,6 +4932,8 @@ public:
 
         recordSourceParseDefine(loc, str, val);
         setDefine(str, val, parseSink);
+        // see setDefine()
+        std::lock_guard<std::mutex> rl(threadContainerLock());
         if (source) {
             source_defines.insert(str);
         } else {
@@ -4700,6 +4953,8 @@ public:
         ValueHolder old(xsink);
         AutoLocker al(plock);
         setDefine(str, val, xsink, &old);
+        // see setDefine()
+        std::lock_guard<std::mutex> rl(threadContainerLock());
         if (untrusted) {
             source_defines.insert(str);
         } else {
@@ -4943,13 +5198,19 @@ public:
         AutoLocker al(tlock);
         pgm_data_map_t::iterator i = pgm_data_map.find(tpd);
         assert(i != pgm_data_map.end());
-        i->second->setTZ(tz);
+        if (i->second) {
+            i->second->setTZ(tz);
+        }
     }
 
     DLLLOCAL const AbstractQoreZoneInfo* getThreadTZ(ThreadProgramData* tpd, bool& set) const {
         AutoLocker al(tlock);
         pgm_data_map_t::const_iterator i = pgm_data_map.find(tpd);
         assert(i != pgm_data_map.end());
+        if (!i->second) {
+            set = false;
+            return nullptr;
+        }
         set = i->second->tz_set;
         return i->second->tz;
     }
@@ -4958,7 +5219,9 @@ public:
         AutoLocker al(tlock);
         pgm_data_map_t::iterator i = pgm_data_map.find(tpd);
         assert(i != pgm_data_map.end());
-        i->second->clearTZ();
+        if (i->second) {
+            i->second->clearTZ();
+        }
     }
 
     DLLLOCAL void addStatement(AbstractStatement* s, const QoreNativeParseInfo& info = {});
@@ -5011,7 +5274,11 @@ public:
         AutoLocker al(plock);
         q_exp_set_t::iterator i = exp_set.find(exp);
         if (i != exp_set.end()) {
-            exp_set.erase(exp);
+            {
+                // fork() waits for the change (see recordLock())
+                std::lock_guard<std::mutex> rl(threadContainerLock());
+                exp_set.erase(i);
+            }
             delete exp;
         }
     }
@@ -5039,7 +5306,10 @@ public:
         std::lock_guard<std::recursive_mutex> lock(runtime_metadata_lock);
         str_set_t::iterator i = str_set.lower_bound(str);
         if (i == str_set.end() || strcmp(*i, str)) {
-            str_vec.push_back(strdup(str));
+            // fork() waits for the change (see recordLock())
+            char* copy = strdup(str);
+            std::lock_guard<std::mutex> rl(threadContainerLock());
+            str_vec.push_back(copy);
             i = str_set.insert(i, str_vec.back());
         }
         return *i;
@@ -5071,6 +5341,9 @@ public:
             return -1;
         }
 
+        // fork() waits for the change (see recordLock())
+        std::lock_guard<std::mutex> rl(threadContainerLock());
+        QORE_DBG_RECORD_CHANGE(QPRS_FEATURES, this);
         featureList.insert(i, f);
         return 0;
     }
@@ -5079,6 +5352,7 @@ public:
         QoreSafeRWWriteLocker wl(featureLock);
         strset_t::iterator i = featureList.find(f);
         assert(i != featureList.end());
+        std::lock_guard<std::mutex> rl(threadContainerLock());
         featureList.erase(i);
     }
 
@@ -5090,6 +5364,9 @@ public:
             return -1;
         }
 
+        // fork() waits for the change (see recordLock())
+        std::lock_guard<std::mutex> rl(threadContainerLock());
+        QORE_DBG_RECORD_CHANGE(QPRS_FEATURES, this);
         userFeatureList.insert(i, f);
         return 0;
     }
@@ -5103,6 +5380,7 @@ public:
         QoreSafeRWWriteLocker wl(featureLock);
         strset_t::iterator i = userFeatureList.find(f);
         assert(i != userFeatureList.end());
+        std::lock_guard<std::mutex> rl(threadContainerLock());
         userFeatureList.erase(i);
     }
 
@@ -5126,6 +5404,7 @@ public:
     */
     DLLLOCAL void commitFeature(const char* f) {
         QoreSafeRWWriteLocker wl(featureLock);
+        std::lock_guard<std::mutex> rl(threadContainerLock());
         committedFeatureList.insert(f);
     }
 
@@ -5175,6 +5454,8 @@ public:
     DLLLOCAL void setExternalData(const char* owner, AbstractQoreProgramExternalData* pud) {
         AutoLocker al(plock);
         assert(extmap.find(owner) == extmap.end());
+        // fork() waits for the change (see recordLock())
+        std::lock_guard<std::mutex> rl(threadContainerLock());
         extmap.insert(extmap_t::value_type(owner, pud));
     }
 
@@ -5194,6 +5475,7 @@ public:
             return nullptr;
         }
         AbstractQoreProgramExternalData* rv = i->second;
+        std::lock_guard<std::mutex> rl(threadContainerLock());
         extmap.erase(i);
         return rv;
     }
@@ -5205,8 +5487,11 @@ public:
     DLLLOCAL void saveObject(QoreObject* obj) {
         AutoLocker al(plock);
         if (saved_objects.find(obj) == saved_objects.end()) {
+            int64 now = q_epoch();
+            // fork() waits for the change (see recordLock()); the record and its reference are one change
+            std::lock_guard<std::mutex> rl(threadContainerLock());
+            saved_objects.insert(saved_obj_map_t::value_type(obj, now));
             obj->ref();
-            saved_objects.insert(saved_obj_map_t::value_type(obj, q_epoch()));
         }
     }
 
@@ -5219,6 +5504,7 @@ public:
             if (i == saved_objects.end()) {
                 return false;
             }
+            std::lock_guard<std::mutex> rl(threadContainerLock());
             saved_objects.erase(i);
         }
         // deref outside the lock: the destructor may run user code that needs the program
@@ -5231,6 +5517,7 @@ public:
         saved_obj_map_t tmp;
         {
             AutoLocker al(plock);
+            std::lock_guard<std::mutex> rl(threadContainerLock());
             tmp.swap(saved_objects);
         }
         int rv = (int)tmp.size();
@@ -5245,6 +5532,7 @@ public:
         std::vector<QoreObject*> to_deref;
         {
             AutoLocker al(plock);
+            std::lock_guard<std::mutex> rl(threadContainerLock());
             for (saved_obj_map_t::iterator i = saved_objects.begin(), e = saved_objects.end(); i != e;) {
                 if (i->second <= cutoff) {
                     to_deref.push_back(i->first);
@@ -5278,6 +5566,15 @@ public:
     }
 
     DLLLOCAL LocalVar* createLocalVar(const char* name, const QoreTypeInfo* typeInfo);
+
+    //! creates a local variable with runtime_metadata_lock and the stripe lock (threadContainerLock()) held
+    /** For a caller that creates several variables in one hold of the locks; nothing here takes another lock
+    */
+    DLLLOCAL LocalVar* createLocalVarLocked(const char* name, const QoreTypeInfo* typeInfo) {
+        LocalVar* lv = local_var_list.emplace(name, typeInfo);
+        lv->setOwner(this);
+        return lv;
+    }
 
     DLLLOCAL const AbstractQoreFunctionVariant* runtimeFindCall(const char* name, const QoreListNode* params, ExceptionSink* xsink);
 
@@ -5461,7 +5758,7 @@ public:
     }
 
     DLLLOCAL static const AbstractQoreZoneInfo* currentTZIntern(QoreProgram& pgm) {
-        return pgm.priv->TZ;
+        return pgm.priv->TZ.load(std::memory_order_acquire);
     }
 
     DLLLOCAL static int tryLockParsing(QoreProgram& pgm, ExceptionSink* xsink) {
@@ -6022,19 +6319,29 @@ public:
         pgm->priv->warnSink->raiseException(ne);
     }
 
-    DLLLOCAL void attachDebug(const qore_debug_program_private* n_dpgm) {
+    //! attaches the debug program
+    /** @param n_dpgm the debug program
+        @param record records the Program in the debug program; called with the stripe lock of the debug program
+        held, under which the Program's debug program is set as well, so that a child process created with fork()
+        gets the two consistent (see recordLock())
+    */
+    template <typename F>
+    DLLLOCAL void attachDebug(const qore_debug_program_private* n_dpgm, F record) {
         printd(5, "qore_program_private::attachDebug(n_dpgm: %p), dpgm: %p\n", n_dpgm,
             dpgm.load(std::memory_order_relaxed));
         AutoLocker al(tlock);
         //QoreAutoRWWriteLocker arwl(&lck_debug_program);
 
+        std::lock_guard<std::mutex> rl(recordLock(n_dpgm));
+        record();
         if (dpgm.load(std::memory_order_relaxed) == n_dpgm)
             return;
         dpgm.store(const_cast<qore_debug_program_private*>(n_dpgm), std::memory_order_release);
         printd(5, "qore_program_private::attachDebug, dpgm: %p, pgm_data_map: size:%d\n",
             dpgm.load(std::memory_order_relaxed), (int)(pgm_data_map.size()));
         for (auto& i : pgm_data_map) {
-            if (!i.first->canRunDebugCallbacks()) {
+            // an entry without data was cleared (see clearProgramThreadData())
+            if (!i.second || !i.first->canRunDebugCallbacks()) {
                 continue;
             }
             i.second->dbgPendingAttach();
@@ -6042,19 +6349,27 @@ public:
         }
     }
 
-    DLLLOCAL void detachDebug(const qore_debug_program_private* n_dpgm) {
+    //! detaches the debug program
+    /** @param n_dpgm the debug program
+        @param unrecord removes the Program from the debug program; called with the stripe lock of the debug program
+        held, under which the Program's debug program is cleared as well (see attachDebug())
+    */
+    template <typename F>
+    DLLLOCAL void detachDebug(const qore_debug_program_private* n_dpgm, F unrecord) {
         printd(5, "qore_program_private::detachDebug(n_dpgm: %p), dpgm: %p\n", n_dpgm,
             dpgm.load(std::memory_order_relaxed));
         AutoLocker al(tlock);
         //QoreAutoRWWriteLocker arwl(&lck_debug_program);
         assert(n_dpgm==dpgm.load(std::memory_order_relaxed));
+        std::lock_guard<std::mutex> rl(recordLock(n_dpgm));
+        unrecord();
         if (!n_dpgm)
             return;
         dpgm.store(nullptr, std::memory_order_release);
         printd(5, "qore_program_private::detachDebug, dpgm: %p, pgm_data_map: size:%d\n",
             dpgm.load(std::memory_order_relaxed), (int)(pgm_data_map.size()));
         for (auto& i : pgm_data_map) {
-            if (!i.first->canRunDebugCallbacks()) {
+            if (!i.second || !i.first->canRunDebugCallbacks()) {
                 continue;
             }
             i.second->dbgPendingDetach();
@@ -6090,7 +6405,8 @@ public:
         AutoLocker al(tlock);
         for (auto& i : pgm_data_map) {
             if (i.first->gettid() == tid) {
-                if (!i.first->canRunDebugCallbacks() || !in_program.count(tid)) {
+                // an entry without data was cleared (see clearProgramThreadData())
+                if (!i.second || !i.first->canRunDebugCallbacks() || !in_program.count(tid)) {
                     return -1;
                 }
                 i.second->dbgBreak();
@@ -6107,7 +6423,7 @@ public:
         AutoLocker al(tlock);
         bool rv = false;
         for (auto& i : pgm_data_map) {
-            if (!i.first->canRunDebugCallbacks() || !in_program.count(i.first->gettid())) {
+            if (!i.second || !i.first->canRunDebugCallbacks() || !in_program.count(i.first->gettid())) {
                 continue;
             }
             i.second->dbgBreak();
@@ -6124,19 +6440,36 @@ public:
             bkpt->assignProgram(nullptr, nullptr);
         }
         QoreAutoRWWriteLocker al(&lck_breakpoint);
-        breakpointList.push_back(bkpt);
-        bkpt->pgm = this;
-        bkpt->ref();
+        {
+            // fork() waits for the change (see recordLock())
+            std::lock_guard<std::mutex> rl(threadContainerLock());
+            QORE_DBG_RECORD_CHANGE(QPRS_BREAKPOINTS, this);
+            breakpointList.push_back(bkpt);
+            // the record and its reference are one change for fork()
+            bkpt->pgm = this;
+            bkpt->ref();
+        }
     }
 
     DLLLOCAL void deleteAllBreakpoints() {
         QoreAutoRWWriteLocker al(&lck_breakpoint);
-        for (QoreBreakpointList_t::iterator it = breakpointList.begin(); it != breakpointList.end(); ++it) {
-            (*it)->unassignAllStatements();
-            (*it)->pgm = nullptr;
-            (*it)->deref();
+        while (true) {
+            QoreBreakpoint* b;
+            {
+                // each breakpoint leaves the list before its reference is released, which can free it; fork() waits
+                // for the change (see recordLock()), and the stripe lock is not held while the breakpoint is
+                // released, which takes the lock of all breakpoints
+                std::lock_guard<std::mutex> rl(threadContainerLock());
+                if (breakpointList.empty()) {
+                    break;
+                }
+                b = breakpointList.front();
+                breakpointList.pop_front();
+                b->unassignAllStatements();
+            }
+            b->pgm = nullptr;
+            b->deref();
         }
-        breakpointList.clear();
     }
 
     DLLLOCAL void getBreakpoints(QoreBreakpointList_t &bkptList) {
@@ -6545,7 +6878,8 @@ private:
     //! the blocks of AOT closures, by location, which the debugger's events of their debug IR are given with; owned
     /** see getAOTClosureDebugBlock(); protected by plock
     */
-    std::map<const QoreProgramLocation*, StatementBlock*> aot_closure_debug_blocks;
+    typedef std::map<const QoreProgramLocation*, StatementBlock*> aot_closure_debug_block_map_t;
+    aot_closure_debug_block_map_t aot_closure_debug_blocks;
     //! the blocks found by getBlockFromIndex(), by file and line; cleared when a statement is registered
     std::map<std::tuple<std::string, int, int>, const StatementBlock*> blockIndexCache;
 
@@ -6570,6 +6904,7 @@ private:
         if (!dpgm.load(std::memory_order_acquire)) {
             return nullptr;
         }
+        QORE_DBG_RECORD_CHANGE(QPRS_DEBUG_CALL_UNCOUNTED, this);
         AutoLocker al(tlock);
         //QoreAutoRWReadLocker al(&lck_debug_program);
         qore_debug_program_private* ret = dpgm.load(std::memory_order_relaxed);
@@ -6597,6 +6932,11 @@ private:
     static QoreRWLock lck_programMap; // to protect program list manipulation
 
 public:
+    //! registers a debug program, so that it is made consistent in a child process created with fork()
+    DLLLOCAL static void registerDebugProgram(qore_debug_program_private* dp);
+    //! removes a debug program from the registry
+    DLLLOCAL static void unregisterDebugProgram(qore_debug_program_private* dp);
+
     //! makes the Program consistent in a child process created with fork(), where only the forking thread exists
     /** Its locks can be held by threads that do not exist in the child, so they are initialized again, and its
         thread counts keep only the forking thread, so that the end of the Program does not wait for the other
@@ -6729,10 +7069,23 @@ private:
     };
 
 public:
-    DLLLOCAL qore_debug_program_private(QoreDebugProgram* n_dpgm) : dpgm(n_dpgm) {}
+    DLLLOCAL qore_debug_program_private(QoreDebugProgram* n_dpgm) : dpgm(n_dpgm) {
+        qore_program_private::registerDebugProgram(this);
+    }
 
     DLLLOCAL ~qore_debug_program_private() {
         assert(qore_program_map.empty());
+        qore_program_private::unregisterDebugProgram(this);
+    }
+
+    //! makes the debug program consistent in a child process created with fork(), where only the forking thread exists
+    /** Its lock can be held by a thread that does not exist in the child, and its count of calls in progress keeps
+        only the calls of the forking thread (see QoreForkCountedHold); its list of Programs is consistent, as it is
+        changed under the stripe lock (see qore_program_private_base::recordLock())
+    */
+    DLLLOCAL void fixupAfterFork() {
+        tlock.reinitAfterFork();
+        debug_program_counter.reinitAfterFork(static_cast<int>(QoreForkCountedHold::countOwn(&debug_program_counter)));
     }
 
     DLLLOCAL void addProgram(QoreProgram* pgm, ExceptionSink *xsink) {
@@ -6744,33 +7097,53 @@ public:
             (int)(i != qore_program_map.end()));
         if (i != qore_program_map.end())
             return;  // already exists
-        qore_program_map.insert(qore_program_map_t::value_type(pgm, pgm->priv));
         pgm->ref();
-        pgm->priv->attachDebug(this);
+        try {
+            // fork() waits for the change (see qore_program_private_base::recordLock())
+            pgm->priv->attachDebug(this, [this, pgm] () {
+                QORE_DBG_RECORD_CHANGE(QPRS_DEBUG_PROGRAMS, pgm->priv);
+                qore_program_map.insert(qore_program_map_t::value_type(pgm, pgm->priv));
+            });
+        } catch (...) {
+            pgm->deref();
+            throw;
+        }
     }
 
     DLLLOCAL void removeProgram(QoreProgram* pgm) {
-        QoreAutoRWWriteLocker al(&tlock);
-        qore_program_map_t::iterator i = qore_program_map.find(pgm);
-        printd(5, "qore_debug_program_private::removeProgram(), this: %p, pgm: %p, found: %d\n", this, pgm,
-            (int)(i != qore_program_map.end()));
-        if (i == qore_program_map.end())
-            return;
-        pgm->priv->detachDebug(this);
-        qore_program_map.erase(i);
+        {
+            QoreAutoRWWriteLocker al(&tlock);
+            qore_program_map_t::iterator i = qore_program_map.find(pgm);
+            printd(5, "qore_debug_program_private::removeProgram(), this: %p, pgm: %p, found: %d\n", this, pgm,
+                (int)(i != qore_program_map.end()));
+            if (i == qore_program_map.end())
+                return;
+            pgm->priv->detachDebug(this, [this, i] () {
+                qore_program_map.erase(i);
+            });
+        }
+        // released without the lock: the Program's teardown can run user code
         pgm->deref();
         // onDetach will not be executed as program is removed
     }
 
     DLLLOCAL void removeAllPrograms() {
-        QoreAutoRWWriteLocker al(&tlock);
-        printd(5, "qore_debug_program_private::removeAllPrograms(), this: %p\n", this);
-        qore_program_map_t::iterator i;
-        while ((i = qore_program_map.begin()) != qore_program_map.end()) {
-            qore_program_private* qpp = i->second;
-            QoreProgram* p = i->first;
-            qore_program_map.erase(i);
-            qpp->detachDebug(this);
+        std::vector<QoreProgram*> removed;
+        {
+            QoreAutoRWWriteLocker al(&tlock);
+            printd(5, "qore_debug_program_private::removeAllPrograms(), this: %p\n", this);
+            removed.reserve(qore_program_map.size());
+            qore_program_map_t::iterator i;
+            while ((i = qore_program_map.begin()) != qore_program_map.end()) {
+                qore_program_private* qpp = i->second;
+                removed.push_back(i->first);
+                qpp->detachDebug(this, [this, i] () {
+                    qore_program_map.erase(i);
+                });
+            }
+        }
+        // released without the lock: a Program's teardown can run user code
+        for (QoreProgram* p : removed) {
             p->deref();
         }
     }

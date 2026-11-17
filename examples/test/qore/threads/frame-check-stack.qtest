@@ -1,0 +1,232 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - thread stack sizes, the stack guard and the frames of JIT and AOT code
+# test-exec-mode: children - every check runs a fixture that sets its own execution mode
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../TestInterpreter.qm
+%requires FsUtil
+
+%exec-class FrameCheckStackTest
+
+#! A compiled function whose frame is larger than the stack guard checks the stack for its frame (qore#6124, #6414)
+/** Every compiled function checks the stack in its entry block, after its prologue has allocated its frame; a frame
+    larger than the stack guard could reach past the end of the thread's stack before the check ran, and the check's
+    own call then faulted (loading DataProvider in a thread with a 182KB stack on Linux).  Such a function is now a
+    thunk that checks the stack for its frame before it calls the function's code.  The fixture calls a function with a
+    frame of about 100KB (a hash literal of 300 hashdecl casts) in threads with stacks around the size it needs, with
+    the JIT and in an AOT module, and loads DataProvider in threads with stacks around the size that its constant
+    initializers need: each thread gets the result or \c STACK-LIMIT-EXCEEDED, and none crashes.
+*/
+public class FrameCheckStackTest inherits QUnit::Test {
+    public {
+        #! the number of entries of the hash literal of the function with a large frame
+        const Entries = 300;
+
+        #! the most bytes of frame per entry of the hash literal: the arrays of the entries' constructions share
+        #! the stack (qore#6415: about 96 bytes per entry on x86_64; 184 with qcc and 328 with the JIT before)
+        const MaxFrameBytesPerEntry = 150;
+    }
+
+    private {
+        string root;
+        string libdir;
+        string exe;
+        *TmpDir dir;
+    }
+
+    constructor() : Test("FrameCheckStackTest", "1.0") {
+        addTestCase("JIT function with a large frame", \jitTest());
+        addTestCase("AOT function with a large frame", \aotTest());
+        addTestCase("DataProvider load in a small stack", \dataProviderTest());
+        set_return_value(main());
+    }
+
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+
+    #! Returns the build tree of the qore under test, if any (see small-thread-stack.qtest)
+    private static *string findBuildTree() {
+        list<string> candidates;
+        if (ENV.LIBQORE_BINARY && is_file(ENV.LIBQORE_BINARY)) {
+            push candidates, dirname(realpath(ENV.LIBQORE_BINARY));
+        }
+        string qore = TestInterpreter::qore_interpreter();
+        if (qore !~ /\//) {
+            *string found;
+            foreach string d in (ENV.PATH.split(":")) {
+                if (d && is_executable(d + "/" + qore)) {
+                    found = d + "/" + qore;
+                    break;
+                }
+            }
+            qore = found ?? "";
+        }
+        if (qore && is_file(qore)) {
+            push candidates, dirname(realpath(qore));
+        }
+        foreach string d in (candidates) {
+            if ((is_file(d + "/libqore.so") || is_file(d + "/libqore.dylib"))
+                    && is_file(d + "/include/qore/qore-version.h")) {
+                return d;
+            }
+        }
+    }
+
+    #! compiles the fixture once
+    private setup() {
+        if (exe) {
+            return;
+        }
+        if (!Option::HAVE_STACK_GUARD) {
+            testSkip("runtime built without native stack protection");
+        }
+        root = realpath(get_script_dir() + "/../../../..");
+        if (ENV.QORE_LIBDIR) {
+            libdir = realpath(ENV.QORE_LIBDIR);
+        } else {
+            *string d = findBuildTree();
+            if (!d) {
+                testSkip("the qore under test is not in a build tree (the fixture is compiled with the headers of "
+                    "this checkout and of its build tree): set QORE_LIBDIR to the build tree, or run the test with "
+                    "the qore of a build tree");
+            }
+            libdir = d;
+        }
+        dir = new TmpDir("qore-frame-check-stack-");
+        exe = dir.path + "/frame-check-stack";
+        list<string> args = (ENV.CXX ?? "c++", "-std=c++17", "-pthread", "-g", "-O2", "-I" + root + "/include",
+            "-I" + libdir + "/include", get_script_dir() + "/frame_check_stack.cpp", "-L" + libdir,
+            "-Wl,-rpath," + libdir, "-lqore", "-o", exe);
+        *list<*string> target = (Qore::CFLAGS =~ x/(-mmacosx-version-min=\S+)/);
+        if (target) {
+            push args, target[0];
+        }
+        int status;
+        string output = backquote((map quote($1), args).join(" ") + " 2>&1", \status);
+        assertEq(0, status, output);
+    }
+
+    #! the code of a function whose frame is about 100KB: a hash literal of hashdecl casts with values that are not
+    #! constant
+    private static string bigFunction() {
+        string code = "hash<auto> sub big(string x) {\n    return {\n";
+        for (int i = 0; i < Entries; ++i) {
+            code += sprintf("        \"k%d\": <H>{\"name\": x + \"%d\", \"desc\": \"d%d \" + x, \"args\": (x, %d, "
+                "\"a%d\"), \"info\": {\"a\": x, \"b\": %d}},\n", i, i, i, i, i, i);
+        }
+        code += "    };\n}\n";
+        return code;
+    }
+
+    #! runs the fixture; returns its output
+    private string runFixture(string env, list<string> args, reference<int> status) {
+        return backquote("ulimit -c 0; " + env + " LD_LIBRARY_PATH=" + quote(libdir) + " DYLD_LIBRARY_PATH="
+            + quote(libdir) + " " + quote(exe) + " " + (map quote($1), args).join(" ") + " 2>&1", \status);
+    }
+
+    #! the stack sizes of the threads that call the function with a large frame: from below the size that its frame
+    #! needs (the stack guard plus the frame) to above it
+    private static list<string> callStacks() {
+        return map sprintf("%d", $1), xrange(96, 256, 8);
+    }
+
+    #! checks that every thread got the result or STACK-LIMIT-EXCEEDED, that both happened, and that the frame got a
+    #! thunk
+    private checkCalls(string what, string out, int status, list<string> stacks) {
+        assertEq(0, status, what + ": " + out);
+        *list<*string> frame = (out =~ x/frame check: [^\n]*big[^\n:]*: ([0-9]+) bytes: thunk/);
+        assertTrue(exists frame, what + ": a thunk was made: " + out);
+        # the frame grows with the code of the entries of the literal, but not with the arrays of their constructions
+        assertLt(Entries * MaxFrameBytesPerEntry, frame[0].toInt(), what + ": frame size");
+        int ok;
+        int ex;
+        foreach string kb in (stacks) {
+            bool got_result = out.find("\n" + kb + ": ok: 300\n") >= 0;
+            bool got_error = out.find("\n" + kb + ": ex: STACK-LIMIT-EXCEEDED\n") >= 0;
+            assertTrue(got_result || got_error, sprintf("%s: %s KB: result or STACK-LIMIT-EXCEEDED: %s", what, kb,
+                out));
+            if (got_result) {
+                ++ok;
+            } else if (got_error) {
+                ++ex;
+            }
+        }
+        assertTrue(ok > 0, what + ": a stack that holds the frame: " + out);
+        assertTrue(ex > 0, what + ": a stack that does not hold the frame: " + out);
+    }
+
+    private jitTest() {
+        setup();
+        string code = "hashdecl H { string name; string desc; list<auto> args; hash<auto> info; }\n" + bigFunction()
+            + "string sub run() { return sprintf(\"%d\", big(\"z\").size()); }\n";
+        string file = dir.path + "/jit.q";
+        File f();
+        f.open2(file, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(code);
+        f.close();
+        int status;
+        list<string> stacks = callStacks();
+        string out = runFixture("QORE_JIT_SYNC_COMPILE=1 QORE_FRAME_CHECK_REPORT=1", (file, "jit", "call") + stacks,
+            \status);
+        checkCalls("JIT", out, status, stacks);
+    }
+
+    private aotTest() {
+        setup();
+        string src_dir = dir.path + "/aot-src";
+        string qmod_dir = dir.path + "/aot-qmod";
+        mkdir(src_dir);
+        mkdir(qmod_dir);
+        string mod = "%modern\nmodule BigFrame {\n    version = \"1.0\";\n    desc = \"a function with a large frame\";\n"
+            "    author = \"Qore Technologies, s.r.o.\";\n    license = \"MIT\";\n}\n"
+            "public namespace BigFrame {\npublic hashdecl H { string name; string desc; list<auto> args; "
+            "hash<auto> info; }\npublic " + bigFunction() + "}\n";
+        File f();
+        f.open2(src_dir + "/BigFrame.qm", O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(mod);
+        f.close();
+        int status;
+        string qore = TestInterpreter::qore_interpreter();
+        string compile_out = backquote("QORE_FRAME_CHECK_REPORT=1 QORE_LIBDIR=" + quote(libdir) + " "
+            + quote(qore) + " -b --compile-module --output " + quote(qmod_dir + "/BigFrame.qmod") + " "
+            + quote(src_dir + "/BigFrame.qm") + " 2>&1", \status);
+        assertEq(0, status, compile_out);
+        assertTrue(is_file(qmod_dir + "/BigFrame.qmod"), compile_out);
+
+        string file = dir.path + "/aot.q";
+        f.open2(file, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write("%requires BigFrame\nstring sub run() { return sprintf(\"%d\", BigFrame::big(\"z\").size()); }\n");
+        f.close();
+        list<string> stacks = callStacks();
+        string out = runFixture("QORE_MODULE_DIR=" + quote(qmod_dir), (file, "ast", "call") + stacks, \status);
+        # the thunk was made when the module was compiled
+        checkCalls("AOT", compile_out + out, status, stacks);
+    }
+
+    private dataProviderTest() {
+        setup();
+        string file = dir.path + "/dp.q";
+        File f();
+        f.open2(file, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write("%try-module DataProvider\n%endtry\nstring sub run() { return \"loaded\"; }\n");
+        f.close();
+        string module_dir = root + "/qlib" + (ENV.QORE_MODULE_DIR ? ":" + ENV.QORE_MODULE_DIR : "");
+        # around the stack sizes whose stack the constant initializers of DataProvider need
+        foreach int kb in (xrange(170, 234, 2)) {
+            int status;
+            string out = runFixture("QORE_MODULE_DIR=" + quote(module_dir), (file, "ast", "parse", string(kb)),
+                \status);
+            assertEq(0, status, sprintf("%d KB: %s", kb, out));
+            assertTrue(out =~ /\n?[0-9]+: (ok: loaded|ex: (PARSE-)?STACK-LIMIT-EXCEEDED)\n$/,
+                sprintf("%d KB: loaded or a stack error: %s", kb, out));
+        }
+    }
+}

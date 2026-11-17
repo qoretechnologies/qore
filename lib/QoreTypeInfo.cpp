@@ -61,6 +61,7 @@
 #include <mutex>
 #include <set>
 #include <string>
+#include <typeinfo>
 #include <unordered_map>
 
 const QoreAnyTypeInfo staticAnyTypeInfo;
@@ -609,6 +610,13 @@ static wildcard_type_map_t wildcard_type_map;
 */
 static std::unordered_set<const void*> derived_type_keys;
 
+//! The declarations (and signatures) that own a type parameter type of type_parameter_map, guarded by ctl
+/** Kept apart from derived_type_keys: a declaration's own type parameter types do not name it for the decision to
+    keep it after its last reference is released (type_owner_derived()), as only its own code and the types derived
+    from them use them; they are orphaned and retired when it is destroyed (issue #6419)
+*/
+static std::unordered_set<const void*> type_param_owner_keys;
+
 //! Records the keys of a new derived-type cache entry; the caller holds ctl
 static void noteDerivedTypeKeys(const void* first, const type_vec_t& types) {
     if (first) {
@@ -847,7 +855,7 @@ static void qore_purge_derived_types_intern(const void* owner, std::set<const Qo
     AutoLocker al(ctl);
 
     // dead holds the destroyed types here (at most two)
-    bool keyed = owner && derived_type_keys.count(owner);
+    bool keyed = owner && (derived_type_keys.count(owner) || type_param_owner_keys.count(owner));
     for (auto i = dead.begin(), e = dead.end(); !keyed && i != e; ++i) {
         keyed = derived_type_keys.count(*i);
     }
@@ -909,6 +917,8 @@ static void qore_purge_derived_types_intern(const void* owner, std::set<const Qo
         }
         for (type_parameter_map_t::iterator i = type_parameter_map.begin(); i != type_parameter_map.end();) {
             if (owner && i->first.owner == owner) {
+                // the type outlives its declaration (issue #6419)
+                i->second->orphan();
                 retire(i->second);
                 i = type_parameter_map.erase(i);
             } else {
@@ -929,6 +939,7 @@ static void qore_purge_derived_types_intern(const void* owner, std::set<const Qo
     // addresses cannot be reused, but the destroyed owner's and types' addresses can
     if (owner) {
         derived_type_keys.erase(owner);
+        type_param_owner_keys.erase(owner);
     }
     for (const QoreTypeInfo* t : dead) {
         derived_type_keys.erase(t);
@@ -1549,6 +1560,34 @@ size_t qore_retired_type_owner_count() {
 size_t qore_type_owner_group_count() {
     AutoLocker al(ctl);
     return type_owner_groups.size();
+}
+
+void qore_type_retention_breakdown(std::map<std::string, int64_t>& out) {
+    AutoLocker al(ctl);
+    // the declarations kept until library cleanup, by kind
+    for (const QoreTypeOwner* o : retired_type_owners) {
+        ++out[std::string("retired declaration: ") + typeid(*o).name()];
+    }
+    // the derived types removed from the caches and kept until library cleanup, by kind
+    for (const QoreTypeInfo* ti : retired_derived_types) {
+        ++out[std::string("retired derived type: ") + typeid(*ti).name()];
+    }
+    // the live entries of the derived type caches
+    size_t complex = 0;
+    for (tmap_t* m : {&ch_map, &chon_map, &cl_map, &clon_map, &chr_map, &cr_map, &cron_map, &csl_map, &cslon_map}) {
+        complex += m->size();
+    }
+    out["cache: complex types"] = complex;
+    out["cache: union types"] = union_map.size() + union_on_map.size();
+    out["cache: code types"] = complex_code_map.size();
+    out["cache: parameterized class types"] = parameterized_class_map.size();
+    out["cache: type parameter types"] = type_parameter_map.size();
+    out["cache: type parameter owners"] = type_param_owner_keys.size();
+    out["cache: wildcard types"] = wildcard_type_map.size();
+    out["cache: derived type keys"] = derived_type_keys.size();
+    out["generic cache registry types"] = qore_generic_cache_registry().registeredTypeCount();
+    out["live generic specializations"] = qore_live_generic_specializations.load();
+    out["live parameterized hashdecls"] = qore_live_parameterized_hashdecls.load();
 }
 
 void qore_purge_derived_types(const void* owner, const QoreTypeInfo* ti1, const QoreTypeInfo* ti2) {
@@ -2302,11 +2341,11 @@ static q_return_vec_t make_type_parameter_return_vec(const QoreTypeParameterType
 }
 
 const QoreTypeInfo* QoreTypeParameterTypeInfo::getBoundTypeInfo() const {
-    if (owner_signature) {
-        return owner_signature->getTypeParameterBoundTypeInfo(index);
+    if (const UserSignature* sig = getOwnerSignature()) {
+        return sig->getTypeParameterBoundTypeInfo(index);
     }
-    if (owner_class) {
-        return qore_class_private::get(*owner_class)->getTypeParamBoundTypeInfo(index);
+    if (const QoreClass* cls = getOwnerClass()) {
+        return qore_class_private::get(*cls)->getTypeParamBoundTypeInfo(index);
     }
     return nullptr;
 }
@@ -2352,7 +2391,7 @@ QoreTypeParameterTypeInfo::QoreTypeParameterTypeInfo(const QoreClass* owner, siz
         index(n_index),
         param_name(name),
         or_nothing(n_or_nothing) {
-    assert(owner_class);
+    assert(getOwnerClass());
     assert(name && *name);
     assert(!or_nothing || value_type);
     pname = tname.c_str();
@@ -2368,7 +2407,7 @@ QoreTypeParameterTypeInfo::QoreTypeParameterTypeInfo(const TypedHashDecl* owner,
         index(n_index),
         param_name(name),
         or_nothing(n_or_nothing) {
-    assert(owner_hashdecl);
+    assert(getOwnerHashDecl());
     assert(name && *name);
     assert(!or_nothing || value_type);
     pname = tname.c_str();
@@ -2384,7 +2423,7 @@ QoreTypeParameterTypeInfo::QoreTypeParameterTypeInfo(const UserSignature* owner,
         index(n_index),
         param_name(name),
         or_nothing(n_or_nothing) {
-    assert(owner_signature);
+    assert(getOwnerSignature());
     assert(name && *name);
     assert(!or_nothing || value_type);
     pname = tname.c_str();
@@ -2492,7 +2531,7 @@ const QoreTypeInfo* qore_get_type_parameter_type(const QoreClass* owner, size_t 
     }
 
     QoreTypeParameterTypeInfo* ti = new QoreTypeParameterTypeInfo(owner, index, name, or_nothing, value_type);
-    derived_type_keys.insert(key.owner);
+    type_param_owner_keys.insert(key.owner);
     type_parameter_map.insert(i, type_parameter_map_t::value_type(key, ti));
     return ti;
 }
@@ -2517,7 +2556,7 @@ const QoreTypeInfo* qore_get_hashdecl_type_parameter_type(const TypedHashDecl* o
     }
 
     QoreTypeParameterTypeInfo* ti = new QoreTypeParameterTypeInfo(owner, index, name, or_nothing, value_type);
-    derived_type_keys.insert(key.owner);
+    type_param_owner_keys.insert(key.owner);
     type_parameter_map.insert(i, type_parameter_map_t::value_type(key, ti));
     return ti;
 }
@@ -2542,7 +2581,7 @@ const QoreTypeInfo* qore_get_signature_type_parameter_type(const UserSignature* 
     }
 
     QoreTypeParameterTypeInfo* ti = new QoreTypeParameterTypeInfo(owner, index, name, or_nothing, value_type);
-    derived_type_keys.insert(key.owner);
+    type_param_owner_keys.insert(key.owner);
     type_parameter_map.insert(i, type_parameter_map_t::value_type(key, ti));
     return ti;
 }
@@ -3677,6 +3716,10 @@ const QoreTypeInfo* qore_get_complex_code_or_nothing_type(const QoreTypeInfo* re
 
 static const QoreTypeInfo* get_substituted_type_param_arg(const QoreTypeParameterTypeInfo* tpi,
         const QoreTypeInfo* receiver_type_info, const QoreTypeParamInstantiation* type_param_inst) {
+    // the declaration of the type parameter was destroyed: no receiver or instantiation can be of it (issue #6419)
+    if (tpi->isOrphaned()) {
+        return nullptr;
+    }
     if (const UserSignature* owner_signature = tpi->getOwnerSignature()) {
         if (!type_param_inst || type_param_inst->owner != owner_signature
                 || tpi->getIndex() >= type_param_inst->type_args.size()) {

@@ -66,6 +66,56 @@ public namespace TestInterpreter {
         return (QORE_ARGV.size() - (ARGV.size() ?? 0)) < 2;
     }
 
+    #! returns the interpreter options of this process: the arguments between the interpreter and the script
+    /** The interpreter's \c QORE_ARGV is <tt>[\<qore\>, \<interpreter options\>..., \<script\>, \<script
+        arguments\>...]</tt>.  The arguments after the script are the test's own (such as the \c -v that
+        <tt>run_tests.sh -v</tt> gives QUnit), not interpreter options: a test that starts a child interpreter with
+        the options of its own process takes them from here, never from all of \c QORE_ARGV (issue #6250), and
+        keeps an option and its value given as two arguments (<tt>--exec-mode ir</tt>) together.
+
+        @param script the path of the test's script as the test's code gets it: \c get_script_path() called in the
+        test, not in this module, where it returns the path of the module (module code runs in the module's Program);
+        for a script given by its name alone, it is the name with \c "./" before it
+
+        @return the interpreter options; an empty list for a compiled test, which has none, and for a script whose
+        path is not on the command line (read from stdin)
+    */
+    public list<string> sub interpreter_options(*string script) {
+        if (!QORE_ARGV || running_compiled() || !script) {
+            return ();
+        }
+        list<string> opts = ();
+        for (int i = 1; i < QORE_ARGV.size(); ++i) {
+            # a script given by its name alone has "./" before it in its path
+            if (QORE_ARGV[i] == script || "./" + QORE_ARGV[i] == script) {
+                return opts;
+            }
+            opts += QORE_ARGV[i];
+        }
+        # the script is not on the command line
+        return ();
+    }
+
+    #! returns the execution mode given to the interpreter of this process (\c --exec-mode), if any
+    /** Only the interpreter options are read (see interpreter_options()): an argument of the test that looks like
+        the option is not the interpreter's execution mode
+
+        @param script the path of the test's script: \c get_script_path() called in the test (see
+        interpreter_options())
+    */
+    public *string sub exec_mode(*string script) {
+        list<string> opts = interpreter_options(script);
+        for (int i = 0; i < opts.size(); ++i) {
+            *string mode = (opts[i] =~ x/^--exec-mode=(.+)$/)[0];
+            if (mode) {
+                return mode;
+            }
+            if (opts[i] == "--exec-mode" && i + 1 < opts.size()) {
+                return opts[i + 1];
+            }
+        }
+    }
+
     #! returns the canonical path of the running executable (\c QORE_ARGV[0])
     public string sub own_executable() {
         string path = QORE_ARGV[0];

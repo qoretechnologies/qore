@@ -615,15 +615,16 @@ public namespace HttpClientIo {
         */
         timeout tcp_user_timeout = DefaultTcpUserTimeout;
 
-        #! Connect timeout (also used as stale detection timeout for reused pooled connections)
-        /** For fresh connections, this is the TCP/TLS establishment timeout.  For reused
-            pooled connections, this is also used as the request timeout — if a reused
-            connection doesn't respond within \c connect_timeout, the connection is assumed
-            stale, evicted, and the request is retried on a fresh connection.
+        #! Connect timeout: the bound of the TCP/TLS (or QUIC) establishment of each connection
+        /** It bounds a connection's own connect phase; a request's wait for a connection is bounded by the request's
+            timeout as well (see @ref HttpClientConnectionManager::request()).
 
-            Dead connections where the server sent FIN/RST are detected instantly by the
-            async I/O thread (epoll/kqueue + recv(MSG_PEEK)) and evicted before reuse.
-            This timeout only applies to the "half-open" case where the server goes silent.
+            It is not a stale-connection detector.  Dead connections where the server sent FIN/RST are detected
+            instantly by the async I/O thread (epoll/kqueue + recv(MSG_PEEK)) and evicted before reuse.  A reused
+            connection whose server went silent ("half-open") is detected by \c io_timeout (or
+            \c tcp_user_timeout / TCP keepalive at the TCP level): a request that fails on the inactivity timeout of
+            a reused connection is sent again once on a fresh connection within its remaining time.  The request's
+            timeout is a hard deadline: no request is sent again once it has run out (#6429).
         */
         timeout connect_timeout = DefaultConnectTimeout;
 
