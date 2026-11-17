@@ -694,6 +694,18 @@ DLLLOCAL bool qore_module_init_untrusted_loader();
 */
 DLLLOCAL bool qore_module_init_library();
 
+//! records \a pgm as the Program of the library module whose initialization the innermost barrier is for
+/** Called when the Program of a library module is created under its barrier (see
+    QoreModuleInitSandboxBarrierHelper); the first one created is the module's (qore#6337)
+*/
+DLLLOCAL void qore_module_init_set_program(const QoreProgram* pgm);
+
+//! returns true if a closure of \a pgm created now is created by the initialization of its library module
+/** That is, the innermost module initialization barrier is the one of the library module whose Program is \a pgm;
+    such a closure can be run later as deferred module initialization (call_module_init_closure(), qore#6337)
+*/
+DLLLOCAL bool qore_module_init_closure_creation(const QoreProgram* pgm);
+
 //! Returns the sandbox that governs a module that is not library code, loaded while library code is initialized
 /** That is the sandbox of the code that loaded the library code, if it is not trusted; the caller owns the
     reference returned; see QoreModuleInitSandboxBarrierHelper

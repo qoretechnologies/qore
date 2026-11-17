@@ -814,6 +814,9 @@ public:
         QoreSandboxManager* loader_manager;
         //! the ID of the Program of that code, or QORE_NO_PROGRAM_ID (see qore_caller_owner_program_id())
         qore_program_id_t loader_pgm_id;
+        //! the Program of the library module initialized under the barrier, once it exists, or nullptr; never set
+        //! for a lift or for the barrier of a deferred initialization (see qore_module_init_set_program())
+        const QoreProgram* module_pgm = nullptr;
     };
     std::vector<ModuleInitBarrier> module_init_barriers;
 
@@ -6028,6 +6031,30 @@ bool qore_module_init_untrusted_loader() {
 bool qore_module_init_library() {
     ThreadData* td = thread_data.get();
     return td && !td->module_init_barriers.empty() && !td->module_init_barriers.back().lift;
+}
+
+void qore_module_init_set_program(const QoreProgram* pgm) {
+    ThreadData* td = thread_data.get();
+    if (!td || td->module_init_barriers.empty()) {
+        return;
+    }
+    ThreadData::ModuleInitBarrier& mib = td->module_init_barriers.back();
+    // the first library Program created under the barrier is the module's
+    if (!mib.lift && !mib.module_pgm) {
+        mib.module_pgm = pgm;
+    }
+}
+
+bool qore_module_init_closure_creation(const QoreProgram* pgm) {
+    ThreadData* td = thread_data.get();
+    if (!pgm || !td || td->module_init_barriers.empty()) {
+        return false;
+    }
+    const ThreadData::ModuleInitBarrier& mib = td->module_init_barriers.back();
+    // only the code of the library module that is being initialized, not code of another Program that runs while it
+    // is initialized (the loader's, or another module's)
+    return !mib.lift && mib.module_pgm == pgm
+        && qore_program_private::get(*const_cast<QoreProgram*>(pgm))->library_module;
 }
 
 QoreSandboxManager* qore_module_init_lift_manager_ref() {

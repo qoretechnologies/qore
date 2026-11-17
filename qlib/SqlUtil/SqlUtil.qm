@@ -8078,8 +8078,32 @@ table.insert(("id": id, "ref": iop_seq("xid"), "ref2": iop_seq_currval("xid")));
             return TableCache::cache{dsdesc}{name};
         }
 
+        #! Returns the cached table for the given connection, resolving and caching it first if needed
+        /** The key is the description of the connection given; used by
+            @ref SqlUtil::sqlutil_get_cached_table() "sqlutil_get_cached_table()", which resolves tables for the code
+            that generates SQL, also for code restricted from the \c PROCESS_CONTROL domain of put() (qore#6337)
+
+            @since %SqlUtil 3.2.0
+        */
+        static AbstractTable getCached(AbstractDatasource ds, string name) {
+            string dsdesc = AbstractSqlUtilBase::makeDatasourceDesc(ds);
+            *AbstractTable cached = TableCache::get(dsdesc, name);
+            if (cached) {
+                return cached;
+            }
+
+            # resolve outside the lock; this loads the driver-specific module and can contact the server, and
+            # another thread resolving the same name at the same time is resolved by putIntern()
+            return TableCache::putIntern(dsdesc, name, new Table(ds, name).getTable());
+        }
+
         #! Caches the given table unless another thread cached one first; returns the table in the cache
         static AbstractTable put(string dsdesc, string name, AbstractTable t) [dom=PROCESS_CONTROL] {
+            return TableCache::putIntern(dsdesc, name, t);
+        }
+
+        #! Caches the given table unless another thread cached one first; returns the table in the cache
+        private:internal static AbstractTable putIntern(string dsdesc, string name, AbstractTable t) {
             TableCache::lck.lock();
             on_exit TableCache::lck.unlock();
             *AbstractTable cached = TableCache::cache{dsdesc}{name};
@@ -8196,15 +8220,7 @@ sqlutil_register_table_resolver(\sqlutil_get_cached_table());
         @since %SqlUtil 3.2.0
     */
     public AbstractTable sub sqlutil_get_cached_table(AbstractDatasource ds, string name) {
-        string dsdesc = AbstractSqlUtilBase::makeDatasourceDesc(ds);
-        *AbstractTable cached = TableCache::get(dsdesc, name);
-        if (cached) {
-            return cached;
-        }
-
-        # resolve outside the lock; this loads the driver-specific module and can contact the server, and
-        # another thread resolving the same name at the same time is resolved by put()
-        return TableCache::put(dsdesc, name, new Table(ds, name).getTable());
+        return TableCache::getCached(ds, name);
     }
 
     #! Discards tables cached by sqlutil_get_cached_table()

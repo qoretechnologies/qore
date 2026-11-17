@@ -1820,7 +1820,7 @@ list<hash<auto>> actions = map ProviderIndexUtil::tryGetActionMetadata($1.app, $
         checkDataIndex();
 
         if (exists (*string mod = index.factorymap{factory})) {
-            return tryLoadModule(mod);
+            return ProviderIndexUtil::loadIndexModule(mod);
         }
         return False;
     }
@@ -1836,7 +1836,7 @@ list<hash<auto>> actions = map ProviderIndexUtil::tryGetActionMetadata($1.app, $
         if (*hash<string, bool> h = index.appmap{app}) {
             bool loaded = False;
             foreach string mod in (keys h) {
-                if (tryLoadModule(mod) && !loaded) {
+                if (ProviderIndexUtil::loadIndexModule(mod) && !loaded) {
                     loaded = True;
                 }
             }
@@ -1856,7 +1856,7 @@ list<hash<auto>> actions = map ProviderIndexUtil::tryGetActionMetadata($1.app, $
         if (*hash<string, bool> h = index.schememap{scheme}) {
             bool loaded = False;
             foreach string mod in (keys h) {
-                if (tryLoadModule(mod) && !loaded) {
+                if (ProviderIndexUtil::loadIndexModule(mod) && !loaded) {
                     loaded = True;
                 }
             }
@@ -1871,6 +1871,16 @@ list<hash<auto>> actions = map ProviderIndexUtil::tryGetActionMetadata($1.app, $
         @return @ref True if the module was loaded, @ref False if it was not
     */
     static bool tryLoadModule(string mod) [dom=PROCESS_CONTROL] {
+        return ProviderIndexUtil::loadIndexModule(mod);
+    }
+
+    #! Loads a module that the data provider index names, for a lookup that the module's caller makes
+    /** Does not declare the \c PROCESS_CONTROL domain as tryLoadModule() does, which loads any module or path that it
+        is given: a lookup (DataProvider::getFactory(), an application or connection scheme lookup) loads only the
+        modules that the index names for what is looked up, also for code that is restricted from the domain
+        (qore#6337)
+    */
+    private:internal static bool loadIndexModule(string mod) {
         # check local cache first to avoid acquiring the global module lock
         if (loaded_module_cache{mod}) {
             return True;

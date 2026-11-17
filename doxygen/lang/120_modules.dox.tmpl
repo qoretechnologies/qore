@@ -1615,7 +1615,13 @@ xcrun notarytool submit MyModule.zip --keychain-profile my-notary-profile --wait
       call that the module resolves at run time, a call reference that the module creates, or a thread that the module
       starts, whose calling code is the code that called the module when the thread was started).  The \c init closure
       of a module whose declaration applies (a module found in the process-wide module path, see above), and the
-      threads that it starts, are not called by the code that loads the module; work that module code hands to a
+      threads that it starts, are not called by the code that loads the module, and neither is a closure that it
+      creates and runs later as deferred module initialization: a module that runs initialization code that other
+      modules register with it for later (such as the lazy application actions of the DataProvider catalog and the
+      pending connection schemes of the ConnectionProvider module) tests it with is_module_init_closure() when it is
+      registered and runs it with call_module_init_closure(), which raises \c MODULE-INIT-CLOSURE-ERROR for code that
+      the initialization of its library module did not create, so code cannot give its own code this exemption.  Work
+      that module code hands to a
       thread that it started earlier (through a queue, for example) runs with the restrictions of the code that the
       thread was started for, not with those of the code that hands it over.  Since %Qore 3.0
     - \c init: (optional) if present, must be a closure that will be executed when the module is loaded; this can be

@@ -474,7 +474,12 @@ public class ConnectionSchemeCache {
             throw "SCHEMA-ERROR", sprintf("Scheme %y is already pending", scheme);
         }
 
-        initmap{scheme} = init;
+        # a closure that the initialization of its library module created runs as deferred module initialization when
+        # a lookup runs it, also for code restricted from the domains of what it registers (qore#6337); the
+        # qualification is tested now and again when it runs
+        initmap{scheme} = is_module_init_closure(init)
+            ? auto sub () { return call_module_init_closure(init); }
+            : init;
         load_all = False;
         ++registry_revision;
     }

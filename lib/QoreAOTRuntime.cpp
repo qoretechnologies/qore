@@ -10496,6 +10496,8 @@ static void inheritAOTModulePathLists(QoreProgram* local_pgm, QoreProgram* paren
     // an AOT module initialized as library code (see QoreModuleInitSandboxBarrierHelper) has a library Program
     if (qore_module_init_library()) {
         local_priv->library_module = true;
+        // the closures that its initialization creates can run as deferred module initialization (qore#6337)
+        qore_module_init_set_program(local_pgm);
     }
 
     // the lists are those of the Program loading the module when the module loader names it, as for the inherited

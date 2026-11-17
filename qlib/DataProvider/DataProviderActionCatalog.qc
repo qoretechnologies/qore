@@ -1540,6 +1540,9 @@ public class DataProviderActionCatalog {
             "SANDBOX-MEMORY-LIMIT": True,
             "SANDBOX-ERROR": True,
             "STACK-LIMIT-EXCEEDED": True,
+            # the reader's restrictions refused a registration that it ran: the registration belongs to the next
+            # reader (qore#6337)
+            "INVALID-FUNCTION-ACCESS": True,
         };
 
         #! Valid file API write formats
@@ -4753,7 +4756,9 @@ DataProviderActionCatalog::checkSandboxAccess(app_name, True);
             throw "FILE-API-ERROR", sprintf("a file API has already been registered for application %y", app);
         }
         app_fileapimap{app} = info;
-        ImplicitModuleTransaction::add(sub () { DataProviderActionCatalog::deregisterAppFileApi(app); });
+        # the rollback of a failed module load that a lookup made for code restricted from the domain of
+        # deregisterAppFileApi() removes the registration too (qore#6337)
+        ImplicitModuleTransaction::add(sub () { DataProviderActionCatalog::removeAppFileApi(app); });
     }
 
     #! Returns the single-file read/write mapping for an application, if any
@@ -4786,6 +4791,11 @@ DataProviderActionCatalog::checkSandboxAccess(app_name, True);
     */
     static *hash<DataProviderFileApiInfo> deregisterAppFileApi(string app) [dom=PROCESS_CONTROL] {
         DataProviderSandboxState::checkRegistration("file API", app, True);
+        return DataProviderActionCatalog::removeAppFileApi(app);
+    }
+
+    #! Removes the file API registration for an application; the rollback of its registration (qore#6337)
+    private:internal static *hash<DataProviderFileApiInfo> removeAppFileApi(string app) {
         bool needs_lock = !lck.lockOwner();
         if (needs_lock) {
             lck.lock();
@@ -6434,7 +6444,16 @@ DataProviderActionCatalog::checkSandboxAccess(app_name, True);
         registerPendingApp()); this keeps a deferred registration bound if that changes
     */
     private:internal static code makeLazyCall(code init) {
-        return DataProviderActionCatalog::isGoverned() ? SandboxManager::bindCall(init) : init;
+        if (DataProviderActionCatalog::isGoverned()) {
+            return SandboxManager::bindCall(init);
+        }
+        # a closure that the initialization of its library module created runs as deferred module initialization,
+        # also for a reader restricted from the domains of what it registers (qore#6337); the qualification is
+        # tested now and again when it runs
+        if (is_module_init_closure(init)) {
+            return auto sub () { return call_module_init_closure(init); };
+        }
+        return init;
     }
 
     #! Returns @ref True if an exception ended a lazy registration because its thread was stopped
