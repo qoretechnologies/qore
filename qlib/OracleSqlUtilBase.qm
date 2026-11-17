@@ -481,6 +481,8 @@ hash schema = (
       Oracle cannot lock rows selected through an inline view
     - fixed a bug where the \c first_rows optimizer hint used with \c limit was placed after the \c "from" clause,
       where Oracle ignores it as a plain comment
+    - table comments (\c comment \c on \c table) are created and aligned, as well as read
+      (<a href="https://github.com/qoretechnologies/qore/issues/1483">issue 1483</a>)
 
     @section oracle16 OracleSqlUtilBase v1.6
     - fixed a bug in the IN operator
@@ -4430,9 +4432,24 @@ public class OracleTable inherits SqlUtil::AbstractTable {
         return tablespace;
     }
 
-    #! returns any table comment or @ref nothing if none is known
-    *string getComment() {
+    #! Returns @ref True: Oracle has table comments
+    /** @since OracleSqlUtilBase 1.7
+    */
+    bool supportsTableComments() {
+        return True;
+    }
+
+    #! Reads the comment of the table
+    private *string getCommentImpl() {
+        if (!tablespace) {
+            setTableInfoIntern();
+        }
         return comment;
+    }
+
+    #! Returns the SQL that sets or removes the comment of the table; an empty comment is no comment in Oracle
+    private softlist<string> getTableCommentSqlImpl(*string comment) {
+        return sprintf("comment on table %s is %s", getSqlName(), getSqlValueImpl(comment ?? ""));
     }
 
     bool readOnly() {

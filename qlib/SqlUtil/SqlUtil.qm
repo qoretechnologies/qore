@@ -161,6 +161,11 @@ module SqlUtil {
       database's own truncation (<a href="https://github.com/qoretechnologies/qore/issues/2363">issue 2363</a>)
     - @ref SqlUtil::SqlUtilColumnField::setDefaultValue() "SqlUtilColumnField::setDefaultValue()" returns the object,
       as @ref DataProvider::AbstractDataField::setDefaultValue() "AbstractDataField::setDefaultValue()" does
+    - added table comments: the \c "comment" key of a @ref table_desc_hash "table description", which is created and
+      aligned with the table, given by @ref SqlUtil::AbstractTable::getComment() "AbstractTable::getComment()" and in
+      the table's description, on databases whose driver supports them
+      (@ref SqlUtil::AbstractTable::supportsTableComments() "AbstractTable::supportsTableComments()")
+      (<a href="https://github.com/qoretechnologies/qore/issues/1483">issue 1483</a>)
     - code restricted from the \c DATABASE domain (@ref Qore::PO_NO_DATABASE "PO_NO_DATABASE") cannot open a
       database connection from a connection string, a datasource configuration or a serialized configuration
       (@ref SqlUtil::AbstractTable::getTable() "AbstractTable::getTable()",
@@ -2268,6 +2273,10 @@ db_table.getAlignSql(template_table, callback_opts);
       are @ref uk_desc_hash "unique constraint hashes"
     - \c partition_strategy: (optional) a @ref SqlUtil::PartitionStrategy "partition strategy hash"; Phase 1
       supports range partitioning
+    - \c comment: (optional) the comment of the table; it is created and aligned with the table, on databases whose
+      driver supports table comments (PostgreSQL, Oracle, MySQL/MariaDB and SQL Server; see
+      @ref SqlUtil::AbstractTable::supportsTableComments() "AbstractTable::supportsTableComments()"), and ignored on
+      others (SQLite, Firebird and Sybase); since SqlUtil 3.11.0
     - \c partitions: (optional) a hash of @ref SqlUtil::PartitionSpec "partition specification hashes" keyed by
       partition name; this key is used for table creation and description only, not for alignment deltas
     - \c driver: this key can optionally contain a hash keyed by driver name which contains a hash of values that will

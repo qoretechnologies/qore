@@ -331,7 +331,7 @@ public class DataSchemaLoader {
         @since Schema 1.9
     */
     public const TableKeys = ("columns", "primary_key", "indexes", "unique_constraints", "foreign_constraints",
-        "partition_strategy", "partitions", "auto_triggers", "triggers", "driver");
+        "partition_strategy", "partitions", "auto_triggers", "triggers", "driver", "comment");
 
     #! The keys a table's \c auto_triggers configuration may carry
     /** @since Schema 1.9
@@ -512,6 +512,10 @@ public class DataSchemaLoader {
         }
         if (table_def.foreign_constraints) {
             result.foreign_constraints = table_def.foreign_constraints;
+        }
+        # issue #1483: the comment of the table
+        if (exists table_def.comment) {
+            result.comment = table_def.comment;
         }
         if (table_def.partition_strategy) {
             result.partition_strategy = table_def.partition_strategy;

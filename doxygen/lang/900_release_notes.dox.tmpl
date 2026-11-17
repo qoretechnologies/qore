@@ -1043,6 +1043,12 @@
     of an external module can link to %Qore types and to the modules named in \c QORE_DOXYGEN_MODULES; see
     "Module Documentation and Cross-Module Links" in the C++ API documentation.
 
+    @par Table Comments in SqlUtil Schemas
+    A @ref table_desc_hash "table description" of @ref sqlutilintro "SqlUtil" can have a \c "comment", which is
+    created and aligned with the table on PostgreSQL, Oracle, MySQL/MariaDB and SQL Server, and which
+    @ref SqlUtil::AbstractTable::getComment() "AbstractTable::getComment()" and SchemaReverse give
+    (<a href="https://github.com/qoretechnologies/qore/issues/1483">issue 1483</a>).
+
     @par Opt-In Structured Datasource Mutation Observer
     @ref Qore::SQL::Datasource "Datasource" and @ref Qore::SQL::DatasourcePool "DatasourcePool" objects accept a
     mutation observer, set with

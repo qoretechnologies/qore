@@ -463,6 +463,8 @@ $function$
       column gets the pseudo-type's integer type and a sequence of its own as its default, named as PostgreSQL
       names it (with a number when the name is taken)
       (<a href="https://github.com/qoretechnologies/qore/issues/853">issue 853</a>)
+    - table comments (\c comment \c on \c table) are created, read and aligned
+      (<a href="https://github.com/qoretechnologies/qore/issues/1483">issue 1483</a>)
 
     @section pgsqlsqlutilbasev18 PgsqlSqlUtilBase v1.8
     - updated to support \c jdbc and \c odbc drivers as well as the native \c pgsql driver
@@ -5632,6 +5634,23 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
             return " on commit drop";
         }
         return "";
+    }
+
+    #! Returns @ref True: PostgreSQL has table comments
+    /** @since PgsqlSqlUtilBase 1.19
+    */
+    bool supportsTableComments() {
+        return True;
+    }
+
+    #! Reads the comment of the table
+    private *string getCommentImpl() {
+        return ds.selectRow("select pg_catalog.obj_description(%v::regclass, 'pg_class') as c", getSqlName()).c;
+    }
+
+    #! Returns the SQL that sets or removes the comment of the table
+    private softlist<string> getTableCommentSqlImpl(*string comment) {
+        return sprintf("comment on table %s is %s", getSqlName(), comment.val() ? getSqlValueImpl(comment) : "null");
     }
 
     private *list getCreateMiscSqlImpl(*hash opt, bool cache) {

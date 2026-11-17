@@ -279,6 +279,9 @@ hash<auto> desc = {
       generic @ref SqlUtil::AbstractTable "AbstractTable" partition APIs
     - implemented the generic validated named-partition select qualifier for primary and joined table references
     - added targeted canonical-name partition metadata lookup with the preceding range bound
+    - table comments (the \c COMMENT table option) are created, read and aligned; a comment with a backslash raises
+      \c VALUE-ERROR, as for column comments
+      (<a href="https://github.com/qoretechnologies/qore/issues/1483">issue 1483</a>)
 
     @section mysqlsqlutilv15 MysqlSqlUtil v1.5
     - fixed the prepend and append column operators
@@ -3053,6 +3056,33 @@ end";
         }
 
         private *list getCreateMiscSqlImpl(*hash opt, bool cache) {
+        }
+
+        #! Returns @ref True: MySQL and MariaDB have table comments
+        /** @since MysqlSqlUtil 1.6
+        */
+        bool supportsTableComments() {
+            return True;
+        }
+
+        #! Reads the comment of the table
+        private *string getCommentImpl() {
+            return ds.selectRow("select table_comment from information_schema.tables where table_schema = %v and "
+                "table_name = %v", schema, name).table_comment;
+        }
+
+        #! Returns the SQL that sets or removes the comment of the table
+        /** @throw VALUE-ERROR the comment has a backslash, which a MySQL comment cannot have, as for column comments
+        */
+        private softlist<string> getTableCommentSqlImpl(*string comment) {
+            # the COMMENT option takes a string literal only, in which a backslash is read according to the sql_mode
+            # of the session
+            if (comment && comment.find("\\") >= 0) {
+                throw "VALUE-ERROR", sprintf("table %y: the comment %y has a backslash, which a MySQL comment cannot "
+                    "have: the COMMENT option takes a string literal only, which reads a backslash according to the "
+                    "sql_mode of the session", name, comment);
+            }
+            return sprintf("alter table %s comment = %s", getSqlName(), getSqlValue(comment ?? ""));
         }
 
         private *list getAlignSqlImpl(AbstractTable table, *hash opt) {

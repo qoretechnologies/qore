@@ -943,6 +943,8 @@ module Schema {
       for the database it is connected to; a migration's \c sql step and a column's populate \c sql take the SQL under
       the driver's own name, else under the key of the database's native driver (ex: \c "oracle" on a \c jdbc
       connection to Oracle), else the default
+    - a table of a data schema can have a \c comment, the comment of the table
+      (<a href="https://github.com/qoretechnologies/qore/issues/1483">issue 1483</a>)
 
     @section schema_v1_8_0 Schema Module v1.8.0
     - added shared \c columns and \c indexes definitions at the top level of a data schema: a
