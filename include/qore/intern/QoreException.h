@@ -398,6 +398,17 @@ static_assert(offsetof(qore_es_private, pending) == offsetof(qore_es_private, ex
 static_assert(sizeof(qore_es_private) == (offsetof(qore_es_private, thread_exit) + 4 + alignof(void*) - 1)
     / alignof(void*) * alignof(void*), "the size of qore_es_private changed");
 
+// The checks of a sink, inline in libqore (qore#6369): every "if (*xsink)" in the library would otherwise be a call
+// through the PLT.  Modules, which see the declarations without "inline", call the copies that the library exports
+// (ExceptionSink.cpp makes the compiler emit them), so the API and the ABI are unchanged.
+inline bool ExceptionSink::isEvent() const {
+    return priv->isPending();
+}
+
+inline ExceptionSink::operator bool() const {
+    return priv->isPending();
+}
+
 //! Returns the value that code gives, or no value if the code raised an exception
 /** Code that raises an exception gives no value to its caller: a return statement whose value the declared return
     type rejects raises the error with the value still held, which is released here, so that a caller that takes no

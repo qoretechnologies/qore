@@ -128,10 +128,6 @@ void ExceptionSink::raiseThreadExit() {
     priv->pending = true;
 }
 
-bool ExceptionSink::isEvent() const {
-    return priv->isPending();
-}
-
 bool ExceptionSink::isThreadExit() const {
     return priv->thread_exit;
 }
@@ -140,13 +136,11 @@ bool ExceptionSink::isException() const {
     return priv->head;
 }
 
-// Intended as a alternative to isException():
-// ExceptionSink xsink;
-// if (xsink) { .. }
-ExceptionSink::operator bool () const {
-    assert(this);
-    return priv->isPending();
-}
+// ExceptionSink::isEvent() and ExceptionSink::operator bool() are inline in libqore (see qore/intern/QoreException.h,
+// qore#6369); taking their addresses here makes the compiler emit the copies that the library exports for modules
+static bool (ExceptionSink::* const qore_es_is_event_export)() const __attribute__((used)) = &ExceptionSink::isEvent;
+static bool (ExceptionSink::* const qore_es_operator_bool_export)() const __attribute__((used))
+    = &ExceptionSink::operator bool;
 
 QoreValue qore_release_value_with_exception_intern(QoreValue rv, ExceptionSink* xsink) {
     rv.discard(xsink);
