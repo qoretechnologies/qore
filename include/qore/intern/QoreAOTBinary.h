@@ -55,6 +55,7 @@
 #include <qore/SystemEnvironment.h>
 #include <qore/TypedHashDecl.h>
 #include "qore/intern/qore_aot_deps.h"
+#include "qore/intern/SyncParseOptions.h"
 
 class AbstractQoreNode;
 class QoreValue;
@@ -3193,16 +3194,20 @@ struct QoreAOTModuleFileInfo {
     //! the options that the module's directives gave the modules that they loaded, in directive order
     /** The parse options that the module's Program gave each module that a directive loaded, which it inherits from
         it (not those that relieve restrictions); the loader loads the module's dependencies with them, as the module's
-        source would (qore#6406; see qore_program_private::parse_module_restrictions)
+        source would (qore#6406; see qore_program_private::parse_module_restrictions); each entry has QMDR_* flags: the
+        modules that a module declaring functional domains requested before its header, and every module of a record
+        whose requests before the header could not be recorded exactly, are loaded before the module's
+        initialization with the restrictions of the loading code (qore#6386)
     */
-    std::vector<std::pair<std::string, QoreParseOptions>> dependency_restrictions;
+    std::vector<QoreModuleDependencyRestriction> dependency_restrictions;
 };
 
 //! The magic number of an AOT module metadata record: 'QAMI' little-endian
 static constexpr uint32_t QORE_AOT_MODULE_INFO_MAGIC = 0x494d4151u;
 //! The format version of AOT module metadata records
 /** version 2 added the names of the modules the module was compiled with and its own module path directories;
-    version 3 the restrictions that its code gives the modules it requires (qore#6406)
+    version 3 the restrictions that its code gives the modules it requires (qore#6406), each with QMDR_* flags
+    (qore#6386)
 */
 static constexpr uint32_t QORE_AOT_MODULE_INFO_VERSION = 3u;
 //! The size of the header of an AOT module metadata record: magic, version and payload size

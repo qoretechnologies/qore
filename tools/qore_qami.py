@@ -12,7 +12,7 @@ that many strings.  The payload of each version:
 - version 2: as version 1, then the modules it was compiled with, its %prepend-module-path directories and its
   %append-module-path directories;
 - version 3: as version 2, then the parse options that its directives gave its dependencies: a u32 count, then for
-  each a module name followed by four u32 words of options.
+  each a module name, four u32 words of options and a u32 word of flags (FLAG_*).
 """
 
 import struct
@@ -31,6 +31,14 @@ MAX_PAYLOAD = 16 * 1024 * 1024
 MAX_COUNT = 65536
 #: the number of u32 words of the parse options of a dependency restriction
 RESTRICTION_WORDS = 4
+#: the flag of a dependency restriction: the module was requested before the header of a module that declares
+#: functional domains (QMDR_BEFORE_HEADER)
+FLAG_BEFORE_HEADER = 1 << 0
+#: the flag of a dependency restriction: the requests before the module header could not be recorded exactly; the
+#: loader relieves no dependency of the module (QMDR_INEXACT)
+FLAG_INEXACT = 1 << 1
+#: the flags that a record can have; any other bit makes it invalid (QMDR_ALL_FLAGS)
+ALL_FLAGS = FLAG_BEFORE_HEADER | FLAG_INEXACT
 
 
 class ModuleInfo:
@@ -42,8 +50,8 @@ class ModuleInfo:
     - optional: the optional modules that were unavailable when the module was compiled
     - compiled_with: the modules that the module was compiled with (version 2 and later; else empty)
     - prepend_paths, append_paths: the module's own module path directories (version 2 and later; else empty)
-    - dependency_restrictions: (name, options) for each module that a directive loaded, options being a tuple of four
-      u32 words (version 3 and later; else empty)
+    - dependency_restrictions: (name, options, flags) for each module that a directive loaded, options being a tuple
+      of four u32 words and flags a combination of FLAG_* (version 3 and later; else empty)
     """
 
     def __init__(self, version, name, dependencies, optional, compiled_with=(), prepend_paths=(), append_paths=(),
@@ -125,14 +133,18 @@ def parse(data, offset=0, versions=VERSIONS, exact=False):
             prepend, cur = read_list(cur)
             append, cur = read_list(cur)
         if version >= 3:
-            count, cur = read_count(cur, 5 + 4 * RESTRICTION_WORDS)
+            count, cur = read_count(cur, 5 + 4 * RESTRICTION_WORDS + 4)
             for _ in range(count):
                 dep, cur = read_str(cur)
-                if cur + 4 * RESTRICTION_WORDS > end:
+                if cur + 4 * RESTRICTION_WORDS + 4 > end:
                     raise ValueError
                 words = struct.unpack_from("<%dI" % RESTRICTION_WORDS, data, cur)
                 cur += 4 * RESTRICTION_WORDS
-                restrictions.append((dep, words))
+                (flags,) = struct.unpack_from("<I", data, cur)
+                cur += 4
+                if flags & ~ALL_FLAGS:
+                    raise ValueError
+                restrictions.append((dep, words, flags))
     except (ValueError, UnicodeDecodeError):
         return None
     if cur != end:
@@ -167,6 +179,8 @@ def encode(version, name, dependencies=(), optional=(), compiled_with=(), prepen
         payload += enc_list(list(compiled_with)) + enc_list(list(prepend_paths)) + enc_list(list(append_paths))
     if version >= 3:
         payload += struct.pack("<I", len(dependency_restrictions))
-        for dep, words in dependency_restrictions:
-            payload += enc_str(dep) + struct.pack("<%dI" % RESTRICTION_WORDS, *words)
+        for entry in dependency_restrictions:
+            dep, words = entry[0], entry[1]
+            flags = entry[2] if len(entry) > 2 else 0
+            payload += enc_str(dep) + struct.pack("<%dI" % RESTRICTION_WORDS, *words) + struct.pack("<I", flags)
     return MAGIC + struct.pack("<II", version, len(payload)) + payload

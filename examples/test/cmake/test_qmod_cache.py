@@ -85,7 +85,7 @@ def sign_build(cache, build, key_path, env=None):
 def qami_record(name, deps=(), optional=(), compiled_with=(), prepend=(), append=(), restrictions=(), version=3):
     """An AOT module metadata record (version 3): with @p compiled_with, the module names of the module's compile-time
     closure, its own module path directives and the parse options that its directives gave its dependencies
-    (@p restrictions: (name, lo, hi) tuples); @p version 2 writes the layout without the options, @p version 1 the
+    (@p restrictions: (name, lo, hi) tuples, written with no flags); @p version 2 writes the layout without the options, @p version 1 the
     earlier layout, without any of them"""
     def s(v):
         b = v.encode()
@@ -97,7 +97,7 @@ def qami_record(name, deps=(), optional=(), compiled_with=(), prepend=(), append
         payload += lst(compiled_with) + lst(prepend) + lst(append)
     if version not in (1, 2):
         payload += struct.pack("<I", len(restrictions)) + b"".join(
-            s(n) + struct.pack("<IIII", lo & 0xffffffff, lo >> 32, hi & 0xffffffff, hi >> 32)
+            s(n) + struct.pack("<IIIII", lo & 0xffffffff, lo >> 32, hi & 0xffffffff, hi >> 32, 0)
             for n, lo, hi in restrictions)
     return b"QAMI" + struct.pack("<II", version, len(payload)) + payload
 

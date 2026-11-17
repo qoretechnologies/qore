@@ -25464,7 +25464,7 @@ static bool parseModuleMetadata(const char* source, int source_len, const char* 
                     ++p;
                 }
                 const char* mod_start = p;
-                while (p < end && *p != '\n' && *p != ' ' && *p != '\t') {
+                while (p < end && *p != '\n' && *p != '\r' && *p != ' ' && *p != '\t') {
                     ++p;
                 }
                 if (p > mod_start) {
@@ -25508,7 +25508,7 @@ static bool parseModuleMetadata(const char* source, int source_len, const char* 
                 }
                 // Now read the module name (stop at whitespace, newline, or version operators)
                 const char* name_start = p;
-                while (p < end && *p != '\n' && *p != ' ' && *p != '\t' &&
+                while (p < end && *p != '\n' && *p != '\r' && *p != ' ' && *p != '\t' &&
                        *p != '<' && *p != '>' && *p != '=') {
                     ++p;
                 }
@@ -26381,10 +26381,22 @@ static bool buildAOTModuleInfoRecord(const QoreAOTModuleInfo& mod_info, QoreProg
     info.appended_module_paths = pp->appended_module_paths;
     // the options that the module's directives gave the modules that they loaded, in directive order, for its
     // dependencies: the loader loads them in that order with these options, as the source does (qore#6406)
+    // a module that declares functional domains also records the modules that it requested before its header, in
+    // every form of request (%requires in any form, %try-module, in an included file): the loader loads them before
+    // its initialization, with the restrictions of the loading code, as its source loads them before the declared
+    // domains relieve them; with a conditional directive before its header, what it requests there can depend on where
+    // it is loaded, so every module it requested is recorded as inexact: the loader loads them all with those
+    // restrictions, and none is relieved (qore#6386)
+    const bool declares_domains = qore_program_private::getModuleOwnDomains(*pgm) != 0;
+    const bool inexact = declares_domains && pp->conditional_before_module_header;
     for (const auto& i : pp->parse_module_restrictions) {
-        if (std::find(mod_info.dependencies.begin(), mod_info.dependencies.end(), i.first)
+        uint32_t flags = declares_domains ? (i.flags & QMDR_BEFORE_HEADER) : 0;
+        if (inexact) {
+            flags |= QMDR_INEXACT;
+        }
+        if (flags || std::find(mod_info.dependencies.begin(), mod_info.dependencies.end(), i.module)
                 != mod_info.dependencies.end()) {
-            info.dependency_restrictions.push_back(i);
+            info.dependency_restrictions.emplace_back(i.module, i.options, flags);
         }
     }
     return qoreAOTEncodeModuleInfo(info, record, error);

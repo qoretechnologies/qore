@@ -202,7 +202,15 @@ class ArtifactChecksTest(unittest.TestCase):
                 self.assertEqual(rec, artifacts.module_info(build(note(rec))))
                 info = qami.parse(rec, exact=True)
                 self.assertEqual((version, "Module", ["Dep"]), (info.version, info.name, info.dependencies))
-                self.assertEqual([("Dep", (1, 0, 0, 0))] if version >= 3 else [], info.dependency_restrictions)
+                self.assertEqual([("Dep", (1, 0, 0, 0), 0)] if version >= 3 else [], info.dependency_restrictions)
+        # the flags of a dependency restriction: the known ones are read, any other bit makes the record invalid
+        flags = qami.FLAG_BEFORE_HEADER | qami.FLAG_INEXACT
+        rec = qami.encode(qami.CURRENT_VERSION, "Module", [], [], [], [], [], [("Dep", (0, 0, 0, 0), flags)])
+        self.assertEqual([("Dep", (0, 0, 0, 0), flags)], qami.parse(rec, exact=True).dependency_restrictions)
+        rec = qami.encode(qami.CURRENT_VERSION, "Module", [], [], [], [], [], [("Dep", (0, 0, 0, 0), 4)])
+        self.assertIsNone(qami.parse(rec, exact=True))
+        with self.assertRaises(ValueError):
+            artifacts.module_info(build(note(rec)))
         data = build(note(record()))
         self.assertIsNone(artifacts.module_info(build(b"")))
         self.assertIsNone(artifacts.module_info(b"not an ELF image"))

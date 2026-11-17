@@ -1439,7 +1439,7 @@ protected:
             QoreModuleInfo& mod_info, const char* path, const char* feature = nullptr, bool reexport = false,
             QoreProgram* mpgm = nullptr, QoreProgram* path_pgm = nullptr, unsigned load_opt = QMLO_NONE,
             ModuleLoadMapHelper* load_guard = nullptr,
-            const std::vector<std::pair<std::string, QoreParseOptions>>* dep_restrictions = nullptr);
+            const std::vector<QoreModuleDependencyRestriction>* dep_restrictions = nullptr);
 
     //! Checks that the modules an AOT module of a build tree was compiled with are the ones it was compiled against
     /** A module of a build tree has the depfile that qcc wrote next to it; for any other module nothing is checked.
@@ -1474,7 +1474,7 @@ protected:
     */
     DLLLOCAL int loadAOTBinaryModuleDependencies(ExceptionSink& xsink,
             const std::vector<std::string>& dependencies, QoreProgram* path_pgm,
-            const std::vector<std::pair<std::string, QoreParseOptions>>* restrictions = nullptr);
+            const std::vector<QoreModuleDependencyRestriction>* restrictions = nullptr);
 
     DLLLOCAL QoreAbstractModule* loadUserModuleFromPath(ExceptionSink& xsink, ExceptionSink& wsink, const char* path,
             const char* feature = nullptr, QoreProgram* tpgm = nullptr, bool reexport = false,

@@ -436,15 +436,34 @@ and the counts and directories of the module's own `%prepend-module-path` and
 loader finds the modules it checks with them), and the count and entries of the
 restricting parse options that the module's `%requires` and `%try-module`
 directives gave its dependencies, in directive order.  Each string is a 32-bit
-length and its bytes; each parse option entry is a module name and the options
-as four 32-bit words, the low and high halves of each of the two option words.
+length and its bytes; each parse option entry is a module name, the options
+as four 32-bit words, the low and high halves of each of the two option words,
+and a 32-bit word of flags (`QMDR_*` in `include/qore/intern/SyncParseOptions.h`;
+any other bit makes the record invalid).
 The loader loads those dependencies first, in that order, and adds their
 options to the restrictions that they inherit; the decoder keeps only the
-options that qcc writes, the restrictions that a loaded module inherits.  Version 2 added the compiled-with and module path
-lists, version 3 the parse option list. Every
-string is nonempty and contains no NUL; payloads are bounded to 16 MiB and
-65,536 entries per list. `QoreAOTModuleFileInfo` in
-`include/qore/intern/QoreAOTBinary.h` documents the layout.
+options that qcc writes, the restrictions that a loaded module inherits.
+A module that declares functional domains in its header also lists the
+modules that it requested before its header, in every form of module request
+(`%requires` in any form, `%try-module`, in an included file), with the flag
+`QMDR_BEFORE_HEADER`: the loader loads them before the module's initialization
+removes the declared domains from the restrictions, as its source loads them.
+A conditional directive before its header makes every entry `QMDR_INEXACT`, as
+what it requests there can depend on where it is loaded: the loader then loads
+every listed module with the restrictions of the loading code, relieving none
+(fail-closed; qore#6386).
+
+When the restrictions refuse a module that a `%try-module` directive before
+the header requests, the qmod, compiled where the request succeeded and with no
+code for its failure, is refused with the error of that module's load
+(`AOT-MODULE-RESTRICTED` when the module is itself a qmod; fail-closed), while
+the source continues without the module and fails or not by its own code (with
+`PARSE-EXCEPTION` when it calls the module that it did not load).
+
+Version 2 added the compiled-with and module path lists, version 3 the parse
+option list. Every string is nonempty and contains no NUL; payloads are bounded to 16 MiB and 65,536 entries per list.
+`QoreAOTModuleFileInfo` in `include/qore/intern/QoreAOTBinary.h` documents the
+layout.
 
 qcc adds the section as a constant global of the LLVM module
 (`addAOTModuleInfoSection()` in `lib/QoreAOT.cpp`) to the object that is linked

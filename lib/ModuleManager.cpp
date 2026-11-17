@@ -5606,21 +5606,27 @@ static qore_binary_module_desc_t get_binary_module_desc(void* ptr, const char* f
 
 int QoreModuleManager::loadAOTBinaryModuleDependencies(ExceptionSink& xsink,
         const std::vector<std::string>& dependencies, QoreProgram* path_pgm,
-        const std::vector<std::pair<std::string, QoreParseOptions>>* restrictions) {
+        const std::vector<QoreModuleDependencyRestriction>* restrictions) {
     // the modules that the module's directives loaded first, in the order of the directives, each with the options
     // that the module's code gave it at its directive, as its source loads them (qore#6406): the modules that they
     // require are loaded by them, with the same options; a module that is loaded already is not loaded again,
     // whatever its restrictions, as for the source
+    // a module that a module declaring functional domains requested before its header, in any form
+    // (QMDR_BEFORE_HEADER), or every module of a record whose requests before the header could not be recorded
+    // exactly (QMDR_INEXACT), is loaded here too, with the restrictions of the loading code, before the module's
+    // initialization removes the declared domains from them, as its source loads it (qore#6386)
     if (restrictions) {
         for (size_t i = 0; i < restrictions->size(); ++i) {
-            const std::string& dep = (*restrictions)[i].first;
+            const QoreModuleDependencyRestriction& entry = (*restrictions)[i];
+            const std::string& dep = entry.module;
             if (i && !(i % 10) && qore_check_cancel(&xsink, "AOT binary module dependency loading")) {
                 return -1;
             }
-            if (std::find(dependencies.begin(), dependencies.end(), dep) == dependencies.end()) {
+            if (!(entry.flags & (QMDR_BEFORE_HEADER | QMDR_INEXACT))
+                    && std::find(dependencies.begin(), dependencies.end(), dep) == dependencies.end()) {
                 continue;
             }
-            QoreModuleDependencyRestrictionHelper restriction_helper((*restrictions)[i].second);
+            QoreModuleDependencyRestrictionHelper restriction_helper(entry.options);
             loadModuleIntern(xsink, xsink, dep.c_str(), nullptr, false, MOD_OP_NONE, nullptr, nullptr, nullptr,
                 QMLO_NONE, QP_WARN_MODULES, nullptr, path_pgm);
             if (xsink) {
@@ -5939,7 +5945,7 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromPath(ExceptionSink& x
 QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromDesc(ExceptionSink& xsink, DLHelper* dlh,
         QoreModuleInfo& mod_info, const char* path, const char* feature, bool reexport,
         QoreProgram* mpgm, QoreProgram* path_pgm, unsigned load_opt, ModuleLoadMapHelper* load_guard,
-        const std::vector<std::pair<std::string, QoreParseOptions>>* dep_restrictions) {
+        const std::vector<QoreModuleDependencyRestriction>* dep_restrictions) {
     ReferenceHolder<QoreProgram> pholder(mpgm, &xsink);
     // take info hash immediately, if any
     ReferenceHolder<QoreHashNode> info(mod_info.info, &xsink);
@@ -6080,7 +6086,10 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromDesc(ExceptionSink& x
     // Use path_pgm for search-path layering: AOT qmods expose source %requires
     // as binary-module dependencies, and those must honor the importing
     // Program's %prepend-module-path / %append-module-path lists.
-    if (!mod_info.dependencies.empty() && !dependencies_preloaded) {
+    // the modules that an AOT module's directives gave restrictions are loaded as well, also when the descriptor lists
+    // no dependency (see loadAOTBinaryModuleDependencies())
+    if ((!mod_info.dependencies.empty() || (mod_info.is_aot && dep_restrictions && !dep_restrictions->empty()))
+            && !dependencies_preloaded) {
         if (mod_info.is_aot) {
             if (loadAOTBinaryModuleDependencies(xsink, mod_info.dependencies, path_pgm, dep_restrictions)) {
                 return nullptr;
@@ -6774,6 +6783,12 @@ void QoreModuleManager::issueParseCmd(const QoreProgramLocation* loc, const char
             return;
         }
     }
+    // the module that the directive loaded, with the options that it gave it, as for a module request: an AOT module
+    // compiled from this Program loads it with them, and before its initialization if the directive precedes the
+    // header of a module that declares functional domains (qore#6406, qore#6386)
+    qore_program_private::get(*pgm)->addParseModuleRestrictions(mi->getName(),
+        get_inherited_module_parse_options(pgm->getParseOptions(), PO_REQUIRE_TYPES | PO_NO_GLOBAL_VARS
+            | PO_ENABLE_DEBUG) & ~QoreParseOptions::POSITIVE_OPTIONS);
 
     // the code that issues the command is the Program being parsed: it has the parse options in force at the
     // directive and, as a parse can be run by restricted code, the restrictions of the code running the parse.  The
