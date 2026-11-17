@@ -80,7 +80,8 @@ if (i == -1) {
 
     @param pattern the byte sequence to find in the binary object
     @param byte_offset the starting byte position for the search; if negative, then specifies an offset from the end of
-    the current binary object
+    the current binary object, and a negative offset before the start of the binary object is the start, as with
+    @ref <string>::find() "<string>::find()" and @ref Qore::bindex() "bindex()"
 
     @return the byte position of a sequence of bytes within a binary object, -1 is returned if the byte sequence is
     not found or if \a byte_offset specifies a position beyond the end of the string
@@ -101,11 +102,13 @@ int <binary>::find(data pattern, softint byte_offset = 0) [const;flags=RET_VALUE
         return qore_string_private::emptyNeedleIndex(byte_offset, b->size());
     }
     if (byte_offset < 0) {
+        // a negative offset before the start is the start, as with <string>::find() and bindex()
         byte_offset = b->size() + byte_offset;
         if (byte_offset < 0) {
-            return -1;
+            byte_offset = 0;
         }
-    } else if ((size_t)byte_offset >= b->size()) {
+    }
+    if ((size_t)byte_offset >= b->size()) {
         return -1;
     }
 

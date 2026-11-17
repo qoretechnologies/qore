@@ -9,6 +9,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
 %requires QUnit
+%requires ../../../TestInterpreter.qm
 %requires FsUtil
 
 %include dgc-scan-avoidance-checks.qi
@@ -219,7 +220,9 @@ class DgcScanAvoidanceTest inherits QUnit::Test {
 
             # a write that replaces an edge between two members of the set is never handed to a member with real
             # references: it is scanned (the first write cuts the cycle, so there is no set to hand the later ones to)
-            "pinned-cut-scans": 100,
+            # and the first write replaces the peer's edge to the root, which a local variable holds: the root, no
+            # longer reached from the peer, is scanned too, as its set would keep counting that edge (#6335)
+            "pinned-cut-scans": 101,
             "pinned-cut-walked": 200,
             "pinned-cut-sets": 0,
             "pinned-cut-release-scans": 1,
@@ -235,8 +238,9 @@ class DgcScanAvoidanceTest inherits QUnit::Test {
             "pinned-close-release-walked": 3,
             "pinned-close-release-sets": 1,
 
-            # the edge that closes the cycle is replaced while a list holds the root
-            "cut-list-scans": 2,
+            # the edge that closes the cycle is replaced while a list holds the root: the root, no longer reached from
+            # its peer, is scanned too, as its set would keep counting the replaced edge (#6335)
+            "cut-list-scans": 3,
             "cut-list-walked": 6,
             "cut-list-sets": 0,
             "cut-list-release-scans": 1,
@@ -447,7 +451,7 @@ class DgcScanAvoidanceTest inherits QUnit::Test {
     }
 
     constructor() : QUnit::Test("DgcScanAvoidanceTest", "1.0", \ARGV) {
-        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        qore_bin = TestInterpreter::qore_interpreter();
         libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
 
         addTestCase("checks in this program", \testInProgram());

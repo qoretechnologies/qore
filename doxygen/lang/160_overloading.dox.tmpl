@@ -33,10 +33,18 @@ string sub example(string str) {
     the call and not removed or deleted since; for a member, a global variable, a variable of a closure or another
     expression, the variant is resolved at run time.  A variant selected so is resolved again at run time if the
     argument has no value after all, as for a method call that calls an overriding method whose return type accepts
-    no value.  A variant selected at parse time can still not
+    no value.  An untyped parameter (\c auto) is a worse match than a typed one for every value that the typed
+    parameter accepts, so a variant whose typed parameters accept the types of their arguments is selected at parse
+    time beside a variant that takes the same arguments with untyped parameters only: with <tt>f(Obj x)</tt> and
+    <tt>f(auto x)</tt>, a call with an argument of type \c Obj calls <tt>f(Obj x)</tt>.  A variant selected at parse
+    time can still not
     match at run time only because of the state of a value, which declared types do not describe: an argument that has
-    no value (a member or variable of the type that was not assigned) or a deleted object; then the variant is resolved
-    again at run time, as for a call resolved at run time, with the arguments as given.
+    no value (a member or variable of the type that was not assigned); then the variant is resolved again at run time,
+    as for a call resolved at run time, with the arguments as given.  A deleted object keeps its class for the
+    selection of a variant (see @ref overloading_deleted_objects).
+
+    A call through a @ref call_reference "call reference" is always resolved at run time: a reference names a function or method, not one of its variants, so the variant of an overloaded function or
+    method is selected each time the reference is called, with the arguments of that call.
 
     @section overloading_no_value Arguments With No Value And Overloading
     An argument with no value is an argument: it counts toward the number of arguments of the call, whether it is a
@@ -52,6 +60,18 @@ string sub example(string str) {
     passes one argument.  This matters only when a variant takes variable arguments (<tt>...</tt>) or no parameters:
     with <tt>v(*string)</tt> and <tt>v(...)</tt>, <tt>v(NOTHING)</tt> and <tt>v()</tt> call <tt>v(...)</tt> with no
     arguments, and <tt>v(x)</tt> calls <tt>v(*string)</tt>.
+
+    @section overloading_deleted_objects Deleted Objects And Overloading
+    A deleted object keeps its class for the selection of a variant: it matches a parameter of its class, or of a
+    parent class of its class, as the object did before it was deleted, at parse time and at run time and in every
+    @ref execution_modes "execution mode", so a call selects the same variant for an object whether it has been
+    deleted or not.  For example, with <tt>f(Obj x)</tt> and <tt>f(auto x)</tt>, <tt>f(o)</tt> calls
+    <tt>f(Obj x)</tt> also when \c o is a deleted object, and with <tt>f(Obj x)</tt> and <tt>f(int x)</tt> it calls
+    <tt>f(Obj x)</tt> instead of raising \c RUNTIME-OVERLOAD-ERROR.  A deleted object is passed to a parameter of a
+    class type as it is: calling one of its methods there raises \c OBJECT-ALREADY-DELETED, and reading one of its
+    members gives no value.  A parameter of type @ref object_type "object" does not accept a deleted object, which
+    raises \c RUNTIME-TYPE-ERROR when the variant is called.  The @ref instanceof "instanceof operator" does not
+    match a deleted object.
 
     @section overloading_named_arguments Named Arguments And Overloading
     Named-argument calls are resolved by applying the argument names to each accessible candidate variant's own

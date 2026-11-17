@@ -10,7 +10,7 @@
 %exec-class CompoundAssignmentUnassignedInProcessTest
 
 #! Tests -= and += on unassigned lvalues in the execution mode of the test itself
-/** The child processes of compound-assignment-unassigned.qtest check every execution mode against the AST
+/** The child processes of CompoundAssignmentUnassigned-<n>.qtest check every execution mode against the AST
     interpreter; these checks run in the process of the test, so each CI job checks them in its own execution mode.
 */
 class CompoundAssignmentUnassignedInProcessTest inherits QUnit::Test {

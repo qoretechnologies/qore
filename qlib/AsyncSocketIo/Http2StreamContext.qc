@@ -84,6 +84,9 @@ public class Http2StreamContext inherits AbstractStreamContext {
         self.data_queue = data_queue;
         self.uses_frame_state = uses_frame_state;
         self.wake_callback = wake_callback;
+        if (uses_frame_state) {
+            ws_close_record = sock.getHttp2StreamWebSocketCloseRecord(stream_id);
+        }
     }
 
     #! Returns True when the transport feeds pre-decoded WebSocket frame hashes
@@ -146,6 +149,7 @@ public class Http2StreamContext inherits AbstractStreamContext {
         any exception thrown by Socket::sendHttp2StreamData()
     */
     sendData(binary data, bool end_stream = False) {
+        checkWebSocketDataFrame(data);
         sock.sendHttp2StreamData(stream_id, data, end_stream);
         if (end_stream) {
             ended = True;
@@ -175,6 +179,7 @@ public class Http2StreamContext inherits AbstractStreamContext {
         @since AsyncSocketIo 1.0
     */
     sendDataWithTimeout(binary data, timeout timeout_ms, bool end_stream = False) {
+        checkWebSocketDataFrame(data);
         # the deadline is on the monotonic clock: a step of the system clock does not change the wait
         int deadline = timeout_ms > 0 ? clock_get_monotonic_us() / 1000 + timeout_ms : 0;
         while (True) {
@@ -220,6 +225,10 @@ public class Http2StreamContext inherits AbstractStreamContext {
         @since AsyncSocketIo 1.0
     */
     bool sendWebSocketClose(binary frame, bool end_stream = False) {
+        # the connection's record decides before the stream or the session, which may have ended
+        if (isWebSocketCloseSent() && !end_stream) {
+            return False;
+        }
         on_exit {
             if (wake_callback) {
                 wake_callback();
@@ -229,6 +238,8 @@ public class Http2StreamContext inherits AbstractStreamContext {
         if (end_stream) {
             ended = True;
         }
+        # a close frame was sent on the stream, now or before
+        ws_close_sent = True;
         return !rc;
     }
 
@@ -246,6 +257,7 @@ public class Http2StreamContext inherits AbstractStreamContext {
         @since AsyncSocketIo 1.0
     */
     bool trySendData(binary data, bool end_stream = False) {
+        checkWebSocketDataFrame(data);
         try {
             sock.sendHttp2StreamData(stream_id, data, end_stream);
         } catch (hash<ExceptionInfo> ex) {

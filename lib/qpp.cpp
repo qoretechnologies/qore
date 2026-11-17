@@ -73,7 +73,8 @@ const char usage_str[] = "usage: %s [options] <input file(s)...>\n"
     " -s, --stub-output=arg  Qore-syntax compile-time stub (.stub.qc) output file name\n"
     " -t, --table=arg        process the given file for doxygen tables (|!...)\n"
     " -u, --unit=arg         qtest (QUnit) output file name\n"
-    " -v, --verbose          increases verbosity level\n"
+    " -v, --verbose[=arg]    increases the verbosity level (repeatable: -vv), or sets it to\n"
+    "                        arg, from 0 to 4 (-v3, --verbose=3); the default is 2\n"
     " -T, --table-strict     treat documentation table issues as errors\n";
 
 static const option pgm_opts[] = {
@@ -1036,6 +1037,630 @@ public:
 
         // Not a directive we handle - let it pass through unchanged
         return false;
+    }
+};
+
+static std::string qpp_strip_comments_and_literals(const std::string& line);
+
+//! returns true if the line starts with an identifier, or with an or-nothing type ('*' and an identifier)
+static bool qpp_line_starts_with_identifier(const std::string& line) {
+    size_t i = (!line.empty() && line[0] == '*') ? 1 : 0;
+    return i < line.size() && (isalpha(static_cast<unsigned char>(line[i])) || line[i] == '_');
+}
+
+//! returns true if the line has a ';' outside square brackets: a statement, as a declaration has a ';' only in its
+//! attributes ("[const;flags=...]")
+static bool qpp_line_has_statement_end(const std::string& line) {
+    int depth = 0;
+    for (char c : line) {
+        if (c == '[') {
+            ++depth;
+        } else if (c == ']') {
+            if (depth) {
+                --depth;
+            }
+        } else if (c == ';' && !depth) {
+            return true;
+        }
+    }
+    return false;
+}
+
+//! returns true if the line starts with a C++ statement keyword, which a declaration never does
+static bool qpp_line_starts_with_statement_keyword(const std::string& line) {
+    static const char* keywords[] = {"return", "if", "else", "while", "for", "switch", "case", "do", "delete",
+        "new", "throw", "sizeof", "goto", "using", "typedef", "template", "namespace", "class", "struct", "enum",
+        "union", "extern", "friend", "operator"};
+    size_t e = 0;
+    while (e < line.size() && (isalnum(static_cast<unsigned char>(line[e])) || line[e] == '_')) {
+        ++e;
+    }
+    for (const char* k : keywords) {
+        if (e == strlen(k) && !line.compare(0, e, k)) {
+            // "enum<...>" and "union<...>" are %Qore types, as in a return type
+            if ((!strcmp(k, "enum") || !strcmp(k, "union")) && e < line.size() && line[e] == '<') {
+                return false;
+            }
+            return true;
+        }
+    }
+    return false;
+}
+
+//! returns the start of the identifier that ends at \a end in \a line (\a end if there is none)
+static size_t qpp_identifier_start(const std::string& line, size_t end) {
+    size_t start = end;
+    while (start > 0 && (isalnum(static_cast<unsigned char>(line[start - 1])) || line[start - 1] == '_')) {
+        --start;
+    }
+    return start;
+}
+
+//! returns true if the (trimmed) line is a Qore declaration that qpp processes only in a group or a class
+/** A constant ("const ..."), or the first line of a function signature: an optional return type and a name followed
+    by '(' at the start of the line, with no ';' (a statement) and no '=' before the '(' (issues #219, #1686)
+*/
+static bool qpp_line_is_qore_declaration(const std::string& orig_line) {
+    std::string line = qpp_strip_comments_and_literals(orig_line);
+    trim(line);
+    if (!line.compare(0, 6, "const ")) {
+        return true;
+    }
+    if (!qpp_line_starts_with_identifier(line) || qpp_line_starts_with_statement_keyword(line)
+            || qpp_line_has_statement_end(line)) {
+        return false;
+    }
+    size_t paren = line.find('(');
+    if (paren == std::string::npos || line.find_first_of("={}", 0) < paren) {
+        return false;
+    }
+    // a ':' before the '(' is a label or an initializer list, unless it is a scope ("Qore::Xml::XmlDoc name(")
+    for (size_t i = line.find(':'); i != std::string::npos && i < paren; i = line.find(':', i + 1)) {
+        if (i + 1 < line.size() && line[i + 1] == ':') {
+            ++i;
+            continue;
+        }
+        return false;
+    }
+    // the name before '('
+    size_t end = paren;
+    while (end > 0 && isspace(static_cast<unsigned char>(line[end - 1]))) {
+        --end;
+    }
+    size_t start = qpp_identifier_start(line, end);
+    if (start == end) {
+        return false;
+    }
+    // a name with no return type (as a group accepts) must be the whole text before the '('
+    if (!start) {
+        return true;
+    }
+    // or the return type is before it
+    return isspace(static_cast<unsigned char>(line[start - 1])) || line[start - 1] == '*'
+        || line[start - 1] == '>';
+}
+
+//! returns the class name of a method definition at the start of a line ("[type ]Class::name(..."), or an empty
+//! string
+/** The class can be a pseudo-class (\c "<list>"), and the return type can contain "::"; a line with a ';' is a
+    statement (issue #1686)
+*/
+static std::string qpp_line_method_class(const std::string& orig_line) {
+    if (!qpp_line_starts_with_identifier(orig_line)) {
+        return std::string();
+    }
+    std::string line = qpp_strip_comments_and_literals(orig_line);
+    trim_end(line);
+    if (!qpp_line_starts_with_identifier(line) || qpp_line_starts_with_statement_keyword(line)
+            || qpp_line_has_statement_end(line)) {
+        return std::string();
+    }
+    size_t paren = line.find('(');
+    if (paren == std::string::npos || line.find_first_of("={}\"", 0) < paren) {
+        return std::string();
+    }
+    // the method name before '('
+    size_t end = paren;
+    while (end > 0 && isspace(static_cast<unsigned char>(line[end - 1]))) {
+        --end;
+    }
+    size_t name_start = qpp_identifier_start(line, end);
+    if (name_start == end || name_start < 2 || line.compare(name_start - 2, 2, "::")) {
+        return std::string();
+    }
+    // the class name before "::": an identifier or a pseudo-class name in angle brackets
+    size_t colons = name_start - 2;
+    size_t start;
+    if (colons && line[colons - 1] == '>') {
+        size_t lt = line.rfind('<', colons - 1);
+        if (lt == std::string::npos) {
+            return std::string();
+        }
+        start = lt;
+    } else {
+        start = qpp_identifier_start(line, colons);
+        if (start == colons) {
+            return std::string();
+        }
+    }
+    // the class name starts the line or follows the return type
+    if (start > 0 && !isspace(static_cast<unsigned char>(line[start - 1])) && line[start - 1] != '*'
+            && line[start - 1] != '&' && line[start - 1] != '>') {
+        return std::string();
+    }
+    return std::string(line, start, colons - start);
+}
+
+//! returns true if the "'" at \a i is a digit separator ("1'000"): the word before it is a number
+static bool qpp_is_digit_separator(const std::string& line, size_t i) {
+    size_t start = i;
+    while (start > 0 && (isalnum(static_cast<unsigned char>(line[start - 1])) || line[start - 1] == '_'
+            || line[start - 1] == '\'')) {
+        --start;
+    }
+    return start < i && isdigit(static_cast<unsigned char>(line[start]));
+}
+
+//! returns true if the '"' at \a i starts a raw string literal (R"delim(...)delim", also with the prefixes u8, u, U
+//! and L); then \a close is the sequence that ends it and \a body the offset after its '('
+static bool qpp_raw_string_start(const std::string& line, size_t i, std::string& close, size_t& body) {
+    if (!i || line[i - 1] != 'R') {
+        return false;
+    }
+    size_t k = i - 1;
+    if (k >= 2 && line[k - 2] == 'u' && line[k - 1] == '8') {
+        k -= 2;
+    } else if (k >= 1 && (line[k - 1] == 'u' || line[k - 1] == 'U' || line[k - 1] == 'L')) {
+        --k;
+    }
+    // the prefix is not the end of an identifier ("FOOR"")
+    if (k && (isalnum(static_cast<unsigned char>(line[k - 1])) || line[k - 1] == '_')) {
+        return false;
+    }
+    // the delimiter: at most 16 characters, none of them a space, a parenthesis, a backslash or a quote
+    size_t j = i + 1;
+    for (; j < line.size() && j - i - 1 <= 16; ++j) {
+        char c = line[j];
+        if (c == '(') {
+            close = ")" + line.substr(i + 1, j - i - 1) + "\"";
+            body = j + 1;
+            return true;
+        }
+        if (isspace(static_cast<unsigned char>(c)) || c == ')' || c == '\\' || c == '"') {
+            break;
+        }
+    }
+    return false;
+}
+
+//! returns the line with its comments, string literals and character literals replaced by spaces
+/** a comment or a raw string literal that starts in the line and does not end in it ends at its end; a digit
+    separator ("1'000") is not a character literal
+*/
+static std::string qpp_strip_comments_and_literals(const std::string& line) {
+    std::string rv = line;
+    for (size_t i = 0; i < rv.size(); ++i) {
+        char c = rv[i];
+        std::string raw_close;
+        size_t raw_body;
+        if (c == '"' && qpp_raw_string_start(rv, i, raw_close, raw_body)) {
+            size_t e = rv.find(raw_close, raw_body);
+            e = e == std::string::npos ? rv.size() : e + raw_close.size();
+            for (size_t j = i; j < e; ++j) {
+                if (rv[j] != '\n') {
+                    rv[j] = ' ';
+                }
+            }
+            i = e - 1;
+            continue;
+        }
+        if (c == '/' && i + 1 < rv.size() && (rv[i + 1] == '/' || rv[i + 1] == '*')) {
+            size_t e;
+            if (rv[i + 1] == '/') {
+                e = rv.size();
+            } else {
+                e = rv.find("*/", i + 2);
+                e = e == std::string::npos ? rv.size() : e + 2;
+            }
+            for (size_t j = i; j < e; ++j) {
+                if (rv[j] != '\n') {
+                    rv[j] = ' ';
+                }
+            }
+            i = e - 1;
+            continue;
+        }
+        if (c == '"' || (c == '\'' && !qpp_is_digit_separator(rv, i))) {
+            size_t j = i + 1;
+            for (; j < rv.size() && rv[j] != c; ++j) {
+                if (rv[j] == '\\') {
+                    ++j;
+                }
+            }
+            for (size_t k = i; k <= j && k < rv.size(); ++k) {
+                if (rv[k] != '\n') {
+                    rv[k] = ' ';
+                }
+            }
+            i = j;
+        }
+    }
+    return rv;
+}
+
+//! returns true if the character can be part of an identifier
+static bool qpp_idchar(char c) {
+    return isalnum(static_cast<unsigned char>(c)) || c == '_';
+}
+
+//! returns true if the text in brackets is a qpp attribute list: items separated by ';' that are "name=value" or the
+//! flags "const" and "doconly", as qpp attributes are, and not an array bound or subscript ("N", "MAX", "0", "i")
+static bool qpp_is_attribute_list(const std::string& text) {
+    bool any = false;
+    size_t start = 0;
+    while (start <= text.size()) {
+        size_t semi = text.find(';', start);
+        std::string item(text, start, semi == std::string::npos ? std::string::npos : semi - start);
+        trim(item);
+        if (!item.empty()) {
+            if (item.find('=') != std::string::npos) {
+                size_t eq = item.find('=');
+                std::string name(item, 0, eq);
+                trim(name);
+                // "name=value": a name that is an identifier (not "a == b" or "i <= n")
+                if (name.empty() || !(isalpha(static_cast<unsigned char>(name[0])) || name[0] == '_')
+                        || (eq + 1 < item.size() && item[eq + 1] == '=')) {
+                    return false;
+                }
+                for (char c : name) {
+                    if (!qpp_idchar(c)) {
+                        return false;
+                    }
+                }
+            } else if (item != "const" && item != "doconly") {
+                return false;
+            }
+            any = true;
+        }
+        if (semi == std::string::npos) {
+            break;
+        }
+        start = semi + 1;
+    }
+    // "const" alone is a qpp flag only; "[const]" is not an array bound
+    return any;
+}
+
+//! returns true if a signature line has syntax that only qpp accepts, so that it cannot be C++ code
+/** A line of C++ code that qpp copies can be a definition of a C++ function or of a method of a C++ class that has the
+    name of a class of the file (the class of its private data, for example), so a declaration that qpp did not
+    process is recognized by what C++ does not accept (issue #1686): a pseudo-class before the method name
+    (\c "<list>::size("), attributes after the parameters (\c "[flags=...]"), an or-nothing return type
+    (\c "*string name("), no value (\c "nothing name("), or a type that only %Qore has in a type position
+    (\c "softint a"); comments and literals are not checked
+*/
+static bool qpp_line_has_qpp_only_syntax(const std::string& orig_line) {
+    std::string line = qpp_strip_comments_and_literals(orig_line);
+    trim(line);
+    size_t paren = line.find('(');
+    if (paren == std::string::npos) {
+        return false;
+    }
+    // the name before '('
+    size_t name_end = paren;
+    while (name_end > 0 && isspace(static_cast<unsigned char>(line[name_end - 1]))) {
+        --name_end;
+    }
+    size_t name_start = name_end;
+    while (name_start > 0 && qpp_idchar(line[name_start - 1])) {
+        --name_start;
+    }
+    if (name_start == name_end) {
+        return false;
+    }
+    // an or-nothing return type or no value: "*type name(" or "nothing name(", where the type is the first word
+    if (line[0] == '*' || !line.compare(0, 8, "nothing ") || !line.compare(0, 8, "nothing\t")) {
+        size_t i = line[0] == '*' ? 1 : 7;
+        if (line[0] == '*') {
+            if (i >= line.size() || !(isalpha(static_cast<unsigned char>(line[i])) || line[i] == '_')) {
+                return false;
+            }
+            while (i < line.size() && (qpp_idchar(line[i]) || line[i] == ':')) {
+                ++i;
+            }
+            // type arguments
+            if (i < line.size() && line[i] == '<') {
+                int depth = 0;
+                for (; i < line.size(); ++i) {
+                    if (line[i] == '<') {
+                        ++depth;
+                    } else if (line[i] == '>' && !--depth) {
+                        ++i;
+                        break;
+                    }
+                }
+            }
+        }
+        // whitespace, then the name (possibly with its class) and '('
+        if (i < name_start && i < line.size() && isspace(static_cast<unsigned char>(line[i]))) {
+            size_t j = line.find_first_not_of(" \t", i);
+            if (j != std::string::npos && j <= name_start
+                    && line.find_first_of("(),;=", j) == paren) {
+                return true;
+            }
+        }
+    }
+    // a pseudo-class before the method name: "<name>::method(", where the '<' starts a word
+    if (name_start >= 2 && !line.compare(name_start - 2, 2, "::") && name_start >= 3
+            && line[name_start - 3] == '>') {
+        size_t lt = line.rfind('<', name_start - 3);
+        if (lt != std::string::npos && (!lt || isspace(static_cast<unsigned char>(line[lt - 1]))
+                || line[lt - 1] == '*' || line[lt - 1] == '&')) {
+            bool word = lt + 1 < name_start - 3;
+            for (size_t k = lt + 1; k < name_start - 3; ++k) {
+                if (!qpp_idchar(line[k])) {
+                    word = false;
+                    break;
+                }
+            }
+            if (word) {
+                return true;
+            }
+        }
+    }
+    // attributes after the parameters: ") [" or ")[" followed by a qpp attribute list, whose items, separated by ';',
+    // are "name=value" or the flags "const" and "doconly" ("[flags=CONSTANT]", "[const;flags=RET_VALUE_ONLY]"); an
+    // array bound after a declarator ("-> int(&)[N]", "int (*name(int))[N]", "f(x)[0]") or a C++ attribute ("[[")
+    // has none
+    // only after the ')' that closes the first '(', where qpp attributes are: an inner cast or call followed by a
+    // lambda with an init-capture ("run((Fn)[self = i]() {") is C++
+    {
+        int depth = 0;
+        size_t close = std::string::npos;
+        for (size_t i = paren; i < line.size(); ++i) {
+            if (line[i] == '(') {
+                ++depth;
+            } else if (line[i] == ')' && !--depth) {
+                close = i;
+                break;
+            }
+        }
+        if (close != std::string::npos) {
+            size_t i = line.find_first_not_of(" \t", close + 1);
+            if (i != std::string::npos && line[i] == '[' && (i + 1 >= line.size() || line[i + 1] != '[')) {
+                size_t end = line.find(']', i + 1);
+                if (end != std::string::npos && qpp_is_attribute_list(std::string(line, i + 1, end - i - 1))) {
+                    return true;
+                }
+            }
+        }
+    }
+    // a type that only Qore has, in a type position: the word followed by a name
+    static const char* qore_types[] = {"softint", "softstring", "softbool", "softfloat", "softnumber", "softdate",
+        "softlist", "softbinary"};
+    for (const char* t : qore_types) {
+        size_t len = strlen(t);
+        for (size_t i = line.find(t); i != std::string::npos; i = line.find(t, i + 1)) {
+            if ((i && qpp_idchar(line[i - 1])) || (i + len < line.size() && qpp_idchar(line[i + len]))) {
+                continue;
+            }
+            // type arguments
+            size_t j = i + len;
+            if (j < line.size() && line[j] == '<') {
+                int depth = 0;
+                for (; j < line.size(); ++j) {
+                    if (line[j] == '<') {
+                        ++depth;
+                    } else if (line[j] == '>' && !--depth) {
+                        ++j;
+                        break;
+                    }
+                }
+            }
+            size_t k = line.find_first_not_of(" \t", j);
+            if (k != j && k != std::string::npos && (isalpha(static_cast<unsigned char>(line[k])) || line[k] == '_')) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+//! returns true if the (trimmed) line is a %Qore constant definition, which has no type: \c "const Name = ..."
+static bool qpp_line_is_qore_constant(const std::string& line) {
+    if (line.compare(0, 6, "const ")) {
+        return false;
+    }
+    size_t i = line.find_first_not_of(" \t", 6);
+    if (i == std::string::npos || !(isalpha(static_cast<unsigned char>(line[i])) || line[i] == '_')) {
+        return false;
+    }
+    while (i < line.size() && (isalnum(static_cast<unsigned char>(line[i])) || line[i] == '_')) {
+        ++i;
+    }
+    i = line.find_first_not_of(" \t", i);
+    return i != std::string::npos && line[i] == '=';
+}
+
+//! tracks the lines of the C++ code that qpp copies that are not compiled: in a block comment, or in an '#if 0' block
+/** issue #1686: a method or a declaration in them is not reported
+*/
+class QppCopiedCodeState {
+public:
+    //! returns true if the next line is not compiled code: in a block comment, a raw string literal or disabled code
+    /** a line that a backslash joins to a line comment or a literal is not: qpp reads its own lines ("//!") there
+    */
+    bool inactive() const {
+        return inText() || if0_depth;
+    }
+
+    //! returns true if the next line is in a block comment or a raw string literal: a '#' there is not a directive
+    bool inText() const {
+        return in_block_comment || !raw_close.empty();
+    }
+
+    //! a line that qpp reads itself in place of the C++ text (a doc comment or a group's namespace) ends a line
+    //! comment or a literal continued from the line before
+    void endSplice() {
+        spliced_comment = false;
+        spliced_literal = 0;
+        escape_pending = false;
+    }
+
+    //! updates the state with a line of C++ code
+    void text(const std::string& line) {
+        size_t i = 0;
+        // a line comment continued from the line before (a backslash at its end)
+        if (spliced_comment) {
+            spliced_comment = spliced(line);
+            return;
+        }
+        // a string or character literal continued from the line before; its first character can be escaped by a
+        // backslash before the one that joined the lines
+        if (spliced_literal) {
+            char c = spliced_literal;
+            spliced_literal = 0;
+            size_t start = 0;
+            if (escape_pending) {
+                escape_pending = false;
+                start = 1;
+            }
+            i = skipLiteral(line, start, c) + 1;
+        }
+        for (; i < line.size(); ++i) {
+            char c = line[i];
+            if (!raw_close.empty()) {
+                // in a raw string literal, which ends with its close sequence
+                size_t e = line.find(raw_close, i);
+                if (e == std::string::npos) {
+                    return;
+                }
+                i = e + raw_close.size() - 1;
+                raw_close.clear();
+                continue;
+            }
+            if (in_block_comment) {
+                if (c == '*' && i + 1 < line.size() && line[i + 1] == '/') {
+                    in_block_comment = false;
+                    ++i;
+                }
+                continue;
+            }
+            if (c == '/' && i + 1 < line.size()) {
+                if (line[i + 1] == '/') {
+                    // a line comment, which a backslash at the end of the line continues
+                    spliced_comment = spliced(line);
+                    return;
+                }
+                if (line[i + 1] == '*') {
+                    in_block_comment = true;
+                    ++i;
+                }
+                continue;
+            }
+            // a raw string literal, which can span lines
+            size_t raw_body;
+            if (c == '"' && qpp_raw_string_start(line, i, raw_close, raw_body)) {
+                i = raw_body - 1;
+                continue;
+            }
+            // a literal; not a digit separator ("1'000")
+            if (c == '"' || (c == '\'' && !qpp_is_digit_separator(line, i))) {
+                i = skipLiteral(line, i + 1, c);
+            }
+        }
+    }
+
+    //! updates the state with a preprocessor directive that qpp copies into the C++ code
+    void directive(const std::string& line) {
+        if (in_block_comment || !raw_close.empty()) {
+            // a comment or a raw string literal can end in the line, which is not a directive
+            text(line);
+            return;
+        }
+        // without its comments; a comment that starts in it is tracked
+        std::string d = qpp_strip_comments_and_literals(line).substr(1);
+        text(line);
+        trim(d);
+        if (if0_depth) {
+            if (!d.compare(0, 2, "if")) {
+                ++if0_depth;
+            } else if (!d.compare(0, 5, "endif") || (if0_depth == 1 && (!d.compare(0, 4, "else")
+                    || !d.compare(0, 4, "elif")))) {
+                --if0_depth;
+            }
+            return;
+        }
+        if (!d.compare(0, 2, "if") && d.size() > 2 && (isspace(static_cast<unsigned char>(d[2])) || d[2] == '(')) {
+            // "#if 0" and "#if false", also in parentheses ("#if(0)")
+            std::string cond;
+            for (char c : d.substr(2)) {
+                if (!isspace(static_cast<unsigned char>(c)) && c != '(' && c != ')') {
+                    cond += c;
+                }
+            }
+            if (cond == "0" || cond == "false") {
+                if0_depth = 1;
+            }
+        }
+    }
+
+private:
+    bool in_block_comment = false;
+    //! the sequence that ends the raw string literal that the code is in, if any
+    std::string raw_close;
+    //! true if a line comment continues on the next line
+    bool spliced_comment = false;
+    //! the quote of a string or character literal that continues on the next line, if any
+    char spliced_literal = 0;
+    //! true if the first character of the continued literal is escaped
+    bool escape_pending = false;
+    unsigned if0_depth = 0;
+
+    //! returns the offset of the backslash that joins the next line to the line, or std::string::npos if none
+    /** a backslash followed only by spaces or tabs before the end of the line joins it too, as with GCC and Clang
+    */
+    static size_t splicePos(const std::string& line) {
+        size_t e = line.size();
+        while (e && (line[e - 1] == '\n' || line[e - 1] == '\r' || line[e - 1] == ' ' || line[e - 1] == '\t')) {
+            --e;
+        }
+        return e && line[e - 1] == '\\' ? e - 1 : std::string::npos;
+    }
+
+    //! returns true if a backslash at the end of the line joins the next line to it
+    static bool spliced(const std::string& line) {
+        return splicePos(line) != std::string::npos;
+    }
+
+    //! returns the offset of the quote that ends the literal from \a start, or the size of the line if it does not
+    //! end in it; a literal that a backslash at the end of the line continues is continued on the next line
+    /** the lines are joined before the literal is read, so the backslash that joins them is not an escape: one before
+        it escapes the first character of the next line
+    */
+    size_t skipLiteral(const std::string& line, size_t start, char quote) {
+        size_t splice = splicePos(line);
+        size_t end = splice == std::string::npos ? line.size() : splice;
+        size_t i = start;
+        bool escaped = false;
+        for (; i < end && line[i] != quote; ++i) {
+            if (line[i] == '\\') {
+                if (i + 1 >= end) {
+                    escaped = true;
+                    i = end;
+                    break;
+                }
+                ++i;
+            }
+        }
+        if (i >= end) {
+            if (splice != std::string::npos) {
+                spliced_literal = quote;
+                escape_pending = escaped;
+            }
+            return line.size();
+        }
+        return i;
     }
 };
 
@@ -3490,9 +4115,13 @@ static int serialize_dox_comment(FILE* fp, std::string& buf, const strlist_t& do
 class ConstantGroupElement {
 protected:
     std::string name, doc, value;
+    //! the source file and the line of the constant's definition (issue #2290)
+    std::string fileName;
+    unsigned line;
 
 public:
-    ConstantGroupElement(const std::string& n, const std::string& d, const std::string& v) : name(n), doc(d), value(v) {
+    ConstantGroupElement(const std::string& n, const std::string& d, const std::string& v, const std::string& fn,
+            unsigned l) : name(n), doc(d), value(v), fileName(fn), line(l) {
     }
 
     int serializeCpp(FILE* fp) {
@@ -3506,6 +4135,9 @@ public:
         const char* prefix = 0;
         if (get_qore_value(value, qv, name.c_str(), &prefix))
             return -1;
+        // the binding has the location of the constant's definition, so the compiler's errors for its value name it
+        // (issue #2290)
+        fprintf(fp, "# %u \"%s\"\n", line, fileName.c_str());
         if (get_val_type(value) == T_QORE_RUNTIME) {
             // qv is "(<value>, <value in compiled code>)"; code referencing the constant reads it from the process
             // it runs in; see ConstantEntry::setRuntimeDependent()
@@ -3636,8 +4268,20 @@ public:
     }
 
     int serializeCpp(FILE* fp) const {
-        fprintf(fp, "# %d \"%s\"\n", startLine, fileName.c_str());
-        output_file(fp, text);
+        // issue #2290: the text is written with its lines as in the source after the location of its first line
+        // written, so that each line has its own location (output_file() drops the leading empty lines and joins
+        // runs of empty lines)
+        size_t start = text.find_first_not_of('\n');
+        if (start == std::string::npos) {
+            return 0;
+        }
+        size_t end = text.size();
+        while (end > start && whitespace(text[end - 1])) {
+            --end;
+        }
+        fprintf(fp, "# %u \"%s\"\n", startLine + static_cast<unsigned>(start), fileName.c_str());
+        fwrite(text.data() + start, 1, end - start, fp);
+        fputc('\n', fp);
         return 0;
     }
 
@@ -4599,16 +5243,27 @@ protected:
 
     bool valid;
     const char* fileName;
+    //! the line of the first line of the text being read (issue #2290)
     unsigned startLineNumber;
+    //! the line in the name of the group's unit test: the line after the last text of the group
+    unsigned unitLineNumber;
     unsigned& lineNumber;
     PreprocessorState& ppState; // preprocessor state for #ifdef handling
 
     void checkBuf(std::string& buf) {
         if (!buf.empty()) {
             tlist.push_back(new TextGroupElement(buf, startLineNumber, fileName));
-            startLineNumber = lineNumber;
+            unitLineNumber = lineNumber;
             buf.clear();
         }
+    }
+
+    //! adds a line read to the text of the group; the location of the text is that of its first line (issue #2290)
+    void addText(std::string& buf, const std::string& line) {
+        if (buf.empty()) {
+            startLineNumber = read_line_number(line, lineNumber);
+        }
+        buf += line;
     }
 
     //! returns the name of the group from its @defgroup comment, for diagnostics
@@ -4745,7 +5400,9 @@ protected:
 
 public:
     Group(std::string& buf, FILE* fp, const char* fn, unsigned& ln, PreprocessorState& pps)
-            : valid(true), fileName(fn), startLineNumber(ln), lineNumber(ln), ppState(pps) {
+            : valid(true), fileName(fn), startLineNumber(ln), unitLineNumber(ln), lineNumber(ln), ppState(pps) {
+        // the state of the C++ code copied (issue #1686)
+        QppCopiedCodeState copied;
         doc = buf;
         // readUntilOpenGroup() has reported the error
         if (readUntilOpenGroup(fileName, lineNumber, doc, fp)) {
@@ -4762,24 +5419,45 @@ public:
                 return;
             }
 
-            // Handle preprocessor directives
-            if (!line.empty() && line[0] == '#') {
+            // Handle preprocessor directives; a line in a block comment or a raw string literal is not one
+            if (!line.empty() && line[0] == '#' && !copied.inText()) {
+                bool was_empty = buf.empty();
                 if (ppState.handleDirective(line, read_line_number(line, lineNumber), buf)) {
+                    if (was_empty && !buf.empty()) {
+                        startLineNumber = read_line_number(line, lineNumber);
+                    }
+                    // a comment can start or end in the directive line (issue #1686)
+                    copied.text(line);
                     continue;
                 }
                 // Not a recognized/tracked directive - add to buf and continue
                 // This handles unknown #ifdef/#endif macros as pass-through to C++
-                buf += line;
+                copied.directive(line);
+                addText(buf, line);
                 continue;
             }
 
             // Skip content in inactive conditional blocks
             if (ppState.isSkipping()) {
-                buf += line;  // Keep the raw text for pass-through to C++
+                addText(buf, line);  // Keep the raw text for pass-through to C++
+                // a comment or a raw string literal can start or end in skipped code, as for the preprocessor
+                copied.text(line);
+                continue;
+            }
+
+            // issue #1686: text in a block comment or an '#if 0' block is copied as it is; the end of the group ends
+            // it there too
+            if (copied.inactive() && line.find("@}") == std::string::npos) {
+                copied.text(line);
+                addText(buf, line);
                 continue;
             }
 
             if (!line.compare(0, 10, "namespace ")) {
+                // the text before has its lines (issue #2290)
+                checkBuf(buf);
+                // qpp reads the line
+                copied.endSplice();
                 size_t p = line.find(';');
                 if (p == std::string::npos) {
                     error("%s:%d: cannot find ';' in namespace declaration\n", fileName, lineNumber);
@@ -4800,6 +5478,8 @@ public:
 
             if (!line.compare(0, 3, "//!")) {
                 checkBuf(buf);
+                // qpp reads the doc comment
+                copied.endSplice();
 
                 // check for block comment
                 std::string cdoc = line;
@@ -4831,6 +5511,8 @@ public:
 
                 if (!line.compare(0, 6, "const ")) {
                     checkBuf(buf);
+                    // the line of the definition: read_line() has counted the line read (issue #2290)
+                    unsigned const_line = lineNumber - 1;
 
                     // trim off trailing newline and spaces
                     line.erase(line.size() - 1);
@@ -4867,7 +5549,7 @@ public:
                         return;
                     }
 
-                    cmap[name] = new ConstantGroupElement(name, cdoc, val);
+                    cmap[name] = new ConstantGroupElement(name, cdoc, val, fileName, const_line);
                     continue;
                 }
 
@@ -4883,7 +5565,22 @@ public:
                 break;
             }
 
-            buf += line;
+            // issue #1686: a constant or a function without a doc comment was copied into the C++ code as it was
+            {
+                std::string trimmed = line;
+                trim(trimmed);
+                if (!line.empty() && !isspace(static_cast<unsigned char>(line[0]))
+                        && (qpp_line_is_qore_constant(trimmed) || (qpp_line_is_qore_declaration(trimmed)
+                            && qpp_line_has_qpp_only_syntax(trimmed)))) {
+                    error("%s:%d: '%s': a constant or a function in a group must have a leading doc comment "
+                        "('//! ...')\n", fileName, read_line_number(line, lineNumber), trimmed.c_str());
+                    // the other errors of the file are reported too
+                    valid = false;
+                }
+            }
+
+            copied.text(line);
+            addText(buf, line);
         }
         checkBuf(buf);
 
@@ -4903,7 +5600,7 @@ public:
         std::string mock_filename = fileName;
         std::replace(mock_filename.begin(), mock_filename.end(), '.', '_');
 
-        std::string v = "test_" + mock_filename + "_" + std::to_string(startLineNumber);
+        std::string v = "test_" + mock_filename + "_" + std::to_string(unitLineNumber);
         ret.push_back(v);
 
         return ret;
@@ -4911,7 +5608,7 @@ public:
 
     int serializeUnitTest(FILE* fp) const {
         //fprintf(fp, "# Group::serializeUnitTest\n");
-        fprintf(fp, "    # %s: %d\n", fileName, startLineNumber);
+        fprintf(fp, "    # %s: %d\n", fileName, unitLineNumber);
 
         if (fmap.empty())
             return 0;
@@ -8052,6 +8749,16 @@ protected:
 
         std::string str;
         std::string buf;
+        // the state of the C++ code copied (issue #1686)
+        QppCopiedCodeState copied;
+        // the methods without a doc comment, checked against the classes of the file when it has been read, as a
+        // method can precede its class (issue #1686)
+        struct UndocumentedMethod {
+            unsigned line;
+            std::string text;
+            std::string cls;
+        };
+        std::vector<UndocumentedMethod> undocumented_methods;
         while (true) {
             str.clear();
             read_line(lineNumber, str, fp);
@@ -8061,13 +8768,16 @@ protected:
             if (str.empty())
                 break;
 
-            // Handle preprocessor directives
-            if (!str.empty() && str[0] == '#') {
+            // Handle preprocessor directives; a line in a block comment or a raw string literal is not one
+            if (!str.empty() && str[0] == '#' && !copied.inText()) {
                 if (ppState.handleDirective(str, read_line_number(str, lineNumber), buf)) {
+                    // a comment can start or end in the directive line (issue #1686)
+                    copied.text(str);
                     continue;
                 }
                 // Not a recognized/tracked directive - add to buf and continue
                 // This handles unknown #ifdef/#endif macros as pass-through to C++
+                copied.directive(str);
                 buf += str;
                 continue;
             }
@@ -8075,11 +8785,22 @@ protected:
             // Skip content in inactive conditional blocks
             if (ppState.isSkipping()) {
                 buf += str;  // Keep the raw text for pass-through to C++
+                // a comment or a raw string literal can start or end in skipped code, as for the preprocessor
+                copied.text(str);
+                continue;
+            }
+
+            // issue #1686: text in a block comment or an '#if 0' block of the C++ code is copied as it is
+            if (copied.inactive()) {
+                copied.text(str);
+                buf += str;
                 continue;
             }
 
             if (!str.compare(0, 13, "/** @defgroup")) {
                 checkBuf(buf);
+                // a line comment or a literal continued from the line before stays continued: the group's text is not
+                // written here, so the compiler joins the line after the group to it
 
                 if (groups.add(new Group(str, fp, fileName, lineNumber, ppState))) {
                     rc = -1;
@@ -8089,6 +8810,8 @@ protected:
             }
 
             if (!str.compare(0, 3, "//!")) {
+                // qpp reads the doc comment
+                copied.endSplice();
                 if (!str.compare(0, 14, "//! @qppinit: ")) {
                     str.erase(0, 14);
                     log(LL_DEBUG, "got qppinit: %s", str.c_str());
@@ -8230,7 +8953,13 @@ protected:
                 }
 
                 const char* p0;
-                if ((p0 = strstr(sc.c_str(), "::"))) {
+                // issue #219: a constant is never a method, also with "::" in its value
+                if (!sc.compare(0, 6, "const ")) {
+                    p0 = nullptr;
+                } else {
+                    p0 = strstr(sc.c_str(), "::");
+                }
+                if (p0) {
                     trim_end(sc);
                     if (sc[sc.size() - 1] == ';') {
                         if (parseMethod(sc, fp, str, true)) {
@@ -8321,13 +9050,56 @@ protected:
                     }
                 }
 
+                // issue #219: a function or a constant outside a group was dropped with its documentation; qpp
+                // processes them only in a group, so this is an error; any other line (C++ code or documentation
+                // markup, such as the "///@{" of an empty group) is kept with its comment
+                {
+                    std::string trimmed = sc;
+                    trim(trimmed);
+                    if (qpp_line_is_qore_declaration(trimmed)) {
+                        error("%s:%d: '%s': a Qore function or constant with a doc comment must be declared in a "
+                            "group ('/** @defgroup ...' followed by '//@{' ... '//@}'), a method with its class name "
+                            "('Class::method(...)'); C++ code takes a '//' or '/* */' comment, not '//!'\n", fileName,
+                            read_line_number(sc, lineNumber), trimmed.c_str());
+                        // the other errors of the file are reported too
+                        valid = false;
+                        continue;
+                    }
+                }
+                // a line with "::" has been trimmed at its end; it is copied as a line
+                if (sc.empty() || sc.back() != '\n') {
+                    sc += '\n';
+                }
+                buf += str;
+                buf += sc;
+                copied.text(sc);
                 continue;
             }
 
+            // issue #1686: a method of a class of the file without a doc comment is not processed by qpp, so it would
+            // be copied into the C++ code as it is; checked when the classes of the file are known
+            {
+                std::string cls = qpp_line_method_class(str);
+                if (!cls.empty() && qpp_line_has_qpp_only_syntax(str)) {
+                    std::string trimmed = str;
+                    trim(trimmed);
+                    undocumented_methods.push_back({read_line_number(str, lineNumber), trimmed, cls});
+                }
+            }
+
+            copied.text(str);
             buf += str;
         }
 
         checkBuf(buf);
+
+        for (auto& i : undocumented_methods) {
+            if (cemap.find(i.cls) != cemap.end()) {
+                error("%s:%d: '%s': a method of class '%s' must have a leading doc comment ('//! ...')\n",
+                    fileName, i.line, i.text.c_str(), i.cls.c_str());
+                valid = false;
+            }
+        }
 
         // Check for unclosed preprocessor conditionals
         if (ppState.hasUnclosedConditions()) {
@@ -9013,7 +9785,11 @@ void process_command_line(int& argc, char**& argv) {
     pn = basename(argv[0]);
 
     int ch;
-    while ((ch = getopt_long(argc, argv, "d:D:hj:m:o:s:t:Tu:v:V", pgm_opts, nullptr)) != -1) {
+    int long_index = -1;
+    while ((ch = getopt_long(argc, argv, "d:D:hj:m:o:s:t:Tu:v::V", pgm_opts, &long_index)) != -1) {
+        // the index of a long option, or -1 for a short option
+        int long_opt = long_index;
+        long_index = -1;
         //log(LL_INFO, "ch=%c optarg=%p (%s)\n", ch, optarg, optarg ? optarg : "(null)");
 
         switch (ch) {
@@ -9071,12 +9847,36 @@ void process_command_line(int& argc, char**& argv) {
                 opts.unit_test_fn = optarg;
                 break;
 
-            case 'v':
-                if (optarg)
-                    opts.verbose = strtoll(optarg, nullptr, 10);
-                else
+            case 'v': {
+                // issue #1686: "-v" increases the level, as does each "v" of "-vv...", and "-v<n>" or
+                // "--verbose=<n>" sets it; the short option took a required argument, so "-v" used the next
+                // argument and "-vv" set the level to 0
+                if (!optarg) {
                     ++opts.verbose;
+                    break;
+                }
+                const char* p = optarg;
+                // "-vv...": the short option only
+                if (long_opt < 0) {
+                    while (*p == 'v') {
+                        ++p;
+                    }
+                    if (!*p) {
+                        opts.verbose += 1 + static_cast<int>(p - optarg);
+                        break;
+                    }
+                }
+                char* end;
+                errno = 0;
+                long long level = strtoll(optarg, &end, 10);
+                if (end == optarg || *end || errno || level < 0 || level > LL_DEBUG) {
+                    fprintf(stderr, "%s: invalid verbosity level '%s'; expecting an integer from 0 to %d\n",
+                        pn.c_str(), optarg, LL_DEBUG);
+                    exit(1);
+                }
+                opts.verbose = static_cast<int>(level);
                 break;
+            }
         }
     }
 

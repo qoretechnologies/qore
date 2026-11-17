@@ -1,0 +1,121 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - fork() and the fork handlers of Program thread bookkeeping
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class ProgramThreadContainersForkTest
+
+#! fork() does not copy the process while another thread changes the records of a Program's threads (issue #6394)
+/** A Program records the threads that run its code, their data in the Program and the thread-local data of its
+    family; other threads change these records when they enter and leave the Program.  fork() waits for a change in
+    progress, so that a child process gets the records consistent.
+
+    dbg_hold_thread_container_change() (debug builds) parks the next thread that enters the Program for the first time
+    inside that change, and dbg_fork_while_thread_container_held() calls fork() meanwhile: fork() must wait until the
+    thread has finished the change, and the child must be able to enter the Program, start threads in it and delete it.
+    A child that finds the records locked exits at once (98), and one that waits forever is ended, so the test cannot
+    hang.
+*/
+class ProgramThreadContainersForkTest inherits QUnit::Test {
+    public {
+        #! the code of the Program that the test enters
+        const ProgramCode = "
+int sub add(int a, int b) {
+    return a + b;
+}
+
+sub save(string key, auto value) {
+    save_thread_data(key, value);
+}
+
+auto sub get(string key) {
+    return get_thread_data(key);
+}
+
+# starts the given number of threads in the Program, each of which saves thread-local data, and returns the sum of
+# the values that the threads computed
+int sub run_threads(int n) {
+    Counter c(n);
+    Mutex m();
+    int sum = 0;
+    for (int i = 1; i <= n; ++i) {
+        background sub (int v) {
+            on_exit c.dec();
+            save_thread_data(\"v\", v);
+            int r = add(get_thread_data(\"v\"), v);
+            m.lock();
+            on_exit m.unlock();
+            sum += r;
+        }(i);
+    }
+    c.waitForZero();
+    return sum;
+}
+";
+    }
+
+    constructor() : Test("ProgramThreadContainersForkTest", "1.0") {
+        addTestCase("fork() waits for a change of a Program's thread records", \forkTest());
+        set_return_value(main());
+    }
+
+    forkTest() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the test needs a debug build of the library");
+        }
+        if (!Option::HAVE_FORK) {
+            testSkip("fork() is not available");
+        }
+        Program p(PO_NEW_STYLE);
+        p.parse(ProgramCode, "program-thread-containers");
+        # threads of the parent have entered the Program before the fork: 1 + 2 + 3 doubled
+        assertEq(12, p.callFunction("run_threads", 3));
+        p.callFunction("save", "parent", True);
+
+        # the next thread that enters the Program is parked inside the change of its thread records
+        call_function("dbg_hold_thread_container_change", p);
+        on_exit call_function("dbg_hold_thread_container_change_clear");
+
+        Counter entered(1);
+        int entry_result;
+        background sub () {
+            on_exit entered.dec();
+            entry_result = p.callFunction("add", 20, 22);
+        }();
+
+        hash<auto> r = call_function("dbg_fork_while_thread_container_held", int sub () {
+            # the child enters the Program, saves thread-local data in it, starts threads that enter it, and deletes
+            # it
+            if (p.callFunction("add", 2, 3) != 5) {
+                return 1;
+            }
+            p.callFunction("save", "child", True);
+            if (p.callFunction("get", "child") !== True) {
+                return 2;
+            }
+            # 1 + 2 + 3 + 4 doubled
+            if (p.callFunction("run_threads", 4) != 20) {
+                return 3;
+            }
+            delete p;
+            return 0;
+        });
+        entered.waitForZero();
+
+        assertTrue(r.waited, "the fork handlers were reached while the thread was inside the change");
+        assertTrue(r.changed, "fork() waited until the thread had finished the change");
+        assertEq(0, r.status, "the child entered, used and deleted the Program");
+        assertEq(42, entry_result, "the parked thread entered the Program and ran its code");
+
+        # the parent can still enter the Program and run threads in it
+        assertEq(6, p.callFunction("run_threads", 2));
+        assertTrue(p.callFunction("get", "parent"));
+    }
+}

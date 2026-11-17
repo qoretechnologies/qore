@@ -1,0 +1,179 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+#
+# a message with an 8-bit part in a single-byte charset is parsed, and the part is decoded with the charset that it
+# declares; the parse failed with INVALID-ENCODING, a multipart message with "BOUNDARY=" could not be parsed, and a
+# part of type "TEXT/PLAIN" was returned as binary data (issue #114); a raw 8-bit header line (not in an RFC 2047
+# encoded word) that is not valid in the encoding of the message text made the parse fail with INVALID-ENCODING, as
+# raw socket data is read as UTF-8; the bytes are read as UTF-8 if they are valid UTF-8, otherwise in the charset
+# declared by the message or the part, else in Windows-1252 or ISO-8859-1 (issue #6326)
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Mime
+%requires MailMessage
+
+%exec-class MailMessage8bitTest
+
+public class MailMessage8bitTest inherits QUnit::Test {
+    public {
+        # the message of issue #114, shortened: a multipart message whose first part is 8-bit ISO-8859-15 text
+        const Multipart = binary("From: Dave <dave@example.com>\r\nTo: Users <users@example.com>\r\n"
+            "Subject: Re: Announce\r\nMIME-version: 1.0\r\nContent-type: MULTIPART/MIXED;\r\n BOUNDARY=\"b1\"\r\n\r\n"
+            "  This message is in MIME format.  The first part should be readable text,\r\n"
+            "  while the remaining parts are likely unreadable without MIME-aware tools.\r\n\r\n"
+            "--b1\r\nContent-Type: TEXT/PLAIN; charset=ISO-8859-15\r\nContent-Transfer-Encoding: 8BIT\r\n\r\n"
+            "On Wed, 18 Mar 2015, Lawrence Vel") + <e1> + binary("zquez wrote:\r\n\r\n> costs 5 ") + <a4>
+            + binary(".\r\n"
+            "--b1\r\nContent-Type: text/plain; charset=\"us-ascii\"\r\nContent-Transfer-Encoding: 7bit\r\n\r\n"
+            "footer\r\n"
+            "--b1--\r\n\r\n");
+
+        const MultipartBody = "On Wed, 18 Mar 2015, Lawrence Velázquez wrote:\r\n\r\n> costs 5 €.";
+        const MultipartBodyBytes = binary("On Wed, 18 Mar 2015, Lawrence Vel") + <e1>
+            + binary("zquez wrote:\r\n\r\n> costs 5 ") + <a4> + binary(".");
+
+        # a message that is one 8-bit ISO-8859-15 text part
+        const SinglePart = binary("From: Dave <dave@example.com>\r\nTo: Users <users@example.com>\r\n"
+            "Subject: single\r\nMIME-Version: 1.0\r\nContent-Type: TEXT/PLAIN; CHARSET=ISO-8859-15\r\n"
+            "Content-Transfer-Encoding: 8bit\r\n\r\n"
+            "Vel") + <e1> + binary("zquez ") + <a4> + binary("\r\n");
+
+        # an 8-bit ISO-8859-15 text part in a multipart/alternative part
+        const Nested = binary("From: Dave <dave@example.com>\r\nTo: Users <users@example.com>\r\n"
+            "Subject: nested\r\nMIME-Version: 1.0\r\nContent-Type: multipart/mixed; boundary=outer\r\n\r\n"
+            "--outer\r\nContent-Type: MULTIPART/ALTERNATIVE; BOUNDARY=\"inner\"\r\n\r\n"
+            "--inner\r\nContent-Type: Text/Plain; Charset=\"ISO-8859-15\"\r\nContent-Transfer-Encoding: 8bit\r\n\r\n"
+            "Vel") + <e1> + binary("zquez ") + <a4> + binary("\r\n"
+            "--inner--\r\n"
+            "--outer--\r\n");
+    }
+
+    constructor() : Test("MailMessage8bitTest", "1.0", \ARGV) {
+        addTestCase("multipart message with an 8-bit part", \multipart());
+        addTestCase("single-part 8-bit message", \singlePart());
+        addTestCase("nested 8-bit part", \nested());
+        addTestCase("raw 8-bit header lines (issue #6326)", \headers());
+        addTestCase("raw 8-bit header bytes without a charset (issue #6326)", \headerFallback());
+        addTestCase("raw 8-bit part header lines (issue #6326)", \partHeaders());
+        set_return_value(main());
+    }
+
+    multipart() {
+        # the raw bytes as a string in UTF-8, as read from a socket, and in a single-byte encoding
+        foreach string enc in (("UTF-8", "ISO-8859-1")) {
+            MailMessage::Message msg(binary_to_string(Multipart, enc));
+            assertEq("Re: Announce", msg.getSubject(), enc + " subject");
+            assertTrue(msg.isMultipart(), enc + " multipart");
+            auto body = msg.getBody();
+            assertEq("ISO-8859-15", get_encoding(body), enc + " body encoding");
+            assertEq(MultipartBody, body, enc + " body");
+            assertEq(MultipartBodyBytes, binary(body), enc + " body bytes");
+            assertEq(("footer",), (map $1.getData(), msg.getParts()), enc + " parts");
+        }
+    }
+
+    singlePart() {
+        foreach string enc in (("UTF-8", "ISO-8859-1")) {
+            MailMessage::Message msg(binary_to_string(SinglePart, enc));
+            auto body = msg.getBody();
+            assertEq("ISO-8859-15", get_encoding(body), enc + " body encoding");
+            assertEq("Velázquez €\r\n", body, enc + " body");
+            assertEq(binary("Vel") + <e1> + binary("zquez ") + <a4> + binary("\r\n"), binary(body), enc
+                + " body bytes");
+        }
+    }
+
+    nested() {
+        foreach string enc in (("UTF-8", "ISO-8859-1")) {
+            MailMessage::Message msg(binary_to_string(Nested, enc));
+            auto body = msg.getBody();
+            assertEq("ISO-8859-15", get_encoding(body), enc + " body encoding");
+            assertEq("Velázquez €", body, enc + " body");
+        }
+    }
+
+    # returns a message with raw 8-bit header lines: the text given in the given charset, as bytes
+    private static binary getHeaderMessage(string charset, *string declared) {
+        string msg = "From: Jérôme Dupré <jerome@example.com>\r\nTo: Zoë <zoe@example.com>, b@example.com\r\n"
+            "Subject: café crème,\r\n déjà vu\r\nX-Other: naïve\r\nMIME-Version: 1.0\r\n"
+            + (declared ? sprintf("Content-Type: text/plain;\r\n charset=%s\r\n", declared) : "")
+            + "\r\nbody\r\n";
+        return binary(convert_encoding(msg, charset));
+    }
+
+    # raw 8-bit Subject, From and To display names and other headers, as valid UTF-8 and as Latin-1 bytes, in message
+    # text tagged UTF-8 (as read from a socket) and ISO-8859-1
+    headers() {
+        foreach hash<auto> c in ((
+                {"name": "UTF-8 bytes", "bytes": getHeaderMessage("UTF-8")},
+                {"name": "UTF-8 bytes, ISO-8859-1 declared", "bytes": getHeaderMessage("UTF-8", "ISO-8859-1")},
+                {"name": "Latin-1 bytes", "bytes": getHeaderMessage("ISO-8859-1")},
+                {"name": "Latin-1 bytes, ISO-8859-1 declared",
+                    "bytes": getHeaderMessage("ISO-8859-1", "ISO-8859-1")},
+            )) {
+            foreach string enc in (("UTF-8", "ISO-8859-1")) {
+                string label = sprintf("%s, %s text", c.name, enc);
+                MailMessage::Message msg(binary_to_string(c.bytes, enc));
+                assertEq("café crème, déjà vu", msg.getSubject(), label + " subject");
+                assertEq("Jérôme Dupré <jerome@example.com>", msg.getSender(), label + " sender");
+                assertEq("jerome@example.com", msg.getFrom(), label + " from");
+                assertEq(("Zoë <zoe@example.com>, b@example.com",), msg.getTO(), label + " to");
+                assertEq(("zoe@example.com", "b@example.com"), msg.getRecipients(), label + " recipients");
+                assertEq("naïve", msg.getHeaders()."X-Other", label + " header");
+                assertEq("body\r\n", msg.getBody(), label + " body");
+            }
+        }
+
+        # the charset declared by the message reads bytes that are not valid UTF-8: 0xa4 is the euro sign in
+        # ISO-8859-15
+        binary b = binary("Subject: 5 ") + <a4> + binary("\r\nContent-Type: text/plain; charset=ISO-8859-15\r\n\r\n"
+            "body\r\n");
+        foreach string enc in (("UTF-8", "ISO-8859-1")) {
+            MailMessage::Message msg(binary_to_string(b, enc));
+            assertEq("5 €", msg.getSubject(), enc + " text: declared charset");
+        }
+    }
+
+    # bytes that are not valid UTF-8 in a message that declares no charset are read in Windows-1252, else in
+    # ISO-8859-1, which reads any bytes, so that no byte is lost
+    headerFallback() {
+        # 0x80 is the euro sign in Windows-1252
+        MailMessage::Message msg(binary_to_string(binary("Subject: 5 ") + <80> + binary("\r\n\r\nbody\r\n"),
+            "UTF-8"));
+        assertEq("5 €", msg.getSubject(), "Windows-1252");
+        # 0x81 is not a character in Windows-1252
+        msg = new MailMessage::Message(binary_to_string(binary("Subject: a") + <81e9> + binary("\r\n\r\nbody\r\n"),
+            "UTF-8"));
+        assertEq(binary_to_string(<6181e9>, "ISO-8859-1"), msg.getSubject(), "ISO-8859-1");
+        assertEq(<6181e9>, binary(convert_encoding(msg.getSubject(), "ISO-8859-1")), "ISO-8859-1 bytes");
+    }
+
+    # a raw 8-bit file name in the header of a part, read with the charset that the part declares
+    partHeaders() {
+        foreach hash<auto> c in ((
+                {"name": "Latin-1 bytes", "charset": "ISO-8859-1"},
+                {"name": "UTF-8 bytes", "charset": "UTF-8"},
+            )) {
+            binary b = binary("From: a@example.com\r\nTo: b@example.com\r\nSubject: parts\r\nMIME-Version: 1.0\r\n"
+                "Content-Type: multipart/mixed; boundary=b1\r\n\r\n"
+                "--b1\r\nContent-Type: text/plain\r\n\r\nbody\r\n"
+                "--b1\r\nContent-Type: text/plain; charset=ISO-8859-1\r\n"
+                "Content-Disposition: attachment; filename=\"") + binary(convert_encoding("café.txt", c.charset))
+                + binary("\"\r\nContent-Transfer-Encoding: 8bit\r\n\r\n")
+                + binary(convert_encoding("thé", "ISO-8859-1")) + binary("\r\n--b1--\r\n");
+            foreach string enc in (("UTF-8", "ISO-8859-1")) {
+                string label = sprintf("%s, %s text", c.name, enc);
+                MailMessage::Message msg(binary_to_string(b, enc));
+                list<MailMessage::Attachment> atts = msg.getAttachments();
+                assertEq(("café.txt",), (map $1.getName(), atts), label + " name");
+                assertEq("thé", atts[0].getData(), label + " data");
+                assertEq("body", msg.getBody(), label + " body");
+            }
+        }
+    }
+}

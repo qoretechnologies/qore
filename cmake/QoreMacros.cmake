@@ -3045,6 +3045,14 @@ MACRO (QORE_USER_MODULE_AOT_RULES _name _is_dir _source_root)
     if (DEFINED QORE_AOT_PROBE_STAMP)
         set(_qmod_probe_dep ${QORE_AOT_PROBE_STAMP})
     endif()
+    # In the Qore build, each qmod also depends on the AOT runtime identity header, which qcc-format-version rewrites
+    # only when the identity changes (qore_aot_runtime_identity_targets() in cmake/QoreMacrosIntern.cmake): a qmod
+    # older than the header was compiled for a previous identity and is refused by the libqore built with the header,
+    # whatever the fingerprint's modification time says; this also rebuilds the qmods of a build tree in which the
+    # fingerprint was rewritten after its qmods had been compiled for the previous identity (qore#6221)
+    if (DEFINED QORE_AOT_RUNTIME_IDENTITY_HEADER)
+        list(APPEND _qmod_probe_dep ${QORE_AOT_RUNTIME_IDENTITY_HEADER})
+    endif()
     # With the qmod build cache (QORE_QMOD_CACHE_DIR, see design/qmod-build-cache.md), qcc runs through the cache
     # tool, which supplies the module from the cache when every input is unchanged; without it the command is qcc's
     set(_qmod_cache_launcher "")
@@ -3711,8 +3719,8 @@ MACRO (QORE_USER_MODULE _module_file)
                 COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} ${QDX_DOXYFILE_ARGS}
                 COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} ${QDX_QMDOXH_ARGS}
                 COMMAND ${DOXYGEN_EXECUTABLE} ${_qore_user_doxyfile}
-                COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/*.html
-                COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/search/*.html
+                COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/*.html ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/*.js
+                COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/search/*.html ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/search/*.js
                 ${_qore_user_java_step}
                 COMMENT "Generating API documentation with Doxygen for module: ${f}"
                 VERBATIM
@@ -3723,8 +3731,8 @@ MACRO (QORE_USER_MODULE _module_file)
                 COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} ${QDX_DOXYFILE_ARGS}
                 COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} ${QDX_QMDOXH_ARGS}
                 COMMAND ${DOXYGEN_EXECUTABLE} ${_qore_user_doxyfile}
-                COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/*.html
-                COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/search/*.html
+                COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/*.html ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/*.js
+                COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/search/*.html ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/search/*.js
                 ${_qore_user_java_step}
                 COMMENT "Generating API documentation with Doxygen for module: ${f}"
                 VERBATIM
@@ -3736,8 +3744,8 @@ MACRO (QORE_USER_MODULE _module_file)
                 COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} ${QDX_DOXYFILE_ARGS}
                 COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} ${QDX_QMDOXH_ARGS}
                 COMMAND ${DOXYGEN_EXECUTABLE} ${_qore_user_doxyfile}
-                COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/*.html
-                COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/search/*.html
+                COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/*.html ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/*.js
+                COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/search/*.html ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/search/*.js
                 ${_qore_user_java_step}
                 COMMENT "Generating API documentation with Doxygen for module: ${f}"
                 VERBATIM
@@ -3748,8 +3756,8 @@ MACRO (QORE_USER_MODULE _module_file)
                 COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} ${QDX_DOXYFILE_ARGS}
                 COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} ${QDX_QMDOXH_ARGS}
                 COMMAND ${DOXYGEN_EXECUTABLE} ${_qore_user_doxyfile}
-                COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/*.html
-                COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/search/*.html
+                COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/*.html ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/*.js
+                COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/search/*.html ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/search/*.js
                 ${_qore_user_java_step}
                 COMMENT "Generating API documentation with Doxygen for module: ${f}"
                 VERBATIM
@@ -4149,8 +4157,8 @@ MACRO (QORE_EXTERNAL_USER_MODULE _module_file _mod_deps)
             ${_qdx_qc_commands}
             # Run doxygen
             COMMAND ${DOXYGEN_EXECUTABLE} ${MOD_DOXYFILE}
-            COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/${f}/html/*.html
-            COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/${f}/html/search/*.html
+            COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/${f}/html/*.html ${CMAKE_BINARY_DIR}/docs/${f}/html/*.js
+            COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/${f}/html/search/*.html ${CMAKE_BINARY_DIR}/docs/${f}/html/search/*.js
 
             WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
             COMMENT "Generating API documentation with Doxygen for: ${f}" VERBATIM
@@ -4377,8 +4385,24 @@ MACRO (QORE_BINARY_MODULE_TWO_PHASE_DOCS _binary_module _user_modules)
 ENDMACRO (QORE_BINARY_MODULE_TWO_PHASE_DOCS)
 
 # Called after all bundled native and user documentation targets are registered.
-# User modules already import the initial native indexes; native final passes
-# import every user/native index, including documentation-only reverse links.
+# User modules already import the initial native indexes. A native module's final
+# pass imports only the tag files of the modules its documentation references,
+# listed in QORE_DOC_REFERENCE_MODULES_<module> (native or user module names: for
+# example user modules that link back to the native module's landing page and
+# the peers its pages @ref); a module without the variable imports no peer tags.
+# Importing every index would copy the symbols of all of them into the module's
+# own search data (about 38 MB per module) and its namespace lists. A missing entry
+# is only a Doxygen warning in the final pass (WARN_IF_DOC_ERROR = YES): nothing
+# fails and the reference renders as plain text, so check the warnings after
+# changing a module's documentation.
+# This is the native-module counterpart of QORE_DOC_EXTRA_MODULES_<module> (user
+# modules: the %requires closure plus these documentation-only extras): the
+# listed modules are the documentation-only references, but a native module has no
+# %requires closure, so the list is its complete peer set.
+# A listed name must be a module passed in _binary_modules or _user_modules, else
+# configure fails (a typo would otherwise silently drop the tag). The one
+# exception is a name in _binary_modules that is not built in this configuration
+# (an optional module such as mongodb), which is skipped.
 function(QORE_BUNDLED_MODULE_TWO_PHASE_DOCS _binary_modules _user_modules)
     if (NOT DOXYGEN_FOUND)
         return()
@@ -4396,14 +4420,24 @@ function(QORE_BUNDLED_MODULE_TWO_PHASE_DOCS _binary_modules _user_modules)
     endforeach()
     foreach(_module IN LISTS _binaries)
         set(_tags "")
-        foreach(_peer IN LISTS _binaries)
-            if (NOT "${_peer}" STREQUAL "${_module}")
+        foreach(_peer IN LISTS QORE_DOC_REFERENCE_MODULES_${_module})
+            if ("${_peer}" STREQUAL "${_module}")
+                message(FATAL_ERROR
+                    "QORE_DOC_REFERENCE_MODULES_${_module} lists the module itself")
+            endif()
+            list(FIND _binaries "${_peer}" _binary_index)
+            list(FIND _user_modules "${_peer}" _user_index)
+            list(FIND _binary_modules "${_peer}" _declared_index)
+            if (NOT _binary_index EQUAL -1)
                 string(APPEND _tags
                     " \"${CMAKE_BINARY_DIR}/modules/${_peer}/${_peer}.tag=../../${_peer}/html\"")
+            elseif (NOT _user_index EQUAL -1)
+                string(APPEND _tags " \"${CMAKE_BINARY_DIR}/${_peer}.tag=../../${_peer}/html\"")
+            elseif (_declared_index EQUAL -1)
+                message(FATAL_ERROR
+                    "QORE_DOC_REFERENCE_MODULES_${_module} lists \"${_peer}\", which is neither a "
+                    "bundled binary module nor a user module")
             endif()
-        endforeach()
-        foreach(_peer IN LISTS _user_modules)
-            string(APPEND _tags " \"${CMAKE_BINARY_DIR}/${_peer}.tag=../../${_peer}/html\"")
         endforeach()
         _qore_add_module_doc_final_pass(docs-${_module}
             "${CMAKE_BINARY_DIR}/modules/${_module}/Doxyfile"
@@ -4457,8 +4491,8 @@ MACRO (QORE_USER_MODULES _inputs)
             file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/docs/${file}/${qm_install_subdir}/)
             add_custom_target(docs-${file}
                 ${DOXYGEN_EXECUTABLE} ${CMAKE_BINARY_DIR}/doxygen/Doxyfile.${file}
-                COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/html/*.html
-                COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/html/search/*.html
+                COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/html/*.html ${CMAKE_BINARY_DIR}/html/*.js
+                COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/html/search/*.html ${CMAKE_BINARY_DIR}/html/search/*.js
                 WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
                 COMMENT "Generating API documentation with Doxygen for: ${file}" VERBATIM
             )

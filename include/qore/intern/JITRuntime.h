@@ -92,6 +92,10 @@ extern "C" {
 
 //! Check the current native stack guard for generated code entry points
 int qore_rt_check_stack(ExceptionSink* xsink);
+//! raises STACK-LIMIT-EXCEEDED and returns -1 if the stack of the thread cannot take \a reserve more bytes beyond its
+//! stack check: the thunk of a compiled function whose frame exceeds the stack guard checks for the frame before the
+//! frame is allocated (QoreIRFrameCheck, qore#6414)
+int qore_rt_check_stack_reserve(ExceptionSink* xsink, int64_t reserve);
 
 // --- Outlined function-body return token (design/aot-function-outlining.md) ---
 
@@ -347,14 +351,25 @@ void qore_rt_raise_return_statement_nothing_by_type_path_aot(QoreAOTContext* ctx
 */
 DLLLOCAL int qore_check_call_target(const QoreValue& call, const QoreValue& target, ExceptionSink* xsink);
 
+//! The evaluated arguments of a call, for the check of its target after them: built only if the check raises its
+//! error, which needs them (issue #5824)
+struct QoreCallArgsSource {
+    //! returns a new list of the arguments (with references of their own), or nullptr if there are none
+    QoreListNode* (*build)(const void* ctx) = nullptr;
+    const void* ctx = nullptr;
+};
+
 //! Raises the exception that a method call @a call raises when its arguments deleted its object @a target
 /** The check made after the arguments of a call that can have side effects (QoreIRExprInstruction::check_after_args):
-    the AST interpreter raises "cannot call <class>::<method>() on an object that has already been deleted" when the
-    method's code is entered (qore_object_private::startCall()), naming the class of the method (issue #5824)
+    the AST interpreter raises "cannot call <class>::<method>() on an object that has already been deleted" when it
+    enters the code of the variant that the call resolves with its arguments (qore_object_private::startCall()),
+    naming the class of the variant: the variant is resolved here with the arguments from @a args, as the call would
+    resolve it (qore_raise_deleted_method_call_after_args()), as the call is not made (issue #5824)
 
     @return -1 if the exception was raised, 0 if not
 */
-DLLLOCAL int qore_check_call_target_after_args(const QoreValue& call, const QoreValue& target, ExceptionSink* xsink);
+DLLLOCAL int qore_check_call_target_after_args(const QoreValue& call, const QoreValue& target,
+        const QoreCallArgsSource& args, ExceptionSink* xsink);
 
 //! The JIT fast test of QoreIROpcode::CheckCallTarget for a method call resolved at parse time (known when the call is
 //! compiled): true if the target is an object that has not been deleted, of one of the classes given or of any class
@@ -415,12 +430,24 @@ DLLLOCAL bool qore_call_target_cache_hit(const QoreCallTargetCheckCache* cache, 
 DLLLOCAL bool qore_call_target_cache_hit_static(const QoreCallTargetCheckCache* cache, const QoreValue& target,
         const qore_class_private* ctx, const QoreProgram* pgm);
 
-//! The JIT helper of a CheckCallTarget made after the arguments (QoreIRExprInstruction::check_after_args)
-void qore_rt_check_call_target_after_args(uint64_t call_bits, uint64_t target_bits, ExceptionSink* xsink);
+//! the kind of a value that compiled code passes to the check of a call's target after its arguments, which converts
+//! it (qore_rt_check_call_target_after_args())
+enum QoreCompiledCallArgKind : uint8_t {
+    QORE_COMPILED_CALL_ARG_BOXED = 0,  //!< a NaN-boxed value (no reference of its own)
+    QORE_COMPILED_CALL_ARG_INT = 1,    //!< an int64
+    QORE_COMPILED_CALL_ARG_FLOAT = 2,  //!< the bits of a double
+    QORE_COMPILED_CALL_ARG_BOOL = 3,   //!< 0 or 1
+};
+
+//! The JIT helper of a CheckCallTarget made after the arguments (QoreIRExprInstruction::check_after_args): @a args
+//! are the @a nargs arguments of the call, of the kinds in @a kinds (QoreCompiledCallArgKind); @a nargs is negative
+//! if the code does not know the call (a check not followed by its call, see qore_ir_call_of_target_check())
+void qore_rt_check_call_target_after_args(uint64_t call_bits, uint64_t target_bits, const uint64_t* args,
+    const uint8_t* kinds, int32_t nargs, ExceptionSink* xsink);
 
 //! The AOT counterpart of qore_rt_check_call_target_after_args(), with the call identified by its expression slot
 void qore_rt_check_call_target_after_args_aot(QoreAOTContext* ctx, int32_t slot, uint64_t target_bits,
-    ExceptionSink* xsink);
+    const uint64_t* args, const uint8_t* kinds, int32_t nargs, ExceptionSink* xsink);
 
 //! Returns the current object as a NaN-boxed value (no reference), which native code reads once per function
 uint64_t qore_rt_current_self_bits();
@@ -508,18 +535,70 @@ uint64_t qore_rt_make_opaque_value(uint64_t value, ExceptionSink* xsink);
 //! variable stack.
 uint64_t qore_rt_load_local(LocalVar* var, ExceptionSink* xsink);
 
-//! Run all cleanup actions from an array of pointers to NaN-boxed cleanup slots.
-void qore_rt_cleanup_run_allocas(uint64_t** alloca_ptrs, int32_t count, ExceptionSink* xsink);
-void qore_rt_cleanup_release_slots(uint64_t** slots, const uint32_t* order, int32_t count, ExceptionSink* xsink);
+//! The number of the low bits of an entry of a cleanup frame table that are its tag (qore#6299)
+/** An entry of a constant table of the slots of the cleanup frame of a function (QoreIRToLLVM::cleanup_frame) is
+    the index of its slot in the frame shifted left by this number of bits, or'ed with its tag: 0 for a slot that
+    holds a value, QORE_FRAME_ENTRY_OBJECT for the cache of an object local, QORE_FRAME_ENTRY_ITERATOR for the slot of
+    an iterator.  An entry tagged with QORE_FRAME_ENTRY_LOCAL is a local on the runtime stack instead: in JIT code the
+    address of its LocalVar or'ed with the tag, in AOT code its slot in the AOT context shifted like an index.
+*/
+constexpr unsigned QORE_FRAME_ENTRY_SHIFT = 3;
+//! the tag of an entry of a cleanup frame table that is the cache of an object local, released with the real
+//! reference that it has from the cache (qore_rt_object_slot_release())
+constexpr uint64_t QORE_FRAME_ENTRY_OBJECT = 1;
+//! the tag of an entry of a cleanup frame table that is a local on the runtime stack whose value is released
+//! (qore_rt_clear_local()); with QORE_FRAME_ENTRY_OBJECT, a closure-bound variable popped from the closure stack
+//! (qore_rt_pop_closure_var())
+constexpr uint64_t QORE_FRAME_ENTRY_LOCAL = 2;
+//! the tag of an entry of a cleanup frame table that is the slot of the iterator of a foreach statement
+constexpr uint64_t QORE_FRAME_ENTRY_ITERATOR = 4;
+//! the mask of the tag of an entry of a cleanup frame table
+constexpr uint64_t QORE_FRAME_ENTRY_TAG = (uint64_t(1) << QORE_FRAME_ENTRY_SHIFT) - 1;
 
-//! Release every active iterator recorded in an array of cleanup slots.
-void qore_rt_iterator_cleanup_allocas(void*** slots, int32_t count);
+//! Runs the cleanup of the entries of a table of the slots of the cleanup frame of a function, last entry first
+/** @param frame the cleanup frame of the function
+    @param entries the entries (see QORE_FRAME_ENTRY_SHIFT): the value of a slot is taken from it, which is cleared,
+    and released (with its real reference for QORE_FRAME_ENTRY_OBJECT), the iterator of a QORE_FRAME_ENTRY_ITERATOR
+    slot likewise, and the value of a QORE_FRAME_ENTRY_LOCAL local is released
+    @param count the number of entries
+    @param ctx the AOT context of AOT code, whose slots QORE_FRAME_ENTRY_LOCAL entries give; null in JIT code
+    @param xsink for the exceptions of the destructors of the values released
+*/
+void qore_rt_cleanup_run_frame(uint64_t* frame, const uint64_t* entries, int32_t count, QoreAOTContext* ctx,
+        ExceptionSink* xsink);
+//! Releases the values of the slots of the cleanup frame given by the entries of \a slots at the indexes in
+//! \a order, in that order; each slot is cleared first (see QoreIRToLLVM::emitTempReleaseSequence())
+void qore_rt_cleanup_release_frame_slots(uint64_t* frame, const uint64_t* slots, const uint32_t* order, int32_t count,
+        ExceptionSink* xsink);
+
+//! Releases the active iterators of the slots of the cleanup frame given by the entries, in their order
+void qore_rt_iterator_cleanup_frame(uint64_t* frame, const uint64_t* entries, int32_t count);
 
 //! Rotate one local reload-chain entry at a temp boundary (no-op for an empty tracker).
 void qore_rt_reload_chain_rotate(uint64_t* tracker, uint64_t* deferred, ExceptionSink* xsink);
 
 //! Clear one local reload-chain slot at a temp boundary (no-op for an empty slot).
 void qore_rt_reload_chain_clear(uint64_t* slot, ExceptionSink* xsink);
+
+//! the index of an absent slot in a table of qore_rt_reload_chain_flush()
+constexpr uint32_t QORE_RELOAD_CHAIN_NO_SLOT = 0xffffffffu;
+
+//! Flushes the reload chains of the locals of a function at a temp boundary (qore#6299)
+/** @param frame the cleanup frame of the function, whose first slots are its tracker, deferred and valid-epoch
+    slots
+    @param table \a pairs pairs of indexes in \a frame, of a tracker and of its deferred slot, either of which can be
+    QORE_RELOAD_CHAIN_NO_SLOT, then \a epochs indexes of valid-epoch slots
+    @param pairs the number of pairs: each is rotated (qore_rt_reload_chain_rotate()), or its slot cleared
+    (qore_rt_reload_chain_clear()) if it has one, in the order of the table
+    @param epochs the number of valid-epoch slots that get the value of \a epoch, which is incremented then, so that
+    the caches of their locals are stale
+    @param epoch the reload epoch of the function, or null if it has none (then \a epochs is 0)
+    @param xsink for the exceptions of the destructors of the values released
+
+    The same as the inline code of a flush of a smaller function, in one call.
+*/
+void qore_rt_reload_chain_flush(uint64_t* frame, const uint32_t* table, int32_t pairs, int32_t epochs,
+        uint64_t* epoch, ExceptionSink* xsink);
 
 //! Clear caller-owned argument cleanup slots after callee ownership has been established.
 void qore_rt_clear_arg_cleanups(uint64_t** arg_cleanups, int32_t count, ExceptionSink* xsink);
@@ -860,12 +939,32 @@ int64_t qore_rt_get_on_block_exit_count();
 //! Removes executed handlers from the stack.
 void qore_rt_exec_on_block_exit(int64_t saved_count, ExceptionSink* xsink);
 
-//! Runs the handlers as qore_rt_exec_on_block_exit() does, keeping the value that a handler run while an exception
-//! is pending returns in \a hold, which replaces the value of the return that the exception interrupted (#5992)
-/** @return 1 if a handler's value was kept in \a hold, after which the parent releases the values of the
-    interrupted return
+//! Runs the handlers as qore_rt_exec_on_block_exit() does; the values that a handler run while an exception or a
+//! thread_exit is pending hands over (QoreIROpcode::HandlerReturn) replace the value of the return that the unwind
+//! interrupted and are kept in \a hold (#5992, #6074)
+/** @param saved_count the number of handlers registered before the block
+    @param xsink the exception sink of the function
+    @param hold the function's hold slot
+    @param replace copies of the values of the function's returns (or of the try block's returns of the try statement
+    of the function that catches the exception), which the first hand-over releases, or nullptr
+    @param n_replace the number of values in \a replace
+
+    @return 1 if a value was handed over: the caller then clears the slots of the values of \a replace, which were
+    released
 */
-int8_t qore_rt_exec_on_block_exit_hold(int64_t saved_count, ExceptionSink* xsink, uint64_t* hold);
+int8_t qore_rt_exec_on_block_exit_hold(int64_t saved_count, ExceptionSink* xsink, uint64_t* hold,
+    uint64_t* replace, int64_t n_replace);
+
+//! Runs the handlers of a block of a handler body as qore_rt_exec_on_block_exit() does; the values that they hand over
+//! go to the function that the handler runs for (#6074)
+void qore_rt_exec_on_block_exit_forward(int64_t saved_count, ExceptionSink* xsink);
+
+//! Hands the value of a return statement of a handler run out of line to the function that it runs for
+//! (QoreIROpcode::HandlerReturn, #6074)
+/** \a value_bits is borrowed; ignored unless the handler runs while an exception or a thread_exit is pending; see
+    QoreHandlerRunContext
+*/
+void qore_rt_handler_return(uint64_t value_bits, ExceptionSink* xsink);
 
 //! Discard (without firing) on_block_exit handlers registered since saved_count,
 //! truncating the thread-local handler stack back to that mark.  Used by the JIT
@@ -1707,30 +1806,34 @@ uint8_t qore_rt_reload_local_if_stale_raw_aot(QoreAOTContext* ctx, int32_t idx, 
 // --- the table-driven code that runs pending handlers (qore#6110) ---
 
 //! A local of a function with on_block_exit handlers, as the helpers that run its pending handlers see it
-/** Native code fills an array of these in the entry block of the function (a record for each local that a site that
-    runs handlers publishes or reloads), and a site passes the array with a constant table of the indexes of the
+/** Native code has a constant array of these (a record for each local that a site that runs handlers publishes or
+    reloads), and a site passes the array with the function's cleanup frame and a constant table of the indexes of the
     records that it covers.  Without them, the code of each site grew with the number of locals of the function.  The
-    layout is the one that QoreIRToLLVM writes: the fields are pointers or 32-bit integers at 8-byte offsets.
+    storage of the local is given by the indexes of its slots in the cleanup frame (qore#6299), so that nothing is
+    written to describe it when the function is entered.
 */
 struct QoreObeLocal {
     //! the variable in JIT code; null in AOT code
     LocalVar* var;
-    //! the native cache of the local (its alloca)
-    uint64_t* cache;
-    //! the reload tracker of the local, if it has one
-    uint64_t* tracker;
-    //! the value that the cache held before the last reload, if the local has the slot
-    uint64_t* deferred;
-    //! the epoch of the last reload of the cache, if the local has it
-    uint64_t* valid_epoch;
-    //! the reference flag of the local, if it has one
-    uint8_t* ref_flag;
-    //! the value of the entry-time load that the local owns, if it does
-    uint64_t* entry_owner;
     //! the slot of the local in AOT code
     int32_t slot;
-    int32_t reserved;
+    //! the native cache of the local
+    uint32_t cache;
+    //! the reload tracker of the local, if it has one
+    uint32_t tracker;
+    //! the value that the cache held before the last reload, if the local has the slot
+    uint32_t deferred;
+    //! the epoch of the last reload of the cache, if the local has it
+    uint32_t valid_epoch;
+    //! the reference flag of the local (a byte), if it has one
+    uint32_t ref_flag;
+    //! the value of the entry-time load that the local owns, if it does
+    uint32_t entry_owner;
+    uint32_t reserved;
 };
+
+//! the index of the slot of a field of a QoreObeLocal that the local does not have
+constexpr uint32_t QORE_OBE_NO_SLOT = 0xffffffffu;
 
 //! the entry of a table of qore_rt_obe_publish() or qore_rt_obe_reload() that has the cache reloaded first/marked fresh
 constexpr uint32_t QORE_OBE_TABLE_FRESH = 0x80000000u;
@@ -1740,31 +1843,33 @@ constexpr uint32_t QORE_OBE_TABLE_INDEX = 0x3fffffffu;
 //! Publishes the locals of the table to the runtime local stack before the handlers run (qore#6110)
 /** For each entry: a local with QORE_OBE_TABLE_FRESH is reloaded if its cache is stale
     (qore_rt_reload_local_if_stale()), then its cache is published (qore_rt_sync_local()), as the inline code of
-    each site does.  \a epoch is the function's reload epoch, \a ctx the AOT context (null in JIT code).
+    each site does.  \a frame is the function's cleanup frame, whose slots the records give, \a epoch the
+    function's reload epoch, \a ctx the AOT context (null in JIT code).
 */
-void qore_rt_obe_publish(QoreObeLocal* locals, const uint32_t* table, int32_t count, const uint64_t* epoch,
-        QoreAOTContext* ctx, ExceptionSink* xsink);
+void qore_rt_obe_publish(uint64_t* frame, const QoreObeLocal* locals, const uint32_t* table, int32_t count,
+        const uint64_t* epoch, QoreAOTContext* ctx, ExceptionSink* xsink);
 
 //! Reloads the locals of the table from the runtime local stack after the handlers ran
 /** As the inline reload of a local (QoreIRToLLVM::reloadLocalFromRuntime()): the cache and the tracker get the value,
     the deferred slot the tracker's old value, whose old content is released; an entry with QORE_OBE_TABLE_FRESH marks
     the cache fresh for \a epoch.
 */
-void qore_rt_obe_reload(QoreObeLocal* locals, const uint32_t* table, int32_t count, const uint64_t* epoch,
-        QoreAOTContext* ctx, ExceptionSink* xsink);
+void qore_rt_obe_reload(uint64_t* frame, const QoreObeLocal* locals, const uint32_t* table, int32_t count,
+        const uint64_t* epoch, QoreAOTContext* ctx, ExceptionSink* xsink);
 
 //! Releases the reload storage of the locals of the table before handlers run out of line (qore#5942)
 /** For each entry in the order of the table: the entry-time load that the local owns, its deferred value and its
     tracker, each set to NOTHING and released
 */
-void qore_rt_obe_release(QoreObeLocal* locals, const uint32_t* table, int32_t count, ExceptionSink* xsink);
+void qore_rt_obe_release(uint64_t* frame, const QoreObeLocal* locals, const uint32_t* table, int32_t count,
+        ExceptionSink* xsink);
 
 //! Reloads the locals that qore_rt_obe_release() released, after the handlers ran
 /** The value is loaded from the runtime local stack into the cache and into the tracker, or into the entry owner if
     the local has no tracker, and the cache is marked fresh for an entry with QORE_OBE_TABLE_FRESH.
 */
-void qore_rt_obe_reload_released(QoreObeLocal* locals, const uint32_t* table, int32_t count, const uint64_t* epoch,
-        QoreAOTContext* ctx, ExceptionSink* xsink);
+void qore_rt_obe_reload_released(uint64_t* frame, const QoreObeLocal* locals, const uint32_t* table, int32_t count,
+        const uint64_t* epoch, QoreAOTContext* ctx, ExceptionSink* xsink);
 
 //! Assign to a local variable via AOT context slot
 void qore_rt_assign_local_aot(QoreAOTContext* ctx, int32_t idx, uint64_t val, ExceptionSink* xsink);
@@ -1913,7 +2018,9 @@ uint64_t qore_rt_self_member_assign(const char* member_name, uint64_t rhs_bits,
     int32_t mode_raw, ExceptionSink* xsink);
 uint64_t qore_rt_self_member_compound(const char* member_name, int32_t compound_op,
     uint64_t rhs_bits, ExceptionSink* xsink);
-uint64_t qore_rt_self_member_update(const char* member_name, int32_t unary_op,
+//! Applies ++ or -- (\a unary_op, an LVUnaryOp) to a member of the current object; \a ref_rv is 0 if the value of a
+//! post operation is not used, so that the old value of a number is not copied
+uint64_t qore_rt_self_member_update(const char* member_name, int32_t unary_op, int32_t ref_rv,
     ExceptionSink* xsink);
 uint64_t qore_rt_lv_path_assign(QoreIRLValuePathInstruction* inst, uint64_t* dyn_vals,
     uint64_t rhs_bits, ExceptionSink* xsink);
@@ -1968,6 +2075,15 @@ uint64_t qore_rt_dot_eval_with_base_aot(QoreAOTContext* ctx, int32_t slot, uint6
 //! args is an array of nargs NaN-boxed QoreValues.
 //! Returns the NaN-boxed result; sets xsink on exception.
 uint64_t qore_rt_call_with_args(uint64_t expr_bits, uint64_t* args, int nargs, ExceptionSink* xsink);
+//! as qore_rt_call_with_args(), giving the references of the temporary arguments (arg_cleanups) to the callee
+uint64_t qore_rt_call_with_args_consume_args(uint64_t expr_bits, uint64_t* args, uint64_t** arg_cleanups, int nargs,
+    ExceptionSink* xsink);
+
+//! Loads the value of a parameter that takes its argument over for the cache of its normal entry and releases the
+//! reference of its runtime variable, which leaves the cache with the only reference that the call gave (#5958)
+uint64_t qore_rt_take_param(LocalVar* var, ExceptionSink* xsink);
+//! AOT variant of qore_rt_take_param()
+uint64_t qore_rt_take_param_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink);
 
 //! AOT variant: resolve expression from context slot, then delegate to qore_rt_call_with_args
 uint64_t qore_rt_call_with_args_aot(QoreAOTContext* ctx, int32_t slot, uint64_t* args, int nargs,
@@ -2480,9 +2596,11 @@ enum : int {
 /** Sets \a rv to the conversion of a value that the builtin accepts; any other value raises the error of the builtin
     call (RUNTIME-OVERLOAD-ERROR), as with the AST interpreter (issue #5660)
 
-    @return false if the value is not accepted and the error was raised
+    @return 0 if the value is not accepted and the error was raised, 1 with the result in \a rv, 2 with the result in
+    \a rv if it holds a reference that the caller must release: a string, and an int above 48 bits, a negative NaN or a
+    double in the tag-collision range (about -2.2e307 to -8.7e307), which a node holds (issue #6211)
 */
-DLLLOCAL bool qore_rt_builtin_conversion_checked(int kind, QoreValue val, QoreValue& rv, ExceptionSink* xsink);
+DLLLOCAL int qore_rt_builtin_conversion_checked(int kind, QoreValue val, QoreValue& rv, ExceptionSink* xsink);
 
 //! Returns true if the builtin conversion of the given kind accepts a value of the given type
 /** string(softstring), int(*softint) and float(softfloat) accept a string, an int, a float, a number, a boolean, a

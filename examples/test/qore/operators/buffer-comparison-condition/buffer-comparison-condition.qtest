@@ -1,0 +1,99 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - JIT and AOT code generation of a comparison used as a condition
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - every check runs a script in a child process that sets its own --exec-mode, or AOT
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires ../../../TestInterpreter.qm
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class BufferComparisonConditionTest
+
+#! qore#6160: a comparison of buffers as the condition of a statement
+/** A comparison whose operands can be buffers (auto operands) gives the buffer of the elementwise comparison, which
+    is true when it is not empty; the parser types the comparison as bool.  The IR interpreter released the buffer
+    with the statement's temporaries before the branch tested it, and native code compared it with True, so the
+    condition was false in every mode but the AST interpreter.  The script next to the test runs in every execution
+    mode, on the IR tier and as AOT executables, and its output must be that of the AST interpreter.
+*/
+class BufferComparisonConditionTest inherits QUnit::Test {
+    public {
+        #! the script
+        const Script = "conditions";
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string env;
+    }
+
+    constructor() : QUnit::Test("buffer comparison as a condition", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        env = sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir);
+
+        addTestCase("AST semantics", \astTest());
+        addTestCase("execution modes", \modesTest());
+        addTestCase("AOT executables", \aotTest());
+        set_return_value(main());
+    }
+
+    #! checks the output of the AST interpreter
+    private astTest() {
+        string out = astOutput();
+        # a buffer that is not empty is true, also when its elements are all False; an empty buffer is false
+        assertTrue(out =~ /^buffer:\n  if: 1\n  while: 2\n  do: 3\n  for: 4\n  if eq: 1\n  if ne: 1\n  if lt: 1\n  if le: 1\n  if ge: 1\n  ternary: t\n  if ternary: 1\n  while ternary: 5\n  if cmp eq: 1\n  if cmp ne: 1\n/,
+            "buffer: " + out);
+        assertTrue(out =~ /\nbuffer of zeros:\n  if: 1\n  while: 2\n  do: 3\n  for: 4\n/, "buffer of zeros");
+        assertTrue(out =~ /\nempty buffer:\n  if: 0\n  while: 0\n  do: 1\n  for: 0\n  if eq: 0\n/, "empty buffer");
+        assertTrue(out =~ /\nint:\n  if: 1\n  while: 2\n  do: 3\n  for: 4\n  if eq: 0\n  if ne: 1\n  if lt: 0\n/, "int");
+        assertTrue(out =~ /\nint false:\n  if: 0\n  while: 0\n  do: 1\n  for: 0\n/, "int false");
+    }
+
+    #! runs the script in every execution mode and on the IR tier
+    private modesTest() {
+        string exp = astOutput();
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            if (mode == "ast") {
+                continue;
+            }
+            assertEq(exp, ExecModeHarness::run(sprintf("%s %s --exec-mode=%s %s", env, qore_bin, mode, scriptPath())),
+                mode);
+        }
+        assertEq(exp, ExecModeHarness::run_ir_tier(sprintf("%s %s --exec-mode=tiered %s", env, qore_bin,
+            scriptPath())), ExecModeHarness::IRTierName);
+    }
+
+    #! compiles the script with qcc -O0 and -O3 and checks that the executables give the output of the AST
+    #! interpreter
+    private aotTest() {
+        if (!is_file(qcc_bin)) {
+            testSkip("qcc is not available at " + qcc_bin);
+        }
+        string exp = astOutput();
+        TmpDir dir("buffer-comparison-condition-aot-");
+        foreach string opt in ("-O0", "-O3") {
+            string exe = sprintf("%s/%s%s", dir.path, Script, opt);
+            string out = ExecModeHarness::run_any(sprintf("%s %s %s -o %s %s", env, qcc_bin, opt, exe, scriptPath()));
+            assertTrue(is_file(exe), sprintf("%s: qcc compiles the script: %s", opt, out));
+            assertEq(exp, ExecModeHarness::run_any(sprintf("%s %s", env, exe)), "AOT " + opt);
+        }
+    }
+
+    private string scriptPath() {
+        return get_script_dir() + "/" + Script + ".q";
+    }
+
+    #! the output of the script with the AST interpreter
+    private string astOutput() {
+        return ExecModeHarness::run(sprintf("%s %s --exec-mode=ast %s", env, qore_bin, scriptPath()));
+    }
+}

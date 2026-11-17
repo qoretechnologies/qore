@@ -1,0 +1,41 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../TestInterpreter.qm
+
+%exec-class StringOffsetBoundsTest
+
+#! Regression test for issue #6238: offsets and lengths given to the QoreString C++ API stay within the string
+/** An offset past the end of the string is clamped to its end and a length past the end to the rest of the string
+    (QoreString::replace(), QoreString::concat() with a position and a length, QoreString::rfind() and
+    QoreString::rfindAny() with a byte position); the checks are in the native executable
+    qore-string-offset-bounds-test.  To check that no byte outside a string's buffer is accessed, run it under
+    valgrind manually (in a build directory):
+    @verbatim
+valgrind --leak-check=full ./qore-string-offset-bounds-test
+    @endverbatim
+*/
+class StringOffsetBoundsTest inherits QUnit::Test {
+    constructor() : QUnit::Test("QoreString offset bounds", "1.0") {
+        addTestCase("native offset and length bounds", \native());
+        set_return_value(main());
+    }
+
+    native() {
+        string qore = TestInterpreter::qore_interpreter();
+        string native = ENV.QORE_STRING_OFFSET_BOUNDS_TEST ?? dirname(qore) + "/qore-string-offset-bounds-test";
+        if (!is_file(native)) {
+            testSkip("the native string offset bounds test executable is not available");
+            return;
+        }
+        int rc;
+        string output = backquote("'" + replace(native, "'", "'\\''") + "' 2>&1", \rc);
+        assertEq(0, rc, output);
+        assertTrue(output.startsWith("PASS: "), output);
+    }
+}

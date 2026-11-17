@@ -68,17 +68,18 @@ public class QoreAsyncJobUtilsTest inherits QUnit::Test {
             },
             bool sub (hash<auto> s) { return s.status == "DONE"; },
         );
-        # the deadline is measured with a clock that does not advance, so only the sleeps take time
+        # the deadline is measured with a clock that does not advance
         FakeClock clock();
         clock.install(p);
-        # timeout values are milliseconds, but usleep(integer) expects microseconds.
-        # Observe elapsed time to catch a 1000-fold unit error in the default sleeper: two sleeps of
-        # 20 ms take at least 40 ms
-        date start = now_us();
+        # the default sleeper runs, with a sleep function that records what it is asked to sleep instead of
+        # sleeping: timeout values are milliseconds, but usleep(integer) expects microseconds, so a 1000-fold unit
+        # error in the default sleeper shows in the arguments, without measuring time
+        list<auto> slept = ();
+        p.setSleepFunction(sub (int us) { slept += us; });
         hash<auto> r = p.poll("job-default-sleeper", 10s, 20ms);
-        assertTrue(get_duration_milliseconds(now_us() - start) >= 40);
         assertEq("DONE", r.status);
         assertEq(3, fetch_calls, "the poller waited and polled again rather than throwing");
+        assertEq((20000, 20000), slept, "the default sleeper sleeps the poll interval in microseconds");
     }
 
     private terminalImmediatelyTest() {

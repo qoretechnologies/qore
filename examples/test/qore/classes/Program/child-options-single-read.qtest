@@ -1,0 +1,115 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+%allow-debugger
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class ChildOptionsSingleReadTest
+
+#! A new child Program inherits the parent's options that its %modern check was made against (issue #6176)
+/** The creation of a child Program read the parent's options twice: once for the check of the child's %modern
+    options, and again for the options that the child inherits.  A change of the parent's options in between made the
+    child inherit options that the check had not seen: a child with %modern could inherit a compatibility option that
+    %modern does not allow.  The creation is held after the check with dbg_hold_child_program_create() (debug builds),
+    the parent's options are changed, and the child must have the options that the parent had when it was checked.
+*/
+class ChildOptionsSingleReadTest inherits QUnit::Test {
+    constructor() : Test("ChildOptionsSingleReadTest", "1.0") {
+        addTestCase("a %modern child does not inherit a compatibility option added after its check",
+            \modernCompatTest());
+        addTestCase("Program::constructor()", \programTest());
+        addTestCase("ProgramControl::createEvalProgram()", \evalProgramTest());
+        set_return_value(main());
+    }
+
+    modernCompatTest() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the hold of the creation is only in debug builds");
+        }
+        # the parent's code creates a %modern child; the parent has no compatibility option when the child is checked
+        Program parent(PO_NEW_STYLE);
+        parent.parse("Program sub make_child() { ParseOptions po(PO_NEW_STYLE); po.set(\"modern\"); "
+            "return new Program(po); }", "child-options");
+        Program child = createHeld(parent, Program sub () { return parent.callFunction("make_child"); },
+            sub () { parent.setParseOptions(PO_BROKEN_INT_ASSIGNMENTS); });
+        assertTrue(boolean(parent.getParseOptions() & PO_BROKEN_INT_ASSIGNMENTS),
+            "the parent has the compatibility option now");
+        assertFalse(boolean(child.getParseOptions() & PO_BROKEN_INT_ASSIGNMENTS),
+            "the %modern child does not inherit the compatibility option that its check did not see");
+    }
+
+    programTest() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the hold of the creation is only in debug builds");
+        }
+        # the parent's code creates the child; the parent does not have PO_NO_FILESYSTEM when the child is checked
+        Program parent(PO_NEW_STYLE);
+        parent.parse("Program sub make_child() { return new Program(PO_NEW_STYLE); }", "child-options");
+        checkRestriction(parent, Program sub () { return parent.callFunction("make_child"); });
+    }
+
+    evalProgramTest() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the hold of the creation is only in debug builds");
+        }
+        Program parent(PO_NEW_STYLE);
+        ProgramControl pc = parent.getProgram();
+        checkRestriction(parent, Program sub () { return pc.createEvalProgram(PO_NEW_STYLE); });
+    }
+
+    #! the child inherits the parent's options without the restriction that the parent gets after the check
+    private checkRestriction(Program parent, code<Program()> create) {
+        assertFalse(boolean(parent.getParseOptions() & PO_NO_FILESYSTEM), "the parent has no PO_NO_FILESYSTEM yet");
+        Program child = createHeld(parent, create, sub () { parent.setParseOptions(PO_NO_FILESYSTEM); });
+        assertTrue(boolean(parent.getParseOptions() & PO_NO_FILESYSTEM), "the parent has PO_NO_FILESYSTEM now");
+        assertFalse(boolean(child.getParseOptions() & PO_NO_FILESYSTEM),
+            "the child inherits the parent's options that it was checked against");
+    }
+
+    #! creates the child in another thread with the creation held after its check, and changes the parent meanwhile
+    private Program createHeld(Program parent, code<Program()> create, code<nothing()> change) {
+        Counter reached(1);
+        Counter release(1);
+        bool released;
+        on_exit if (!released) { release.dec(); }
+        call_function("dbg_hold_child_program_create", reached, release);
+        # a creation that fails before the hold leaves it armed: it is disarmed in any case
+        on_exit call_function("dbg_hold_child_program_create_clear");
+
+        Counter done(1);
+        *Program child;
+        *hash<ExceptionInfo> err;
+        background sub () {
+            on_exit done.dec();
+            try {
+                child = create();
+            } catch (hash<ExceptionInfo> ex) {
+                err = ex;
+                if (reached.getCount()) {
+                    reached.dec();
+                }
+            }
+        }();
+        reached.waitForZero();
+        if (err) {
+            done.waitForZero();
+            throw err.err, err.desc;
+        }
+
+        # the parent's options change after the child's check
+        change();
+        released = True;
+        release.dec();
+        done.waitForZero();
+        if (err) {
+            throw err.err, err.desc;
+        }
+        return child;
+    }
+}

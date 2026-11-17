@@ -193,6 +193,7 @@ int ContextStatement::parseInitImpl(QoreParseContext& parse_context) {
     QoreParseContextLvarHelper lh(parse_context, lvars);
 
     // initialize context expression
+    unsigned implicit_element_reads = parse_context.implicit_element_reads;
     parse_context.typeInfo = nullptr;
     if (parse_init_value(exp, parse_context) && !err) {
         err = -1;
@@ -220,6 +221,7 @@ int ContextStatement::parseInitImpl(QoreParseContext& parse_context) {
             err = -1;
         }
     }
+    reads_implicit_element = parse_context.implicit_element_reads != implicit_element_reads;
 
     // initialize statement block
     if (code) {

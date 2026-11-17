@@ -9,6 +9,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
+%requires ../TestInterpreter.qm
 %requires FsUtil
 %requires ../ExecModeHarness.qm
 
@@ -174,7 +175,7 @@ printf("%%d of %%d right%%s\n", right, 2 * %d, wrong ? ": " + wrong.join("; ") :
     }
 
     constructor() : QUnit::Test("AOTPathCacheProgramReuseTest", "1.0", \ARGV) {
-        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        qore_bin = TestInterpreter::qore_interpreter();
         libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
         foreach string mode in (ExecModeHarness::ExecModes) {
             addTestCase(sprintf("subclasses of an AOT generic class in Programs created one after another in %s mode",

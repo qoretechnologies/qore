@@ -22,6 +22,7 @@
 %modern
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
+%requires ../../TestInterpreter.qm
 %requires FsUtil
 %requires DataProvider
 %requires ConnectionProvider
@@ -200,7 +201,7 @@ class ConnectionPresentationTest inherits QUnit::Test {
         string root = get_script_dir() + "/../../../..";
         string module_path = get_script_dir() + PathSep + root + "/qlib" + PathSep
             + (ENV.QORE_MODULE_DIR ?? "");
-        string command = "QORE_MODULE_DIR=" + shellQuote(module_path) + " " + shellQuote(QORE_ARGV[0])
+        string command = "QORE_MODULE_DIR=" + shellQuote(module_path) + " " + shellQuote(TestInterpreter::qore_interpreter())
             + " " + shellQuote(root + "/bin/qore-data-provider-i18n")
             + " -C -m ConnectionPresentationFixture --owner ConnectionPresentationFixture -o " + shellQuote(output);
         assertEq(0, runQuiet(command));
@@ -220,7 +221,7 @@ class ConnectionPresentationTest inherits QUnit::Test {
         string output = make_tmp_dir("connection-presentation-empty-");
         on_exit remove_tree(output);
         string root = get_script_dir() + "/../../../..";
-        string command = shellQuote(QORE_ARGV[0]) + " " + shellQuote(root + "/bin/qore-data-provider-i18n")
+        string command = shellQuote(TestInterpreter::qore_interpreter()) + " " + shellQuote(root + "/bin/qore-data-provider-i18n")
             + " -C --update-source-tree -o " + shellQuote(output) + " > " + shellQuote(output + "/result.log") + " 2>&1";
         assertEq(1, system(command));
         assertTrue(ReadOnlyFile::readTextFile(output + "/result.log").find("no provider owner modules were discovered") >= 0);
@@ -247,7 +248,7 @@ class ConnectionPresentationTest inherits QUnit::Test {
         impl.close();
         string root = get_script_dir() + "/../../../..";
         string module_path = output + "/qlib" + PathSep + root + "/qlib" + PathSep + (ENV.QORE_MODULE_DIR ?? "");
-        string command = "QORE_MODULE_DIR=" + shellQuote(module_path) + " " + shellQuote(QORE_ARGV[0])
+        string command = "QORE_MODULE_DIR=" + shellQuote(module_path) + " " + shellQuote(TestInterpreter::qore_interpreter())
             + " " + shellQuote(root + "/bin/qore-data-provider-i18n")
             + " -C --update-source-tree -o " + shellQuote(output) + " > " + shellQuote(output + "/result.log") + " 2>&1";
         assertEq(1, system(command));
@@ -270,7 +271,7 @@ class ConnectionPresentationTest inherits QUnit::Test {
         entry.close();
         string root = get_script_dir() + "/../../../..";
         string module_path = output + "/qlib" + PathSep + root + "/qlib" + PathSep + (ENV.QORE_MODULE_DIR ?? "");
-        string command = "QORE_MODULE_DIR=" + shellQuote(module_path) + " " + shellQuote(QORE_ARGV[0])
+        string command = "QORE_MODULE_DIR=" + shellQuote(module_path) + " " + shellQuote(TestInterpreter::qore_interpreter())
             + " " + shellQuote(root + "/bin/qore-data-provider-i18n")
             + " -C --update-source-tree -o " + shellQuote(output) + " > " + shellQuote(output + "/result.log") + " 2>&1";
         assertEq(1, system(command));

@@ -223,10 +223,19 @@ static const QoreTypeInfo* qore_cast_get_complex_softlist_value_type(const QoreT
     return nullptr;
 }
 
+// the result of a soft list conversion: acceptAssignment() leaves the value referenced when it raises an exception
+static QoreValue qore_cast_softlist_result(QoreValue& value, ExceptionSink* xsink) {
+    if (*xsink) {
+        value.discard(xsink);
+        return QoreValue();
+    }
+    return value;
+}
+
 static QoreValue qore_cast_coerce_softlist_value(const QoreTypeInfo* type_info, QoreValue value,
         ExceptionSink* xsink) {
     QoreTypeInfo::acceptAssignment(type_info, "<cast operator>", value, xsink);
-    return *xsink ? QoreValue() : value;
+    return qore_cast_softlist_result(value, xsink);
 }
 
 // if del is true, then the returned QoreString* should be deleted, if false, then it must not be
@@ -238,6 +247,40 @@ QoreString* QoreParseCastOperatorNode::getAsString(bool& del, int foff, Exceptio
 int QoreParseCastOperatorNode::getAsString(QoreString& str, int foff, ExceptionSink* xsink) const {
     qore_string_private::get(str)->concat(&cast_str);
     return 0;
+}
+
+//! Returns true if the resolved target type of a cast is one that the cast operator supports
+/** This is the type check of QoreParseCastOperatorNode::parseInitImpl() after it has resolved the target type, without
+    the checks of the operand: the cast of an operand of NOTHING to an or-nothing type, which gives NOTHING without a
+    conversion, uses it to refuse the target types that any other operand gets "cannot cast<> to type" for (qore#6260);
+    the special cases of cast<object>, cast<hash> and cast<list>, which are recognized by name before the type is
+    resolved, are checked by the caller
+*/
+static bool qore_cast_is_castable_type(const QoreTypeInfo* ti, bool or_nothing) {
+    if (qore_type_info_is_aot_deferred(ti)
+            && (QoreTypeInfo::parseReturns(ti, NT_OBJECT) != QTI_NOT_EQUAL
+                || QoreTypeInfo::parseReturns(ti, NT_HASH) != QTI_NOT_EQUAL)) {
+        return true;
+    }
+    if (QoreScalarCastOperatorNode::isSupportedCastType(ti)) {
+        return true;
+    }
+    if (or_nothing ? QoreTypeInfo::getReturnClass(ti) : QoreTypeInfo::getUniqueReturnClass(ti)) {
+        return true;
+    }
+    if (or_nothing ? QoreTypeInfo::getComplexHashValueType(ti) : QoreTypeInfo::getUniqueReturnComplexHash(ti)) {
+        return true;
+    }
+    if (or_nothing ? QoreTypeInfo::getTypedHash(ti) : QoreTypeInfo::getUniqueReturnHashDecl(ti)) {
+        return true;
+    }
+    if (qore_cast_get_complex_softlist_value_type(ti)) {
+        return true;
+    }
+    if (or_nothing ? QoreTypeInfo::getComplexListValueType(ti) : QoreTypeInfo::getUniqueReturnComplexList(ti)) {
+        return true;
+    }
+    return or_nothing ? QoreTypeInfo::getReturnEnum(ti) : QoreTypeInfo::getUniqueReturnEnum(ti);
 }
 
 int QoreParseCastOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {
@@ -313,10 +356,21 @@ int QoreParseCastOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& p
         return -1;
     }
     if (!exp && or_nothing) {
+        // the target type is resolved and checked also when the cast gives NOTHING without a conversion, so that an
+        // undefined or invalid target type (ex: cast<*enum<NoSuchEnum>>(NOTHING), cast<*code>(NOTHING)) is a parse
+        // error, as with any other operand (qore#6260); the result is still NOTHING
+        bool special_case = pti->cscope->size() == 1 && !pti->hasExplicitSubtypeList()
+            && (!strcmp(pti->cscope->ostr, "object") || !strcmp(pti->cscope->ostr, "hash")
+                || !strcmp(pti->cscope->ostr, "list"));
+        const QoreTypeInfo* target_ti = QoreParseTypeInfo::resolveAny(pti, loc, err);
+        if (!err && !special_case && !qore_cast_is_castable_type(target_ti, or_nothing)) {
+            parse_error(*loc, "cannot cast<> to type '%s'", QoreTypeInfo::getName(target_ti));
+            err = -1;
+        }
         ReferenceHolder<> holder(this, nullptr);
         val = QoreValue();
         set_cast_analysis();
-        return 0;
+        return err;
     }
 
     // check special cases
@@ -819,11 +873,24 @@ QoreValue QoreClassCastOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* 
     if (*xsink) {
         return QoreValue();
     }
+    // a temporary operand is a temporary of the statement, which lives until the statement ends, as in the other
+    // execution modes (qore#5712); the value is then the operand itself, which the caller can use after the scope
+    // that holds the operand ends (an assignment to an element, a default argument, a member initializer), so it is
+    // returned with a reference of its own; an operand read from a variable is returned as it was read
+    bool held = false;
+    if (rv.isTemp() && xsink && rv->needsRef()) {
+        QoreStatementTempScope::holdReceiver(exp, rv, xsink);
+        held = !rv.isTemp();
+    }
 
     if (QoreClassCastOperatorNode::checkValue(xsink, *rv, false)) {
         return QoreValue();
     }
 
+    if (held) {
+        needs_deref = true;
+        return rv->refSelf();
+    }
     return rv.takeValue(needs_deref);
 }
 
@@ -1168,7 +1235,7 @@ QORE_INTERN_ALWAYS_INLINE QoreValue QoreComplexListCastOperatorNode::evalImplInt
         if constexpr (Lexical) {
             QoreValue value = rv.takeReferencedValue();
             QoreTypeInfo::acceptAssignment(type_info, "<cast operator>", value, xsink, getSemanticPolicy());
-            return *xsink ? QoreValue() : value;
+            return qore_cast_softlist_result(value, xsink);
         } else {
             return qore_cast_coerce_softlist_value(type_info, rv.takeReferencedValue(), xsink);
         }
@@ -1178,7 +1245,7 @@ QORE_INTERN_ALWAYS_INLINE QoreValue QoreComplexListCastOperatorNode::evalImplInt
         if constexpr (Lexical) {
             QoreValue value = rv.takeReferencedValue();
             QoreTypeInfo::acceptAssignment(type_info, "<cast operator>", value, xsink, getSemanticPolicy());
-            return *xsink ? QoreValue() : value;
+            return qore_cast_softlist_result(value, xsink);
         } else {
             return qore_cast_coerce_softlist_value(type_info, rv.takeReferencedValue(), xsink);
         }
@@ -1227,7 +1294,7 @@ QORE_INTERN_ALWAYS_INLINE QoreValue QoreComplexListCastOperatorNode::castValueIm
         if constexpr (Lexical) {
             QoreValue value = inner;
             QoreTypeInfo::acceptAssignment(type_info, "<cast operator>", value, xsink, getSemanticPolicy());
-            return *xsink ? QoreValue() : value;
+            return qore_cast_softlist_result(value, xsink);
         } else {
             return qore_cast_coerce_softlist_value(type_info, inner, xsink);
         }
@@ -1238,7 +1305,7 @@ QORE_INTERN_ALWAYS_INLINE QoreValue QoreComplexListCastOperatorNode::castValueIm
         if constexpr (Lexical) {
             QoreValue value = ref_inner;
             QoreTypeInfo::acceptAssignment(type_info, "<cast operator>", value, xsink, getSemanticPolicy());
-            return *xsink ? QoreValue() : value;
+            return qore_cast_softlist_result(value, xsink);
         } else {
             return qore_cast_coerce_softlist_value(type_info, ref_inner, xsink);
         }
@@ -1312,7 +1379,9 @@ int QoreEnumCastOperatorNode::checkValue(ExceptionSink* xsink, const QoreValue& 
 }
 
 QoreValue QoreEnumCastOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
-    ValueEvalOptimizedRefHolder rv(exp, xsink);
+    // the operand is a temporary of the statement, which lives until the statement ends, as in the other execution
+    // modes (qore#5712)
+    QoreOperandEvalHolder rv(exp, xsink);
     if (*xsink) {
         return QoreValue();
     }

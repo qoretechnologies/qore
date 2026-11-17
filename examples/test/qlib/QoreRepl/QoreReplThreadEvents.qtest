@@ -7,6 +7,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
+%requires ../../TestInterpreter.qm
 %requires QoreRepl
 %requires FsUtil
 
@@ -416,7 +417,7 @@ class ReplThreadEventsTest inherits QUnit::Test {
 %else
         # a process waits for its background threads before it ends: the module stops the thread that delivers the
         # events before that, so a session with a listener does not keep the process from ending, wherever it is kept
-        string qore = ENV.QORE_BINARY ?? ENV.QORE_BIN ?? QORE_ARGV[0] ?? "qore";
+        string qore = TestInterpreter::qore_interpreter();
         # Process searches PATH for a command without a directory
         if (qore =~ /\//) {
             qore = realpath(qore);

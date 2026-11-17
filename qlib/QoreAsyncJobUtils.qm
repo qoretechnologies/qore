@@ -123,6 +123,9 @@ public class AsyncJobPoller {
         #! Clock closure (test seam): returns the current time that the deadline is measured with
         code<date()> clock;
 
+        #! The function that the default sleeper sleeps with (test seam), called with microseconds
+        code sleep_function;
+
         #! Exception class raised when the overall timeout fires
         string error_class;
 
@@ -153,7 +156,9 @@ public class AsyncJobPoller {
         # return type, so the block is declared to return a closure and then falls off its end, and
         # every poll that needs to wait fails with "block missing return statement".  The member is
         # already typed, so the annotation adds nothing.
-        sleeper = sub (timeout to) { Qore::usleep(int(to) * 1000); };
+        # the default sleeper calls the sleep function that is installed when it runs (see setSleepFunction())
+        sleeper = sub (timeout to) { sleep_function(int(to) * 1000); };
+        sleep_function = \Qore::usleep();
         clock = \Qore::now_us();
     }
 
@@ -167,6 +172,17 @@ public class AsyncJobPoller {
     */
     setSleeper(code<nothing(timeout)> s) {
         sleeper = s;
+    }
+
+    #! Injects the function that the default sleeper sleeps with (test seam)
+    /** The default sleeper, which @ref setSleeper() replaces, calls it with the number of microseconds to sleep;
+        by default it is @ref Qore::usleep() "usleep()".  A test that records its argument checks what the default
+        sleeper sleeps without measuring time.
+
+        @param f called with the number of microseconds to sleep (an @ref int_type "int")
+    */
+    setSleepFunction(code f) {
+        sleep_function = f;
     }
 
     #! Injects a custom clock closure (test seam)

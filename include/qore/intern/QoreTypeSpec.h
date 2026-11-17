@@ -121,6 +121,10 @@ public:
         return typespec;
     }
 
+    //! returns true if this enum type (QTS_ENUM) accepts the values of the given enum: the same declaration or an
+    //! equal one
+    DLLLOCAL bool acceptsEnumDecl(const QoreEnumDecl* ed) const;
+
     DLLLOCAL bool isRuntimeBaseType(qore_type_t t) const {
         return typespec == QTS_TYPE && u.t == t;
     }

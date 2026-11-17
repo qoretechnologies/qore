@@ -397,6 +397,15 @@ int qore_date_info::getMonthIxFromAbbr(const char* abbr) {
    return -1;
 }
 
+void qore_absolute_time::set(double f, const AbstractQoreZoneInfo* n_zone) {
+    // the whole seconds and the fraction; the fraction was taken from a float of the int of the value, which lost
+    // precision above 2^24 seconds and was undefined above 2^31 (qore#6212)
+    int64 n_epoch;
+    int n_us;
+    qore_split_float_seconds_saturated(f, n_epoch, n_us);
+    set(n_zone, n_epoch, n_us);
+}
+
 void qore_absolute_time::set(const AbstractQoreZoneInfo* n_zone, const QoreValue v) {
    qore_type_t t = v.getType();
    if (t == NT_BOOLEAN) {

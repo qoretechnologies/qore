@@ -260,6 +260,25 @@ public:
         return waitWithInterrupt(&l, timeout_ms, xsink);
     }
 
+    //! blocks a thread on a lock until the condition is signaled, with interrupt support and a check before it blocks
+    /** As waitWithInterrupt(QoreThreadLock&, ExceptionSink*), but \a before_block is called with the lock held after
+        the wait is registered for a cancellation wakeup and before the thread blocks; if it returns non-zero, the
+        thread does not block, and QORE_COND_RESULT_SUCCESS is returned.  A thread that requests the end of the wait
+        by setting what \a before_block reads and then waking the waiter (QoreThreadList::wakeCondWaiter()) is
+        therefore never lost; see qore_cond_wait_cancellable()
+
+        @param l the QoreThreadLock to wait on
+        @param xsink exception sink for interrupt errors
+        @param operation the operation named in the cancellation exception
+        @param before_block the check; called with \a arg
+        @param arg the argument of \a before_block
+
+        @note internal: for the wait for a Program's parse lock, whose mutex is a QoreThreadLock (see
+        qore_program_private::waitForParseLock()); not available to modules
+    */
+    DLLLOCAL int waitWithInterrupt(QoreThreadLock& l, ExceptionSink* xsink, const char* operation,
+            int (*before_block)(void*), void* arg);
+
     //! returns the current signal generation counter
     /** Used by SmartMutex/RWLock to detect signals that were fired while a thread was reacquiring
         the Qore-level mutex after a timed wait on the underlying condition variable.

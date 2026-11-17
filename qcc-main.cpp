@@ -2006,6 +2006,7 @@ static const char* aot_section_type_name(uint16_t type) {
         case QoreAOTSectionType::UNRUN_TOP_LEVEL_CODE: return "UNRUN_TOP_LEVEL_CODE";
         case QoreAOTSectionType::FUNCTIONAL_DOMAIN: return "FUNCTIONAL_DOMAIN";
         case QoreAOTSectionType::MODULE_DOMAINS: return "MODULE_DOMAINS";
+        case QoreAOTSectionType::TIME_ZONE: return "TIME_ZONE";
     }
     return "UNKNOWN";
 }
@@ -2658,6 +2659,29 @@ static bool dump_skip_expr_payload(const QoreAOTBinaryReader& reader,
                 && skip_n_args(nargs);
         }
 
+        case AOTExprKind::CALLREF_CALL_NAMED: {
+            // the CALLREF_CALL layout, then a count and a string ref for each argument name
+            uint8_t nargs = 0;
+            uint8_t nnames = 0;
+            if (!dump_skip_inline_expr(reader, p, end, summary, func_name, child_ctx)
+                    || !dump_read_u8(p, end, nargs) || !skip_n_args(nargs) || !dump_read_u8(p, end, nnames)) {
+                return false;
+            }
+            for (unsigned i = 0; i < nnames; ++i) {
+                if (!dump_skip_string_ref(reader, p, end)) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        case AOTExprKind::FIND:
+            // the find mode, then the expression, the find expression and the where expression
+            return dump_skip_bytes(p, end, 1)
+                && dump_skip_inline_expr(reader, p, end, summary, func_name, child_ctx)
+                && dump_skip_inline_expr(reader, p, end, summary, func_name, child_ctx)
+                && dump_skip_inline_expr(reader, p, end, summary, func_name, child_ctx);
+
         case AOTExprKind::RUNTIME_CONST_REF:
         case AOTExprKind::SELF_VARREF:
         case AOTExprKind::LOCAL_VARREF:
@@ -2665,6 +2689,7 @@ static bool dump_skip_expr_payload(const QoreAOTBinaryReader& reader,
         case AOTExprKind::CONST_NUMBER:
         case AOTExprKind::CONST_BINARY:
         case AOTExprKind::CONST_STRING:
+        case AOTExprKind::BACKQUOTE:
         case AOTExprKind::FUNC_CALL_REF:
         case AOTExprKind::SELF_METHOD_REF:
             return dump_skip_string_ref(reader, p, end);
@@ -2804,6 +2829,8 @@ static bool dump_skip_expr_payload(const QoreAOTBinaryReader& reader,
         case AOTExprKind::LOG_GE:
         case AOTExprKind::PUSH:
         case AOTExprKind::UNSHIFT:
+        case AOTExprKind::LOG_CMP:
+        case AOTExprKind::LIST_ASSIGN:
             return dump_skip_inline_expr(reader, p, end, summary, func_name, child_ctx)
                 && dump_skip_inline_expr(reader, p, end, summary, func_name, child_ctx);
 
@@ -2817,6 +2844,8 @@ static bool dump_skip_expr_payload(const QoreAOTBinaryReader& reader,
         case AOTExprKind::REMOVE:
         case AOTExprKind::BACKGROUND:
         case AOTExprKind::UNARY_MINUS:
+        case AOTExprKind::UNARY_PLUS:
+        case AOTExprKind::BIT_NOT:
             return dump_skip_inline_expr(reader, p, end, summary, func_name, child_ctx);
 
         case AOTExprKind::QUESTION:
@@ -3107,7 +3136,8 @@ static bool summarize_aot_slot_maps(const QoreAOTBinaryReader& reader,
 
         uint16_t num_locals = 0, num_globals = 0, num_exprs = 0, num_stmts = 0;
         uint16_t num_regex = 0, num_body_locals = 0;
-        uint8_t has_unsupported = 0, num_lv_paths = 0;
+        uint8_t has_unsupported = 0, num_lv_paths8 = 0;
+        uint32_t num_lv_paths = 0;
         if (!dump_read_u16(p, entry_end, num_locals)
                 || !dump_read_u16(p, entry_end, num_globals)
                 || !dump_read_u16(p, entry_end, num_exprs)
@@ -3115,10 +3145,16 @@ static bool summarize_aot_slot_maps(const QoreAOTBinaryReader& reader,
                 || !dump_read_u16(p, entry_end, num_regex)
                 || !dump_read_u16(p, entry_end, num_body_locals)
                 || !dump_read_u8(p, entry_end, has_unsupported)
-                || !dump_read_u8(p, entry_end, num_lv_paths)) {
+                || !dump_read_u8(p, entry_end, num_lv_paths8)
+                || (reader.getHeader().version >= QORE_AOT_SHARED_HANDLER_VERSION
+                    && !dump_read_u32(p, entry_end, num_lv_paths))) {
             ++summary.malformed_entries;
             p = entry_start + 4 + entry_size;
             continue;
+        }
+        if (reader.getHeader().version < QORE_AOT_SHARED_HANDLER_VERSION) {
+            // the low byte of the count only (#6127)
+            num_lv_paths = num_lv_paths8;
         }
 
         summary.local_slots += num_locals;
@@ -9654,7 +9690,9 @@ static bool collect_blob_top_level_local_uses(const QoreAOTBinaryReader& reader,
         // the unsupported-expression flag and the LValuePath count
         if (!dump_skip_string_ref(reader, p, entry_end, &fname)
                 || !dump_read_u16(p, entry_end, num_locals)
-                || !dump_skip_bytes(p, entry_end, 5 * sizeof(uint16_t) + 2 * sizeof(uint8_t))) {
+                || !dump_skip_bytes(p, entry_end, 5 * sizeof(uint16_t) + 2 * sizeof(uint8_t)
+                    // the u32 count of LValuePath instructions (#6127)
+                    + (reader.getHeader().version >= QORE_AOT_SHARED_HANDLER_VERSION ? sizeof(uint32_t) : 0))) {
             error = "malformed SLOT_MAPS entry " + std::to_string(f) + " in '" + object + "'";
             return false;
         }
@@ -11751,7 +11789,8 @@ int main(int argc, char** argv) {
             rc = 1;
         } else {
             // Compile to executable
-            QoreParseOptions po = qpgm->getParseOptions() | compile_po;
+            // the compatibility options that the code's %modern reset are not added back (issue #6382)
+            QoreParseOptions po = qore_aot_merge_parse_options(qpgm->getParseOptions(), compile_po);
             if (!QoreAOT::compile(
                     qpgm,
                     source_text.c_str(), (int)source_text.size(),

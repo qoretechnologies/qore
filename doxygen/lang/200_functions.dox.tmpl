@@ -100,6 +100,17 @@ int default_value = make();          # default type argument T = int
 int explicit_value = make<int>();    # explicit T
     @endcode
 
+    When a generic variant takes the explicit type arguments of a call, the call selects among all variants of the
+    function or method, also those without type parameters, which ignore the type arguments, at parse time as at run
+    time (see @ref overloading).  For example, with <tt>m&lt;X&gt;(X x)</tt> and <tt>m(auto x)</tt> declared,
+    <tt>m&lt;Obj&gt;(o)</tt> calls <tt>m&lt;X&gt;(X x)</tt> for an object \c o, as <tt>m(Obj x)</tt> beside
+    <tt>m(auto x)</tt> would be called, and <tt>m&lt;int&gt;("s")</tt> calls <tt>m(auto x)</tt>, as its argument
+    does not match the type argument.  As for any method call, the variants of the first class in the
+    hierarchy with a matching variant are selected from, so a method without type parameters of a child class that
+    accepts the arguments is called instead of a generic method of a parent class.  Explicit type arguments that no
+    generic variant takes (for a function or method without a generic variant, more type arguments than a variant has
+    type parameters, or a type argument outside a bound) are a parse error.
+
     Type parameters can declare an upper bound and a default. Bounds are
     checked after inference or after explicit type arguments are applied:
 
@@ -254,6 +265,22 @@ code ref = \label();
 code cl = string sub (string text, int count = 1) { return sprintf("%s x %d", text, count); };
 ref(text: "files", count: 3);   # "3 files"
 cl(count: 2, text: "boxes");    # "boxes x 2"
+    @endcode
+
+    A call of a method that a class does not have, of the name of a member whose type can hold code (a member of no
+    type, \c auto, or a member of a code type), calls the code that the member holds, and a named call binds its
+    names to the parameters of that code when the call is made, as a named call of a call reference or closure; when
+    the member does not hold code, the call is a call of the pseudo-method of objects of the same name, if there is
+    one, with the names bound to its parameters:
+    @code{.py}
+class Handler {
+    public {
+        auto callback;
+    }
+}
+Handler h();
+h.callback = string sub (string text, int count = 1) { return sprintf("%s x %d", text, count); };
+h.callback(count: 2, text: "boxes");    # "boxes x 2"
     @endcode
 
     Other calls with named arguments must resolve to a known signature at parse time: method calls through a

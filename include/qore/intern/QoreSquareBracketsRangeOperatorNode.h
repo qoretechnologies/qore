@@ -119,12 +119,14 @@ protected:
     ValueOptionalRefHolder seq;
     int64 start;
     int64 stop;
+    //! true if the range of a list reaches outside of it with %broken-list-range, giving NOTHING elements (qore#5757)
+    bool or_nothing;
 
 public:
     DLLLOCAL QoreFunctionalSquareBracketsRangeOperator(ValueEvalRefHolder& old_seq, int64 begin, int64 end,
-            bool broken_range, ExceptionSink* xsink)
+            bool broken_range, ExceptionSink* xsink, bool or_nothing = false)
             : RangeIterator(begin, end, 1, &Nothing, broken_range, xsink), seq(*old_seq, old_seq.isTemp(), xsink), start(begin),
-            stop(end) {
+            stop(end), or_nothing(or_nothing) {
         old_seq.clearTemp();
     }
 
@@ -134,8 +136,10 @@ public:
 
     DLLLOCAL virtual const QoreTypeInfo* getValueTypeImpl() const {
         switch (seq->getType()) {
-            case NT_LIST:
-                return seq->get<const QoreListNode>()->getValueTypeInfo();
+            case NT_LIST: {
+                const QoreTypeInfo* ti = seq->get<const QoreListNode>()->getValueTypeInfo();
+                return or_nothing ? get_or_nothing_type_check(ti) : ti;
+            }
             case NT_STRING:
                 return stringTypeInfo;
             case NT_BINARY:

@@ -37,6 +37,14 @@ bool qore_ir_visit_value_operands(const QoreIRInstruction& inst, const QoreIRVal
 //! @param visitor callback invoked once per successor
 void qore_ir_visit_successors(const QoreIRInstruction& inst, const QoreIRBlockVisitor& visitor);
 
+//! Returns the returns of the try block of the try statement whose catch block an exception at an instruction whose
+//! exception target is \a target reaches first, if any (QoreIRFunction::catch_interrupted_returns, #6074)
+/** Searches the exception path from \a target, breadth first, for the first CatchException; nullptr if there is none
+    (the exception leaves the function), an empty list if its try block has no interrupted returns.
+*/
+DLLLOCAL const std::vector<uint32_t>* qore_ir_exception_catch_returns(const QoreIRFunction& func,
+        const QoreIRBasicBlock* target);
+
 //! Returns true for a release that only runs once a functional operator's loop has ended on an exception
 /** A ReleaseOwnedTemp of the exception cleanup of a functional operator (QoreIRInstruction::exception_cleanup_release):
     a value that it releases and that a Phi or a container took over is released there through its new owner, so the
@@ -138,6 +146,17 @@ struct QoreIRControlFlowGraph {
         (#6201).
     */
     std::vector<DebugFlowSource> debug_flow_sources;
+    //! 1 for each block that is the exception target of an instruction (or of a throw) of a block that runs: a handler
+    //! entry, which control can enter in the middle of any block that it handles, whatever the graph's edges
+    std::vector<uint8_t> exception_entry;
+    //! 1 for each block that runs only through exception edges: not in \a reachable (always 0 with exception edges)
+    /** A forward dataflow over a graph without exception edges skips the blocks that are not reachable, so it never
+        computes the state at the end of one of these blocks; at a join that one of them flows into (the block after
+        a try statement, which the end of its catch block flows into) it must either compute that state, as the
+        in-place mutation analyses do from the states at the instructions that throw to the handler, or assume
+        nothing from it (issue #6334), while a predecessor that does not run at all can be ignored.
+    */
+    std::vector<uint8_t> exception_only;
     bool cancelled = false;
 
     //! Returns the only successor of \a block other than the paths of the debugger's flow requests at its step
@@ -204,6 +223,22 @@ struct QoreIRNaturalLoop {
 //! @return natural loops ordered from smallest to largest
 std::vector<QoreIRNaturalLoop> qore_ir_find_natural_loops(const QoreIRControlFlowGraph& cfg);
 
+//! Decides the release checks of functional loop bodies (pending CheckExceptions, see QoreIRReleaseCheck; qore#6072)
+/** The lowering emits one after each container, at the start of each call's continuation and after the Phis of each
+    block in the body of a functional loop, with the value whose release it checks as its operand, and one at the
+    loop's back-edge.  A check is removed when its value cannot hold an object (a monotone data-flow analysis over the
+    value facts, local types, resolved variants' return types and opcodes), when a ListAppendElement with the same
+    handler follows it past instructions that cannot observe the exception, or, at a back-edge, when such an append
+    precedes it, or when no value of the back-edge's loop can hold an object.  A kept check of a container's value gives
+    the container its handler and becomes QoreIRReleaseCheck::Kept (native code emits nothing for it); one of a call's
+    or a Phi's value becomes QoreIRReleaseCheck::Native (native code checks the sink there); the operands are cleared.
+    Decided checks are left alone, so running it again changes nothing.  A loop of values that cannot hold an object
+    gets no check, and a map of objects whose elements are appended none per element.
+
+    @return the number of instructions removed
+*/
+size_t qore_ir_prune_release_checks(QoreIRFunction& func);
+
 //! Returns the values that a call takes as an argument and that a later execution of the call uses again.
 /** A call that consumes an argument releases it when the call returns (see design/temporary-lifetime.md); that is
     only correct if the argument is defined again for each execution of the call.  Neither the static use count nor
@@ -241,6 +276,28 @@ bool qore_ir_find_reused_call_args(const QoreIRFunction& func, std::vector<uint8
     native code generation ignores the mark.  Returns the number of loads marked (issue #5784).
 */
 size_t qore_ir_fuse_call_target_checks(QoreIRFunction& func);
+
+//! Returns @a next if it is the call that makes the check of its target @a check (a CheckCallTarget) when the check is
+//! fused into it (see qore_ir_fuse_call_target_checks()): the method call of the same expression; otherwise nullptr
+/** Native code generation, which does not fuse the checks, takes the arguments of the call for the check after them
+    from it (issue #5824).
+*/
+const QoreIRInstruction* qore_ir_call_of_target_check(const QoreIRInstruction* check, const QoreIRInstruction* next);
+
+//! Moves the debugger's step event of each statement whose first instruction is a fused local int operation into the
+//! operation
+/** Run on the final IR of a function lowered for the IR interpreter and the JIT with the debugger's step events
+    (QoreIRFunction::source_dpgm_addr): a QoreIROpcode::DebugStatement instruction directly followed by an
+    IncrementLocalInt or AddAssignLocalInt instruction of int locals that only the IR uses, which cannot raise an
+    exception, is removed from its block and kept by the operation (qore_ir_folded_debug_step()), which makes the event
+    before the operation, as the instruction did, in both tiers.  The operation is the first instruction of the
+    statement, which can have more: `i += 1;` is then one instruction, as without the debugger's events, and
+    `x = ++i;` or `if (++i > n)` have one instruction less.  The exception path of the event becomes the operation's
+    exception target, which the operation itself does not use, so that the edges of the function's blocks are
+    unchanged.  Not run on the IR of AOT code, whose debug IR is serialized with its DebugStatement instructions.
+    Returns the number of events moved.
+*/
+size_t qore_ir_fold_debug_statements(QoreIRFunction& func);
 
 struct QoreIROptimizationStats {
     size_t loops_analyzed = 0;

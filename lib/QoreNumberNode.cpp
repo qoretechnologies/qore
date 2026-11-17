@@ -32,6 +32,7 @@
 #include <qore/Qore.h>
 #include "qore/intern/qore_string_private.h"
 #include "qore/intern/qore_number_private.h"
+#include "qore/intern/qore_date_private.h"
 #include "qore/intern/QoreAsciiCompatStringHelper.h"
 
 #include <algorithm>
@@ -662,16 +663,23 @@ void QoreNumberNode::getStringRepresentation(QoreString& str) const {
 }
 
 // if del is true, then the returned DateTime * should be deleted, if false, then it should not
+// the seconds and microseconds are split as for an absolute date from a float with no exception sink: the fraction was
+// taken from a float of the int of the value, which lost precision above 2^24 seconds and was undefined above 2^31, and
+// a value out of range, infinity and NaN were undefined (qore#6212)
 DateTime *QoreNumberNode::getDateTimeRepresentation(bool& del) const {
     del = true;
-    double f = priv->getAsFloat();
-    return DateTime::makeAbsoluteLocal(currentTZ(), (int64)f, (int)((f - (float)((int)f)) * 1000000));
+    int64 secs;
+    int us;
+    qore_split_float_seconds_saturated(priv->getAsFloat(), secs, us);
+    return DateTime::makeAbsoluteLocal(currentTZ(), secs, us);
 }
 
 // assign date representation to a DateTime (no action for complex types = default implementation)
 void QoreNumberNode::getDateTimeRepresentation(DateTime& dt) const {
-    double f = priv->getAsFloat();
-    dt.setLocalDate(currentTZ(), (int64)f, (int)((f - (float)((int)f)) * 1000000));
+    int64 secs;
+    int us;
+    qore_split_float_seconds_saturated(priv->getAsFloat(), secs, us);
+    dt.setLocalDate(currentTZ(), secs, us);
 }
 
 bool QoreNumberNode::getAsBoolImpl() const {
@@ -749,6 +757,31 @@ int QoreNumberNode::parseInit(QoreValue& val, QoreParseContext& parse_context) {
 
 bool QoreNumberNode::zero() const {
     return priv->zero();
+}
+
+// documented in QoreLibIntern.h
+bool qore_number_divisor_is_zero(const QoreValue& v) {
+    switch (v.getType()) {
+        case NT_NUMBER:
+            return v.get<const QoreNumberNode>()->zero();
+        // their conversion to a number is zero exactly when their float is
+        case NT_INT:
+        case NT_FLOAT:
+        case NT_BOOLEAN:
+        case NT_NOTHING:
+        case NT_NULL:
+            return v.getAsFloat() == 0.0;
+        default: {
+            // the number that the division converts the value to (ex: a string)
+            SimpleRefHolder<QoreNumberNode> n(new QoreNumberNode(v));
+            return n->zero();
+        }
+    }
+}
+
+// documented in QoreLibIntern.h
+bool qore_constant_divisor_is_zero(const QoreValue& v) {
+    return v.getAsFloat() == 0.0 && qore_number_divisor_is_zero(v);
 }
 
 int QoreNumberNode::sign() const {

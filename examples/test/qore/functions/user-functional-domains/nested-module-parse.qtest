@@ -9,6 +9,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
 %requires QUnit
+%requires ../../../TestInterpreter.qm
 %requires FsUtil
 
 %exec-class NestedModuleParseTest
@@ -103,7 +104,7 @@ module's own run-time call: INVALID-FUNCTION-ACCESS
         mkdir(mod_dir);
         writeFile(mod_dir + "/NestedLoader.qm", ModuleSource);
         string script = writeFile(tmp.path + "/run.q", ScriptSource);
-        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string qore_bin = TestInterpreter::qore_interpreter();
         string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
         string qlib_dir = realpath(get_script_dir() + "/../../../../../qlib");
         *string env_dir = ENV.QORE_MODULE_DIR;

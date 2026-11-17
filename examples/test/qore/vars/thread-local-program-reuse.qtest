@@ -8,6 +8,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
+%requires ../../TestInterpreter.qm
 %requires FsUtil
 %requires ../../ExecModeHarness.qm
 
@@ -429,7 +430,7 @@ printf("done\n");
     }
 
     constructor() : QUnit::Test("ThreadLocalProgramReuseTest", "1.0", \ARGV) {
-        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        qore_bin = TestInterpreter::qore_interpreter();
         libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
         foreach string mode in (ExecModeHarness::ExecModes) {
             addTestCase(sprintf("thread_local variables of Programs created one after another in %s mode", mode),
