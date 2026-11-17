@@ -157,8 +157,9 @@ public class SseStreamReader {
         - \c retry: reconnection interval in ms (from \c "retry:" line)
     */
     *hash<SseMessageInfo> readEvent(*timeout timeout_ms) {
-        *date read_deadline = timeout_ms > 0
-            ? now_us() + milliseconds(timeout_ms) : NOTHING;
+        # on the monotonic clock, so that a change of the system clock does not end the wait early or late (#6455)
+        *int read_deadline = timeout_ms > 0
+            ? clock_get_monotonic_us() + timeout_ms * 1000 : NOTHING;
         while (!done) {
             # Check buffer for a complete SSE event.  Events are delimited by a
             # blank line, which is "\n\n" (LF framing) or "\r\n\r\n" (CRLF
@@ -222,8 +223,10 @@ public class SseStreamReader {
                 try {
                     *timeout remaining = timeout_ms;
                     if (read_deadline) {
-                        remaining = (read_deadline - now_us()).durationMilliseconds();
-                        if (remaining <= 0) { return NOTHING; }
+                        int remaining_us = read_deadline - clock_get_monotonic_us();
+                        if (remaining_us <= 0) { return NOTHING; }
+                        # rounded up, so that the wait does not end before the deadline
+                        remaining = (remaining_us + 999) / 1000;
                     }
                     data = stream.readData(remaining);
                 } catch (hash<ExceptionInfo> ex) {

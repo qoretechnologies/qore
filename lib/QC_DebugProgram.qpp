@@ -58,6 +58,17 @@ const DebugStepOver = DBG_RS_STEP_OVER;
 //! Run program till function is exited
 const DebugUntilReturn = DBG_RS_UNTIL_RETURN;
 
+//! A request that a debugger can set as the run state in an event: the thread is detached and is not offered to the debugger again
+/** No @ref Qore::DebugProgram::onAttach() "onAttach()" (and so no @ref Qore::DebugProgram::onDetach() "onDetach()")
+    is called for the thread when it enters the program again, as for a thread of another program that calls into
+    the debugged program (a callback, a logger) and that the debugger does not want to debug.  It is not a run state
+    of a thread.  The thread is offered again after @ref Qore::DebugProgram::attachThread() "DebugProgram::attachThread()",
+    or when the program's debugger changes; it is not remembered for a later thread that gets the same thread ID.
+
+    @since %Qore 3.0
+*/
+const DebugDontAttach = DBG_RS_DONT_ATTACH;
+
 //  const DebugStopped = DBG_RS_STOPPED = 5,    // not needed
 ///@}
 
@@ -193,7 +204,9 @@ list DebugProgram::getAllPrograms() {
 //! Executed when new thread is attached to program being debugged
 /**
     @param program the program being debugged
-    @param run_state a reference to the run state to return to the program
+    @param run_state a reference to the run state to return to the program; @ref Qore::DebugDontAttach "DebugDontAttach"
+    for a thread that the debugger does not want to debug: it is not offered again (see
+    @ref Qore::DebugProgram::attachThread() "attachThread()")
     @param run_to_statement_id a reference to the statement ID to run to
  */
 abstract nothing DebugProgram::onAttach(ProgramControl[QoreProgram] program, reference run_state, reference run_to_statement_id) [flags=NAMED_ARGS];
@@ -264,8 +277,10 @@ abstract nothing DebugProgram::onFunctionExit(ProgramControl[QoreProgram] progra
  */
 abstract nothing DebugProgram::onException(ProgramControl[QoreProgram] program, int statement_id, hash exception, reference dismiss, reference run_state, reference run_to_statement_id) [flags=NAMED_ARGS];
 
-//! Executed when a program/thread is exited.
-/**
+//! Executed when the code of a thread ends, and by default when the code of a program run ends
+/** The end of a program run calls @ref Qore::DebugProgram::onRunExit() "onRunExit()", whose default implementation
+    calls this method.
+
     @param program the program being debugged
     @param statement_id the statement ID where the program or thread exited
     @param return_value a reference to the return value
@@ -276,6 +291,41 @@ abstract nothing DebugProgram::onException(ProgramControl[QoreProgram] program, 
        @ref Qore::ProgramControl::getStatementIdInfo "ProgramControl::getStatementIdInfo"
  */
 abstract nothing DebugProgram::onExit(ProgramControl[QoreProgram] program, int statement_id, reference return_value, reference run_state, reference run_to_statement_id) [flags=NAMED_ARGS];
+
+//! Offers a thread that the debugger did not want (@ref Qore::DebugDontAttach "DebugDontAttach") to the debugger again
+/** The thread is offered to the debugger (@ref Qore::DebugProgram::onAttach() "onAttach()") on its next entry into
+    the program.
+
+    @param program the program
+    @param thread_id the ID of the thread
+
+    @return @ref True if the thread has data in the program (it has entered it); @ref False, and nothing is done, if it
+    has none (it has not entered the program, or it has ended), or if the program is not a debug target of this
+    debugger
+
+    @since %Qore 3.0
+*/
+bool DebugProgram::attachThread(ProgramControl[QoreProgram] program, int thread_id) [flags=NAMED_ARGS] {
+   return dpgm->attachThread(*program, thread_id);
+}
+
+//! Executed when the code of a program run ends: its top-level code, or its exec class, with the value that @ref Qore::Program::run() "Program::run()" returns
+/** The default implementation calls @ref Qore::DebugProgram::onExit() "onExit()"; a debugger overrides it to tell the
+    end of a program run from the end of a thread, which gives @ref Qore::DebugProgram::onExit() "onExit()" only.  It
+    runs in the thread that called @ref Qore::Program::run() "Program::run()", in the context of the program.
+
+    @param program the program being debugged
+    @param statement_id the statement ID of the end, which is 0, as the top-level code has none
+    @param return_value a reference to the value that @ref Qore::Program::run() "Program::run()" returns, which the
+    debugger can replace; no value when the run ends with an exception
+    @param run_state a reference to the run state to return to the program
+    @param run_to_statement_id a reference to the statement ID to run to
+
+    @since %Qore 3.0
+ */
+nothing DebugProgram::onRunExit(ProgramControl[QoreProgram] program, int[doc] statement_id, reference[doc] return_value, reference[doc] run_state, reference[doc] run_to_statement_id) [flags=NAMED_ARGS] {
+   self->evalMethod("onExit", args, xsink);
+}
 
 //! Break particular program thread
 /**

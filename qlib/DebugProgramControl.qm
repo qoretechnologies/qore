@@ -49,6 +49,12 @@ module DebugProgramControl {
     The %DebugProgramControl module provides common functionality for implementing debugger server utilities
 
     @subsection dc_v0_1_3 v0.1.3
+    - the end of the code of a program run is sent to the clients as an \c "exit" event
+      (@ref DebugUtil::DebugEventCmd "DebugEventCmd::Exit") with the value that @ref Qore::Program::run() "Program::run()"
+      returns in \c result, the \c pgmid, \c tid and \c threadname of the thread that ran it, and \c stamp; the thread
+      does not stop there, and stops at its \c detach interrupt as before (see
+      @ref Qore::DebugProgram::onRunExit() "DebugProgram::onRunExit()";
+      <a href="https://github.com/qoretechnologies/qore/issues/3401">issue 3401</a>)
     - the callbacks of the debugger run with the cancellation of the thread deferred, so that the code of the
       debugger always completes and the debugged code is cancelled where it would be without the debugger: a thread
       that is cancelled while it is stopped stays stopped until a client resumes it, or the debugger ends the program
@@ -3207,6 +3213,34 @@ public namespace DebugProgramControl {
 
         onExit(ProgramControl pgm, int statementId, reference result, reference rs, reference runToStatementId) {
             handleInterrupt('exit', pgm, \rs, \runToStatementId, statementId, "result", \result);
+        }
+
+        #! the code of a program run has ended: the clients get an exit event with its result; the thread does not stop
+        /** the thread stops when it leaves the program, at its detach event, as before (#3401)
+        */
+        onRunExit(ProgramControl pgm, int statementId, reference result, reference rs, reference runToStatementId) {
+            if (!hasConnection()) {
+                return;
+            }
+            hash<auto> sd = {
+                'type': DebugResponseType::Event,
+                'cmd': DebugEventCmd::Exit,
+                'pgmid': pgm.getProgramId(),
+                'tid': gettid(),
+                # the name of the thread, which only the thread itself can get
+                'threadname': get_thread_name(),
+                'stamp': now_us(),
+                'result': result,
+            };
+            # the output that the program wrote before its end reaches the clients before the event
+            if (outputCapture) {
+                outputCapture.flushAndWait();
+            }
+            try {
+                broadcastDataImpl(sd);
+            } catch (hash<ExceptionInfo> ex) {
+                # suppress exceptions
+            }
         }
     }
 }

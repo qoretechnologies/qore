@@ -341,6 +341,23 @@ string sub appendAroundTry(int n) {
     return s + "/" + x;
 }
 
+# appends in a catch block and before the try statement to a local that is fresh wherever the try block can throw
+# are in place
+string sub appendInCatchFresh(int n) {
+    string s = "";
+    for (int i = 0; i < n; ++i) {
+        s += "a";
+        try {
+            if (i == 2) {
+                throw "X";
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            s += "c";
+        }
+    }
+    return s;
+}
+
 list<int> sub pushAroundTry(int n) {
     list<int> l = ();
     int x = 0;
@@ -391,6 +408,7 @@ list<int> dtor_o = lsrc();
 printf("dtorList => %y | %y\n", dtorList(dtor_o), dtor_o);
 string dtor_t = src();
 printf("dtorString => %y | %y\n", dtorString(dtor_t), dtor_t);
+printf("appendInCatchFresh => %y\n", appendInCatchFresh(5));
 printf("appendAroundTry => %y\n", appendAroundTry(6));
 printf("pushAroundTry => %y\n", pushAroundTry(6));
 printf("plainBuilder => %d\n", plainBuilder(1000).size());

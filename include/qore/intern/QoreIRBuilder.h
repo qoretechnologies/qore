@@ -509,6 +509,9 @@ public:
     //! #6074); an invalid \a value is a return without a value
     QoreIRInstruction* createHandlerReturn(QoreIRValue value, const QoreProgramLocation* loc = nullptr);
 
+    //! Sets the parse options that the top-level code runs with from here on (QoreIROpcode::SetCodeParseOptions)
+    QoreIRInstruction* createSetCodeParseOptions(const QoreParseOptions& po, const QoreProgramLocation* loc = nullptr);
+
     //! Releases \a input, the input of a fused pipeline's map stage, once the stage has given \a kept, unless it is
     //! \a kept itself at run time (a value that an optimization or the expression made the input): a ReleaseOwnedTemp
     //! with \a kept as a second operand

@@ -550,10 +550,20 @@ constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 //!        of them refuses the kinds
 //!      - an optional TIME_ZONE section (34) records the time zone that the code sets with %set-time-zone and whether
 //!        its directive follows the header of a module (qore#6270)
-//! v42: the DebugStatement, DebugBlock and ScopeExit records of the debug IR end with the paths of a debugger's
+//! v42 (batch AA; one format version for the format changes of the batch, one line each):
+//!      - the serialized IR of an LValuePath instruction has a u8 after its ternary operator: 1 if the value of the
+//!        operation is used (ref_rv), 0 if not, so that an unused post increment or decrement copies no old value and
+//!        an unused remove or delete releases its value in the operation in the IR rebuilt from the image (debug IR,
+//!        closure bodies without native code); an earlier image has none, and its instructions use their values, as
+//!        before (qore#6328)
+//!      - top-level code whose statements have different parse options sets the options of each statement where they
+//!        change with a SetCodeParseOptions instruction (QoreIROpcode::SetCodeParseOptions, 439: the options as four
+//!        32-bit ConstInt words), whose native code calls qore_rt_set_code_parse_options(); the AOT runtime identity
+//!        changes with the runtime entry (qore#6293)
+//! v43: the DebugStatement, DebugBlock and ScopeExit records of the debug IR end with the paths of a debugger's
 //!      flow requests (a u8 mask: bit 0 break, bit 1 continue, bit 2 return, then the u16 block index of each path in
 //!      that order), and the flags of a block record have the bit 0x10 for a block of such a path (#6200, #6201).  A
-//!      v9-v41 image has none: a request at a step event of its code returns from the function.
+//!      v9-v42 image has none: a request at a step event of its code returns from the function.
 constexpr uint16_t QORE_AOT_BINARY_MIN_VERSION = 9;
 //! First format version whose function variant flags record each variant's public flag (see v25 above).
 constexpr uint16_t QORE_AOT_VARIANT_PUBLIC_VERSION = 25;
@@ -608,8 +618,14 @@ constexpr uint16_t QORE_AOT_HANDLER_RETURN_VERSION = 39;
     which readers of this format ignore), which a function with more than 255 of them overflowed (#6127).
 */
 constexpr uint16_t QORE_AOT_SHARED_HANDLER_VERSION = 41;
-//! First format version whose debug IR has the paths of a debugger's flow requests (see v42 above).
-constexpr uint16_t QORE_AOT_DEBUG_FLOW_VERSION = 42;
+//! First format version whose serialized LValuePath instructions record whether their value is used (see v42 above)
+constexpr uint16_t QORE_AOT_LVPATH_REF_RV_VERSION = 42;
+//! First format version whose top-level code can set the parse options of its statements (see v42 above)
+constexpr uint16_t QORE_AOT_CODE_PARSE_OPTIONS_VERSION = 42;
+static_assert(QORE_AOT_LVPATH_REF_RV_VERSION == 42 && QORE_AOT_CODE_PARSE_OPTIONS_VERSION == 42,
+    "the format changes of batch AA share one format version (v42)");
+//! First format version whose debug IR has the paths of a debugger's flow requests (see v43 above).
+constexpr uint16_t QORE_AOT_DEBUG_FLOW_VERSION = 43;
 //! The current format version: the newest version of the history above, which is the newest feature version above
 //! when a reader branches on it (a merge with another format change takes the next version after the newest, here and
 //! in the history above)

@@ -38,6 +38,7 @@
 #define HE_TAG_CONST        1
 #define HE_TAG_SCOPED_CONST 2
 
+#include <string>
 #include <cstring>
 #include "qore/intern/QoreNativeParseInfo.h"
 #include "qore/intern/LexicalSemanticPolicy.h"
@@ -148,9 +149,25 @@ struct QoreParseState {
    bool stop = false;
    //! true if the scanner has ended the input
    bool ended = false;
+   //! the name after the % of the last line that started with % and a name that no parse directive's rule matched,
+   //! which the scanner gives as a context reference: a syntax error in the statement that it begins (up to the next
+   //! ;, { or } in the code) reports it as an unknown or invalid parse directive (issue #56)
+   std::string line_start_directive;
+   //! the location of line_start_directive (its line and source), or nullptr if there is none
+   const QoreProgramLocation* line_start_directive_loc = nullptr;
+   //! true from line_start_directive until the scanner matches the end of a statement or block (;, { or }): a
+   //! syntax error before it is that of the directive, whose name the scanner gave as a context reference (issue #56)
+   bool line_start_directive_active = false;
    //! Provenance of the current legacy options; tokens copy it before later directives can restore %modern.
    QoreNativeParseInfo native_parse_info;
 };
+
+//! returns the description of a syntax error on a line that starts with % and \a name, which no parse directive's
+//! rule matched: an unknown parse directive, with the closest one, or one with invalid syntax (issue #56)
+DLLLOCAL std::string qore_parse_directive_error(const std::string& name);
+
+//! returns true if \a name is the name of a parse directive (issue #56)
+DLLLOCAL bool qore_parse_directive_known(const std::string& name);
 
 // private interface to bison/flex parser/scanner
 typedef void* yyscan_t;

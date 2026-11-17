@@ -334,22 +334,23 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         */
         hash<string, int> alt_svc_port_map;
 
-        #! Last H3 probe times: "host:port" -> timestamp
-        hash<string, date> h3_probe_times;
+        #! Last H3 probe times: "host:port" -> time on the monotonic clock in microseconds
+        hash<string, int> h3_probe_times;
 
         #! Address families that HTTP/3 connections failed to reach: "host:port" -> family -> expiry time
         /** A host name can resolve to addresses of both families while the server only receives QUIC datagrams on
             one of them; a family whose connection attempt never reached a server is not used for new HTTP/3
-            connections to the origin until the entry expires (see @ref H3FamilyFailureTtl)
+            connections to the origin until the entry expires (see @ref H3FamilyFailureTtl); the expiry times are on
+            the monotonic clock in microseconds
         */
-        hash<string, hash<string, date>> h3_failed_families;
+        hash<string, hash<string, int>> h3_failed_families;
 
-        #! Last HTTP/1.1 fallback times: "host:port" -> timestamp
+        #! Last HTTP/1.1 fallback times: "host:port" -> time on the monotonic clock in microseconds
         /** Written by @ref cacheProtocol() whenever \c "h1" is cached; read by
             @ref resolveProtocol() to re-run the happy-eyeballs race after
             @ref H1_REPROBE_INTERVAL.
         */
-        hash<string, date> h1_probe_times;
+        hash<string, int> h1_probe_times;
 
         #! Pending Alt-Svc discoveries from async callbacks
         /** Thread-safe unlimited Queue: the I/O thread pushes {url, alt_svc}
@@ -1239,19 +1240,21 @@ HttpClientResponseStream stream = mgr.openStream("https://example.com/file.iso",
             list<binary> pending = ();
             bool ended = False;
             *hash<auto> resp;
-            date sent = now_us();
-            *date header_deadline = wait > 0 ? sent + milliseconds(wait) : NOTHING;
+            # on the monotonic clock, so that a change of the system clock does not end the wait early or late
+            int sent = clock_get_monotonic_us();
+            *int header_deadline = wait > 0 ? sent + wait * 1000 : NOTHING;
             while (!(resp = sh.getResponse()).status_code) {
                 *timeout slice;
                 if (header_deadline) {
-                    slice = (header_deadline - now_us()).durationMilliseconds();
+                    int left_us = header_deadline - clock_get_monotonic_us();
+                    slice = left_us > 0 ? (left_us + 999) / 1000 : 0;
                     if (slice <= 0) {
                         throw "HTTPCLIENT-TIMEOUT", sprintf("no response received from %y within %d ms",
                             rf.getRequestUrl(), wait);
                     }
                 }
                 if (opts.io_timeout > 0) {
-                    int io_ms = opts.io_timeout - sh.getInactiveTime(sent) / 1000;
+                    int io_ms = opts.io_timeout - sh.getInactiveTimeSince(sent) / 1000;
                     if (io_ms <= 0) {
                         throw "HTTPCLIENT-TIMEOUT", sprintf("no data received from %y for %d ms (io_timeout)",
                             rf.getRequestUrl(), opts.io_timeout);
@@ -2251,7 +2254,8 @@ printf("%d connection(s) migrated\n", migrated);
                 # full race so a server that has since enabled ALPN (or a
                 # now-reachable QUIC path) is rediscovered.
                 if (h1_probe_times.hasKey(key)
-                        && (now_us() - h1_probe_times{key}) < H1_REPROBE_INTERVAL) {
+                        && (clock_get_monotonic_us() - h1_probe_times{key})
+                            < H1_REPROBE_INTERVAL.durationMicroseconds()) {
                     return "h1";
                 }
                 log(LoggerLevel::DEBUG, "re-probing HTTP/3 + HTTP/2 for %s after the HTTP/1.1 "
@@ -2269,9 +2273,10 @@ printf("%d connection(s) migrated\n", migrated);
             # Cached as "h2" after a race or H3 fallback — re-probe both protocols
             # after H3_REPROBE_INTERVAL without delaying TCP behind a QUIC timeout
             if (canUseHttp3() && h3_probe_times.hasKey(key)) {
-                date elapsed = now_us() - h3_probe_times{key};
-                if (elapsed >= H3_REPROBE_INTERVAL) {
-                    log(LoggerLevel::DEBUG, "re-probing HTTP/3 + HTTP/2 for %s after %y elapsed", key, elapsed);
+                int elapsed_us = clock_get_monotonic_us() - h3_probe_times{key};
+                if (elapsed_us >= H3_REPROBE_INTERVAL.durationMicroseconds()) {
+                    log(LoggerLevel::DEBUG, "re-probing HTTP/3 + HTTP/2 for %s after %y elapsed", key,
+                        microseconds(elapsed_us));
                     return "happy-eyeballs";
                 }
             }
@@ -2650,7 +2655,7 @@ printf("%d connection(s) migrated\n", migrated);
     */
     private hash<auto> prepareH3Probe(hash<auto> url_info, string key) {
         AutoWriteLock al(pool_lock);
-        h3_probe_times{key} = now_us();
+        h3_probe_times{key} = clock_get_monotonic_us();
         if (alt_svc_port_map.hasKey(key)) {
             url_info.port = alt_svc_port_map{key};
         }
@@ -2670,7 +2675,7 @@ printf("%d connection(s) migrated\n", migrated);
         @return the address families to avoid, or @ref NOTHING if there are none
     */
     private *list<int> getH3AvoidedFamilies(string key) {
-        date now = now_us();
+        int now = clock_get_monotonic_us();
         AutoWriteLock al(pool_lock);
         # A connection is closed, and the request waiting for it woken, before its failure is processed by
         # handleConnectionResult(), which records the family and only then removes the connection from the pool; a
@@ -2699,7 +2704,7 @@ printf("%d connection(s) migrated\n", migrated);
     */
     private recordH3FamilyFailure(string key, HttpClientConnection conn, *string err) {
         AutoWriteLock al(pool_lock);
-        recordH3FamilyFailureLocked(key, conn, err, now_us());
+        recordH3FamilyFailureLocked(key, conn, err, clock_get_monotonic_us());
     }
 
     #! Internal: records that an HTTP/3 connection failed without reaching a server; @ref pool_lock must be held
@@ -2709,9 +2714,9 @@ printf("%d connection(s) migrated\n", migrated);
         @param key the origin pool key
         @param conn the connection
         @param err the error code of the failure
-        @param now the current time
+        @param now the current time on the monotonic clock in microseconds
     */
-    private recordH3FamilyFailureLocked(string key, HttpClientConnection conn, *string err, date now) {
+    private recordH3FamilyFailureLocked(string key, HttpClientConnection conn, *string err, int now) {
         if (conn.getProtocol() != "h3" || !H3UnreachedErrors{err}) {
             return;
         }
@@ -2727,7 +2732,7 @@ printf("%d connection(s) migrated\n", migrated);
         }
         log(LoggerLevel::DEBUG, "%s: HTTP/3 connection %d in address family %d failed without reaching a server "
             "(%s); trying another family for new connections", key, conn.getConnectionId(), family, err);
-        h3_failed_families{key}{family} = now + H3FamilyFailureTtl;
+        h3_failed_families{key}{family} = now + H3FamilyFailureTtl.durationMicroseconds();
     }
 
     #! Internal: creates a connection for an explicitly selected or cached protocol
@@ -5050,7 +5055,7 @@ printf("%d connection(s) migrated\n", migrated);
             if (!pool.hasKey(key)) {
                 return;
             }
-            date now = now_us();
+            int now = clock_get_monotonic_us();
             list<HttpClientConnection> live = ();
             foreach HttpClientConnection conn in (pool{key}) {
                 # Evict only definitively unavailable connections — not those
@@ -5094,7 +5099,7 @@ printf("%d connection(s) migrated\n", migrated);
         if (protocol == "h1") {
             # stamp the fallback so resolveProtocol() can re-probe H3 + H2 after
             # H1_REPROBE_INTERVAL instead of pinning the host to HTTP/1.1 forever
-            h1_probe_times{key} = now_us();
+            h1_probe_times{key} = clock_get_monotonic_us();
         } else {
             remove h1_probe_times{key};
         }

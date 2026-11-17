@@ -1107,6 +1107,16 @@ enum class QoreIROpcode : uint16_t {
     */
     HandlerReturn = 438,
 
+    //! Sets the parse options that the top-level code runs with from here on (qore#6293)
+    /** Operands: the options as four 32-bit words, from the lowest (ConstInt).  The lowering of top-level code emits it at
+        the start of the code and before each statement whose options differ from those of the statement before it
+        (other than in options that only the parser reads), when the statements do not all have the same options, as
+        when files with different options are parsed into one Program: the AST interpreter runs each statement with
+        its own options.  The options are those of the thread (its runtime parse options) and of its RuntimeConfig,
+        which the caller of the top-level code saves and restores; see qore_rt_set_code_parse_options().
+    */
+    SetCodeParseOptions = 439,
+
     // NOTE: When adding new opcodes, assign the next sequential ID (439, 440, ...)
     // QORE_IR_MAX_OPCODE is derived automatically from the last enum value below.
 };
@@ -1116,8 +1126,8 @@ enum class QoreIROpcode : uint16_t {
 //! static_assert guards that will break when this value changes, forcing
 //! review of their dispatch switches.
 constexpr uint16_t QORE_IR_MAX_OPCODE
-    = static_cast<uint16_t>(QoreIROpcode::HandlerReturn);
-static_assert(QORE_IR_MAX_OPCODE == 438, "QORE_IR_MAX_OPCODE changed — update this assertion and "
+    = static_cast<uint16_t>(QoreIROpcode::SetCodeParseOptions);
+static_assert(QORE_IR_MAX_OPCODE == 439, "QORE_IR_MAX_OPCODE changed — update this assertion and "
     "verify binary format compatibility");
 
 //! Returns the Any comparison of a plugin comparison opcode (QoreIROpcode::EqPlugin...GePlugin), or \a op itself

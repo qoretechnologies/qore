@@ -242,6 +242,9 @@ class TestDebugProgramControl inherits DebugProgramControl {
         #! events broadcast to all clients
         Queue events();
 
+        #! the exit events of program runs per program ID that getInterrupt() skipped (#3401)
+        hash<string, list<hash<auto>>> exits = {};
+
         #! the console output of the debugger broadcast to all clients, such as the messages of logpoints
         Queue console();
 
@@ -426,7 +429,16 @@ class TestDebugProgramControl inherits DebugProgramControl {
             if (e.cmd == DebugEventCmd::Interrupt && (!exists pgmId || e.pgmid == pgmId)) {
                 return e;
             }
+            # the end of a program run, which does not stop the thread (#3401)
+            if (e.cmd == DebugEventCmd::Exit) {
+                exits{e.pgmid} += (e,);
+            }
         }
+    }
+
+    #! returns and forgets the exit events of a program's runs that getInterrupt() skipped (#3401)
+    list<hash<auto>> takeExits(int pgmId) {
+        return remove exits{pgmId} ?? ();
     }
 }
 
@@ -471,7 +483,8 @@ class DebuggedProgram {
             # loop, a cancellation point, does not raise it again here (qore#5854)
             *string host_cancel;
             try {
-                foreach int i in (range(2)) {
+                # a loop is a cancellation point; its variable is used
+                for (int i = 0; i < 2; ++i) {
                 }
             } catch (hash<ExceptionInfo> ex2) {
                 host_cancel = ex2.err;
@@ -494,7 +507,8 @@ class DebuggedProgram {
     }
 
     #! runs the program to its end and returns the result of the run
-    /** the debugger stops the thread again when the program ends, at the detach event
+    /** the debugger stops the thread again when the program ends, at the detach event; the end of the program's code
+        before it is reported with an exit event with the result of the run, which does not stop the thread (#3401)
     */
     hash<auto> finish() {
         dpc.go(tid);
@@ -505,6 +519,11 @@ class DebuggedProgram {
         dpc.go(tid);
         hash<auto> rv = done.get(EventTimeout);
         finished = True;
+        list<hash<auto>> exits = dpc.takeExits(pgmId);
+        if (exits.size() != 1 || exits[0].tid != tid || exits[0].result !== rv.rc) {
+            throw "TEST-ERROR", sprintf("expecting one exit event of TID %d with the result %y; got: %y", tid, rv.rc,
+                exits);
+        }
         return rv;
     }
 

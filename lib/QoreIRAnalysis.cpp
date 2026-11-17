@@ -9102,9 +9102,15 @@ public:
         return true;
     }
 
-    //! the state on entry to a block after solve()
+    //! the state on entry to a block after solve(); only meaningful for a block for which hasState() is true
     DLLLOCAL const QoreIRLocalBitSet& getIn(size_t block_id) const {
         return fresh_in[block_id];
+    }
+
+    //! returns true if solve() computed the state of a block: every block that the graph reaches, with or without
+    //! exception edges; a block that never runs keeps the initial state (everything fresh), which is not a fact
+    DLLLOCAL bool hasState(size_t block_id) const {
+        return visited[block_id];
     }
 
 private:
@@ -9751,15 +9757,17 @@ static size_t qore_ir_mark_in_place_string_appends(QoreIRFunction& func,
     }
 
     size_t changed = 0;
-    // the blocks that the graph, which has no exception edges, does not reach are the handlers of try statements and
-    // the blocks that only they reach: nothing is fresh there, so that only their guarded copy-on-write appends are
-    // paired with the local's load and store (issue #6280)
+    // every block is marked: the guarded copy-on-write appends of the handlers of try statements and of the blocks
+    // that only they reach are paired with the local's load and store (issue #6280), and an append there is in place
+    // when the dataflow, which computes the entry state of a handler from the instructions that throw to it, proves
+    // the local fresh (issue #6334); a block whose state it did not compute (one that never runs) starts with nothing
+    // fresh, as its initial state (everything fresh) is no fact
     const FreshLocalSet none_fresh(candidate_index.size(), false);
     for (size_t block_id = 0; block_id < cfg.blocks.size(); ++block_id) {
         if (qore_ir_analysis_cancelled(check_count, "IR in-place string append escape analysis")) {
             return changed;
         }
-        transfer_block(block_id, cfg.reachable[block_id] ? dataflow.getIn(block_id) : none_fresh, true, changed,
+        transfer_block(block_id, dataflow.hasState(block_id) ? dataflow.getIn(block_id) : none_fresh, true, changed,
             nullptr);
         if (cancelled) {
             return changed;
@@ -12174,10 +12182,12 @@ private:
         }
     }
 
-    //! true for an opcode whose result is an element of its first operand (a list's or a hash's), which holds what the
-    //! operand holds
+    //! true for an opcode whose result is an element of its first operand (a list's or a hash's), or its value, which
+    //! holds what the operand holds
     static bool isElementOpcode(QoreIROpcode opcode) {
         switch (opcode) {
+            // the value of an expression lowered as a statement of its own: its operand's (qore#6288)
+            case QoreIROpcode::DiscardTempsKeep:
             case QoreIROpcode::ListGetInt:
             case QoreIROpcode::ListGetValue:
             case QoreIROpcode::ListGetValueNoRef:

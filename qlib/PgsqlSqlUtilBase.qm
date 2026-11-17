@@ -463,6 +463,10 @@ $function$
       column gets the pseudo-type's integer type and a sequence of its own as its default, named as PostgreSQL
       names it (with a number when the name is taken)
       (<a href="https://github.com/qoretechnologies/qore/issues/853">issue 853</a>)
+    - table comments (\c comment \c on \c table) are created, read and aligned
+      (<a href="https://github.com/qoretechnologies/qore/issues/1483">issue 1483</a>)
+    - the views of a schema description are aligned, their queries compared as PostgreSQL keeps them, with their
+      comments (see @ref schema_views) (<a href="https://github.com/qoretechnologies/qore/issues/1427">issue 1427</a>)
 
     @section pgsqlsqlutilbasev18 PgsqlSqlUtilBase v1.8
     - updated to support \c jdbc and \c odbc drivers as well as the native \c pgsql driver
@@ -2378,7 +2382,58 @@ public class PgsqlDatabase inherits SqlUtil::AbstractDatabase {
         if (!row)
             return;
 
-        return new PgsqlView(on.sql_name, row.definition, row.schemaname, row.viewowner);
+        PgsqlView v(on.sql_name, row.definition, row.schemaname, row.viewowner);
+        # issue #1427: the comment of the view
+        v.comment = ds.selectRow("select pg_catalog.obj_description(c.oid, 'pg_class') as c from pg_catalog.pg_class c "
+            "join pg_catalog.pg_namespace n on n.oid = c.relnamespace where n.nspname = %v and c.relname = %v",
+            row.schemaname, on.name).c;
+        return v;
+    }
+
+    #! Returns a view object for a view of a schema description
+    private AbstractView makeViewImpl(string name, string src) {
+        return new PgsqlView(name, src);
+    }
+
+    #! Returns @ref True: PostgreSQL has view comments
+    /** @since PgsqlSqlUtilBase 1.19
+    */
+    bool supportsViewComments() {
+        return True;
+    }
+
+    #! Returns the SQL that sets or removes the comment of a view
+    private softlist<string> getViewCommentSqlImpl(AbstractView view, *string comment, *string old_comment) {
+        return sprintf("comment on view %s is %s", pgsql_get_sql_object_name(view.name),
+            comment.val() ? pgsql_get_string_literal(comment) : "null");
+    }
+
+    #! Compares the query of a view with the query of a view of a schema description as PostgreSQL normalizes them
+    /** PostgreSQL keeps the query of a view in a form of its own (ex: with qualified column names and casts), which
+        it gives for the query of the view of the description as well, made as a temporary view in a savepoint that
+        is rolled back
+    */
+    private bool viewSourceEqualImpl(AbstractView live, AbstractView tmpl) {
+        string live_src = AbstractDatabase::normalizeViewSource(live.src);
+        if (live_src == AbstractDatabase::normalizeViewSource(tmpl.src)) {
+            return True;
+        }
+        return live_src == AbstractDatabase::normalizeViewSource(getServerViewSource(tmpl.src));
+    }
+
+    #! Returns the query of a view as PostgreSQL keeps it, from a temporary view made in a savepoint that is rolled back
+    private string getServerViewSource(string src) {
+        bool in_trans = ds.currentThreadInTransaction();
+        ds.exec("savepoint " + PGSQL_TempSavepoint);
+        on_exit {
+            ds.exec("rollback to savepoint " + PGSQL_TempSavepoint);
+            # a transaction that the savepoint started is ended
+            if (!in_trans) {
+                ds.rollback();
+            }
+        }
+        ds.execRaw("create temporary view qore_view_probe as " + src);
+        return ds.selectRow("select pg_catalog.pg_get_viewdef('qore_view_probe'::regclass) as d").d;
     }
 
     private PgsqlFunction makeFunctionImpl(string name, string src, *hash opts) {
@@ -5632,6 +5687,23 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
             return " on commit drop";
         }
         return "";
+    }
+
+    #! Returns @ref True: PostgreSQL has table comments
+    /** @since PgsqlSqlUtilBase 1.19
+    */
+    bool supportsTableComments() {
+        return True;
+    }
+
+    #! Reads the comment of the table
+    private *string getCommentImpl() {
+        return ds.selectRow("select pg_catalog.obj_description(%v::regclass, 'pg_class') as c", getSqlName()).c;
+    }
+
+    #! Returns the SQL that sets or removes the comment of the table
+    private softlist<string> getTableCommentSqlImpl(*string comment) {
+        return sprintf("comment on table %s is %s", getSqlName(), comment.val() ? getSqlValueImpl(comment) : "null");
     }
 
     private *list getCreateMiscSqlImpl(*hash opt, bool cache) {
