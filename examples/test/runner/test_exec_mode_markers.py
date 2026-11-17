@@ -181,6 +181,8 @@ class ExecModeMarkerTest(unittest.TestCase):
         # - nested-callable-types (#6022): its script runs in child processes that set their own --exec-mode, and
         #   compiled with qcc
         # - JitTeardownAtExit-<n> (#6390): JitTeardownAtExit.qr runs in child processes that set their own --exec-mode
+        # - index-writer-filesystem (#6500): each execution mode runs in a child process of its own, which loads the
+        #   modules once
         # - qlib-module-domains: each module is loaded first by a restricted Program in a child process, as a loaded
         #   module is not checked again for the next Program (#5803)
         # - qlib-all-modules-load: each qlib module is loaded by a restricted Program in a child process of its own, as
@@ -347,6 +349,7 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/ir/jit-teardown-at-exit/JitTeardownAtExit-3.qtest",
                                  "examples/test/qore/functions/user-functional-domains/nested-module-parse.qtest",
                                  "examples/test/qore/functions/user-functional-domains/qlib-module-domains.qtest",
+                                 "examples/test/qore/functions/user-functional-domains/index-writer-filesystem.qtest",
                                  "examples/test/qore/functions/user-functional-domains/qlib-all-modules-load.qtest",
                                  "examples/test/qlib/HttpClientIo/ConnectionManagerTeardown.qtest",
                                  "examples/test/qlib/RestSchemaActions/RestSchemaModuleLazyTypes-1.qtest",

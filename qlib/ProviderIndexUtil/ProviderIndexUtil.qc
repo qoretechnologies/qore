@@ -1870,7 +1870,7 @@ list<hash<auto>> actions = map ProviderIndexUtil::tryGetActionMetadata($1.app, $
 
         @return @ref True if the module was loaded, @ref False if it was not
     */
-    static bool tryLoadModule(string mod) [dom=PROCESS_CONTROL] {
+    static bool tryLoadModule(string mod) [dom=PROCESS_CONTROL,FILESYSTEM] {
         # check local cache first to avoid acquiring the global module lock
         if (loaded_module_cache{mod}) {
             return True;
@@ -2684,7 +2684,7 @@ list<hash<auto>> actions = map ProviderIndexUtil::tryGetActionMetadata($1.app, $
         @see writeDataProviderIndexByApp()
     */
     static hash<ProviderIndexInfo> writeDataProviderIndex(*hash<DataProviderIndexInfo> h, date delta,
-            hash<auto> summary, *bool write_canonical_yaml) {
+            hash<auto> summary, *bool write_canonical_yaml) [dom=PROCESS_CONTROL,FILESYSTEM] {
         *hash<string, hash<string, hash<auto>>> actioninfomap = h.actioninfomap;
         hash<auto> maps = h ? (h - ("actioninfomap", "top_actioninfomap")) : {};
         return writeDataProviderIndexByApp(maps, keys actioninfomap, *hash<string, hash<auto>> sub (string app) {
@@ -2739,7 +2739,8 @@ hash<ProviderIndexInfo> info = ProviderIndexUtil::writeDataProviderIndexByApp(ma
         @since ProviderIndexUtil 1.2
     */
     static hash<ProviderIndexInfo> writeDataProviderIndexByApp(hash<auto> maps0, *list<string> action_apps,
-            code get_app_actions, date delta, hash<auto> summary, *bool write_canonical_yaml) {
+            code get_app_actions, date delta, hash<auto> summary, *bool write_canonical_yaml)
+            [dom=PROCESS_CONTROL,FILESYSTEM] {
         # a caller's literal may be narrowed (e.g. hash<string, hash<string, string>>), and adding the altmap member
         # would throw
         hash<auto!> maps = maps0;
@@ -3400,7 +3401,7 @@ if (info) {
         @since ProviderIndexUtil 1.2
     */
     static *hash<SerializedDataProviderIndexInfo> readSerializedDataProviderIndex(string dir,
-            *code<nothing(string, *hash<auto>, *hash<auto>)> per_app) {
+            *code<nothing(string, *hash<auto>, *hash<auto>)> per_app) [dom=FILESYSTEM] {
         return readSerializedIndexIntern(dir, True, per_app);
     }
 
@@ -3415,7 +3416,7 @@ if (info) {
 
         @since ProviderIndexUtil 1.2
     */
-    static *hash<SerializedDataProviderIndexInfo> getSerializedDataProviderIndexSource(string dir) {
+    static *hash<SerializedDataProviderIndexInfo> getSerializedDataProviderIndexSource(string dir) [dom=FILESYSTEM] {
         return readSerializedIndexIntern(dir, False);
     }
 
@@ -3454,7 +3455,7 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
 
         @since ProviderIndexUtil 1.2
     */
-    static *string dumpIndexYaml(*string dir, *string app, *string output_path) {
+    static *string dumpIndexYaml(*string dir, *string app, *string output_path) [dom=FILESYSTEM] {
 %ifdef NoMsgPack
         throw "PROVIDER-INDEX-ERROR", "MessagePack support is not available; cannot read the data provider metadata";
 %else
@@ -4783,7 +4784,7 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
     }
 
     #! Sets the environment variable
-    static setEnvironmentVariable(string dir) [dom=PROCESS_CONTROL] {
+    static setEnvironmentVariable(string dir) [dom=PROCESS_CONTROL,FILESYSTEM] {
         setenv(ProviderIndexEnvVar, dir);
         ENV{ProviderIndexEnvVar} = dir;
     }
