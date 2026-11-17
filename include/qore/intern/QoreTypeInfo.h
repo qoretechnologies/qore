@@ -150,12 +150,13 @@ public:
         return accept_vec.size() == 1;
     }
 
-    //! returns true if this is a union with a member whose type is the value's own scalar or enum type
+    //! returns true if this is a union with a member whose type is the value's own type
     /** A member that comes before it could accept the value by converting it; the union accepts it as it is, whatever
-        the order of its members (qore#6407).  Called only before a conversion, so plain types pay nothing for it.
+        the order of its members (qore#6407).  Called only before a conversion, so plain types pay nothing for it, and
+        a union whose members have no exact type for the value's base type pays only a mask test.
     */
     DLLLOCAL bool unionAcceptsExactly(const QoreValue& n) const {
-        return union_type && unionAcceptsExactlyImpl(n);
+        return union_exact_mask && unionAcceptsExactlyImpl(n);
     }
 
     DLLLOCAL bool acceptsRuntimeValueWithoutFilter(const QoreValue& n) const {
@@ -1269,8 +1270,8 @@ protected:
         qore_get_type_identity_serial()
     */
     uint64_t identity_serial = 0;
-    //! true for a union type, which accepts a value of one of its member types as it is (qore#6407)
-    bool union_type = false;
+    //! for a union type, the base value types (bit n for type n < 64) that one of its members has exactly (qore#6407)
+    uint64_t union_exact_mask = 0;
 
     DLLLOCAL bool unionAcceptsExactlyImpl(const QoreValue& n) const;
 
@@ -4482,8 +4483,11 @@ public:
             const QoreString& name, type_vec_t members, bool or_nothing = false)
             : QoreTypeInfo(std::move(a_vec), std::move(r_vec), name), orNothing(or_nothing),
             members(std::move(members)) {
-        union_type = true;
+        initExactMembers();
     }
+
+    //! returns true if a member of the union has the value's own type (see unionAcceptsExactly())
+    DLLLOCAL bool hasExactMember(const QoreValue& n) const;
 
     //! Returns true if this is an or-nothing union type
     DLLLOCAL bool isOrNothing() const {
@@ -4502,6 +4506,10 @@ protected:
     bool orNothing;  //!< true if this union type accepts NOTHING
     //! the member types as declared, without duplicates
     const type_vec_t members;
+    //! the value types of the members (without NOTHING), which a value of one of them is accepted as (qore#6407)
+    type_vec_t exact_members;
+
+    DLLLOCAL void initExactMembers();
 
     DLLLOCAL virtual void getThisTypeImpl(QoreString& str) const {
         qore_string_private::get(str)->concat(&tname);

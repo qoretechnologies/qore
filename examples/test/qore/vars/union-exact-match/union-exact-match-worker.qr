@@ -9,6 +9,7 @@
 */
 
 %modern
+%requires UnionExactModule
 
 enum EI : int {
     One = 1,
@@ -58,6 +59,11 @@ auto sub param_fi(union<float, int> v) {
 }
 
 auto sub param_nf(union<number, float> v) {
+    return v;
+}
+
+auto sub param_plus(union<float, int> v) {
+    v += 0.5;
     return v;
 }
 
@@ -134,6 +140,67 @@ sub run(EI e, int i, float f, string s, B o) {
         show("var-softstring-int", c);
         union<int, softstring> d = i;
         show("var-int-softstring", d);
+    }
+
+    # an enum of a module, which the script holds a copy of
+    {
+        union<int, MI> a = MI::Two;
+        show("module-enum-var-int-enum", a);
+        show("module-return-int-enum", mod_ret_ie(MI::Two));
+        show("module-return-enum-int", mod_ret_ei(MI::Two));
+        show("module-param-int-enum", mod_param_ie(MI::Two));
+        show("module-local-int-enum", mod_local_ie());
+        hash<MH> mh = <MH>{"ie": MI::Two, "ei": MI::Two};
+        show("module-hashdecl-int-enum", mh.ie);
+        show("module-hashdecl-enum-int", mh.ei);
+    }
+
+    # dates and containers
+    {
+        date d = 2026-01-01;
+        union<softstring, date> a = d;
+        show("var-softstring-date", a);
+        union<softint, date> b = d;
+        show("var-softint-date", b);
+        hash<auto> h = {"a": 1};
+        union<softlist<auto>, hash<auto>> c = h;
+        show("var-softlist-hash", c);
+        list<int> li = (1, 2);
+        union<list<float>, list<int>> l = li;
+        show("var-list-float-list-int", l);
+        union<list<float>, list<number>> ln = li;
+        show("var-list-float-list-number", ln);
+    }
+
+    # casts to unions
+    {
+        show("cast-float-int-int", cast<union<float, int>>(i));
+        show("cast-int-float-float", cast<union<int, float>>(f));
+        show("cast-int-enum-enum", cast<union<int, EI>>(e));
+        show("cast-float-string-int", cast<union<float, string>>(i));
+    }
+
+    # arithmetic on union lvalues
+    {
+        union<float, int> a = 1;
+        a += 0.5;
+        show("plus-equals-float", a);
+        union<float, int> b = 1;
+        b -= 0.5;
+        show("minus-equals-float", b);
+        union<number, int> c = 1;
+        c += 0.5n;
+        show("plus-equals-number", c);
+        union<float, int> d = 1;
+        d += 1;
+        show("plus-equals-int", d);
+        union<float, int> m = 1;
+        m *= 0.5;
+        show("multiply-equals-float", m);
+        union<float, int> v = 1;
+        v++;
+        show("increment-int", v);
+        show("param-plus-equals-float", param_plus(1));
     }
 
     # objects are accepted as they are by a base class or their own class

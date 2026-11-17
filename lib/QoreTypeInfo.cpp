@@ -3904,32 +3904,51 @@ const QoreComplexCodeTypeInfo* QoreTypeInfo::getComplexCodeType(const QoreTypeIn
 }
 
 bool QoreTypeInfo::unionAcceptsExactlyImpl(const QoreValue& n) const {
-    for (const QoreAcceptSpec& t : accept_vec) {
-        if (!t.map && t.spec.isExactScalarValueType(n)) {
+    qore_type_t t = n.getType();
+    if (t < 0 || t >= 64 || !(union_exact_mask & (1ull << t))) {
+        return false;
+    }
+    // only a union sets the mask
+    return static_cast<const QoreUnionTypeInfo*>(this)->hasExactMember(n);
+}
+
+void QoreUnionTypeInfo::initExactMembers() {
+    for (const QoreTypeInfo* m : members) {
+        const QoreTypeInfo* vt = get_value_type(m);
+        if (!hasType(vt) || vt == autoTypeInfo || vt == autoNoNarrowTypeInfo || vt == anyTypeInfo
+                || vt->return_vec.size() != 1) {
+            continue;
+        }
+        qore_type_t t = vt->return_vec[0].spec.getType();
+        if (t < 0 || t >= 64) {
+            continue;
+        }
+        exact_members.push_back(vt);
+        union_exact_mask |= (1ull << t);
+    }
+}
+
+bool QoreUnionTypeInfo::hasExactMember(const QoreValue& n) const {
+    if (n.isEnum()) {
+        // an enum value has the type of its enum, or of an equal copy of it, which a Program that imports a module
+        // holds (as QoreTypeSpec::acceptInput() accepts it)
+        const QoreEnumDecl* ed = n.getEnumMember()->getEnumDecl();
+        for (const QoreTypeInfo* m : exact_members) {
+            const QoreEnumDecl* med = m->return_vec[0].spec.getEnum();
+            if (med && (med == ed
+                    || qore_enum_decl_private::get(*med)->parseEqual(*qore_enum_decl_private::get(*ed)))) {
+                return true;
+            }
+        }
+        return false;
+    }
+    const QoreTypeInfo* vt = n.getFullTypeInfo();
+    for (const QoreTypeInfo* m : exact_members) {
+        if (m == vt) {
             return true;
         }
     }
     return false;
-}
-
-bool QoreTypeSpec::isExactScalarValueType(const QoreValue& n) const {
-    if (typespec == QTS_ENUM) {
-        return n.isEnum() && n.getEnumMember()->getEnumDecl() == u.ed;
-    }
-    if (typespec != QTS_TYPE || n.isEnum()) {
-        return false;
-    }
-    switch (u.t) {
-        case NT_INT:
-        case NT_FLOAT:
-        case NT_NUMBER:
-        case NT_STRING:
-        case NT_BOOLEAN:
-        case NT_BINARY:
-            return n.getType() == u.t;
-        default:
-            return false;
-    }
 }
 
 const QoreUnionTypeInfo* QoreTypeInfo::getUnionType(const QoreTypeInfo* ti) {
@@ -4976,6 +4995,10 @@ bool QoreTypeSpec::acceptInputImpl(ExceptionSink* xsink, const QoreTypeInfo& typ
                     ok = true;
                     break;
                 }
+                // a union with a member of the hash's own type keeps it as it is (qore#6407)
+                if (typeInfo.unionAcceptsExactly(n)) {
+                    return true;
+                }
                 QoreHashNode* h = n.get<QoreHashNode>();
                 bool err = false;
                 ok = acceptInputComplexHashImpl(xsink, typeInfo, arg_type, obj, param_num, param_name, n, lvhelper, h,
@@ -5004,6 +5027,10 @@ bool QoreTypeSpec::acceptInputImpl(ExceptionSink* xsink, const QoreTypeInfo& typ
                 if (is_auto_vti(u.ti)) {
                     ok = true;
                     break;
+                }
+                // a union with a member of the list's own type keeps it as it is (qore#6407)
+                if (typeInfo.unionAcceptsExactly(n)) {
+                    return true;
                 }
                 QoreListNode* l = n.get<QoreListNode>();
                 bool err = false;

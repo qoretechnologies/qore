@@ -125,12 +125,6 @@ public:
         return typespec == QTS_TYPE && u.t == t;
     }
 
-    //! returns true if the value has this scalar type or enum type itself, so that accepting it changes nothing
-    /** A union accepts such a value as the value of this member, before trying the members in their order, which
-        could convert it (qore#6407)
-    */
-    DLLLOCAL bool isExactScalarValueType(const QoreValue& n) const;
-
     DLLLOCAL const char* getName() const;
 
     DLLLOCAL const char* getTypeName() const;

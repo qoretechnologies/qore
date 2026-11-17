@@ -16,10 +16,13 @@
 
 #! Tests that a union accepts a value of one of its member types as it is, whatever the order of its members (qore#6407)
 /** A member type that comes before the value's own type could accept the value by converting it (an enum value by
-    its base type, an int by float, a float by number, a string by softint, an int by softstring); the union keeps
-    the value as it is, as a variable, a list or hash element, a hashdecl member, a parameter and a return value.  The
-    checks are in union-exact-match-worker.qr, which is run in each execution mode, on the IR tier and as a program
-    compiled with qcc at -O0 and -O3; every run must give the results below.
+    its base type, also of an enum of a module, an int by float, a float by number, a string by softint, an int by
+    softstring, a date by softstring, a hash by softlist, a list<int> by list<float>); the union keeps the value as it
+    is, as a variable, a list or hash element, a hashdecl member, a parameter, a return value and the result of a
+    cast, and += and -= give a union lvalue the result of the arithmetic operator.  The checks are in
+    union-exact-match-worker.qr, which is run in each execution mode, on the IR tier and as a program compiled with qcc
+    at -O0 and -O3, with the module UnionExactModule.qm as source and compiled with qcc; every run must give the
+    results below.
 */
 class UnionExactMatchTest inherits QUnit::Test {
     public {
@@ -58,6 +61,29 @@ class UnionExactMatchTest inherits QUnit::Test {
             "var-string-softint": "string",
             "var-softstring-int": "integer",
             "var-int-softstring": "integer",
+            "module-enum-var-int-enum": "enum<MI>",
+            "module-return-int-enum": "enum<MI>",
+            "module-return-enum-int": "enum<MI>",
+            "module-param-int-enum": "enum<MI>",
+            "module-local-int-enum": "enum<MI>",
+            "module-hashdecl-int-enum": "enum<MI>",
+            "module-hashdecl-enum-int": "enum<MI>",
+            "var-softstring-date": "date",
+            "var-softint-date": "date",
+            "var-softlist-hash": "hash<auto>",
+            "var-list-float-list-int": "list<int>",
+            "var-list-float-list-number": "list<float>",
+            "cast-float-int-int": "integer",
+            "cast-int-float-float": "float",
+            "cast-int-enum-enum": "enum<EI>",
+            "cast-float-string-int": "float",
+            "plus-equals-float": "float",
+            "minus-equals-float": "float",
+            "plus-equals-number": "number",
+            "plus-equals-int": "integer",
+            "multiply-equals-float": "float",
+            "increment-int": "integer",
+            "param-plus-equals-float": "float",
             "var-base-sub": "object<D>",
             "var-sub-base": "object<D>",
         };
@@ -82,34 +108,64 @@ class UnionExactMatchTest inherits QUnit::Test {
         addTestCase("each execution mode", \testExecModes());
         addTestCase("IR tier", \testIrTier());
         addTestCase("compiled program", \testCompiledProgram());
+        addTestCase("module compiled with qcc", \testCompiledModule());
 
         set_return_value(main());
     }
 
     testExecModes() {
-        foreach string mode in (ExecModeHarness::ExecModes) {
-            string out = ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s %s -b --enable-debug --exec-mode=%s %s",
-                libqore_dir, qore_bin, mode, getWorker()));
-            checkWorkerOutput(mode, out);
-        }
+        checkModes("", getEnv(get_script_dir()));
     }
 
     #! every function runs on the IR tier, which the tiered run of ExecModes hardly runs
     testIrTier() {
-        checkWorkerOutput("ir-tier", ExecModeHarness::run_ir_tier(sprintf("LD_LIBRARY_PATH=%s %s -b --enable-debug "
-            "--exec-mode=tiered %s", libqore_dir, qore_bin, getWorker())));
+        checkWorkerOutput("ir-tier", ExecModeHarness::run_ir_tier(sprintf("%s %s -b --enable-debug "
+            "--exec-mode=tiered %s", getEnv(get_script_dir()), qore_bin, getWorker())));
     }
 
     testCompiledProgram() {
         TmpDir tmp("qore-union-exact-match-");
-        foreach int opt in (0, 3) {
-            string label = sprintf("aot -O%d", opt);
-            string exe = tmp.path + DirSep + sprintf("union-exact-match-O%d", opt);
-            string compile_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s -O%d --strip-source -o %s %s 2>&1",
-                libqore_dir, qcc_bin, opt, exe, getWorker()));
-            assertTrue(is_file(exe), label + ": " + compile_out);
-            checkWorkerOutput(label, backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, exe)));
+        checkCompiledProgram("", tmp.path, getEnv(get_script_dir()));
+    }
+
+    #! the module that declares an enum is compiled with qcc, and the script uses its unions in every mode
+    testCompiledModule() {
+        TmpDir tmp("qore-union-exact-match-module-");
+        string qmod = tmp.path + DirSep + "UnionExactModule.qmod";
+        string compile_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s -m -O3 -o %s %s 2>&1", libqore_dir, qcc_bin,
+            qmod, get_script_dir() + DirSep + "UnionExactModule.qm"));
+        assertTrue(is_file(qmod), "qcc -m: " + compile_out);
+        string env = getEnv(tmp.path);
+        checkModes("qmod ", env);
+        checkCompiledProgram("qmod ", tmp.path, env);
+    }
+
+    private checkModes(string prefix, string env) {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            string out = ExecModeHarness::run(sprintf("%s %s -b --enable-debug --exec-mode=%s %s", env, qore_bin,
+                mode, getWorker()));
+            checkWorkerOutput(prefix + mode, out);
         }
+    }
+
+    private checkCompiledProgram(string prefix, string dir, string env) {
+        foreach int opt in (0, 3) {
+            string label = sprintf("%saot -O%d", prefix, opt);
+            string exe = dir + DirSep + sprintf("union-exact-match-O%d", opt);
+            string compile_out = backquote(sprintf("%s %s -O%d --strip-source -o %s %s 2>&1", env, qcc_bin, opt,
+                exe, getWorker()));
+            assertTrue(is_file(exe), label + ": " + compile_out);
+            checkWorkerOutput(label, backquote(sprintf("%s %s 2>&1", env, exe)));
+        }
+    }
+
+    #! returns the environment of a run: the library path, and the module path with the module's directory first
+    private string getEnv(string module_dir) {
+        string module_path = module_dir;
+        if (ENV.QORE_MODULE_DIR) {
+            module_path += ":" + ENV.QORE_MODULE_DIR;
+        }
+        return sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s", libqore_dir, module_path);
     }
 
     private string getWorker() {
