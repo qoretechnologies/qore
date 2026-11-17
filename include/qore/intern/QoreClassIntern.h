@@ -4720,7 +4720,10 @@ public:
     DLLLOCAL QoreValue evalMethodGate(LexicalSemanticPolicy policy, QoreObject* self, const char* nme, const QoreListNode* args, ExceptionSink* xsink) const;
 
     template <bool Lexical>
-    DLLLOCAL QoreValue evalMethodGateImpl(LexicalSemanticPolicy policy, QoreObject* self, const char* nme, const QoreListNode* args, ExceptionSink* xsink) const;
+    //! @param given_args true if @a args is an evaluated list whose reference the call takes over (the caller gives
+    //! it), which then needs no copy
+    DLLLOCAL QoreValue evalMethodGateImpl(LexicalSemanticPolicy policy, QoreObject* self, const char* nme, const QoreListNode* args, ExceptionSink* xsink,
+            bool given_args = false) const;
 
     //! returns a reference to the call reference or closure that the member of the name holds, if any
     /** as a call of a method that the class does not have calls it (qore_class_private::evalMethod())

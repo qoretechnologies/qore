@@ -22,6 +22,12 @@ methodGate, auto member holding no code, not deleted: "auto member gate x(1)"
 methodGate, code member with no value, deleted by an argument: OBJECT-ALREADY-DELETED: cannot call GateCodeMember::x() on an object that has already been deleted
 methodGate, code member with no value, not deleted: "code member gate x(1)"
 methodGate, softint member, deleted by an argument: OBJECT-ALREADY-DELETED: cannot call GateSoftIntMember::methodGate() on an object that has already been deleted
+methodGate, internal member from outside, deleted by an argument: OBJECT-ALREADY-DELETED: cannot call GateInternalMember::methodGate() on an object that has already been deleted
+methodGate, internal member from outside, not deleted: "internal member gate x(1)"
+methodGate, internal member in the class, deleted by an argument: OBJECT-ALREADY-DELETED: cannot call GateInternalMember::x() on an object that has already been deleted
+methodGate, internal member in the class, not deleted: "internal closure 1"
+methodGate, private member from outside, deleted by an argument: OBJECT-ALREADY-DELETED: cannot call GatePrivateMember::x() on an object that has already been deleted
+methodGate, private member from outside, not deleted: "private closure 1"
 pseudo-method, untyped, deleted by an argument: OBJECT-ALREADY-DELETED: cannot call Priv::hasCallableMethod() on an object that has already been deleted
 pseudo-method, typed, deleted by an argument: OBJECT-ALREADY-DELETED: cannot call Priv::hasCallableMethod() on an object that has already been deleted
 pseudo-method, deleted by a closure argument: OBJECT-ALREADY-DELETED: cannot call Priv::hasCallableMethod() on an object that has already been deleted

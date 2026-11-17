@@ -690,7 +690,9 @@ DLLLOCAL void qore_raise_deleted_method_call_after_args(QoreObject* self, const 
     qore_eval_missing_method() chooses it before the arguments are evaluated.  The error is "cannot call
     <class>::<name>()", naming the class of the object, or "cannot call <class>::methodGate()", naming the class of
     methodGate(), for a class with methodGate() that has no pseudo-method of the name and no member of the name whose
-    declared type can hold a call reference; it is raised before the variant of methodGate() is resolved.
+    declared type can hold a call reference and that the call can read (an internal member only from a class context
+    with access to it, as qore_eval_missing_method() reads it); it is raised before the variant of methodGate() is
+    resolved.
 
     The members of a deleted object are gone in the compiled modes, which evaluate the arguments before the call: the
     error is chosen from the declaration of the member, and the AST interpreter raises the same error (also when it

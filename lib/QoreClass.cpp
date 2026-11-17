@@ -5378,13 +5378,18 @@ bool qore_class_private::runtimeIsPrivateMemberIntern(const char* str, bool topl
 }
 
 template <bool Lexical>
-QORE_INTERN_ALWAYS_INLINE QoreValue qore_class_private::evalMethodGateImpl(LexicalSemanticPolicy policy, QoreObject* self, const char* nme, const QoreListNode* args, ExceptionSink* xsink) const {
+QORE_INTERN_ALWAYS_INLINE QoreValue qore_class_private::evalMethodGateImpl(LexicalSemanticPolicy policy, QoreObject* self, const char* nme, const QoreListNode* args, ExceptionSink* xsink,
+        bool given_args) const {
     printd(5, "qore_class_private::evalMethodGate() method: %s args: %p\n", nme, args);
 
     ReferenceHolder<QoreListNode> args_holder(xsink);
 
     // build new argument list
-    if (args) {
+    if (given_args) {
+        // the evaluated list that the caller gave, whose reference is taken over
+        assert(args && args->is_unique());
+        args_holder = const_cast<QoreListNode*>(args);
+    } else if (args) {
         if (args->needs_eval()) {
             args_holder = args->evalList(xsink);
         } else {
@@ -5659,6 +5664,10 @@ static QORE_INTERN_NOINLINE QoreValue qore_eval_missing_method(const qore_class_
         QoreListNodeEvalOptionalRefHolder call_args(xsink);
         if (qore_eval_missing_method_args(self, nme, args, class_ctx, call_args, xsink)) {
             return QoreValue();
+        }
+        if (call_args.needsDeref()) {
+            // the list evaluated for the call is given to methodGate(), which adds its arguments to it
+            return qcp.evalMethodGateImpl<Lexical>(policy, self, nme, call_args.getReferencedValue(), xsink, true);
         }
         return qcp.evalMethodGateImpl<Lexical>(policy, self, nme, *call_args, xsink);
     }
@@ -9052,10 +9061,12 @@ void qore_raise_deleted_missing_method_call_after_args(QoreObject* self, const c
             gate = false;
         } else if (const QoreMemberInfo* mi = qcp->runtimeGetMemberInfo(name, class_ctx)) {
             // the value of the member is gone with the object: a member that can hold a call reference is taken to
-            // be the target
+            // be the target, if the call can read it: qore_eval_missing_method() reads an internal member only from a
+            // class context with access to it (a private member is read from any context, as the call reads it)
             const QoreTypeInfo* mti = mi->getTypeInfo();
-            if (!QoreTypeInfo::hasType(mti) || QoreTypeInfo::parseAcceptsReturns(mti, NT_RUNTIME_CLOSURE)
-                    || QoreTypeInfo::parseAcceptsReturns(mti, NT_FUNCREF)) {
+            if ((mi->access != Internal || mi->getClassContext(class_ctx))
+                    && (!QoreTypeInfo::hasType(mti) || QoreTypeInfo::parseAcceptsReturns(mti, NT_RUNTIME_CLOSURE)
+                        || QoreTypeInfo::parseAcceptsReturns(mti, NT_FUNCREF))) {
                 gate = false;
             }
         }

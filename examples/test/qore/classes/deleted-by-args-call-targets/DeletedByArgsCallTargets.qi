@@ -76,6 +76,40 @@ class GateSoftIntMember {
     }
 }
 
+# a class with methodGate() and an internal member holding a closure: a call from outside the class does not read the
+# member, so it calls methodGate(); a call in the class calls the member's closure
+class GateInternalMember {
+    private:internal {
+        code x = string sub (auto a) { return sprintf("internal closure %y", a); };
+    }
+
+    string methodGate(string name, auto a) {
+        return sprintf("internal member gate %s(%y)", name, a);
+    }
+
+    static auto inside() {
+        object o = new GateInternalMember();
+        object h = o;
+        return o.x(del(\h));
+    }
+
+    static auto insideNotDeleted() {
+        object o = new GateInternalMember();
+        return o.x(1);
+    }
+}
+
+# a class with methodGate() and a private member holding a closure, which a call from outside the class calls
+class GatePrivateMember {
+    private {
+        code x = string sub (auto a) { return sprintf("private closure %y", a); };
+    }
+
+    string methodGate(string name, auto a) {
+        return sprintf("private member gate %s(%y)", name, a);
+    }
+}
+
 string sub member_fn(auto a) {
     return sprintf("function %y", a);
 }
@@ -377,6 +411,28 @@ auto sub gate_softint_member() {
     return o.x(del(\h));
 }
 
+auto sub gate_internal_member_outside() {
+    object o = new GateInternalMember();
+    object h = o;
+    return o.x(del(\h));
+}
+
+auto sub gate_internal_member_outside_not_deleted() {
+    object o = new GateInternalMember();
+    return o.x(1);
+}
+
+auto sub gate_private_member_outside() {
+    object o = new GatePrivateMember();
+    object h = o;
+    return o.x(del(\h));
+}
+
+auto sub gate_private_member_outside_not_deleted() {
+    object o = new GatePrivateMember();
+    return o.x(1);
+}
+
 auto sub pseudo_named() {
     Priv o = new Priv();
     object h = o;
@@ -428,6 +484,12 @@ check("methodGate, auto member holding no code, not deleted", \gate_auto_member_
 check("methodGate, code member with no value, deleted by an argument", \gate_code_member_nothing());
 check("methodGate, code member with no value, not deleted", \gate_code_member_nothing_not_deleted());
 check("methodGate, softint member, deleted by an argument", \gate_softint_member());
+check("methodGate, internal member from outside, deleted by an argument", \gate_internal_member_outside());
+check("methodGate, internal member from outside, not deleted", \gate_internal_member_outside_not_deleted());
+check("methodGate, internal member in the class, deleted by an argument", \GateInternalMember::inside());
+check("methodGate, internal member in the class, not deleted", \GateInternalMember::insideNotDeleted());
+check("methodGate, private member from outside, deleted by an argument", \gate_private_member_outside());
+check("methodGate, private member from outside, not deleted", \gate_private_member_outside_not_deleted());
 
 # pseudo-method of <object>
 check("pseudo-method, untyped, deleted by an argument", \pseudo_untyped());

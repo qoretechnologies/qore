@@ -766,8 +766,8 @@ lock();
     a static method, the class of the method that the call would run and the method; for a call by a name that the
     class has no method of, the class of the object and the name of the call, or \c C::methodGate() for a class with
     a \c methodGate() method that has no pseudo-method of the name and no member of the name whose declared type can
-    hold a call reference (the error is chosen from the declaration of the member, whose value is gone with the
-    object).  A static method called in a method of its class without an object (<tt>s()</tt>) is called whatever its
+    hold a call reference and that the call can read (a \c private:internal member only in its class; the error is
+    chosen from the declaration of the member, whose value is gone with the object).  A static method called in a method of its class without an object (<tt>s()</tt>) is called whatever its
     arguments did to the object.  The behavior is the same in every @ref exec_mode_overview "execution mode", also for
     calls with named arguments.
 
