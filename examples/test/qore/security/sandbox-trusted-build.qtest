@@ -236,6 +236,7 @@ Program sub mk(string src) {
         addTestCase("the memory that a build keeps is charged to no caller, the caller's code that it calls is",
             \memory());
         addTestCase("work that a build hands to the event loop is not a part of the caller's call", \memoryAsync());
+        addTestCase("each sandbox of a composite governs the caller's code in a build", \compositeMemory());
         addTestCase("the memory limit of the Program that created the capability governs the build",
             \creatorMemory());
         set_return_value(main());
@@ -571,6 +572,44 @@ sub release() {
         # within the creator's limit, the state is built
         cs.setMemoryLimit(0);
         assertEq("built", creator.callFunction("call_own", cap, 200000));
+    }
+
+    compositeMemory() {
+        # a closure of a Program that sandboxed code created (keeping the creator's sandbox) and that the host gave a
+        # manager of its own: its code is governed by both sandboxes, and in a build each of their limits applies;
+        # the members of a composite sandbox are ordered by address, so each pair of managers is used in both roles:
+        # one of the two runs enters the Program's own sandbox (no budget yet) before the tenant's (whose budget is
+        # below the build)
+        SandboxManager x();
+        SandboxManager y();
+        foreach list<SandboxManager> roles in ((x, y), (y, x)) {
+            SandboxManager tenant_sm = roles[0];
+            SandboxManager own_sm = roles[1];
+            tenant_sm.setUncontrolledApiPolicy(True);
+            tenant_sm.setMemoryLimit(256 * 1024 * 1024);
+            own_sm.setUncontrolledApiPolicy(True);
+            own_sm.setMemoryLimit(1024 * 1024);
+            Program tenant(PO_MODERN);
+            tenant.setSandboxManager(tenant_sm);
+            # mk() creates a Program from the source given
+            tenant.parse(SandboxedSource, "composite-tenant");
+            Program p = tenant.callFunction("mk", "%modern
+code sub mk() {
+    return int sub () {
+        list<string> l = ();
+        for (int i = 0; i < 200000; ++i) {
+            l += sprintf(\"composite entry %d with some padding to use memory\", i);
+        }
+        return l.size();
+    };
+}
+");
+            p.setSandboxManager(own_sm);
+            code c = tenant.callFunction("call", \p.callFunction(), "mk");
+            # called by the tenant directly, and through a build: the Program's own limit applies
+            assertThrows("SANDBOX-MEMORY-LIMIT", \tenant.callFunction(), ("call", c));
+            assertThrows("SANDBOX-MEMORY-LIMIT", \tenant.callFunction(), ("call", BuildCalling, c));
+        }
     }
 
     memoryAsync() {

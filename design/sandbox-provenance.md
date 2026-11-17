@@ -67,44 +67,50 @@ code that created it no privileges in the Program. A manager that code a sandbox
 (`qore_program_private::own_manager_additive`): the walk visits it and goes on to the callers, as for the kept
 sandbox, because a Program's own manager otherwise governs its code alone and a laxer manager would govern the calling
 code's own calls into the Program; the host's own calls are governed by that manager alone, as before. A manager that
-trusted code that no sandbox governs sets, and one set with the C++ API, governs alone. An expression cannot define code: it is parsed as `return (<expression>);`,
-which code that closes the parenthesis could extend with definitions left pending for the next commit, so a
-definition in an expression is a parse error (`check_expression_definition()` in lib/parser.ypp) and the expression's
-pending code is rolled back (with any pending code that the Program had). Parse directives on a line of their own in
-an expression's code (`%requires`, `%define`) still take effect in the Program: that is not code, and a separate
-issue. The walk's cache of a context with no manager on its chain (`sandboxChainClear()`) is shared by policy and
-other lookups, so a Program with a manager in any slot counts as having one: a Program created in a system-policy
-capability has a kept sandbox but no kept policy manager, and a policy check must not cache "none" for the other
-lookups. Trusted infrastructure that builds shared state lazily for whichever caller needs it first (a Program that every
-caller then uses) would give it the first caller's sandbox; it builds it through a capability made during trusted
-startup with `SandboxManager::createTrustedBuildCall()` (`qore_create_trusted_build_call()`), a
-`SandboxBoundCallReference` in build mode: a call evaluates its arguments in the caller's context, sets a construction
-barrier, the module initialization barrier with a trusted loader (`QoreModuleInitSandboxBarrierHelper(QoreTrustedBuildTag)`,
-`ModuleInitBarrier::build`), then enters the Program that created it and runs the callback (no policy mask, unlike
-`createSystemPolicyCall()`: the barrier hides the caller's policy already). Under the barrier nothing of the caller below
-it is seen: `qore_caller_is_sandboxed()` is false for the caller, so what the callback creates or commits keeps no
-sandbox of the caller, threads that it starts inherit none, and objects that it creates have none of the caller's
-provenance. The current Program is never hidden by a build barrier (`ModuleInitBarrier::build`): it is the Program
-that created the capability, also when its own code called the capability, so that Program's own sandbox governs the
-build. The provenance of the caller's objects and callbacks that the build calls applies above the barrier: a frame
-of the same context as one that the barrier hides is applied again (`QoreSandboxProvenanceHelper::apply()`). The
-time and stack budgets of the caller's call (frames of the thread, not found by the walk) still count the build; the
-caller's interrupt requests do not reach it. The memory that the build's own code allocates is shared state, charged to
-no caller (`QoreTrustedBuildChargeHelper`, `QoreSandboxBudgetStack::suspendCharge()`), but to the sandbox of the Program
-that created the capability: the helper enters that Program's sandboxes above the charge floor, as entering the Program
-does, so that its budgets apply also when its own code called the capability (the Program is current then, and
-entering it again enters nothing): storage keeps the charge it was
-created with, so a charged build would bill the first caller for as long as the state lives, and for its later growth
-by any caller. The caller's code that the build calls stays charged: entering its sandbox, whose budget is below the
-build, pushes a frame that makes that budget's charge current again (`enterBelowBuild()`), combined with a charge
-that the same entry made current already (another constituent of a composite manager), but not with a charge made
-current before the entry (the creator's, which the build entered): the caller's code is charged to the caller only. Work that the build hands to
-another thread captures only the budgets entered in the build (`capture()`), so it is not a part of the caller's call
-either.
+trusted code that no sandbox governs sets, and one set with the C++ API, governs alone.
+
+An expression cannot define code: it is parsed as `return (<expression>);`, which code that closes the parenthesis could
+extend with definitions left pending for the next commit, so a definition in an expression is a parse error
+(`check_expression_definition()` in lib/parser.ypp) and the expression's pending code is rolled back (with any pending
+code that the Program had). Parse directives on a line of their own in an expression's code (`%requires`, `%define`)
+still take effect in the Program: that is not code, and a separate issue. The walk's cache of a context with no manager
+on its chain (`sandboxChainClear()`) is shared by policy and other lookups, so a Program with a manager in any slot
+counts as having one: a Program created in a system-policy capability has a kept sandbox but no kept policy manager, and
+a policy check must not cache "none" for the other lookups.
+
+Trusted infrastructure that builds shared state lazily for whichever caller needs it first (a Program that every caller
+then uses) would give it the first caller's sandbox; it builds it through a capability made during trusted startup with
+`SandboxManager::createTrustedBuildCall()` (`qore_create_trusted_build_call()`), a `SandboxBoundCallReference` in build
+mode. A call evaluates its arguments in the caller's context, sets a construction barrier (the module initialization
+barrier with a trusted loader, `QoreModuleInitSandboxBarrierHelper(QoreTrustedBuildTag)`, `ModuleInitBarrier::build`),
+then enters the Program that created it and runs the callback (no policy mask, unlike `createSystemPolicyCall()`: the
+barrier hides the caller's policy already). Under the barrier nothing of the caller below it is seen:
+`qore_caller_is_sandboxed()` is false for the caller, so what the callback creates or commits keeps no sandbox of the
+caller, threads that it starts inherit none, and objects that it creates have none of the caller's provenance. The
+current Program is never hidden by a build barrier: it is the Program that created the capability, also when its own
+code called the capability, so that Program's own sandbox governs the build. The provenance of the caller's objects and
+callbacks that the build calls applies above the barrier: a frame of the same context as one that the barrier hides is
+applied again (`QoreSandboxProvenanceHelper::apply()`). The time and stack budgets of the caller's call (frames of the
+thread, not found by the walk) still count the build; the caller's interrupt requests do not reach it.
+
+The memory that the build's own code allocates is shared state, charged to no caller (`QoreTrustedBuildChargeHelper`,
+`QoreSandboxBudgetStack::suspendCharge()`): storage keeps the charge it was created with, so a charged build would bill
+the first caller for as long as the state lives, and for its later growth by any caller. It is charged to the sandbox of
+the Program that created the capability: the helper enters that Program's sandboxes above the charge floor, as entering
+the Program does, so that its budgets apply also when its own code called the capability (the Program is current then,
+and entering it again enters nothing). The caller's code that the build calls stays charged to the caller: entering its
+sandbox, whose budget is below the build, pushes a frame that makes that budget's charge current again
+(`enterBelowBuild()`). That charge is combined with a charge that the same entry made current already (a constituent of
+a composite manager ordered before it, whose budget was started in the build), but not with a charge made current before
+the entry (the creator's): the caller's code is charged to its own sandboxes only. Work that the build hands to another
+thread captures only the budgets entered in the build (`capture()`), so it is not a part of the caller's call either.
+
 Creating the capability is refused to code that a sandbox governs or that is sandboxed, and for a callback that has
 provenance, belongs to a sandboxed or deleted Program, or is a bound callback or a capability; a trusted build
-capability cannot be registered with `createSystemPolicyCall()` either. The managers are released with the own manager when the Program is cleared, or when it is
-destroyed without being cleared. The constructor throws `std::bad_alloc` if the creator's sandbox cannot be resolved
+capability cannot be registered with `createSystemPolicyCall()` either.
+
+The managers are released with the own manager when the Program is cleared, or when it is destroyed without being
+cleared. The constructor throws `std::bad_alloc` if the creator's sandbox cannot be resolved
 (no Program is created); the parse entry points raise an out-of-memory exception and do not parse.
 
 The existing nearest-caller rule is otherwise unchanged. Interrupt checks include every contributing manager;
