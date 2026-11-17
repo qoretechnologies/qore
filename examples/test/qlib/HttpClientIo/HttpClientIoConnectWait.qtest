@@ -1,0 +1,247 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - TCP connections completed into the backlog of a listener that never accepts, TLS connect waits
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    Tests for the waits of HttpClientIo requests for connections that are not ready
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Logger
+%requires HttpClientIo
+
+%exec-class HttpClientIoConnectWaitTest
+
+#! Captures the log messages of a connection manager and signals the first one that matches a pattern
+class ConnectWaitLog inherits Logger {
+    private {
+        list<string> messages();
+        Mutex m();
+        #! the pattern of the message to signal
+        *string signal_pattern;
+        #! decremented once, when a message matches the pattern
+        Counter signal(0);
+    }
+
+    #! Sets the pattern of the message to signal; the counter is decremented when such a message is logged
+    Counter signalOn(string pattern) {
+        AutoLock al(m);
+        signal_pattern = pattern;
+        signal = new Counter(1);
+        return signal;
+    }
+
+    constructor() : Logger("connect-wait", LoggerLevel::getLevelDebug()) {
+    }
+
+    log(int level, string message, ...) {
+        string formatted = argv ? vsprintf(message, argv) : message;
+        AutoLock al(m);
+        push messages, formatted;
+        if (signal_pattern && regex(formatted, signal_pattern)) {
+            remove signal_pattern;
+            signal.dec();
+        }
+    }
+
+    #! Returns the messages that match the given pattern
+    list<string> getMatching(string pattern) {
+        AutoLock al(m);
+        return select messages, regex($1, pattern);
+    }
+}
+
+#! A TCP listener that never accepts: the kernel completes the TCP handshake into its backlog, TLS never starts
+class SilentListener {
+    private {
+        Socket sock();
+    }
+
+    constructor() {
+        sock.bind("127.0.0.1:0");
+        sock.listen();
+    }
+
+    string getUrl() {
+        return sprintf("https://127.0.0.1:%d", sock.getSocketInfo().port);
+    }
+
+    close() {
+        sock.close();
+    }
+}
+
+class HttpClientIoConnectWaitTest inherits QUnit::Test {
+    constructor() : Test("HttpClientIoConnectWaitTest", "1.0") {
+        addTestCase("a request whose wait expires leaves a shared pending connection to the other requests",
+            \testSharedPendingConnection());
+        addTestCase("a manager request is not failed by another request's expired wait",
+            \testSharedPendingConnectionManager());
+        set_return_value(main());
+    }
+
+    #! Two stream handles of one pending connection: the one whose time runs out does not end the other ones (#6430)
+    /** Three streams are reserved on one HTTP/2 connection that never becomes ready.  The first one's request times
+        out; the connection must keep connecting for the other two: the second one's request ends with its own
+        timeout, and a request waiting in a background thread is ended only by an explicit close of the connection,
+        with a connection error that names the close.  Before the fix, the first timeout closed the connection, and the
+        other requests failed at once with \c HTTPCLIENT-CONNECT-ERROR "connection closed: UNKNOWN: unknown".
+    */
+    testSharedPendingConnection() {
+        SilentListener listener();
+        on_exit listener.close();
+        string url = listener.getUrl();
+
+        HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{
+            "protocol": "h2",
+            "connect_timeout": 60s,
+            "request_timeout": 60s,
+        });
+        on_exit mgr.closeAll();
+
+        # all reservations are taken on this thread before any wait starts
+        HttpClientStreamHandle s1 = mgr.acquireStream(url);
+        HttpClientStreamHandle s2 = mgr.acquireStream(url);
+        HttpClientStreamHandle s3 = mgr.acquireStream(url);
+        HttpClientConnection conn = s1.getConnection();
+        assertTrue(conn == s2.getConnection() && conn == s3.getConnection(), "one pending connection");
+        assertFalse(conn.isReady(), "the connection is not ready");
+        assertEq(3, conn.getPendingStreamCount(), "three reservations");
+
+        # a request with the time of the whole test waits in the background; it is ended by the close below
+        Counter done(1);
+        *hash<ExceptionInfo> s3_err;
+        bool s3_ok = False;
+        background sub () {
+            on_exit done.dec();
+            try {
+                s3.request("GET", "/", NOTHING, NOTHING, 60s);
+                s3_ok = True;
+            } catch (hash<ExceptionInfo> ex) {
+                s3_err = ex;
+            }
+        }();
+        # the background request is ended in any case, also when an assertion below fails
+        on_exit {
+            conn.close();
+            done.waitForZero(60s);
+        }
+
+        *hash<ExceptionInfo> err = getError(sub () { s1.request("GET", "/", NOTHING, NOTHING, 500ms); });
+        assertEq("HTTPCLIENT-TIMEOUT", err.err, "s1 times out; got " + describe(err));
+        # deterministic: the expired request returned, and the connection is still connecting for the other ones
+        assertFalse(conn.isClosed(), "the connection is not closed by s1's timeout");
+        assertEq(HttpClientConnectionState::Connecting, conn.getConnectionState(), "the connection is connecting");
+        assertEq(2, conn.getPendingStreamCount(), "s1's reservation is released");
+
+        # the second request ends with its own timeout, not with an error of the connection
+        err = getError(sub () { s2.request("GET", "/", NOTHING, NOTHING, 500ms); });
+        assertEq("HTTPCLIENT-TIMEOUT", err.err, "s2 times out; got " + describe(err));
+        assertFalse(conn.isClosed(), "the connection is not closed by s2's timeout");
+        assertEq(1, conn.getPendingStreamCount(), "s2's reservation is released");
+        assertEq(1, done.getCount(), "the background request is still waiting");
+
+        # a close of the connection ends the last request with an error that names the close
+        conn.close();
+        assertEq(0, done.waitForZero(60s), "the background request ends");
+        assertFalse(s3_ok, "the background request does not succeed");
+        assertEq("HTTPCLIENT-CONNECT-ERROR", s3_err.err, "s3: connection error; got " + describe(s3_err));
+        assertFalse((s3_err.desc ?? "") =~ /UNKNOWN/, "s3: the error describes the close; got " + describe(s3_err));
+    }
+
+    #! A manager request waiting on a shared pending connection is not failed by another request's timeout (#6430)
+    /** A stream handle reserves a pending HTTP/2 connection, and a manager request in a background thread reuses
+        it (signaled by the manager's log message for the reuse).  The stream handle's request times out; the
+        connection must not be closed under the manager request, which keeps waiting and is not retried for a
+        connection error until the manager is closed.  Before the fix, the close failed the manager request with
+        \c HTTPCLIENT-CONNECT-ERROR, which it retried on a new connection.
+    */
+    testSharedPendingConnectionManager() {
+        SilentListener listener();
+        on_exit listener.close();
+        string url = listener.getUrl();
+
+        ConnectWaitLog log();
+        HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{
+            "protocol": "h2",
+            "connect_timeout": 60s,
+            "request_timeout": 60s,
+            "logger": log,
+        });
+
+        HttpClientStreamHandle s1 = mgr.acquireStream(url);
+        HttpClientConnection conn = s1.getConnection();
+        assertFalse(conn.isReady(), "the connection is not ready");
+
+        Counter reused = log.signalOn("reusing h2 connection " + conn.getConnectionId() + " ");
+        Counter done(1);
+        *hash<ExceptionInfo> mgr_err;
+        bool mgr_ok = False;
+        background sub () {
+            on_exit done.dec();
+            try {
+                mgr.request(url, "GET", "/", NOTHING, NOTHING, 60s);
+                mgr_ok = True;
+            } catch (hash<ExceptionInfo> ex) {
+                mgr_err = ex;
+            }
+        }();
+        # closing the manager ends the background request in any case, also when an assertion below fails
+        on_exit {
+            mgr.closeAll();
+            done.waitForZero(60s);
+        }
+
+        # the manager request has reserved a stream of the pending connection
+        assertEq(0, reused.waitForZero(60s), "the manager request reuses the pending connection");
+
+        *hash<ExceptionInfo> err = getError(sub () { s1.request("GET", "/", NOTHING, NOTHING, 500ms); });
+        assertEq("HTTPCLIENT-TIMEOUT", err.err, "s1 times out; got " + describe(err));
+        # deterministic: the manager request holds its reservation for 60 s, so the connection is still connecting
+        assertFalse(conn.isClosed(), "the connection is not closed by s1's timeout");
+        assertEq(HttpClientConnectionState::Connecting, conn.getConnectionState(), "the connection is connecting");
+        assertEq(1, conn.getPendingStreamCount(), "only s1's reservation is released");
+        assertEq(1, done.getCount(), "the manager request is still waiting");
+        assertEq((), log.getMatching("HTTPCLIENT-CONNECT-ERROR"), "no connection error is retried");
+
+        mgr.closeAll();
+        assertEq(0, done.waitForZero(60s), "the manager request ends when the manager is closed");
+        assertFalse(mgr_ok, "the manager request does not succeed");
+        assertTrue(exists mgr_err, "the manager request raises an error");
+    }
+
+    private static *hash<ExceptionInfo> getError(code c) {
+        try {
+            c();
+        } catch (hash<ExceptionInfo> ex) {
+            return ex;
+        }
+    }
+
+    private static string describe(*hash<ExceptionInfo> err) {
+        return err ? sprintf("%s: %s", err.err, err.desc) : "no error";
+    }
+}

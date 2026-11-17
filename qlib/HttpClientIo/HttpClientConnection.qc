@@ -119,6 +119,13 @@ public class HttpClientConnection inherits HttpClientConnectionBase {
             (see @ref HttpClientConnectionManager::pinConnection()).  Used to keep a
             connection-scoped persistent transaction (HTTP/1.1) on exactly one socket. */
         bool leased = False;
+
+        #! True once a request whose time ran out before the connection was ready closes it (#6430)
+        /** Set under \c lock by @ref releaseExpiredReservation() when no other request has a stream reserved or
+            active on the connection; the connection accepts no further reservation from then on (see
+            @ref tryReserveStream()), so no request can reserve a stream of the connection that is being closed.
+        */
+        bool expire_closing = False;
     }
 
     #! Returns the protocol identifier: "h1", "h2", or "h3"
@@ -254,6 +261,9 @@ public class HttpClientConnection inherits HttpClientConnectionBase {
     */
     bool canAcceptStream() {
         AutoLock al(lock);
+        if (expire_closing) {
+            return False;
+        }
         int cs = self.getConnectionState();
         return (cs == HttpClientConnectionState::Ready
                 || cs == HttpClientConnectionState::Connecting)
@@ -272,10 +282,14 @@ public class HttpClientConnection inherits HttpClientConnectionBase {
         @par Thread Safety
         The check and reservation happen under \c lock in one critical section,
         eliminating the TOCTOU gap that exists with separate
-        \c canAcceptStream() + manual reservation.
+        \c canAcceptStream() + manual reservation.  A connection that a request whose time ran out is closing
+        accepts no reservation (see @ref releaseExpiredReservation()).
     */
     bool tryReserveStream() {
         AutoLock al(lock);
+        if (expire_closing) {
+            return False;
+        }
         int cs = self.getConnectionState();
         if (cs != HttpClientConnectionState::Ready
                 && cs != HttpClientConnectionState::Connecting) {
@@ -294,6 +308,43 @@ public class HttpClientConnection inherits HttpClientConnectionBase {
     */
     releaseStreamReservation() {
         HttpClientConnectionBase::releaseStreamReservation();
+    }
+
+    #! Releases the stream reservation of a request whose time ran out before the connection was ready
+    /** Several requests can reserve streams of a connection that is still connecting, each with its own deadline
+        (see @ref tryReserveStream()).  A request whose deadline passes first gives up only its own reservation: the
+        connection is closed only if no other request has a stream reserved or active on it, and otherwise it keeps
+        connecting for the other requests; its connect is bounded by its own connect timeout, and the connection
+        manager's idle eviction does not close a connection with a reservation (#6184, #6430).
+
+        The check and the decision to close are made under \c lock, which @ref tryReserveStream() takes, and a
+        connection that is to be closed accepts no further reservation, so no request can reserve a stream of it
+        after the check.
+
+        @param reserved @ref True if the request holds a reservation of the connection, which is released
+
+        @return @ref True if the connection was closed, @ref False if another request still uses it
+
+        @since HttpClientIo 1.0
+    */
+    bool releaseExpiredReservation(bool reserved) {
+        {
+            AutoLock al(lock);
+            if (reserved) {
+                HttpClientConnectionBase::releaseStreamReservation();
+            }
+            # the reservations are read first, as in getOutstandingStreamCount()
+            if (getPendingStreamCount() || getPollOperation().getActiveStreamCount()) {
+                return False;
+            }
+            expire_closing = True;
+        }
+        # closed outside the lock: the close can call back into the connection
+        try {
+            close();
+        } catch () {
+        }
+        return True;
     }
 
     #! Wakes the async I/O controller to flush pending protocol writes
@@ -590,8 +641,13 @@ public class HttpClientConnection inherits HttpClientConnectionBase {
             if (http_is_terminal_connection_error(err)) {
                 throw err.err, err.desc, err;
             }
-            throw "HTTPCLIENT-CONNECT-ERROR",
-                sprintf("connection closed: %s: %s", err.err ?? "UNKNOWN", err.desc ?? "unknown"),
+            # a connection closed locally, by its owner, can wake a waiting request before the error of the abort is
+            # recorded (#6430)
+            if (!err.err) {
+                throw "HTTPCLIENT-CONNECT-ERROR", sprintf("connection %d to %s:%d was closed before it became ready",
+                    connection_id, url_info.host ?? "<unknown>", url_info.port ?? 0), err;
+            }
+            throw "HTTPCLIENT-CONNECT-ERROR", sprintf("connection closed: %s: %s", err.err, err.desc ?? "unknown"),
                 err;
         }
 

@@ -844,7 +844,7 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
                         "evicting stale connection and retrying (%d/%d)",
                         timed_out_conn.getProtocol(), timed_out_conn.getConnectionId(),
                         retries, max_retries);
-                    try { timed_out_conn.close(); } catch () {}
+                    closeTimedOutConnection(timed_out_conn);
                     evictDeadConnections(url);
                     continue;
                 }
@@ -1674,7 +1674,7 @@ HttpClientResponseStream stream = mgr.openStream("https://example.com/file.iso",
                             "evicting stale connection and retrying with connect_timeout=%y (%d/%d)",
                             timed_out_conn.getProtocol(), timed_out_conn.getConnectionId(),
                             opts.connect_timeout, resend.retries, max_retries);
-                        try { timed_out_conn.close(); } catch () {}
+                        closeTimedOutConnection(timed_out_conn);
                         evictDeadConnections(url);
                         continue;
                     }
@@ -4524,6 +4524,24 @@ printf("%d connection(s) migrated\n", migrated);
         }
 
         return True;
+    }
+
+    #! Internal: closes the connection of a request that timed out, before the request is sent again
+    /** A connection that is still connecting can be waited for by other requests: it is closed only if no other
+        request has a stream reserved or active on it (see @ref HttpClientConnection::releaseExpiredReservation(),
+        #6430); any other connection is closed
+
+        @param conn the connection of the request that timed out
+    */
+    private static closeTimedOutConnection(HttpClientConnection conn) {
+        if (conn.getConnectionState() == HttpClientConnectionState::Connecting) {
+            conn.releaseExpiredReservation(False);
+            return;
+        }
+        try {
+            conn.close();
+        } catch () {
+        }
     }
 
     #! Internal: checks if a connection can be evicted synchronously at checkout

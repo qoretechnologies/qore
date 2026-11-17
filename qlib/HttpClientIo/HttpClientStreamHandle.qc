@@ -254,20 +254,25 @@ public class HttpClientStreamHandle {
         releaseReservationIfHeld();
     }
 
-    #! Ends a readiness wait that expired: closes the connection and raises the error of its connect phase
+    #! Ends a readiness wait that expired: gives up the stream's reservation and raises the error of the connect phase
     /** Readiness waits are bounded by the request budget, and the transport's own
         connect-phase deadline (armed with \c connect_timeout at connection
         creation) normally fails the connection first, making
         @ref HttpClientConnection::waitForReady() "waitForReady()" throw the
         transport error directly.  This backstop only runs when the wait itself
-        expired.  The connection's error is read before the connection is closed: a transport error recorded by then
+        expired.
+
+        Other requests can wait for the same connection, each with its own deadline: the stream's reservation is
+        released, and the connection is closed only if no other request has a stream reserved or active on it (see
+        @ref HttpClientConnection::releaseExpiredReservation()); otherwise it keeps connecting for them, bounded by
+        its own connect timeout (#6430).
+
+        The connection's error is read before the connection is closed: a transport error recorded by then
         is surfaced so protocol-specific connect failures (e.g. \c QUIC-HANDSHAKE-TIMEOUT) stay diagnosable and keep
         driving the connection manager's connection-error retry/fallback logic.  The close aborts the connect
         operation, and the error that the abort records (\c HTTP2-ABORT for HTTP/2) is no transport error: without
         an error before the close, the request ran out of its time in the connect phase, which is
         \c HTTPCLIENT-TIMEOUT for every protocol (#6427).
-
-        The stream reservation is released.
 
         @throw HTTPCLIENT-CONNECT-ERROR the connection failed with a transport-level
         error
@@ -281,10 +286,11 @@ public class HttpClientStreamHandle {
     private throwConnectWaitExpired() {
         # read before the close, which records an error of its own (see above)
         *hash<auto> err = conn.getPollOperation().getError();
-        # Close the stale connect operation through the connection so
-        # the controller cancels the poll op and closes its socket.
-        try { conn.close(); } catch () {}
-        releaseReservationIfHeld();
+        # the reservation is released, and the connection closed through the connection (so that the controller
+        # cancels the poll op and closes its socket) only if no other request uses it
+        bool reserved = reservation_held;
+        reservation_held = False;
+        conn.releaseExpiredReservation(reserved);
         if (http_is_terminal_connection_error(err)) {
             throw err.err, err.desc, err;
         }
@@ -581,10 +587,15 @@ public class HttpClientStreamHandle {
         @return the response hash with status_code, headers, body
 
         @throw HTTPCLIENT-REQUEST-ERROR if the request fails
-        @throw HTTPCLIENT-TIMEOUT if the request times out
+        @throw HTTPCLIENT-TIMEOUT if the request times out, also while it waits for its connection to become ready
         @throw HTTP-CLIENT-RESPONSE-BODY-TOO-LARGE the response body exceeds the maximum response body size, as
         received or as decoded
         @throw HTTPCLIENT-REQUEST-BODY-ERROR a GET request specifies a body or enables request-body streaming
+
+        @note Other requests can wait for the same connection while it connects (see
+        @ref HttpClientConnectionManager::acquireStream()), each with its own timeout: a request whose time runs out
+        first gives up only its own stream, and the connection is closed only if no other request waits for it or uses
+        it; otherwise it keeps connecting, bounded by its connect timeout
     */
     hash<auto> request(string method, string path, *hash<auto> headers, *data body,
             *timeout timeout_ms) {
