@@ -970,6 +970,7 @@ qore_class_private::qore_class_private(const qore_class_private& old, qore_ns_pr
         deref_source_program(old.deref_source_program),
         from_module(old.from_module),
         lang(old.lang) {
+    hierarchy_initialized = old.hierarchy_initialized;
     system_constructor = old.system_constructor ? old.system_constructor->copy(cls) : nullptr;
 
     // set pointer to new copy
@@ -1107,6 +1108,8 @@ qore_class_private::qore_class_private(const qore_class_private& old, qore_ns_pr
         from_module(old.from_module),
         lang(old.lang) {
     QORE_TRACE("qore_class_private::qore_class_private(const qore_class_private& old)");
+    // the copy is committed: a later parse must not write its parse state (issue #6106)
+    hierarchy_initialized = old.hierarchy_initialized;
     if (!old.initialized)
         const_cast<qore_class_private&>(old).initialize();
 
@@ -1436,6 +1439,12 @@ int qore_class_private::initialize() {
 // issue #2657: initialize class hierarchy first before initializing code and members
 int qore_class_private::initializeHierarchy(qcp_set_t& qcp_set) {
     assert(scl);
+    // the hierarchy of a class is initialized once, not again for each subclass: its base classes and the
+    // inheritance lists of its methods are already set up, and it is not part of a circular hierarchy (issue #6106)
+    if (hierarchy_initialized) {
+        return 0;
+    }
+    QORE_CLASS_HIERARCHY_STEP();
     // the hierarchy is initialized recursively from each class to its most distant base class: a long chain of
     // inheritance stops while enough stack remains (issue #6047)
     if (parse_check_stack(loc) || scl->initializeHierarchy(cls, qcp_set)) {
@@ -1463,6 +1472,22 @@ int qore_class_private::initializeHierarchy(qcp_set_t& qcp_set) {
         }
     }
 
+    // a committed or builtin class can be in use by other threads, so its parse state is never written here; one
+    // with a base class that could not be resolved, or with a base class that is initialized again for this reason,
+    // is initialized again, so that the error is reported again for each subclass, as before
+    if (!committed && !sys) {
+        bool resolved = true;
+        for (auto& i : *scl) {
+            const qore_class_private* bc = i->sclass ? i->sclass->priv : nullptr;
+            if (!bc || (bc->scl && !bc->hierarchy_initialized && !bc->committed && !bc->sys)) {
+                resolved = false;
+                break;
+            }
+        }
+        if (resolved) {
+            hierarchy_initialized = true;
+        }
+    }
     return 0;
 }
 
@@ -1558,6 +1583,9 @@ int qore_class_private::initializeIntern() {
         int rc = scl->initialize(cls);
         if (rc) {
             return -1;
+        }
+        if (!sys) {
+            scl->setSmlComplete();
         }
     }
 
@@ -1778,8 +1806,11 @@ void qore_class_private::finalizeBuiltin(const char* nspath) {
     // A builtin class is shared by every Program and can be used by other threads as soon as it is registered, which a
     // binary module loaded at runtime does while other threads run: the parse state that a parse would otherwise
     // resolve the first time it reaches the class is resolved now, before the class is published, so that no later
-    // parse writes it while the class is in use
-    parseResolveHierarchy();
+    // parse writes it while the class is in use; its hierarchy is marked initialized here, as initializeHierarchy()
+    // does not write the parse state of a builtin class (issue #6106)
+    if (!parseResolveHierarchy()) {
+        hierarchy_initialized = true;
+    }
     parseResolveAbstract();
     // the one-time runtime initialization that a parse commit would otherwise make the first time it reaches the
     // class, writing flags that share a word with the ones that method calls read
@@ -3308,6 +3339,22 @@ int BCList::initializeMembers(QoreClass* cls) {
     return err;
 }
 
+void BCList::setSmlComplete() {
+    if (!valid) {
+        return;
+    }
+    for (auto& i : *this) {
+        // a builtin class's ancestors are added when it is registered; a user class whose base classes are not all
+        // complete yet, or that is still being initialized (when a class is initialized while one of its base classes
+        // is), must have its base classes walked
+        const qore_class_private* bc = i->sclass ? i->sclass->priv : nullptr;
+        if (!bc || (!bc->sys && bc->scl && !bc->scl->smlComplete())) {
+            return;
+        }
+    }
+    sml_complete = true;
+}
+
 int BCList::initialize(QoreClass* cls) {
     printd(5, "BCList::initialize(%s) this: %p empty: %d\n", cls->getName(), this, empty());
     for (bclist_t::iterator i = begin(), e = end(); i != e; ++i) {
@@ -3534,6 +3581,7 @@ void BCList::parseAddAncestors(QoreMethod* m) {
             continue;
         }
         const BCNode& n = *(*f.list)[f.next++];
+        QORE_CLASS_HIERARCHY_STEP();
         // if there was a parse error finding the base class, then skip
         QoreClass* qc = n.sclass;
         if (!qc) {
@@ -3619,7 +3667,22 @@ QoreVarInfo* BCList::parseFindStaticVar(const char* vname, const QoreClass*& qc,
     return nullptr;
 }
 
+const QoreClass* BCList::findInSml(const qore_class_private& qc) const {
+    for (auto& i : sml) {
+        QORE_CLASS_HIERARCHY_STEP();
+        if (i.first->priv->equal(qc)) {
+            return i.first;
+        }
+    }
+    return nullptr;
+}
+
 const QoreClass* BCList::findInHierarchy(const qore_class_private& qc) {
+    // a complete sml has every class in the hierarchy once, while walking the base classes visits a class once for
+    // each path to it (issue #6106)
+    if (smlComplete()) {
+        return findInSml(qc);
+    }
     // the hierarchy is walked iteratively, depth first in the order of the base classes, as it can be as long as the
     // code declares it (issue #6047)
     HierarchyWalkStack<HierarchyWalkFrame> stack;
@@ -3635,11 +3698,18 @@ const QoreClass* BCList::findInHierarchy(const qore_class_private& qc) {
         if (!n.sclass) {
             continue;
         }
+        QORE_CLASS_HIERARCHY_STEP();
         if (n.sclass->priv->equal(qc)) {
             return n.sclass->priv->cls;
         }
-        if (n.sclass->priv->scl) {
-            stack.push({n.sclass->priv->scl, 0});
+        if (BCList* l = n.sclass->priv->scl) {
+            if (l->smlComplete()) {
+                if (const QoreClass* rv = l->findInSml(qc)) {
+                    return rv;
+                }
+            } else {
+                stack.push({l, 0});
+            }
         }
     }
     return nullptr;
@@ -4600,6 +4670,7 @@ const QoreMethod* qore_class_private::parseResolveSelfMethod(const QoreProgramLo
 
 // finds a non-static method in the class hierarchy at parse time, optionally initializes classes
 const QoreMethod* qore_class_private::parseFindNormalMethodIntern(const char* mname, const qore_class_private* class_ctx) {
+    QORE_CLASS_HIERARCHY_STEP();
     initialize();
     const QoreMethod* m = parseFindLocalMethod(mname);
     if (m && doParseMethodAccess(m, class_ctx)) {
@@ -4956,7 +5027,12 @@ void BCSMList::processMemberInitializationList(const QoreMemberMap& members, mem
 
         //printd(5, "BCSMList::processMemberInitializationList() processing %p '%s'\n", i.first->priv,
         //    i.first->getName());
-        for (auto& mi : i.first->priv->members.getList()) {
+        // the members imported from base classes are skipped: they are at the start of the list (issue #6106)
+        const QoreMemberMap& bmembers = i.first->priv->members;
+        for (QoreMemberMap::const_iterator mii = bmembers.endOfFront(), mie = bmembers.getList().end(); mii != mie;
+                ++mii) {
+            QORE_CLASS_HIERARCHY_STEP();
+            const QoreMemberMap::member_list_element_t& mi = *mii;
             // skip imported members
             if (!mi.second->local()) {
                 //printd(5, "BCSMList::processMemberInitializationList() %p '%s::%s' NOT LOCAL\n", i.first->priv,
@@ -5005,16 +5081,45 @@ void BCSMList::align(QoreClass* thisclass, QoreClass* qc, bool is_virtual) {
     assert(thisclass->getID() != qc->getID());
 
     // see if class already exists in vector
-    for (auto& i : *this) {
-        if (i.first->getID() == qc->getID()) {
+    if (useIndex()) {
+        if (id_index.count(qc->getID())) {
             return;
         }
-        assert(i.first->getID() != thisclass->getID());
+        assert(!id_index.count(thisclass->getID()));
+    } else {
+        for (auto& i : *this) {
+            if (i.first->getID() == qc->getID()) {
+                return;
+            }
+            assert(i.first->getID() != thisclass->getID());
+        }
     }
-    qore_class_private::refClass(*qc);
 
     // append to the end of the vector
+    append(qc, is_virtual);
+}
+
+bool BCSMList::useIndex() {
+    if (size() < SML_INDEX_MIN) {
+        return false;
+    }
+    if (id_index.size() != size()) {
+        id_index.clear();
+        id_index.reserve(size() * 2);
+        for (auto& i : *this) {
+            id_index.emplace(i.first->getID(), i.first);
+        }
+    }
+    return true;
+}
+
+void BCSMList::append(QoreClass* qc, bool is_virtual) {
+    qore_class_private::refClass(*qc);
     push_back(std::make_pair(qc, is_virtual));
+    // keep a used index current; an index that is not used yet is built when the list reaches SML_INDEX_MIN entries
+    if (!id_index.empty()) {
+        id_index.emplace(qc->getID(), qc);
+    }
 }
 
 int BCSMList::addBaseClassesToSubclass(QoreClass* thisclass, QoreClass* sc, bool is_virtual) {
@@ -5038,9 +5143,22 @@ int BCSMList::add(QoreClass* thisclass, QoreClass* qc, bool is_virtual) {
         return -1;
     }
 
+    QORE_CLASS_HIERARCHY_STEP();
     // see if class already exists in list
+    if (useIndex()) {
+        // the list is only scanned when it has another class with the ID of thisclass, to find out if it is a
+        // circular reference; an entry for thisclass itself is skipped by the scan
+        auto ti = id_index.find(thisclass->getID());
+        if (ti == id_index.end() || ti->second->priv == thisclass->priv) {
+            if (!id_index.count(qc->getID())) {
+                append(qc, is_virtual);
+            }
+            return 0;
+        }
+    }
     class_list_t::const_iterator i = begin();
     while (i != end()) {
+        QORE_CLASS_HIERARCHY_STEP();
         if (i->first->getID() == qc->getID())
             return 0;
         if (i->first->getID() == thisclass->getID()) {
@@ -5063,10 +5181,9 @@ int BCSMList::add(QoreClass* thisclass, QoreClass* qc, bool is_virtual) {
         }
         ++i;
     }
-    qore_class_private::refClass(*qc);
 
     // append to the end of the list
-    push_back(std::make_pair(qc, is_virtual));
+    append(qc, is_virtual);
 
     return 0;
 }
@@ -5120,7 +5237,13 @@ const QoreClass* BCSMList::getClass(qore_classid_t cid) const {
     return nullptr;
 }
 
+#ifdef DEBUG
+std::atomic<int64> qore_class_hierarchy_steps{0};
+#endif
+
 void BCSMList::resolveCopy() {
+    // the index refers to the classes replaced here
+    id_index.clear();
     for (class_list_t::iterator i = begin(), e = end(); i != e; ++i) {
         assert(i->first->priv->new_copy);
         QoreClass* old = i->first;
@@ -5429,13 +5552,18 @@ bool qore_class_private::runtimeIsPrivateMemberIntern(const char* str, bool topl
 }
 
 template <bool Lexical>
-QORE_INTERN_ALWAYS_INLINE QoreValue qore_class_private::evalMethodGateImpl(LexicalSemanticPolicy policy, QoreObject* self, const char* nme, const QoreListNode* args, ExceptionSink* xsink) const {
+QORE_INTERN_ALWAYS_INLINE QoreValue qore_class_private::evalMethodGateImpl(LexicalSemanticPolicy policy, QoreObject* self, const char* nme, const QoreListNode* args, ExceptionSink* xsink,
+        bool given_args) const {
     printd(5, "qore_class_private::evalMethodGate() method: %s args: %p\n", nme, args);
 
     ReferenceHolder<QoreListNode> args_holder(xsink);
 
     // build new argument list
-    if (args) {
+    if (given_args) {
+        // the evaluated list that the caller gave, whose reference is taken over
+        assert(args && args->is_unique());
+        args_holder = const_cast<QoreListNode*>(args);
+    } else if (args) {
         if (args->needs_eval()) {
             args_holder = args->evalList(xsink);
         } else {
@@ -5620,6 +5748,29 @@ QoreValue qore_class_private::getMemberCode(QoreObject* self, const char* nme, c
     return QoreValue();
 }
 
+//! evaluates the arguments of a call to a member holding a call reference, to a pseudo-method of an object or to
+//! methodGate(), whose target was chosen before them, then checks the object again (issue #6056)
+/** Arguments that deleted the object raise the error that the compiled modes raise after them, which
+    qore_raise_deleted_missing_method_call_after_args() gives: the compiled modes evaluate the arguments before the call,
+    when the members of the object are gone, so the error is chosen from the class in every mode.  Arguments that need
+    no evaluation have no effect on the object, which the call checked before them.
+
+    @return -1 if an exception was raised, 0 if not
+*/
+static QORE_INTERN_NOINLINE int qore_eval_missing_method_args(QoreObject* self, const char* nme,
+        const QoreListNode* args, const qore_class_private* class_ctx, QoreListNodeEvalOptionalRefHolder& call_args,
+        ExceptionSink* xsink) {
+    call_args.assignEval(args);
+    if (*xsink) {
+        return -1;
+    }
+    if (!self->isValid()) {
+        qore_raise_deleted_missing_method_call_after_args(self, nme, class_ctx, xsink);
+        return -1;
+    }
+    return 0;
+}
+
 // Member-call references, pseudo-methods and methodGate are only considered after method lookup fails.
 // Their ownership/locking locals must not reserve stack space on the ordinary method-call path.
 template <bool Lexical>
@@ -5653,8 +5804,19 @@ static QORE_INTERN_NOINLINE QoreValue qore_eval_missing_method(const qore_class_
                 const ResolvedCallReferenceNode* ref =
                     dynamic_cast<const ResolvedCallReferenceNode*>(mv.getInternalNode());
                 if (ref) {
-                    if constexpr (Lexical) return ref->invokeLexical(args, xsink, policy);
-                    else return ref->invoke(args, xsink);
+                    // the member's value, chosen before the arguments, is called after them (issue #6056)
+                    QoreListNodeEvalOptionalRefHolder call_args(xsink);
+                    if (qore_eval_missing_method_args(self, nme, args, class_ctx, call_args, xsink)) {
+                        return QoreValue();
+                    }
+                    // the parameters of a closure or of a reference to user code take the values of the call's own
+                    // list over, so that a write to a parameter releases its argument (issue #5882); a closure runs
+                    // Qore code, which takes no policy
+                    if (call_args.needsDeref() && (!Lexical || ref->getType() == NT_RUNTIME_CLOSURE)) {
+                        return qore_invoke_call_ref_given_args(ref, *call_args, xsink);
+                    }
+                    if constexpr (Lexical) return ref->invokeLexical(*call_args, xsink, policy);
+                    else return ref->invoke(*call_args, xsink);
                 }
             }
         }
@@ -5664,9 +5826,24 @@ static QORE_INTERN_NOINLINE QoreValue qore_eval_missing_method(const qore_class_
     QoreClass* qc = nullptr;
     const QoreMethod* w = pseudo_classes_find_method(NT_OBJECT, nme, qc);
     if (w) {
-        return qore_method_private::evalPseudoMethodWithPolicy<Lexical>(policy, *w, xsink, rc, nullptr, self, args);
+        // the object is checked again after the arguments (issue #6056)
+        QoreListNodeEvalOptionalRefHolder call_args(xsink);
+        if (qore_eval_missing_method_args(self, nme, args, class_ctx, call_args, xsink)) {
+            return QoreValue();
+        }
+        return qore_method_private::evalPseudoMethodWithPolicy<Lexical>(policy, *w, xsink, rc, nullptr, self,
+            *call_args);
     } else if (qcp.methodGate && !qcp.methodGate->inMethod(self)) { // call methodGate with unknown method name and arguments
-        return qcp.evalMethodGateImpl<Lexical>(policy, self, nme, args, xsink);
+        // the object is checked again after the arguments (issue #6056)
+        QoreListNodeEvalOptionalRefHolder call_args(xsink);
+        if (qore_eval_missing_method_args(self, nme, args, class_ctx, call_args, xsink)) {
+            return QoreValue();
+        }
+        if (call_args.needsDeref()) {
+            // the list evaluated for the call is given to methodGate(), which adds its arguments to it
+            return qcp.evalMethodGateImpl<Lexical>(policy, self, nme, call_args.getReferencedValue(), xsink, true);
+        }
+        return qcp.evalMethodGateImpl<Lexical>(policy, self, nme, *call_args, xsink);
     }
 
     xsink->raiseException("METHOD-DOES-NOT-EXIST", "no method %s::%s() has been defined and no pseudo-method " \
@@ -5706,6 +5883,11 @@ QORE_INTERN_ALWAYS_INLINE QoreValue qore_class_private::evalMethodImpl(LexicalSe
     }
 
     if (w) {
+        // a static method called through the object checks it after the arguments (issue #6056)
+        if (qore_method_private::get(*w)->static_flag) {
+            return qore_method_private::evalStaticOnObject<Lexical>(policy, *w, xsink, rc, self, args, class_ctx,
+                pgm_ctx, explicit_type_param_instantiation);
+        }
         return qore_method_private::evalWithPolicy<Lexical>(policy, *w, xsink, rc, self, args, class_ctx, pgm_ctx, nullptr,
             explicit_type_param_instantiation);
     }
@@ -5963,8 +6145,11 @@ int BCList::addBaseClassesToSubclass(QoreClass* thisparent, QoreClass* child, bo
     while (!stack.empty()) {
         AddBaseClassesFrame& f = stack.back();
         BCList* l = f.c->scl;
-        if (l && f.next < l->size()) {
+        // a complete sml already holds every class that walking the base classes would add, in the same order and
+        // with the same virtual flags (issue #6106)
+        if (l && f.next < l->size() && !l->smlComplete()) {
             BCNode& n = *(*l)[f.next++];
+            QORE_CLASS_HIERARCHY_STEP();
             // issue #2318 must check for duplicate base classes here; sclass may be 0 in case of a parse exception
             if (!n.sclass) {
                 continue;
@@ -6736,6 +6921,7 @@ void collect_final_methods(const qore_class_private& qc, bool is_static,
 // returns the first method of the given name found depth-first in the parent classes, as calls are resolved
 const MethodFunctionBase* find_first_parent_method(const qore_class_private& qc, const std::string& name,
         bool is_static) {
+    QORE_CLASS_HIERARCHY_STEP();
     if (!qc.scl) {
         return nullptr;
     }
@@ -6795,6 +6981,15 @@ int qore_class_private::parseCheckReturnTypeHierarchy() const {
     std::vector<std::pair<std::string, const MethodFunctionBase*>> methods;
     std::unordered_set<qore_classid_t> visited;
     collect_parent_methods(*this, methods, visited);
+    // the first method of each name in the parent classes: the methods are collected in the order in which
+    // find_first_parent_method() searches the parent classes, so this is the method that it finds, without searching
+    // the hierarchy for each method (issue #6106)
+    std::unordered_map<std::string, const MethodFunctionBase*> first_methods;
+    if (!single_parent) {
+        for (const auto& i : methods) {
+            first_methods.emplace(i.first, i.second);
+        }
+    }
     for (const auto& i : methods) {
         hm_method_t::const_iterator mi = hm.find(i.first);
         if (single_parent && mi == hm.end()) {
@@ -6802,7 +6997,7 @@ int qore_class_private::parseCheckReturnTypeHierarchy() const {
         }
         const MethodFunctionBase* start = mi != hm.end()
             ? qore_method_private::get(*mi->second)->getFunction()
-            : find_first_parent_method(*this, i.first, false);
+            : first_methods[i.first];
         assert(start);
         if (start->checkReturnTypeResolution(*this, *i.second, single_parent)) {
             return -1;
@@ -7072,13 +7267,30 @@ void qore_class_private::parseWarnAmbiguousOverloads() {
         }
     }
 
-    // warn when multiple base classes supply a method with the same name
+    // warn when multiple base classes supply a method with the same name; only a name in the hierarchies of two
+    // base classes can have two providers, and looking up each name of the hierarchy through each base class would
+    // take time that grows with the square of the depth of the hierarchy for each class (issue #6106)
+    if (scl->size() < 2) {
+        return;
+    }
     std::set<std::string> base_names;
-    std::unordered_set<qore_classid_t> visited;
-    collect_base_method_names(*this, false, base_names, visited);
+    // the number of base classes with each name in their hierarchy
+    std::unordered_map<std::string, unsigned> name_count;
+    for (auto& bci : *scl) {
+        if (!bci->sclass) {
+            continue;
+        }
+        std::set<std::string> names;
+        std::unordered_set<qore_classid_t> visited;
+        collect_base_method_names(*bci->sclass->priv, false, names, visited);
+        for (const auto& i : names) {
+            ++name_count[i];
+        }
+        base_names.merge(names);
+    }
 
     for (const auto& name_it : base_names) {
-        if (hm.find(name_it) != hm.end()) {
+        if (hm.find(name_it) != hm.end() || name_count[name_it] < 2) {
             continue;
         }
 
@@ -8949,6 +9161,21 @@ QoreValue NormalMethodFunction::evalMethodGivenArgs(ExceptionSink* xsink, Runtim
     return mv->evalMethod(self, ceh, xsink);
 }
 
+//! checks the object that a static method is called through (o.s()) after the arguments of the call, which can
+//! have deleted it: the error of a method call, which names the class of the variant (qore_object_private::startCall();
+//! issue #6056)
+/** @return -1 if the error was raised, 0 if not
+*/
+static QORE_INTERN_NOINLINE int qore_check_static_call_receiver(QoreObject* self, const AbstractQoreFunctionVariant* variant,
+        const char* mname, ExceptionSink* xsink) {
+    if (self->isValid()) {
+        return 0;
+    }
+    qore_object_private::get(*self)->raiseDeletedCall(qore_class_private::get(*METHV_const(variant)->getClass()),
+        mname, xsink);
+    return -1;
+}
+
 // raises the exception for a call of an abstract variant
 /** Outlined from NormalMethodFunction::evalMethodTmpArgs(), whose frame is on the stack at every level of a recursion
     of a method (issue #5852)
@@ -8959,11 +9186,48 @@ static QORE_INTERN_NOINLINE void raise_abstract_variant_call(ExceptionSink* xsin
         f->getClassName(), f->getName(), mv->getSignature()->getSignatureText());
 }
 
+// raises the error of a static method called through an object that its arguments deleted, as
+// qore_method_private::evalStaticOnObject() raises it (issue #6056)
+static QORE_INTERN_NOINLINE void qore_raise_deleted_static_call_after_args(QoreObject* self, const QoreMethod& m,
+        const AbstractQoreFunctionVariant* variant, QoreListNode* args, const qore_class_private* cctx,
+        const QoreTypeParamInstantiation* explicit_type_param_instantiation, const name_vec_t* arg_names,
+        ExceptionSink* xsink) {
+    const StaticMethodFunction* f = SMETHF(qore_method_private::get(m)->getFunction());
+    const QoreClass* qc = f->getClass();
+    RuntimeConfig& rc = rc_get_current_ref();
+    QoreSourceProgramHolder spgm_holder(xsink);
+    // as StaticMethodFunction::evalMethodTmpArgs() or, for a named call, StaticMethodFunction::evalMethodTmpArgsNamed(),
+    // which the call runs: the variant is resolved with the arguments, raising the error of the resolution, with the
+    // object as the receiver of the call
+    if (arg_names) {
+        variant = nullptr;
+        CodeEvaluationHelper ceh(xsink, rc, f, variant, f->getName(), args, nullptr, qore_class_private::get(*qc),
+            cctx, qore_get_method_pgm_context(*qc, spgm_holder), qore_get_object_receiver_type_info(self),
+            explicit_type_param_instantiation, false, *arg_names, {});
+        if (*xsink) {
+            return;
+        }
+    } else {
+        CodeEvaluationHelper ceh(xsink, rc, f, variant, f->getName(), args, nullptr, qore_class_private::get(*qc),
+            CT_UNUSED, false, cctx, qore_get_method_pgm_context(*qc, spgm_holder),
+            qore_get_object_receiver_type_info(self), explicit_type_param_instantiation);
+        if (*xsink) {
+            return;
+        }
+    }
+    qore_object_private::get(*self)->raiseDeletedCall(qore_class_private::get(*METHV_const(variant)->getClass()),
+        f->getName(), xsink);
+}
+
 void qore_raise_deleted_method_call_after_args(QoreObject* self, const QoreMethod& m,
         const AbstractQoreFunctionVariant* variant, QoreListNode* args, const qore_class_private* cctx,
         const QoreTypeParamInstantiation* explicit_type_param_instantiation, const name_vec_t* arg_names,
         ExceptionSink* xsink) {
-    assert(!m.isStatic());
+    if (qore_method_private::get(m)->static_flag) {
+        qore_raise_deleted_static_call_after_args(self, m, variant, args, cctx, explicit_type_param_instantiation,
+            arg_names, xsink);
+        return;
+    }
     const NormalMethodFunction* f = NMETHF(qore_method_private::get(m)->getFunction());
     RuntimeConfig& rc = rc_get_current_ref();
     QoreSourceProgramHolder spgm_holder(xsink);
@@ -8987,6 +9251,41 @@ void qore_raise_deleted_method_call_after_args(QoreObject* self, const QoreMetho
     // the error of the method's code, which names the class of the variant (CodeContextHelper)
     qore_object_private::get(*self)->raiseDeletedCall(qore_class_private::get(*mv->getClass()), f->getName(), xsink);
 }
+
+void qore_raise_deleted_missing_method_call_after_args(QoreObject* self, const char* name,
+        const qore_class_private* class_ctx, ExceptionSink* xsink) {
+    assert(!self->isValid());
+    // the target that qore_eval_missing_method() chooses: a member holding a call reference, then a pseudo-method,
+    // then methodGate()
+    const qore_class_private* qcp = qore_class_private::get(*self->getClass());
+    bool gate = qcp->methodGate && !qcp->methodGate->inMethod(self);
+    if (gate) {
+        QoreClass* pseudo_qc = nullptr;
+        if (pseudo_classes_find_method(NT_OBJECT, name, pseudo_qc)) {
+            gate = false;
+        } else if (const QoreMemberInfo* mi = qcp->runtimeGetMemberInfo(name, class_ctx)) {
+            // the value of the member is gone with the object: a member that can hold a call reference is taken to
+            // be the target, if the call can read it: qore_eval_missing_method() reads an internal member only from a
+            // class context with access to it (a private member is read from any context, as the call reads it)
+            const QoreTypeInfo* mti = mi->getTypeInfo();
+            if ((mi->access != Internal || mi->getClassContext(class_ctx))
+                    && (!QoreTypeInfo::hasType(mti) || QoreTypeInfo::parseAcceptsReturns(mti, NT_RUNTIME_CLOSURE)
+                        || QoreTypeInfo::parseAcceptsReturns(mti, NT_FUNCREF))) {
+                gate = false;
+            }
+        }
+    }
+    if (gate) {
+        // the error of the call of methodGate(), which its arguments, evaluated before it, deleted: raised when the
+        // call starts, before its variant is resolved (CodeEvaluationHelper), naming the class of methodGate()
+        qore_raise_deleted_object(xsink, "cannot call %s::%s() on an object that has already been deleted",
+            qcp->methodGate->getClass()->getName(), qcp->methodGate->getName());
+        return;
+    }
+    qore_raise_deleted_object(xsink, "cannot call %s::%s() on an object that has already been deleted",
+        self->getClassName(), name);
+}
+
 
 QoreValue NormalMethodFunction::evalMethod(
         ExceptionSink* xsink, RuntimeConfig& rc,
@@ -9096,13 +9395,17 @@ template <bool Lexical>
 QORE_INTERN_ALWAYS_INLINE QoreValue StaticMethodFunction::evalMethodImpl(LexicalSemanticPolicy policy, ExceptionSink* xsink, RuntimeConfig& rc,
         const AbstractQoreFunctionVariant* variant, const QoreListNode* args, const qore_class_private* cctx,
         QoreProgram* pgm_ctx, const QoreTypeInfo* receiver_type_info,
-        const QoreTypeParamInstantiation* explicit_type_param_instantiation) const {
+        const QoreTypeParamInstantiation* explicit_type_param_instantiation, QoreObject* check_self) const {
     const char* mname = getName();
     QoreSourceProgramHolder spgm_holder(xsink);
     CodeEvaluationHelper ceh(std::bool_constant<Lexical>{}, policy, xsink, rc, this, variant, mname, args, nullptr, qore_class_private::get(*qc),
         CT_UNUSED, false, cctx, qore_get_method_pgm_context(*qc, spgm_holder, pgm_ctx), receiver_type_info,
         explicit_type_param_instantiation);
     if (*xsink) {
+        return QoreValue();
+    }
+    // a call through an object whose arguments deleted it (issue #6056)
+    if (check_self && qore_check_static_call_receiver(check_self, variant, mname, xsink)) {
         return QoreValue();
     }
     // issue #4964: set class ctx
@@ -9115,16 +9418,18 @@ QoreValue StaticMethodFunction::evalMethod(
         ExceptionSink* xsink, RuntimeConfig& rc,
         const AbstractQoreFunctionVariant* variant, const QoreListNode* args, const qore_class_private* cctx,
         QoreProgram* pgm_ctx, const QoreTypeInfo* receiver_type_info,
-        const QoreTypeParamInstantiation* explicit_type_param_instantiation) const {
-    return evalMethodImpl<false>({}, xsink, rc, variant, args, cctx, pgm_ctx, receiver_type_info, explicit_type_param_instantiation);
+        const QoreTypeParamInstantiation* explicit_type_param_instantiation, QoreObject* check_self) const {
+    return evalMethodImpl<false>({}, xsink, rc, variant, args, cctx, pgm_ctx, receiver_type_info, explicit_type_param_instantiation,
+        check_self);
 }
 
 QoreValue StaticMethodFunction::evalMethod(
         LexicalSemanticPolicy policy, ExceptionSink* xsink, RuntimeConfig& rc,
         const AbstractQoreFunctionVariant* variant, const QoreListNode* args, const qore_class_private* cctx,
         QoreProgram* pgm_ctx, const QoreTypeInfo* receiver_type_info,
-        const QoreTypeParamInstantiation* explicit_type_param_instantiation) const {
-    return evalMethodImpl<true>(policy, xsink, rc, variant, args, cctx, pgm_ctx, receiver_type_info, explicit_type_param_instantiation);
+        const QoreTypeParamInstantiation* explicit_type_param_instantiation, QoreObject* check_self) const {
+    return evalMethodImpl<true>(policy, xsink, rc, variant, args, cctx, pgm_ctx, receiver_type_info, explicit_type_param_instantiation,
+        check_self);
 }
 
 QoreValue StaticMethodFunction::evalMethodGivenArgs(ExceptionSink* xsink, RuntimeConfig& rc,
@@ -9258,7 +9563,7 @@ template <typename ArgList>
 static QoreValue eval_static_method_named(const StaticMethodFunction& f, ExceptionSink* xsink, RuntimeConfig& rc,
         ArgList args, const qore_class_private* cctx, const QoreTypeInfo* receiver_type_info,
         const QoreTypeParamInstantiation* explicit_type_param_instantiation, const name_vec_t& arg_names,
-        LexicalSemanticPolicy policy, QoreProgram* pgm_ctx) {
+        LexicalSemanticPolicy policy, QoreProgram* pgm_ctx, QoreObject* check_self) {
     const QoreClass* qc = f.getClass();
     const AbstractQoreFunctionVariant* variant = nullptr;
     QoreSourceProgramHolder spgm_holder(xsink);
@@ -9266,6 +9571,10 @@ static QoreValue eval_static_method_named(const StaticMethodFunction& f, Excepti
         qore_get_method_pgm_context(*qc, spgm_holder, pgm_ctx), receiver_type_info, explicit_type_param_instantiation,
         false, arg_names, policy);
     if (*xsink) {
+        return QoreValue();
+    }
+    // a call through an object whose arguments deleted it (issue #6056)
+    if (check_self && qore_check_static_call_receiver(check_self, variant, f.getName(), xsink)) {
         return QoreValue();
     }
     // issue #4964: set class ctx
@@ -9278,17 +9587,17 @@ static QoreValue eval_static_method_named(const StaticMethodFunction& f, Excepti
 QoreValue StaticMethodFunction::evalMethodNamed(ExceptionSink* xsink, RuntimeConfig& rc, const QoreListNode* args,
         const qore_class_private* cctx, const QoreTypeInfo* receiver_type_info,
         const QoreTypeParamInstantiation* explicit_type_param_instantiation, const name_vec_t& arg_names,
-        LexicalSemanticPolicy policy, QoreProgram* pgm_ctx) const {
+        LexicalSemanticPolicy policy, QoreProgram* pgm_ctx, QoreObject* check_self) const {
     return eval_static_method_named(*this, xsink, rc, args, cctx, receiver_type_info,
-        explicit_type_param_instantiation, arg_names, policy, pgm_ctx);
+        explicit_type_param_instantiation, arg_names, policy, pgm_ctx, check_self);
 }
 
 QoreValue StaticMethodFunction::evalMethodTmpArgsNamed(ExceptionSink* xsink, RuntimeConfig& rc, QoreListNode* args,
         const qore_class_private* cctx, const QoreTypeInfo* receiver_type_info,
         const QoreTypeParamInstantiation* explicit_type_param_instantiation, const name_vec_t& arg_names,
-        LexicalSemanticPolicy policy, QoreProgram* pgm_ctx) const {
+        LexicalSemanticPolicy policy, QoreProgram* pgm_ctx, QoreObject* check_self) const {
     return eval_static_method_named(*this, xsink, rc, args, cctx, receiver_type_info,
-        explicit_type_param_instantiation, arg_names, policy, pgm_ctx);
+        explicit_type_param_instantiation, arg_names, policy, pgm_ctx, check_self);
 }
 
 const qore_class_private* MethodVariantBase::getClassPriv() const {
@@ -9480,17 +9789,18 @@ const QoreMethod* QoreStaticMethodIterator::getMethod() const {
 QoreMemberInfo::QoreMemberInfo(const QoreMemberInfo& old, const qore_class_private* cls) :
     QoreMemberInfoBaseAccess(old, old.access),
     accessors(old.accessors),
-    cls_vec(old.cls_vec),
+    // the new class owner is in the initial position
+    decl_cls(cls),
+    cls_list(old.cls_list),
     cls_context_map(old.cls_context_map ? new cls_context_map_t(*old.cls_context_map) : nullptr),
     member_info_list(old.member_info_list ? new member_info_list_t(*old.member_info_list) : nullptr), is_local(old.is_local) {
-    // write new class owner in initial position
-    cls_vec[0] = cls;
 }
 
 QoreMemberInfo::QoreMemberInfo(const QoreMemberInfo& old, const qore_class_private* cls, ClassAccess cls_access) :
     QoreMemberInfoBaseAccess(old, (old.access == Internal) ? Inaccessible : QORE_MAX(old.access, cls_access)),
     accessors(old.accessors),
-    cls_vec(old.cls_vec),
+    decl_cls(old.decl_cls),
+    cls_list(old.cls_list),
     cls_context_map(old.cls_context_map ? new cls_context_map_t(*old.cls_context_map) : nullptr),
     member_info_list(old.member_info_list ? new member_info_list_t(*old.member_info_list) : nullptr), is_local(false) {
     //printd(5, "QoreMemberInfo::QoreMemberInfo() copy cls: %p '%s' member_info_list: %p old.access: '%s' "
@@ -9500,16 +9810,16 @@ QoreMemberInfo::QoreMemberInfo(const QoreMemberInfo& old, const qore_class_priva
     //    member_info_list ? member_info_list->size() : nullptr);
     // add inheriting class to class vector if accessible
     if (access < Inaccessible) {
-        cls_vec.push_back(cls);
+        cls_list = std::make_shared<QoreMemberClassNode>(cls, std::move(cls_list));
         //printd(5, "QoreMemberInfo::QoreMemberInfo() added class %p '%s' to inheritance list\n", cls,
         //    cls->name.c_str());
     } else {
         // when importing internal members, add context access entries for the child classes
         if (!member_info_list) {
             //printd(5, "QoreMemberInfo::QoreMemberInfo() adding context access for class %p '%s'\n",
-            //    old.cls_vec.back(), old.cls_vec.back()->name.c_str());
+            //    old.getLastClass(), old.getLastClass()->name.c_str());
             // add context to last class
-            addContextAccess(old, old.cls_vec.back());
+            addContextAccess(old, old.getLastClass());
         } else {
             //printd(5, "QoreMemberInfo::QoreMemberInfo() copy member_info_list: %p old.access: '%s'\n",
             //    member_info_list, privpub(old.access));
@@ -9559,7 +9869,15 @@ void QoreMemberInfo::addContextAccess(const QoreMemberInfo& mi, const qore_class
 #ifdef DEBUG
     bool inserted = false;
 #endif
-    for (auto& i : mi.cls_vec) {
+    // the classes where the member is accessible; the order does not matter, as each is mapped to qc
+    std::vector<const qore_class_private*> classes;
+    if (mi.decl_cls) {
+        classes.push_back(mi.decl_cls);
+    }
+    for (const QoreMemberClassNode* node = mi.cls_list.get(); node; node = node->next.get()) {
+        classes.push_back(node->cls);
+    }
+    for (const qore_class_private* i : classes) {
         // the class can be in our cls_context_map already with a class that's inherited multiple times in the hierarchy
         cls_context_map_t::iterator ci = cls_context_map->lower_bound(i);
         if (ci == cls_context_map->end() || ci->first != i) {
@@ -9970,7 +10288,23 @@ int QoreMemberMap::parseInit(LocalVar& selfid) {
 std::string QoreMemberMap::dbgCheckIndex() const {
     const MemberIndex* idx = index.load(std::memory_order_acquire);
     if (!frozen) {
-        return idx ? "an unfrozen map has an index" : "";
+        // the index of a parse (issue #6106; see afterChange())
+        if (!idx) {
+            return "";
+        }
+        if (member_list.size() < IndexThreshold) {
+            return "an unfrozen map with " + std::to_string(member_list.size()) + " members has an index";
+        }
+        if (idx->size() != member_list.size()) {
+            return "the parse index has " + std::to_string(idx->size()) + " entries for "
+                + std::to_string(member_list.size()) + " members";
+        }
+        for (auto& i : member_list) {
+            if (find(i.first) != i.second) {
+                return std::string("member '") + i.first + "' is not found as it is in the list";
+            }
+        }
+        return "";
     }
     if (member_list.size() >= IndexThreshold && !idx) {
         return "a frozen map with " + std::to_string(member_list.size()) + " members has no index";
@@ -10004,6 +10338,7 @@ std::string QoreMemberMap::dbgCheckIndex() const {
 #endif
 
 QoreMemberInfo* QoreMemberMap::findIndexed(const MemberIndex& idx, const char* name) {
+    QORE_CLASS_HIERARCHY_STEP();
     MemberIndex::const_iterator i = idx.find(std::string_view(name));
     return i == idx.end() ? nullptr : i->second;
 }
@@ -10019,7 +10354,7 @@ void QoreMemberMap::moveAllTo(QoreClass* qc, ClassAccess access) {
         qore_class_private::parseAddMember(*qc, i.first, access, i.second);
         i.second = nullptr;
     }
-    member_list.clear();
+    clearList();
 }
 
 void QoreVarMap::parseCommitRuntimeInit(ExceptionSink* xsink) {

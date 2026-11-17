@@ -157,6 +157,9 @@ public:
         //! the virtual implicit arguments and element of the block that declares the handler, which it runs in at
         //! every exit, also one in a loop nested in the block that has its own (qore#6383)
         VirtualImplicitContext virtual_implicit;
+        //! the statement that declares the handler, whose parse options its code runs with, in top-level code whose
+        //! statements have different options; nullptr otherwise (see QoreIRLowering::top_level_code_parse_options)
+        const AbstractStatement* code_po_statement = nullptr;
     };
 
     explicit QoreIRLowering(QoreIRBuilder& builder, QoreParseContext* parse_context = nullptr,
@@ -956,6 +959,10 @@ private:
         a handler compiled to an IR function of its own is the root block of that function, which has none (#5870)
     */
     bool handler_body = false;
+    //! True if the code lowered is top-level code whose statements have different parse options, which sets the
+    //! options of each statement (QoreIROpcode::SetCodeParseOptions): its handlers run with the options of the
+    //! statements that declare them (InlineHandler::code_po_statement, qore#6293)
+    bool top_level_code_parse_options = false;
     //! true while the block cleanups of a return statement in a try statement of a handler body (handler_body) are
     //! lowered: the value of the return (handover_try_value) is handed to the function that the handler runs for when
     //! the walk leaves the outermost try statement of the handler, as the AST interpreter's try statement gives the
@@ -1215,10 +1222,29 @@ private:
     };
     //! the blocks with exception paths of their own being lowered, innermost last (#5968)
     std::vector<AnchorCatchInfo> anchor_catch_stack;
-    //! The blocks that only restore state on the exception path and continue to another exception target with the
-    //! exception (see beginForeachElementExceptionRestore()), with that target: the exceptions of the statements of a
-    //! catch block that go to one of them go on to the target (qore#6432)
-    std::unordered_map<const QoreIRBasicBlock*, QoreIRBasicBlock*> exception_forwarding_blocks;
+    //! The catch blocks to leave at each exception block of a statement that is an exception target of its own and
+    //! runs code before the exception goes on (see pushExceptionAnchor()), once its body has been lowered (qore#6472)
+    std::unordered_map<const QoreIRBasicBlock*, AnchorCatchInfo> exception_block_catches;
+
+    //! Makes an exception block of a statement the exception target of the code lowered until popExceptionAnchor()
+    /** The block runs code of its own on the exception path before the exception goes on to the handlers of the
+        enclosing blocks: the exception cleanup of a foreach statement, the restoration of its implicit element, the
+        catch block of a foreach over a reference or of a context statement.  A catch block without an exit block whose
+        statements' exceptions go to it is left there first, as at the exception path of a block or a try statement:
+        its catch variable is released before the code of the block, the code of the blocks that the exception goes on
+        to and their handlers run, as the AST interpreter leaves the catch block when the exception leaves it (#5968,
+        qore#6472); emitAnchorCatchLeave() emits that at the start of the block.
+    */
+    DLLLOCAL void pushExceptionAnchor(QoreIRBasicBlock* block);
+    //! Ends pushExceptionAnchor(), keeping the catch blocks to leave at the block for emitAnchorCatchLeave()
+    DLLLOCAL void popExceptionAnchor();
+    //! Emits the leaving of the catch blocks whose statements' exceptions went to an exception block of a statement
+    //! (see pushExceptionAnchor()), at the start of the block's code, after its landing pad if it has one
+    DLLLOCAL void emitAnchorCatchLeave(const QoreIRBasicBlock* block, const QoreProgramLocation* loc);
+    //! Emits the leaving of catch blocks without exit blocks whose statements raised an exception: their catch
+    //! variables are released and the catch blocks of the frame opened since \a catches.catch_depth that are still
+    //! open are closed (#5968)
+    DLLLOCAL void emitCatchLeave(const AnchorCatchInfo& catches, const QoreProgramLocation* loc);
 
     //! catch_cleanup_depth at the body of each enclosing try statement, innermost last
     /** An exception raised in a try body lands in that try statement's catch block, so a throw or rethrow there

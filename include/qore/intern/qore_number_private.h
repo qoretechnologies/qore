@@ -548,43 +548,34 @@ struct qore_number_private : public qore_number_private_intern {
     }
 
     // for round functions: round(), ceil(), floor()
-    //! the precision is an int64: it was cut to an int (qore#6212); a power of 10 above 10^308 is 10^308, as for a float
+    //! rounds to a multiple of 10^-prec, exactly; see roundDecimal()
     DLLLOCAL qore_number_private* doRoundNR(q_mpfr_unary_nr_func_t func, int64 prec = 0, ExceptionSink* xsink = NULL)
             const {
-        std::unique_ptr<qore_number_private> p0(new qore_number_private(*this));
+        std::unique_ptr<qore_number_private> p0(new qore_number_private(mpfr_get_prec(num)));
 
-        if (prec == 0) {
-            func(p0 -> num, num);
-
-            if (xsink)
-                checkFlags(xsink);
-
-            return p0.release();
-        }
-
-        qore_number_private* p2;
-
-        // the magnitude of the precision, also of the smallest int, limited to 308: pow() gives infinity above it, which
-        // gave a NaN result
-        uint64_t k = prec < 0 ? 0 - static_cast<uint64_t>(prec) : static_cast<uint64_t>(prec);
-        double scale = pow(10.0, static_cast<double>(k < 308 ? k : 308));
-        if (prec > 0) {
-            std::unique_ptr<qore_number_private> c(new qore_number_private(scale));
-            std::unique_ptr<qore_number_private> p1(p0 -> doMultiply(*c));
-            func(p1 -> num, p1 -> num);
-            p2 = p1 -> doDivideBy(*c, xsink);
+        // zero, infinity and NaN are their own result at any precision
+        if (prec == 0 || !mpfr_regular_p(num)) {
+            func(p0->num, num);
         } else {
-            std::unique_ptr<qore_number_private> c(new qore_number_private(scale));
-            std::unique_ptr<qore_number_private> p1(p0 -> doDivideBy(*c, xsink));
-            func(p1 -> num, p1 -> num);
-            p2 = p1 -> doMultiply(*c);
+            roundDecimal(p0->num, num, func, prec);
         }
 
         if (xsink)
             checkFlags(xsink);
 
-        return p2;
+        return p0.release();
     }
+
+    //! sets @a rv to the multiple of 10^-prec given by @a func (mpfr_round(), mpfr_ceil() or mpfr_floor()) for @a x
+    /** The multiple is found exactly, in integer arithmetic, and @a rv is it correctly rounded to its own precision;
+        no floating-point power of 10 is used, so that any precision is exact (qore#6278)
+
+        @param rv the result; its precision is that of the result
+        @param x a regular (finite, nonzero) value
+        @param func mpfr_round() (halfway values are rounded away from zero), mpfr_ceil() or mpfr_floor()
+        @param prec the number of decimal digits after the decimal point; a negative number rounds to a power of 10
+    */
+    DLLLOCAL static void roundDecimal(mpfr_t rv, const mpfr_t x, q_mpfr_unary_nr_func_t func, int64 prec);
 
     DLLLOCAL mpfr_prec_t getPrec() const {
         return mpfr_get_prec(num);

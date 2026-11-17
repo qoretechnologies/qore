@@ -142,9 +142,10 @@
 - A TSan report makes the process exit with code 66, so a test whose output has no failure can still fail under TSan.
 - Some tests cannot run under TSan whatever the code does, and fail without a report from it: `misc/hashdecl.qtest` and
   `misc/deep-release.qtest` recurse past TSan's limit of 64K nested calls (it crashes in `__tsan::CurrentStackId`);
-  `misc/stdio/stdio-startup.qtest` starts V8, which TSan cannot run; `misc/test-listener-addresses.qtest` and
-  `misc/module-loader/concurrent-module-program-merge.qtest` do so much work in Qore code that they exceed the 300
-  second limit of `run_tests.sh` at TSan's slowdown.
+  `misc/stdio/stdio-startup.qtest` starts V8, which TSan cannot run; `misc/test-listener-addresses.qtest` does so
+  much work in Qore code that it exceeds the 300 second limit of `run_tests.sh` at TSan's slowdown.  The test that
+  exceeded it with it now runs in parts (`misc/module-loader/ConcurrentModuleProgramMerge-<n>.qtest`), which have not
+  been measured under TSan.
 
 ## Commit & Pull Request Guidelines
 - Commit messages use a short type prefix such as `fix:`, `feat:`, or `refactor:` in a present-tense summary.

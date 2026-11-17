@@ -232,15 +232,23 @@ public:
                 break;
         }
 
+        // an lvalue that converts the result (ex: softstring, softbool) gives the value it holds afterwards, as
+        // the operator returns the lvalue's value: the result type is the lvalue's type (qore#6304)
         switch (kind) {
             case lvalue_e::NUMBER:
-                ti = numberTypeInfo;
+                if (!qore_lvalue_converts_result(ti, NT_NUMBER)) {
+                    ti = numberTypeInfo;
+                }
                 break;
             case lvalue_e::FLOAT:
-                ti = floatTypeInfo;
+                if (!qore_lvalue_converts_result(ti, NT_FLOAT)) {
+                    ti = floatTypeInfo;
+                }
                 break;
             case lvalue_e::INT:
-                ti = bigIntTypeInfo;
+                if (!qore_lvalue_converts_result(ti, NT_INT)) {
+                    ti = bigIntTypeInfo;
+                }
                 break;
             case lvalue_e::DATE:
             case lvalue_e::GENERIC:

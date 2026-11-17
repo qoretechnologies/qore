@@ -102,7 +102,7 @@ int ManagedDatasource::forkCheckUnlocked(ExceptionSink* xsink, QoreDbiForkCheck 
 
 void ManagedDatasource::cleanup(ExceptionSink *xsink) {
     // this thread has the transaction lock
-    AutoLocker al(&ds_lock);
+    DsLocker al(*this);
 
     // in a child process created with fork(), a connection opened by the parent is given up: its transaction
     // belongs to the parent, so nothing is rolled back (the thread resource is being run, so it is not removed), and
@@ -126,7 +126,8 @@ void ManagedDatasource::cleanup(ExceptionSink *xsink) {
 }
 
 void ManagedDatasource::destructor(ExceptionSink* xsink) {
-    AutoLocker al(&ds_lock);
+    // also for the connection values in use that the message below reads (qore#6142)
+    DsLocker al(*this);
     // in a child process created with fork(), a connection or transaction lock of the parent is given up
     forkCheckUnlocked(xsink, QoreDbiForkCheck::Discard);
     const int lock_tid = lockTid();
@@ -197,6 +198,11 @@ int ManagedDatasource::grabLockIntern(ExceptionSink* xsink) {
         }
 
         ++waiting;
+#ifdef DEBUG
+        // ds_lock is released during the wait
+        assert(dbgHoldsDsLock());
+        ds_lock_owner.store(nullptr, std::memory_order_relaxed);
+#endif
         if (xsink) {
             // a cancellation request or program interrupt wakes the wait at once; the check at the top of the
             // loop raises it
@@ -205,6 +211,9 @@ int ManagedDatasource::grabLockIntern(ExceptionSink* xsink) {
             // without an exception sink this is not a cancellation point
             cond.wait2(&ds_lock, wait_ms);
         }
+#ifdef DEBUG
+        ds_lock_owner.store(dbgThreadToken(), std::memory_order_relaxed);
+#endif
         --waiting;
     }
 
@@ -218,7 +227,9 @@ int ManagedDatasource::grabLock(ExceptionSink *xsink) {
     if (rc < 0) {
         endDBActionIntern();
         if (rc == -1) {
-            // Timeout
+            // Timeout; the connection values in use are read with ds_lock held, as the thread that holds the
+            // connection changes them with it held (qore#6142)
+            assert(dbgHoldsDsLock());
             const char *un = getUsername();
             const char *db = getDBName();
             xsink->raiseException("TRANSACTION-LOCK-TIMEOUT", "%s:%s@%s: TID %d timed out on datasource '%s@%s' after waiting %d millisecond%s on transaction lock held by TID %d",
@@ -243,7 +254,7 @@ void ManagedDatasource::releaseLockIntern() {
 }
 
 void ManagedDatasource::releaseLock() {
-   AutoLocker al(ds_lock);
+   DsLocker al(*this);
    releaseLockIntern();
 }
 
@@ -268,7 +279,7 @@ void ManagedDatasource::closeOrphans() {
 }
 
 int ManagedDatasource::acquireLock(ExceptionSink* xsink, bool& new_lock, bool& fork_gave_up) {
-    AutoLocker al(&ds_lock);
+    DsLocker al(*this);
     // a connection or lock of the parent of a child process created with fork() is given up first; the actions that
     // take the lock this way need no connection (options and configuration), so a transaction of the parent is
     // raised by the next action that uses a connection
@@ -283,7 +294,7 @@ int ManagedDatasource::acquireLock(ExceptionSink* xsink, bool& new_lock, bool& f
 }
 
 int ManagedDatasource::startDBAction(ExceptionSink *xsink, bool &new_transaction, bool open) {
-    AutoLocker al(&ds_lock);
+    DsLocker al(*this);
 
     // a connection or lock of the parent of a child process created with fork() is given up first: the action uses a
     // new connection, unless it would continue a transaction of the parent; for an action that makes no connection
@@ -341,18 +352,18 @@ bool ManagedDatasource::endDBActionIntern(char cmd, bool new_transaction) {
 }
 
 bool ManagedDatasource::endDBAction(char cmd, bool new_transaction) {
-   AutoLocker al(&ds_lock);
+   DsLocker al(*this);
    return endDBActionIntern(cmd, new_transaction);
 }
 
 void ManagedDatasource::setTransactionLockTimeout(int t_ms) {
     // a thread waiting for the transaction lock reads the timeout with ds_lock held
-    AutoLocker al(&ds_lock);
+    DsLocker al(*this);
     tl_timeout_ms = t_ms;
 }
 
 int ManagedDatasource::getTransactionLockTimeout() const {
-    AutoLocker al(&ds_lock);
+    DsLocker al(*this);
     return tl_timeout_ms;
 }
 
@@ -587,13 +598,13 @@ int ManagedDatasource::closeUnlocked(ExceptionSink *xsink) {
 }
 
 int ManagedDatasource::close(ExceptionSink *xsink) {
-   AutoLocker al(&ds_lock);
+   DsLocker al(*this);
    return closeUnlocked(xsink);
 }
 
 // closes and re-opens to reset a database connection
 int ManagedDatasource::reset(ExceptionSink *xsink) {
-    AutoLocker al(&ds_lock);
+    DsLocker al(*this);
     if (closeUnlocked(xsink))
         return -1;
     // open the connection
@@ -601,63 +612,84 @@ int ManagedDatasource::reset(ExceptionSink *xsink) {
 }
 
 void ManagedDatasource::setPendingUsername(const char *u) {
-   AutoLocker al(&ds_lock);
-   Datasource::setPendingUsername(u);
+    // the calling code is the setter of the value (qore#6142), recorded before the lock is taken; the
+    // previous setter is released after the lock
+    qore_ds_setter_t setter = qore_ds_option_setter::getCaller();
+    DsLocker al(*this);
+    qore_ds_private::get(*this)->setPendingParam(QDCP_USER, u, setter);
 }
 
 void ManagedDatasource::setPendingPassword(const char *p) {
-   AutoLocker al(&ds_lock);
-   Datasource::setPendingPassword(p);
+    // the calling code is the setter of the value (qore#6142), recorded before the lock is taken; the
+    // previous setter is released after the lock
+    qore_ds_setter_t setter = qore_ds_option_setter::getCaller();
+    DsLocker al(*this);
+    qore_ds_private::get(*this)->setPendingParam(QDCP_PASS, p, setter);
 }
 
 void ManagedDatasource::setPendingDBName(const char *d) {
-   AutoLocker al(&ds_lock);
-   Datasource::setPendingDBName(d);
+    // the calling code is the setter of the value (qore#6142), recorded before the lock is taken; the
+    // previous setter is released after the lock
+    qore_ds_setter_t setter = qore_ds_option_setter::getCaller();
+    DsLocker al(*this);
+    qore_ds_private::get(*this)->setPendingParam(QDCP_DB, d, setter);
 }
 
 void ManagedDatasource::setPendingDBEncoding(const char *c) {
-   AutoLocker al(&ds_lock);
+   DsLocker al(*this);
    Datasource::setPendingDBEncoding(c);
 }
 
 void ManagedDatasource::setPendingHostName(const char *h) {
-   AutoLocker al(&ds_lock);
-   Datasource::setPendingHostName(h);
+    // the calling code is the setter of the value (qore#6142), recorded before the lock is taken; the
+    // previous setter is released after the lock
+    qore_ds_setter_t setter = qore_ds_option_setter::getCaller();
+    DsLocker al(*this);
+    qore_ds_private::get(*this)->setPendingParam(QDCP_HOST, h, setter);
 }
 
 void ManagedDatasource::setPendingPort(int port) {
-   AutoLocker al(&ds_lock);
-   Datasource::setPendingPort(port);
+    // the calling code is the setter of the value (qore#6142), recorded before the lock is taken; the previous setter
+    // is released after the lock
+    qore_ds_setter_t setter = qore_ds_option_setter::getCaller();
+    DsLocker al(*this);
+    qore_ds_private::get(*this)->setPendingPort(port, setter);
 }
 
 QoreStringNode *ManagedDatasource::getPendingUsername() const {
-   AutoLocker al(&ds_lock);
+   DsLocker al(*this);
    return Datasource::getPendingUsername();
 }
 
 QoreStringNode *ManagedDatasource::getPendingPassword() const {
-   AutoLocker al(&ds_lock);
+   DsLocker al(*this);
    return Datasource::getPendingPassword();
 }
 
 QoreStringNode *ManagedDatasource::getPendingDBName() const {
-   AutoLocker al(&ds_lock);
+   DsLocker al(*this);
    return Datasource::getPendingDBName();
 }
 
 QoreStringNode *ManagedDatasource::getPendingDBEncoding() const {
-   AutoLocker al(&ds_lock);
+   DsLocker al(*this);
    return Datasource::getPendingDBEncoding();
 }
 
 QoreStringNode *ManagedDatasource::getPendingHostName() const {
-   AutoLocker al(&ds_lock);
+   DsLocker al(*this);
    return Datasource::getPendingHostName();
 }
 
 int ManagedDatasource::getPendingPort() const {
-   AutoLocker al(&ds_lock);
+   DsLocker al(*this);
    return Datasource::getPendingPort();
+}
+
+int ManagedDatasource::getPort() const {
+    // the port in use is changed with ds_lock held by the thread that holds the connection (qore#6142)
+    DsLocker al(*this);
+    return Datasource::getPort();
 }
 
 QoreValue ManagedDatasource::getServerVersion(ExceptionSink *xsink) {
@@ -706,25 +738,32 @@ QoreValue ManagedDatasource::getOption(const char* opt, ExceptionSink* xsink) {
         return QoreValue();
     // the value is the connection's: a connection of the parent of a child process created with fork() that was
     // given up is replaced, unless it was in a transaction
-    if (dbah.forkGaveUpConnection()
-        && (qore_ds_private::get(*this)->raiseForkLostTransaction(xsink) || Datasource::open(xsink))) {
-        return QoreValue();
+    if (dbah.forkGaveUpConnection()) {
+        if (qore_ds_private::get(*this)->raiseForkLostTransaction(xsink)) {
+            return QoreValue();
+        }
+        // the connection values in use are changed with ds_lock held, as by every other open (qore#6142); the
+        // action holds only the transaction lock here
+        DsLocker al(*this);
+        if (Datasource::open(xsink)) {
+            return QoreValue();
+        }
     }
     return Datasource::getOption(opt, xsink);
 }
 
 void ManagedDatasource::setEventQueue(Queue* q, QoreValue arg, ExceptionSink* xsink) {
-    AutoLocker al(&ds_lock);
+    DsLocker al(*this);
     Datasource::setEventQueue(q, arg, xsink);
 }
 
 void ManagedDatasource::setMutationObserver(ResolvedCallReferenceNode* observer, int64 event_mask, QoreValue arg,
         ExceptionSink* xsink) {
-    AutoLocker al(&ds_lock);
+    DsLocker al(*this);
     Datasource::setMutationObserver(observer, event_mask, arg, xsink);
 }
 
 int ManagedDatasource::pushMutationDeclaration(const QoreHashNode* info, ExceptionSink* xsink) {
-    AutoLocker al(&ds_lock);
+    DsLocker al(*this);
     return Datasource::pushMutationDeclaration(info, xsink);
 }

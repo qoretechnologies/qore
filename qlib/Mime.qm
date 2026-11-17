@@ -110,6 +110,11 @@ printf("%y: header word b: %y\n", mime_decode_header(mime_encode_header_word_b(s
 
 
     @section mime_1_9 v1.9
+    - a charset that a message names (the \c charset of a part's \c Content-Type, an encoded word of a header)
+      selects only an encoding that %Qore knows or a standard character set
+      (@ref Qore::get_known_encoding() "get_known_encoding()"), so that untrusted messages never register encodings
+      without limit; an encoded word in another charset is left as it is
+      (<a href="https://github.com/qoretechnologies/qore/issues/6460">issue 6460</a>)
     - added @ref Mime::mime_get_header_text() "mime_get_header_text()" and
       @ref Mime::mime_get_header_block_charset() "mime_get_header_block_charset()";
       @ref Mime::MultiPartMessage::parseBody() "MultiPartMessage::parseBody()" reads a raw 8-bit part header line
@@ -1465,10 +1470,11 @@ public namespace Mime {
         return -1;
     }
 
-    # returns the charset parameter of a Content-Type value, if any; the parameter was taken with any parameters
-    # after it (ex: "ISO-8859-1; format=flowed"), which named no character encoding
+    # returns the encoding that the charset parameter of a Content-Type value selects, if any; the parameter was taken
+    # with any parameters after it (ex: "ISO-8859-1; format=flowed"), which named no character encoding; the name is
+    # untrusted data, which selects only an encoding that Qore knows or a standard character set (issue #6460)
     *string sub mime_get_charset(*string ct) {
-        return (ct =~ x/charset="?([^";\s]+)"?/i)[0];
+        return get_known_encoding((ct =~ x/charset="?([^";\s]+)"?/i)[0]);
     }
 
     # returns True if the name is that of a character encoding with one byte per character
@@ -1496,8 +1502,10 @@ public namespace Mime {
     #! Returns the charset parameter of the Content-Type field in a block of header lines, if any
     /** @param hdr the header lines, separated by \c "\r\n"; the Content-Type field can be folded
 
-        @return the value of the charset parameter of the first Content-Type field (the field name and the parameter
-        name are matched in any case), or @ref nothing if there is none
+        @return the code of the encoding that the charset parameter of the first Content-Type field selects (the
+        field name and the parameter name are matched in any case), or @ref nothing if there is none or it selects
+        none; the name is untrusted data, which selects only what
+        @ref Qore::get_known_encoding() "get_known_encoding()" accepts
 
         @since %Mime 1.9
     */
@@ -1505,7 +1513,8 @@ public namespace Mime {
         if (scan_counting) {
             MimeScanCounter::bytes += hdr.size();
         }
-        return (hdr =~ x/(?:^|\r\n)content-type:(?:[^\r\n]|\r\n[ \t])*?charset\s*=\s*"?([^";\s]+)/i)[0];
+        *string charset = (hdr =~ x/(?:^|\r\n)content-type:(?:[^\r\n]|\r\n[ \t])*?charset\s*=\s*"?([^";\s]+)/i)[0];
+        return get_known_encoding(charset);
     }
 
     #! Returns the text of a raw header line, given as bytes, that can contain 8-bit characters
@@ -1620,6 +1629,10 @@ public namespace Mime {
         @note white space between two encoded words, including a folded line break, is not part of the decoded
         value (<a href="http://tools.ietf.org/html/rfc2047#section-6.2">RFC 2047 section 6.2</a>)
 
+        @note an encoded word whose charset does not select an encoding is left as it is
+        (<a href="http://tools.ietf.org/html/rfc2047#section-6.2">RFC 2047 section 6.2</a>): the charset is untrusted
+        data, which selects only what @ref Qore::get_known_encoding() "get_known_encoding()" accepts
+
         @since %Mime 1.9 the white space between two encoded words is dropped, and only there; one space was dropped
         before every encoded word after the first, and an encoded word was decoded wherever the same word appeared
     */
@@ -1664,9 +1677,16 @@ public namespace Mime {
             if (!pre.empty() && (!after_word || pre !~ /^[ \t\r\n]*$/)) {
                 rv += pre;
             }
-            rv += l[i + 2].upr() == "Q"
-                ? mime_decode_quoted_printable(l[i + 3], l[i + 1])
-                : mime_decode_base64_to_string(l[i + 3], l[i + 1]);
+            # the charset is untrusted data, which selects only an encoding that Qore knows or a standard character
+            # set; a word in another charset is left as it is (RFC 2047 section 6.2; issue #6460)
+            *string word_enc = get_known_encoding(l[i + 1]);
+            if (!exists word_enc) {
+                rv += "=?" + l[i + 1] + "?" + l[i + 2] + "?" + l[i + 3] + "?=";
+            } else {
+                rv += l[i + 2].upr() == "Q"
+                    ? mime_decode_quoted_printable(l[i + 3], word_enc)
+                    : mime_decode_base64_to_string(l[i + 3], word_enc);
+            }
             after_word = True;
         }
         return join("", rv);
@@ -1864,8 +1884,14 @@ hash<MimeHeaderValueInfo> h = mime_parse_header_value("attachment; filename=\"a 
             octets += parse_hex_string(hex);
             i += 2;
         }
+        # the charset is untrusted data, which selects only an encoding that Qore knows or a standard character set
+        # (issue #6460)
+        *string enc = get_known_encoding(charset);
+        if (!exists enc) {
+            return;
+        }
         try {
-            string str = binary_to_string(octets, charset);
+            string str = binary_to_string(octets, enc);
             if (str.encoding() == "UTF-8") {
                 # the octets are validated by the conversion
                 return convert_encoding(convert_encoding(str, "UTF-16"), "UTF-8");

@@ -54,7 +54,7 @@ yaml-dev (Alpine), or libyaml (Homebrew).
 
 *) zlib 1.1.3 or higher
 
-*) mpfr 2.4.1 or higher - version 3.1+ recommended + note that the gmp library is also required to build mpfr
+*) mpfr 2.4.1 or higher - version 3.1+ recommended, and gmp (with its headers), which libqore also links directly
    	http://www.mpfr.org/
 	http://gmplib.org/
 This is for the arbitrary-precision numeric type introduced with Qore 0.8.6

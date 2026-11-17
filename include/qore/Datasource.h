@@ -55,6 +55,106 @@ class QoreSandboxManager;
 */
 #define _QORE_HAS_DATASOURCE_OPTION_RESTRICTIONS 1
 
+//! defined if Datasource::getConnectChoosers(), Datasource::addOptionChooser() and QoreDatasourceConnectChoosers are
+//! available
+/** A driver judges a connection by the code that chose it, not by the code that opens it (qore#6142)
+
+    @since %Qore 3.0
+*/
+#define _QORE_HAS_DATASOURCE_CONNECT_CHOOSERS 1
+
+struct qore_ds_pool_record;
+
+//! The code that chose the connection of a datasource: its creators and the setters of the values that a connect uses
+/** Filled by Datasource::getConnectChoosers() and Datasource::addOptionChooser().  Each entry is the record of a
+    piece of code, made when the code created the datasource or set a value; each creation and each value set makes a
+    record of its own, so code that created a datasource and set three of its values gives four entries.  A record is
+    an entry once (the connections of a DatasourcePool, whose creator set all of their values with one record, have
+    one entry), and the creators of a copy have no two records that always give the same decision (see
+    Datasource::getConnectChoosers()).
+
+    A driver that connects to a destination that sandboxed code must not choose judges the connection by these
+    entries, not by the code that is running when it connects: a connection is restricted if any entry does not allow
+    uncontrolled APIs (allowsUncontrolledApis()), and it is then checked against the policy managers of the entries
+    that restrict it (getPolicyManagerRef()).
+
+    An empty object is restricted: allowsUncontrolledApis() returns false for it.  A filled record always has an entry
+    (the creator), and Datasource::getConnectChoosers() and Datasource::addOptionChooser() leave the object empty when
+    they raise an exception; a driver that derives the decision from the entries itself (allowsUncontrolledApis(size_t)
+    for each entry) must therefore treat size() == 0 as restricted, never as "no entry restricts".
+
+    The object is created by the caller, is not copyable, holds its own references to the records, and may be read on
+    any thread once it is filled.
+
+    @since %Qore 3.0
+*/
+class QoreDatasourceConnectChoosers {
+public:
+    //! creates an empty object; allocates nothing and never throws
+    DLLEXPORT QoreDatasourceConnectChoosers() noexcept;
+
+    //! releases the references to the records
+    DLLEXPORT ~QoreDatasourceConnectChoosers();
+
+    //! returns the number of entries
+    /** At least 1 after a successful Datasource::getConnectChoosers(): a datasource always has a creator; 0 before it,
+        after clear(), or after an error
+    */
+    DLLEXPORT size_t size() const;
+
+    //! returns true if every entry may use uncontrolled APIs; see allowsUncontrolledApis(size_t)
+    /** @return false for an empty object: a missing record is never a permission
+
+        @note Each call reads the policies again, and a host can change them at any time; a driver that also needs the
+        result of each entry calls allowsUncontrolledApis(size_t) once for each entry and derives the aggregate from
+        those results instead of calling this function as well
+    */
+    DLLEXPORT bool allowsUncontrolledApis() const;
+
+    //! returns true if entry \a i may use uncontrolled APIs
+    /** For an entry that a sandbox policy governed, the current \c getUncontrolledApiPolicy() of its policy manager
+        (read now, so that a later change of the host's policy applies, in both directions); for an entry without a
+        policy manager (no sandbox governed it, or it ran under a trusted barrier such as
+        \c SandboxManager::callWithSystemPolicy()), qore_sandbox_allows_uncontrolled_apis() with the \c Policy purpose
+        as it was when it chose, which is true for such an entry.
+
+        @return the result; false if \a i is out of range (asserted in a debug build)
+    */
+    DLLEXPORT bool allowsUncontrolledApis(size_t i) const;
+
+    //! sets \a r to the restrictions of entry \a i
+    /** The restrictions are those that QoreModuleCommandRestrictions::getCallerRestrictions() gave the code when it
+        chose.
+
+        @return true if \a i is in range and \a r was set, false if not (asserted in a debug build)
+
+        @note The restrictions are resolved for every purpose (QoreModuleCommandRestrictions::isSandboxed()), so they do
+        not follow the barrier rule of a policy check: decide whether a connection is restricted with
+        allowsUncontrolledApis(), not with them
+    */
+    DLLEXPORT bool getRestrictions(size_t i, QoreModuleCommandRestrictions& r) const;
+
+    //! returns a new reference to the policy manager of entry \a i, or nullptr
+    /** The manager that a policy check made by the code would have used when it chose
+        (QoreSandboxManagerHelper(QoreSandboxManagerHelper::Policy)); nullptr if no sandbox policy governed it, or if
+        \a i is out of range (asserted in a debug build).  The caller owns the reference.
+    */
+    DLLEXPORT QoreSandboxManager* getPolicyManagerRef(size_t i) const;
+
+    //! removes every entry
+    DLLEXPORT void clear();
+
+    QoreDatasourceConnectChoosers(const QoreDatasourceConnectChoosers&) = delete;
+    QoreDatasourceConnectChoosers& operator=(const QoreDatasourceConnectChoosers&) = delete;
+
+private:
+    //! the entries; nullptr until the object is first filled
+    struct qore_ds_connect_choosers_private* priv;
+
+    friend class Datasource;
+    friend struct qore_ds_private;
+};
+
 //! the base class for accessing databases in Qore through a Qore DBI driver
 /** This class is not thread-safe or even thread-aware.  Thread safety and thread
     resource management is implemented in higher-level classes such as ManagedDatasource
@@ -112,9 +212,22 @@ public:
     */
     DLLLOCAL Datasource(const Datasource& old, DatasourceStatementHelper* dsh);
 
+    //! creates a connection of a DatasourcePool with the record of the pool; internal only
+    /** The connection's creators are the creators of the pool, not the code that runs when the pool grows (qore#6142)
+
+        @param driver the DBIDriver object to use for the connection
+        @param dsh the interface of the real C++ parent object
+        @param rec the creators of the pool
+
+        @since %Qore 3.0
+    */
+    DLLLOCAL Datasource(DBIDriver* driver, DatasourceStatementHelper* dsh, const qore_ds_pool_record& rec);
+
     //! creates the object and binds it to a particular DBIDriver
     /**
         @param driver the DBIDriver object to use for the connection
+
+        @note the calling code is recorded as the creator of the datasource; see getConnectChoosers()
 
         @deprecated do not use
     */
@@ -122,6 +235,9 @@ public:
 
     //! copy constructor
     /*
+        @note the creators of the copy are the calling code (the copier) and the creators of \a old, and the copy
+        keeps the setters of the values that it copies; see getConnectChoosers()
+
         @deprecated do not use
     */
     DLLEXPORT Datasource(const Datasource& old);
@@ -254,36 +370,49 @@ public:
     //! sets the username to be used for the next connection
     /**
         @param u the username to be used for the next connection
+
+        @note the calling code is recorded as the setter of the value; see getConnectChoosers()
     */
     DLLEXPORT void setPendingUsername(const char* u);
 
     //! sets the password to be used for the next connection
     /**
         @param p the password to be used for the next connection
+
+        @note the calling code is recorded as the setter of the value; see getConnectChoosers()
     */
     DLLEXPORT void setPendingPassword(const char* p);
 
     //! sets the database (or schema) name to be used for the next connection
     /**
         @param d the database (or schema) name to be used for the next connection
+
+        @note the calling code is recorded as the setter of the value; see getConnectChoosers()
     */
     DLLEXPORT void setPendingDBName(const char* d);
 
     //! sets the database-specific name of the character-encoding  to be used for the next connection
     /**
         @param c the database-specific name of the character-encoding to be used for the next connection
+
+        @note the encoding does not choose the destination or the credentials of the connection, so no setter is
+        recorded for it (see getConnectChoosers())
     */
     DLLEXPORT void setPendingDBEncoding(const char* c);
 
     //! sets the hostname to be used for the next connection
     /**
         @param h the hostname to be used for the next connection
+
+        @note the calling code is recorded as the setter of the value; see getConnectChoosers()
     */
     DLLEXPORT void setPendingHostName(const char* h);
 
     //! sets the port number to be used for the next connection
     /**
         @param port the port number to be used for the next connection
+
+        @note the calling code is recorded as the setter of the value; see getConnectChoosers()
     */
     DLLEXPORT void setPendingPort(int port);
 
@@ -686,7 +815,8 @@ public:
 
         @return -1 for error (exception raised), 0 for OK
 
-        @note the calling code is recorded as the code that set the option; see getOptionRestrictions()
+        @note the calling code is recorded as the code that set the option; see getOptionRestrictions(), and
+        addOptionChooser() for an option that chooses the destination of the connection
 
         @deprecated use setOption(const char*, const QoreValue, ExceptionSink*);
     */
@@ -722,6 +852,8 @@ public:
         - while a connection is opened, getOptionRestrictions() and getOptionPolicyManagerRef() report the setters of
           the stored values that the connection is given, also while another value of an option is being set
         - a driver must not call setOption() on the datasource from its own open or option-setting functions
+        - a driver that judges the destination of a connection by the code that chose it reads
+          getConnectChoosers() and adds the options that choose the destination with addOptionChooser()
     */
     DLLEXPORT const QoreHashNode* getConnectOptions() const;
 
@@ -753,13 +885,19 @@ public:
         @return true if the code that set the option is known and \a restrictions were set, false if not (the option
         is not set, or it was set in a way that recorded no setter): then the driver judges the code that is running
 
-        @note A driver checks these restrictions first, and an option that they refuse (the setter was sandboxed or
-        restricted) is refused whatever getOptionPolicyManagerRef() returns: that manager is nullptr whenever no
-        sandbox policy governed the setter, also for sandboxed code that ran inside a trusted
-        \c SandboxManager::callWithSystemPolicy() call (a barrier), so a missing policy is not a permission.  Only an
-        option that these restrictions allow is then checked against the policy, if there is one
+        @note For an option that is judged like a module command (an option that does something itself, such as adding
+        to a classpath), a driver checks these restrictions first, and an option that they refuse (the setter was
+        sandboxed or restricted) is refused whatever getOptionPolicyManagerRef() returns: that manager is nullptr
+        whenever no sandbox policy governed the setter, also for sandboxed code that ran inside a trusted
+        \c SandboxManager::callWithSystemPolicy() call (a barrier), so for such an option a missing policy is not a
+        permission.  Only an option that these restrictions allow is then checked against the policy, if there is one.
+        An option that chooses the destination of a connection (such as a JDBC URL), like the connection values and
+        the database name, is judged by the policy rule instead (addOptionChooser() and getConnectChoosers()): a
+        setter without a policy manager (code that no sandbox governed, or that ran under a trusted barrier or a
+        capability) counts as trusted, as QoreDatasourceConnectChoosers::allowsUncontrolledApis(size_t) reports
 
         @see getOptionPolicyManagerRef()
+        @see getConnectChoosers() and addOptionChooser() for the code that chose the destination of a connection
         @see the feature macro \c _QORE_HAS_DATASOURCE_OPTION_RESTRICTIONS
 
         @since %Qore 3.0
@@ -777,14 +915,68 @@ public:
         @return a new reference to the policy manager (the caller owns it), or nullptr if no sandbox policy governed
         the code that set the option, or if the setter is not known (see getOptionRestrictions())
 
-        @note Call it after getOptionRestrictions() has allowed the option, never instead of it: nullptr does not mean
-        that the setter was trusted (under a trusted barrier, \c SandboxManager::callWithSystemPolicy(), the code that
-        set the option has no policy manager but can still be sandboxed), so a driver that refuses the option for a
-        restricted setter refuses it before it looks at the policy
+        @note For an option that is judged like a module command, call it after getOptionRestrictions() has allowed
+        the option, never instead of it: nullptr does not mean that the setter was trusted (under a trusted barrier,
+        \c SandboxManager::callWithSystemPolicy(), the code that set the option has no policy manager but can still be
+        sandboxed), so a driver that refuses the option for a restricted setter refuses it before it looks at the
+        policy.  An option that chooses the destination of a connection is judged by the policy rule of
+        addOptionChooser() instead, where a setter without a policy manager counts as trusted
 
         @since %Qore 3.0
     */
     DLLEXPORT QoreSandboxManager* getOptionPolicyManagerRef(const char* opt) const;
+
+    //! replaces the content of \a c with the code that chose the connection: its creators and the setters of the
+    //! connection values in use
+    /** A driver connects when a datasource is opened, which can happen on another thread and for other code than the
+        code that configured it: a DatasourcePool opens a connection on the thread that first needs one, and trusted
+        code can open a datasource that sandboxed code configured (and the reverse).  A driver that must not connect
+        to a destination that sandboxed code chose therefore judges the connection by this record, not by the code
+        that is running (qore#6142).  The entries are:
+        - the creators of the datasource: the code that created it (also by deserialization), and, for a copy, the
+          code that copied it and the creators of the original; for a connection of a DatasourcePool, the creators of
+          the pool, whatever thread grows it
+        - the setters of the connection values in use: the user name, password, database name, host name and port
+          that the connection is opened with, each recorded when it was set and copied to the values in use when the
+          connection is opened (so a value that was set since then judges the next open, not a reconnect with the
+          values in use); the last setter of a value replaces the previous one.  The encoding is not one of them
+
+        Add the options that choose the destination with addOptionChooser().
+
+        Call it as getConnectOptions() is called: from the driver's open function, or while the calling thread holds
+        the connection (also for a driver's own reconnect).
+
+        @param c receives the entries; its previous entries are removed
+        @param xsink for an out-of-memory error
+
+        @return 0 for OK, -1 if an exception was raised (\a c is empty then)
+
+        @note must not be called from the driver's statement close or free functions (see the DBI driver rules)
+
+        @see the feature macro \c _QORE_HAS_DATASOURCE_CONNECT_CHOOSERS
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT int getConnectChoosers(QoreDatasourceConnectChoosers& c, ExceptionSink* xsink) const;
+
+    //! adds the setter of option \a opt, an option that the driver uses to choose the destination, to \a c
+    /** The setter is the one that getOptionRestrictions() reports for the option (the pending setter during the
+        driver's option-setting function, the stored one during an open; a placeholder entry has none).  A setter that
+        is already an entry of \a c is not added again.
+
+        @param opt the name of the option, as a key of getConnectOptions()
+        @param c the entries to add to, normally filled by getConnectChoosers() first
+        @param xsink for an out-of-memory error
+
+        @return 1 if the setter of the option is an entry of \a c now, 0 if the option has no recorded setter, -1 if
+        an exception was raised (\a c is empty then, also of the entries that it had: an empty record is never a
+        permission)
+
+        @note must not be called from the driver's statement close or free functions (see the DBI driver rules)
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT int addOptionChooser(const char* opt, QoreDatasourceConnectChoosers& c, ExceptionSink* xsink) const;
 
     //! returns a hash representing the configuration of the current object
     /**
