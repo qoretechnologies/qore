@@ -715,7 +715,9 @@ public class GmailMessageWatchDataProviderBase inherits GoogleDataProvider::Goog
         *string content_type = hdr."Content-Type";
         *string encoding;
         if (content_type.val()) {
-            encoding = (content_type =~ x/charset="([^"]+)"/)[0];
+            # the charset is untrusted data, which selects only an encoding that Qore knows or a standard character
+            # set; any other charset is ignored (issue #6460)
+            encoding = get_known_encoding((content_type =~ x/charset="([^"]+)"/)[0]);
             content_type =~ s/;.*//;
         } else if (filename.val()) {
             content_type = get_mime_type_from_ext(filename);

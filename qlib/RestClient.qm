@@ -177,6 +177,9 @@ printf("%Y\n", ans.body);
     @section restclientv2_7 RestClient v2.7
     - errors no longer contain the values of options or credentials, which can be passwords or tokens
       (<a href="https://github.com/qoretechnologies/qore/issues/6467">issue 6467</a>)
+    - a character set given as the \c Content-Encoding of a response selects only an encoding that %Qore knows or a
+      standard character set (@ref Qore::get_known_encoding() "get_known_encoding()"), and is ignored otherwise
+      (<a href="https://github.com/qoretechnologies/qore/issues/6460">issue 6460</a>)
     - added the @ref RestClient::AbstractRestConnection "AbstractRestConnection" class, which provides all of
       @ref RestClient::RestConnection "RestConnection" (options, OAuth2, features, pings and polling) with
       @ref RestClient::AbstractRestConnection::get() "get()" returning an object of any class, for connections
@@ -1102,7 +1105,9 @@ class RestClientResponseOutputStream inherits Qore::OutputStream {
         *string character_encoding;
         bool decoded_content = False;
         if (token =~ /^(?:iso|utf-)/) {
-            character_encoding = token;
+            # the name is untrusted data, which selects only an encoding that Qore knows or a standard character set;
+            # any other name is ignored (issue #6460)
+            character_encoding = get_known_encoding(token);
             content_encoding_charset = token;
         } else if (token.val() && encoding_passthru) {
             # Match HTTPClient's encoding_passthru behavior: any non-character Content-Encoding is returned as

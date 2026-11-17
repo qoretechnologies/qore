@@ -128,6 +128,8 @@
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <sys/resource.h>
+#include <csignal>
 #include <sys/wait.h>
 #include <unistd.h>
 
@@ -10917,6 +10919,390 @@ static void ut_datasource_option_commit_window(UnitTestCounters& c) {
     xsink.clear();
     ut_dsopt_seen_setter.reset();
 }
+
+namespace {
+//! what the hook of the views of the pending connection values observed (qore#6142)
+struct UtDsPendingProbe {
+    //! the number of critical sections on the pending values
+    int calls = 0;
+    //! the number of them in which another thread found the lock of the values held
+    int busy = 0;
+};
+
+//! the hook of the views of the pending connection values: another thread tries to take their lock, which must be
+//! held by this thread
+/** The other thread is joined before the hook returns, and it releases the lock at once if it got it, so the result
+    does not depend on timing: with the lock held, trylock() fails every time; without it, it succeeds every time
+*/
+void ut_ds_pending_hook(QoreThreadLock& m, void* arg) {
+    UtDsPendingProbe& p = *static_cast<UtDsPendingProbe*>(arg);
+    ++p.calls;
+    bool busy = false;
+    std::thread t([&m, &busy]() {
+        if (m.trylock()) {
+            busy = true;
+        } else {
+            m.unlock();
+        }
+    });
+    t.join();
+    if (busy) {
+        ++p.busy;
+    }
+}
+
+//! sets the hook of the views of the pending connection values for the current scope
+class UtDsPendingHookGuard {
+public:
+    UtDsPendingHookGuard(UtDsPendingProbe& p) {
+        qore_ds_pending_params::setDbgViewHook(ut_ds_pending_hook, &p);
+    }
+
+    ~UtDsPendingHookGuard() {
+        qore_ds_pending_params::setDbgViewHook(nullptr, nullptr);
+    }
+
+    UtDsPendingHookGuard(const UtDsPendingHookGuard&) = delete;
+    UtDsPendingHookGuard& operator=(const UtDsPendingHookGuard&) = delete;
+};
+
+//! runs \a f with the hook set, and checks that it entered exactly \a expected sections, each with the lock held
+template <typename F>
+void ut_ds_pending_sections(UnitTestCounters& c, int expected, const std::string& msg, F f) {
+    UtDsPendingProbe p;
+    {
+        UtDsPendingHookGuard g(p);
+        f();
+    }
+    UT_ASSERT_EQ(c, expected, p.calls, (msg + ": the number of sections on the pending values").c_str());
+    UT_ASSERT_EQ(c, p.calls, p.busy, (msg + ": the lock is held in every section").c_str());
+    UT_ASSERT_EQ(c, 0, QoreDsLock::dbgDepth(), (msg + ": no section is left entered").c_str());
+}
+
+//! returns the value of a string or "<none>"
+std::string ut_ds_str(QoreStringNode* str) {
+    SimpleRefHolder<QoreStringNode> h(str);
+    return str ? str->c_str() : "<none>";
+}
+
+//! returns the string value of a key of a hash, or "<none>"
+std::string ut_ds_hash_str(const QoreHashNode* h, const char* key) {
+    QoreValue v = h ? h->getKeyValue(key) : QoreValue();
+    if (v.getType() != NT_STRING) {
+        return "<none>";
+    }
+    return v.get<const QoreStringNode>()->c_str();
+}
+
+//! releases a ManagedDatasource
+struct UtManagedDsHolder {
+    ManagedDatasource* ds;
+
+    UtManagedDsHolder(ManagedDatasource* ds) : ds(ds) {
+    }
+
+    ~UtManagedDsHolder() {
+        if (ds) {
+            ExceptionSink xsink;
+            ds->deref(&xsink);
+            xsink.clear();
+        }
+    }
+
+    UtManagedDsHolder(const UtManagedDsHolder&) = delete;
+    UtManagedDsHolder& operator=(const UtManagedDsHolder&) = delete;
+};
+
+//! sets the connection values of a datasource
+template <typename T>
+void ut_ds_configure(T& ds, const char* tag) {
+    std::string t(tag);
+    ds.setPendingUsername((t + "-user").c_str());
+    ds.setPendingPassword((t + "-pass").c_str());
+    ds.setPendingDBName((t + "-db").c_str());
+    ds.setPendingDBEncoding("utf8");
+    ds.setPendingHostName((t + "-host").c_str());
+    ds.setPendingPort(1234);
+}
+
+#ifndef _Q_WINDOWS
+//! the result that a child process created with fork() reports to its parent
+struct UtDsChildResult {
+    int calls = -1;
+    int busy = -1;
+    int ok = 0;
+};
+
+//! waits for a child process; returns its wait status, or -1 if it cannot be waited for
+int ut_ds_wait_status(pid_t pid) {
+    int status = 0;
+    while (waitpid(pid, &status, 0) < 0) {
+        if (errno != EINTR) {
+            return -1;
+        }
+    }
+    return status;
+}
+
+//! reads the result of a child process from \a fd; returns false if it did not report a complete result
+bool ut_ds_read_child_result(int fd, UtDsChildResult& r) {
+    char* p = reinterpret_cast<char*>(&r);
+    size_t left = sizeof(r);
+    while (left) {
+        ssize_t n = ::read(fd, p, left);
+        if (n < 0 && errno == EINTR) {
+            continue;
+        }
+        if (n <= 0) {
+            return false;
+        }
+        p += n;
+        left -= n;
+    }
+    return true;
+}
+
+//! in a child process created with fork(): an action of an inherited open ManagedDatasource that uses no connection
+//! (getOption()) gives the connection up and opens a new one, and so copies the pending values to the values in use
+/** With \a hook, the sections on the pending values are observed in the child (the hook's thread is started there);
+    the child reports the result through a pipe and exits.  A child that does not report, or does not exit with 0,
+    fails the test.
+*/
+void ut_ds_fork_get_option(UnitTestCounters& c, ManagedDatasource& md, bool hook, const char* msg) {
+    int fds[2];
+    int prc = pipe(fds);
+    UT_ASSERT_EQ(c, 0, prc, (std::string(msg) + ": pipe()").c_str());
+    if (prc) {
+        return;
+    }
+    pid_t pid = fork();
+    if (!pid) {
+        ::close(fds[0]);
+        UtDsChildResult r;
+        UtDsPendingProbe p;
+        {
+            std::unique_ptr<UtDsPendingHookGuard> g;
+            if (hook) {
+                g.reset(new UtDsPendingHookGuard(p));
+            }
+            ExceptionSink xsink;
+            ValueHolder v(md.getOption("opt", &xsink), &xsink);
+            // the connection of the parent was given up, and a new one was opened in this process
+            r.ok = !xsink && md.isOpen() && !qore_ds_private::get(md)->isInherited();
+            xsink.clear();
+        }
+        r.calls = p.calls;
+        r.busy = p.busy;
+        ssize_t n = ::write(fds[1], &r, sizeof(r));
+        _exit(n == static_cast<ssize_t>(sizeof(r)) ? 0 : 1);
+    }
+    ::close(fds[1]);
+    UT_ASSERT(c, pid > 0, (std::string(msg) + ": fork()").c_str());
+    if (pid <= 0) {
+        ::close(fds[0]);
+        return;
+    }
+    UtDsChildResult r;
+    bool reported = ut_ds_read_child_result(fds[0], r);
+    ::close(fds[0]);
+    int status = ut_ds_wait_status(pid);
+    UT_ASSERT(c, reported, (std::string(msg) + ": the child reports its result").c_str());
+    UT_ASSERT(c, WIFEXITED(status) && !WEXITSTATUS(status), (std::string(msg) + ": the child exits with 0").c_str());
+    UT_ASSERT(c, r.ok, (std::string(msg) + ": the child opened a connection of its own").c_str());
+    if (hook) {
+        UT_ASSERT_EQ(c, 1, r.calls, (std::string(msg) + ": the number of sections on the pending values").c_str());
+        UT_ASSERT_EQ(c, 1, r.busy, (std::string(msg) + ": the lock is held in the section").c_str());
+    }
+}
+#endif
+}
+
+//! qore#6142: the pending connection values of a datasource are read and written only with qore_ds_private::m held
+/** X1 (copy), X3 (the configuration of a closed datasource, the pending accessors and setters, the copy of the pending
+    values to another datasource and to the values in use) and X2 (the reopen of an inherited connection in a child
+    process created with fork()): the hook of the views runs in every critical section on the values, and another
+    thread finds the lock held in each one; the number of sections of each path is exact, so a path that reads the
+    values another way is found as well.  Before the fix, these readers copied the strings while another thread could
+    be assigning them (a std::string data race that can read freed memory).
+*/
+static void ut_datasource_pending_params_locked(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    DBIDriver* drv = ut_dsopt_driver();
+
+    // X1: a copy reads the pending values in one section, with the options
+    {
+        Datasource ds(drv);
+        ut_ds_configure(ds, "x1");
+        std::unique_ptr<Datasource> cp;
+        ut_ds_pending_sections(c, 1, "X1: Datasource::copy()", [&]() {
+            cp.reset(ds.copy());
+        });
+        UT_ASSERT(c, ut_ds_str(cp->getPendingDBName()) == "x1-db", "X1: the copy has the database name");
+        UT_ASSERT(c, ut_ds_str(cp->getPendingUsername()) == "x1-user", "X1: the copy has the user name");
+        UT_ASSERT(c, ut_ds_str(cp->getPendingHostName()) == "x1-host", "X1: the copy has the host name");
+        UT_ASSERT(c, ut_ds_str(cp->getPendingPassword()) == "x1-pass", "X1: the copy has the password");
+        UT_ASSERT(c, ut_ds_str(cp->getPendingDBEncoding()) == "utf8", "X1: the copy has the encoding");
+        UT_ASSERT_EQ(c, 1234, cp->getPendingPort(), "X1: the copy has the port");
+
+        UtManagedDsHolder md(new ManagedDatasource(drv));
+        ut_ds_configure(*md.ds, "x1m");
+        UtManagedDsHolder mcp(nullptr);
+        ut_ds_pending_sections(c, 1, "X1: ManagedDatasource::copy()", [&]() {
+            mcp.ds = md.ds->copy();
+        });
+        UT_ASSERT(c, ut_ds_str(mcp.ds->getPendingDBName()) == "x1m-db", "X1: the managed copy has the database name");
+    }
+
+    // X3: the configuration of a closed datasource, and the accessors of the pending values
+    {
+        Datasource ds(drv);
+        ut_ds_configure(ds, "x3");
+        ReferenceHolder<QoreHashNode> h(nullptr);
+        ut_ds_pending_sections(c, 1, "X3: getConfigHash() of a closed datasource", [&]() {
+            h = ds.getConfigHash();
+        });
+        UT_ASSERT(c, ut_ds_hash_str(*h, "db") == "x3-db", "X3: the configuration hash has the database name");
+        UT_ASSERT(c, ut_ds_hash_str(*h, "host") == "x3-host", "X3: the configuration hash has the host name");
+        UT_ASSERT_EQ(c, 1234, h->getKeyValue("port").getAsBigInt(), "X3: the configuration hash has the port");
+        SimpleRefHolder<QoreStringNode> str;
+        ut_ds_pending_sections(c, 1, "X3: getConfigString() of a closed datasource", [&]() {
+            str = ds.getConfigString();
+        });
+        UT_ASSERT(c, !strcmp(str->c_str(), "qore-ut-dsopt:x3-user/x3-pass@x3-db(utf8)%x3-host:1234"),
+            "X3: the configuration string has the values");
+        ut_ds_pending_sections(c, 1, "X3: getPendingDBName()", [&]() {
+            ut_ds_str(ds.getPendingDBName());
+        });
+        ut_ds_pending_sections(c, 1, "X3: getPendingPort()", [&]() {
+            ds.getPendingPort();
+        });
+        ut_ds_pending_sections(c, 1, "X3: setPendingDBName()", [&]() {
+            ds.setPendingDBName("x3-db2");
+        });
+        ut_ds_pending_sections(c, 1, "X3: setPendingPort()", [&]() {
+            ds.setPendingPort(4321);
+        });
+        UT_ASSERT(c, ut_ds_str(ds.getPendingDBName()) == "x3-db2", "X3: the new database name is pending");
+        UT_ASSERT_EQ(c, 4321, ds.getPendingPort(), "X3: the new port is pending");
+
+        // the source and the target are each read or written in a section of their own, never together: the source,
+        // the creators of the target (which are merged with those of the source outside the lock), and the target
+        Datasource target(drv);
+        ut_ds_pending_sections(c, 3, "X3: setPendingConnectionValues()", [&]() {
+            qore_ds_private::get(target)->setPendingConnectionValues(qore_ds_private::get(ds));
+        });
+        UT_ASSERT(c, ut_ds_str(target.getPendingDBName()) == "x3-db2", "X3: the target has the database name");
+
+        // the managed datasource: its configuration methods take the transaction lock, not the lock of the values
+        UtManagedDsHolder md(new ManagedDatasource(drv));
+        ut_ds_configure(*md.ds, "x3m");
+        ReferenceHolder<QoreHashNode> mh(nullptr);
+        ut_ds_pending_sections(c, 1, "X3: ManagedDatasource::getConfigHash() of a closed datasource", [&]() {
+            mh = md.ds->getConfigHash(&xsink);
+        });
+        UT_ASSERT(c, ut_ds_hash_str(*mh, "user") == "x3m-user", "X3: the managed configuration has the user name");
+        ut_ds_pending_sections(c, 1, "X3: ManagedDatasource::getConfigString() of a closed datasource", [&]() {
+            SimpleRefHolder<QoreStringNode> s(md.ds->getConfigString(&xsink));
+        });
+
+        // an open datasource: the values in use are read by the thread that holds the connection, without the lock
+        // of the pending values; opening it copies the pending values in one section
+        ut_ds_pending_sections(c, 1, "X3: open() copies the pending values", [&]() {
+            ds.open(&xsink);
+        });
+        UT_ASSERT(c, ds.getDBNameStr() == "x3-db2", "X3: the database name is in use after the open");
+        UT_ASSERT_EQ(c, 4321, ds.getPort(), "X3: the port is in use after the open");
+        ut_ds_pending_sections(c, 0, "X3: getConfigHash() of an open datasource", [&]() {
+            ReferenceHolder<QoreHashNode> oh(ds.getConfigHash(), &xsink);
+        });
+        ds.close();
+
+        ut_ds_pending_sections(c, 1, "X3: ManagedDatasource::open()", [&]() {
+            md.ds->open(&xsink);
+        });
+        ut_ds_pending_sections(c, 1, "X3: ManagedDatasource::reset()", [&]() {
+            md.ds->reset(&xsink);
+        });
+        UT_ASSERT_EQ(c, 1234, md.ds->getPort(), "X3: the managed port is in use");
+        md.ds->close(&xsink);
+    }
+
+#ifndef _Q_WINDOWS
+    // X2: in a child process created with fork(), getOption() gives the inherited connection up and opens a new one,
+    // which copies the pending values to the values in use in one section
+    {
+        UtManagedDsHolder md(new ManagedDatasource(drv));
+        ut_ds_configure(*md.ds, "x2");
+        UT_ASSERT_EQ(c, 0, md.ds->open(&xsink), "X2: the datasource is opened in the parent");
+        ut_ds_fork_get_option(c, *md.ds, true, "X2: getOption() of an inherited connection");
+        md.ds->close(&xsink);
+    }
+#endif
+
+    UT_ASSERT(c, !xsink, "X1-X3: no exception");
+    xsink.clear();
+}
+
+//! qore#6142: the debug checks of the locks of the connection values pass on every path that uses them (X4)
+/** Each path runs with the checks active and without a helper thread: the leaf sections on the pending values assert
+    that the thread holds no qore_ds_private::m, and the copy of the pending values to the values in use asserts that
+    the thread holds the ds_lock of a ManagedDatasource.  In a child process created with fork(), a call of an entry
+    point of the pending values from inside a section on another datasource's m aborts the child (the "call under m"
+    mutant, which can deadlock in a release build).
+*/
+static void ut_datasource_pending_params_checks(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    DBIDriver* drv = ut_dsopt_driver();
+    UtManagedDsHolder md(new ManagedDatasource(drv));
+    ut_ds_configure(*md.ds, "x4");
+    UT_ASSERT(c, ut_ds_str(md.ds->getPendingHostName()) == "x4-host", "X4: setPending*() and getPending*()");
+    {
+        UtManagedDsHolder cp(md.ds->copy());
+        UT_ASSERT(c, ut_ds_str(cp.ds->getPendingDBName()) == "x4-db", "X4: copy()");
+    }
+    {
+        ReferenceHolder<QoreHashNode> h(md.ds->getConfigHash(&xsink), &xsink);
+        UT_ASSERT(c, ut_ds_hash_str(*h, "db") == "x4-db", "X4: getConfigHash() of a closed datasource");
+    }
+    UT_ASSERT_EQ(c, 0, md.ds->open(&xsink), "X4: open()");
+    UT_ASSERT_EQ(c, 0, md.ds->reset(&xsink), "X4: reset()");
+    UT_ASSERT(c, md.ds->getDBNameStr() == "x4-db", "X4: the values are in use");
+    UT_ASSERT_EQ(c, 0, QoreDsLock::dbgDepth(), "X4: no section on m is left entered");
+#ifndef _Q_WINDOWS
+    ut_ds_fork_get_option(c, *md.ds, false, "X4: getOption() of an inherited connection");
+
+    // the negative case: an entry point of the pending values called from inside a section on an m
+    pid_t pid = fork();
+    if (!pid) {
+        // no core file, and the default action of SIGABRT
+        struct rlimit rl = {0, 0};
+        setrlimit(RLIMIT_CORE, &rl);
+        signal(SIGABRT, SIG_DFL);
+        // the message of the expected assertion is not output
+        int null_fd = ::open("/dev/null", O_WRONLY);
+        if (null_fd >= 0) {
+            dup2(null_fd, STDERR_FILENO);
+        }
+        Datasource a(drv), b(drv);
+        {
+            // the lock of another datasource, so that a missing check completes instead of deadlocking
+            QoreDsLock al(qore_ds_private::get(b)->m);
+            SimpleRefHolder<QoreStringNode> s(a.getPendingUsername());
+        }
+        _exit(0);
+    }
+    UT_ASSERT(c, pid > 0, "X4: fork() for the call under m");
+    if (pid > 0) {
+        int status = ut_ds_wait_status(pid);
+        UT_ASSERT(c, WIFSIGNALED(status) && WTERMSIG(status) == SIGABRT,
+            "X4: a call of an entry point under m aborts in a debug build");
+    }
+#endif
+    md.ds->close(&xsink);
+    UT_ASSERT(c, !xsink, "X4: no exception");
+    xsink.clear();
+}
+
 #endif
 
 //! records the line of every statement step and raises an exception at the step of one line, once
@@ -11185,10 +11571,12 @@ static UtIncLocalIntInfo ut_inc_local_int_at(QoreProgram* pgm, const char* name,
     the step events and results must be the same.
 
     The statement where the debugger raises its exception, `b = ++a;`, is in a try block: it is folded only if the
-    lowering gives its operation no exception target of its own (qore#6197 gives it the try block's handler).  The
-    reference, which runs first, records in \a ref_inc_target whether its IncrementLocalInt of line 13 has an exception
-    target (1) or not (0), as lowered, since no fold changes it there; the Program without PO_ALLOW_DEBUGGER must then
-    fold the statement exactly when it has none.
+    lowering gives its operation no exception target of its own.  The operation on an int local cannot raise, so it
+    gets none (the try block's handler is given only to an operation on a local of another type, see
+    qore_ir_fused_int_change_may_raise() in QoreIRLowering.cpp, qore#6197, qore#6459): the statement is folded, and a
+    debugger exception at its step event takes the event's exception path to the try block's handler.  The reference,
+    which runs first, records in \a ref_inc_target whether its IncrementLocalInt of line 13 has an exception target (1)
+    or not (0), as lowered, since no fold changes it there; it must have none.
 */
 static void ut_debug_step_folded_statements_mode(UnitTestCounters& c, qore_exec_mode_t mode, bool allow_debugger,
         int& ref_inc_target) {
@@ -11315,7 +11703,8 @@ static void ut_debug_step_folded_statements_mode(UnitTestCounters& c, qore_exec_
     // the statement's DebugStatement instruction on the same line set (lines 13-15, without columns), as the runtime
     // location is set only when the line changes: only its line is checked.  The same holds for the statement in the
     // Program without PO_ALLOW_DEBUGGER when it is not folded, as when its operation has an exception target of its
-    // own in the try block (qore#6197; see qore_ir_fold_debug_statements())
+    // own in a try block (an operation on a local of a type other than int or softint, qore#6197; see
+    // qore_ir_fold_debug_statements())
     {
         // whether `b = ++a;` must be folded, from the lowering of its operation (see above), not from the fold
         bool raise_folded = false;
@@ -11326,19 +11715,21 @@ static void ut_debug_step_folded_statements_mode(UnitTestCounters& c, qore_exec_
                 UT_ASSERT(c, !inc.folded, "the IncrementLocalInt instruction of line 13 of the reference is not "
                     "folded");
                 ref_inc_target = inc.exception_target ? 1 : 0;
+                // the change of an int local cannot raise: its operation gets no edge to the try block's handler
+                // (qore#6459)
+                UT_ASSERT_EQ(c, 0, ref_inc_target, "the IncrementLocalInt instruction of line 13 of an int local in "
+                    "a try block has no exception target of its own");
             } else {
-                UT_ASSERT(c, ref_inc_target >= 0, "the reference recorded the exception target of the "
-                    "IncrementLocalInt instruction of line 13");
-                raise_folded = ref_inc_target == 0;
-                UT_ASSERT_EQ(c, raise_folded ? 1 : 0, ut_folded_debug_steps(pgm, "work", 13, 13),
-                    raise_folded ? "`b = ++a;` is folded: its operation has no exception target of its own"
-                        : "`b = ++a;` is not folded: its operation has an exception target of its own");
-                UT_ASSERT_EQ(c, raise_folded, inc.folded, "the IncrementLocalInt instruction of line 13 keeps the step "
-                    "event exactly when it has no exception target of its own");
-                if (!inc.folded) {
-                    UT_ASSERT(c, inc.exception_target, "the IncrementLocalInt instruction of line 13 that is not folded "
-                        "has an exception target of its own");
-                }
+                UT_ASSERT_EQ(c, 0, ref_inc_target, "the reference's IncrementLocalInt instruction of line 13 of an "
+                    "int local in a try block has no exception target of its own");
+                // the fold gives the operation the exception path of its step event (the try block's handler),
+                // which the lowering did not give it (see the reference above)
+                UT_ASSERT(c, inc.exception_target, "the folded IncrementLocalInt instruction of line 13 takes the "
+                    "exception path of its step event");
+                raise_folded = true;
+                UT_ASSERT_EQ(c, 1, ut_folded_debug_steps(pgm, "work", 13, 13), "`b = ++a;` in the try block is "
+                    "folded: its operation has no exception target of its own");
+                UT_ASSERT(c, inc.folded, "the IncrementLocalInt instruction of line 13 keeps the step event");
             }
         }
         FoldedStepDebugProgram::LineColumn statement, runtime, ex;
@@ -11370,10 +11761,9 @@ static void ut_debug_step_folded_statements_mode(UnitTestCounters& c, qore_exec_
     }
     // the three statements of fused local int operations before the try block (a += 2, ++a, a += b) keep their step
     // events in the IR of the IR and JIT tiers of the Program without PO_ALLOW_DEBUGGER, and none in the other one.
-    // The statement in the try block, b = ++a, is folded only if its operation has no exception target of its own
-    // (qore_ir_fold_debug_statements()): the checks of its events and of the debugger's exception above hold either
-    // way (ut_ir_fold_debug_statements_exception_target() checks that an operation with an exception target is not
-    // folded)
+    // The statement in the try block, b = ++a, is folded, as its operation on an int local has no exception target
+    // of its own (qore_ir_fold_debug_statements(), checked above); ut_ir_fold_debug_statements_exception_target()
+    // checks that an operation with an exception target is not folded
     if (mode != QEM_AST) {
         UT_ASSERT_EQ(c, allow_debugger ? 0 : 3, ut_folded_debug_steps(pgm, "work", 9, 11),
             "the statements of the target function are folded only without PO_ALLOW_DEBUGGER");
@@ -17904,6 +18294,14 @@ static QoreValue f_dbg_socket_is_nonblocking(const QoreListNode* params, Runtime
 #endif
 }
 
+//! Debug-only: returns the number of steps taken walking class hierarchies and member lists at parse time
+/** Tests use this to check that the work of parsing a deep class hierarchy grows with the square of its depth, not
+    faster, without measuring time (issue #6106)
+ */
+static QoreValue f_dbg_class_hierarchy_steps(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    return qore_class_hierarchy_steps.load(std::memory_order_relaxed);
+}
+
 //! Debug-only: holds the stream queue registrations of HTTP/2 client connections pending, or applies them again
 /** Tests use this to make data arrive on an HTTP/2 client stream whose queue registration has not been applied yet
     by the I/O thread, deterministically.  A test must stop holding them (also when it fails).
@@ -20965,6 +21363,187 @@ static void ut_old_background_self_call_helper(UnitTestCounters& c) {
     }
 }
 
+#ifdef DEBUG
+//! qore#6142: the record of the code that chose the connection of a datasource, in C++
+/** - Z1: a Datasource that C++ creates on a thread with no Qore thread data (a std::thread) records a trusted creator
+      (no manager, uncontrolled APIs allowed) and does not crash; so does a value that it sets there
+    - the API of QoreDatasourceConnectChoosers: an empty object, the creators and setters of the values in use, the
+      setter of an option, entries without duplicates, clear(), a refill that replaces the entries
+    - a copy: the copier and the creators of the original; setPendingConnectionValues() merges the creators
+    - a pool connection: the record of the pool, whatever thread creates the connection
+*/
+static void ut_datasource_connect_choosers(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    DBIDriver* drv = ut_dsopt_driver();
+
+    // an empty object: no entries, and no permission
+    {
+        QoreDatasourceConnectChoosers ch;
+        UT_ASSERT_EQ(c, 0, (int)ch.size(), "an empty record has no entries");
+        UT_ASSERT(c, !ch.allowsUncontrolledApis(), "an empty record is not a permission");
+        ch.clear();
+        UT_ASSERT_EQ(c, 0, (int)ch.size(), "clear() of an empty record");
+    }
+
+    // Z1: created on a thread that has no Qore thread data
+    {
+        std::unique_ptr<Datasource> ds;
+        std::thread t([&ds, drv]() {
+            ds.reset(new Datasource(drv));
+            ds->setPendingDBName("z1");
+        });
+        t.join();
+        UT_ASSERT(c, ds.get(), "Z1: the datasource is created on a foreign thread");
+        UT_ASSERT_EQ(c, 0, ds->open(&xsink), "Z1: the datasource is opened");
+        QoreDatasourceConnectChoosers ch;
+        UT_ASSERT_EQ(c, 0, ds->getConnectChoosers(ch, &xsink), "Z1: the record is read");
+        // the creator and the setter of the database name, recorded separately
+        UT_ASSERT_EQ(c, 2, (int)ch.size(), "Z1: the creator and the setter of the database name");
+        for (size_t i = 0; i < ch.size(); ++i) {
+            UT_ASSERT(c, ch.allowsUncontrolledApis(i), "Z1: trusted");
+            ReferenceHolder<QoreSandboxManager> pm(ch.getPolicyManagerRef(i), &xsink);
+            UT_ASSERT(c, !pm, "Z1: no policy manager");
+            QoreModuleCommandRestrictions r;
+            UT_ASSERT(c, ch.getRestrictions(i, r), "Z1: the restrictions are known");
+            UT_ASSERT(c, !r.isSandboxed() && !r.isRestricted(), "Z1: not restricted");
+        }
+        UT_ASSERT(c, ch.allowsUncontrolledApis(), "Z1: the aggregate");
+        ds->close();
+    }
+
+    // the creators and the setters of the values in use; an option's setter; no duplicates; a refill replaces
+    {
+        Datasource ds(drv);
+        ds.setPendingUsername("u");
+        ds.setPendingDBName("db");
+        UT_ASSERT_EQ(c, 0, ut_dsopt_set(ds, "opt", "value", xsink), "an option is set");
+        UT_ASSERT_EQ(c, 0, ds.open(&xsink), "the datasource is opened");
+        QoreDatasourceConnectChoosers ch;
+        UT_ASSERT_EQ(c, 0, ds.getConnectChoosers(ch, &xsink), "the record is read");
+        UT_ASSERT_EQ(c, 3, (int)ch.size(), "the creator and the setters of the user and the database name");
+        UT_ASSERT_EQ(c, 1, ds.addOptionChooser("opt", ch, &xsink), "the setter of the option is added");
+        UT_ASSERT_EQ(c, 4, (int)ch.size(), "the setter of the option is an entry");
+        UT_ASSERT_EQ(c, 1, ds.addOptionChooser("opt", ch, &xsink), "the setter of the option is already an entry");
+        UT_ASSERT_EQ(c, 4, (int)ch.size(), "no duplicate entry");
+        UT_ASSERT_EQ(c, 0, ds.addOptionChooser("opt2", ch, &xsink), "an option that is not set has no setter");
+        UT_ASSERT_EQ(c, 4, (int)ch.size(), "nothing is added for an option without a setter");
+        // a value that is set on the open connection judges the next open, not the values in use
+        ds.setPendingHostName("h");
+        UT_ASSERT_EQ(c, 0, ds.getConnectChoosers(ch, &xsink), "the record is read again");
+        UT_ASSERT_EQ(c, 3, (int)ch.size(), "a refill replaces the entries; the pending setter is not in use yet");
+        ds.close();
+        UT_ASSERT_EQ(c, 0, ds.open(&xsink), "the datasource is opened again");
+        UT_ASSERT_EQ(c, 0, ds.getConnectChoosers(ch, &xsink), "the record is read after the reopen");
+        UT_ASSERT_EQ(c, 4, (int)ch.size(), "the setter of the host name is in use after the reopen");
+        // the last setter of a value replaces the previous one
+        ds.setPendingHostName("h2");
+        ds.close();
+        UT_ASSERT_EQ(c, 0, ds.open(&xsink), "the datasource is opened a third time");
+        UT_ASSERT_EQ(c, 0, ds.getConnectChoosers(ch, &xsink), "the record is read after the third open");
+        UT_ASSERT_EQ(c, 4, (int)ch.size(), "the last setter of the host name replaced the previous one");
+        ch.clear();
+        UT_ASSERT_EQ(c, 0, (int)ch.size(), "clear() removes every entry");
+        ds.close();
+
+        // a copy: the copier and the creators of the original, and the setters of the values that it copies
+        std::unique_ptr<Datasource> cp(ds.copy());
+        UT_ASSERT_EQ(c, 0, cp->open(&xsink), "the copy is opened");
+        UT_ASSERT_EQ(c, 0, cp->getConnectChoosers(ch, &xsink), "the record of the copy is read");
+        // the copier is equivalent to the creator (the same code, not sandboxed): one entry
+        UT_ASSERT_EQ(c, 4, (int)ch.size(), "the creator and the three setters of the copy");
+        cp->close();
+
+        // a chain of copies made by the same code stays bounded: equivalent records are kept once
+        {
+            std::unique_ptr<Datasource> chain(cp->copy());
+            for (int i = 0; i < 10; ++i) {
+                chain.reset(chain->copy());
+            }
+            UT_ASSERT_EQ(c, 1, (int)qore_ds_private::get(*chain)->getCreators()->size(),
+                "a chain of copies by the same code has one creator");
+        }
+
+        // setPendingConnectionValues(): the target keeps its creators and gets those of the source
+        Datasource target(drv);
+        qore_ds_private::get(target)->setPendingConnectionValues(qore_ds_private::get(*cp));
+        UT_ASSERT_EQ(c, 1, (int)qore_ds_private::get(target)->getCreators()->size(),
+            "the creators of the source are equivalent to the target's");
+        qore_ds_private::get(target)->setPendingConnectionValues(qore_ds_private::get(*cp));
+        UT_ASSERT_EQ(c, 1, (int)qore_ds_private::get(target)->getCreators()->size(),
+            "a second merge adds nothing");
+    }
+
+    // a datasource that sandboxed code created, copied and configured by code that is not restricted: in Qore, such
+    // calls run under the object's sandbox (its provenance), so only C++ can make them
+    {
+        QoreProgram* sp = new QoreProgram(PO_NO_CHILD_PO_RESTRICTIONS);
+        QoreSandboxManager* sm = new QoreSandboxManager;
+        sp->setSandboxManager(sm);
+        sm->deref(nullptr);
+        std::unique_ptr<Datasource> ds;
+        {
+            ProgramThreadCountContextHelper tch(&xsink, sp, true);
+            UT_ASSERT(c, !xsink, "the sandboxed Program is entered");
+            ds.reset(new Datasource(drv));
+        }
+        // D4d: a setter that is not restricted does not replace the sandboxed creator
+        ds->setPendingDBName("x");
+        UT_ASSERT_EQ(c, 0, ds->open(&xsink), "the sandbox-created datasource is opened");
+        QoreDatasourceConnectChoosers ch;
+        UT_ASSERT_EQ(c, 0, ds->getConnectChoosers(ch, &xsink), "the record of the sandbox-created datasource");
+        UT_ASSERT_EQ(c, 2, (int)ch.size(), "the sandboxed creator and the setter of the database name");
+        UT_ASSERT(c, !ch.allowsUncontrolledApis(0), "D4d: the creator restricts");
+        UT_ASSERT(c, ch.allowsUncontrolledApis(1), "D4d: the setter does not");
+        UT_ASSERT(c, !ch.allowsUncontrolledApis(), "D4d: the connection is restricted");
+        ds->close();
+        // Y2 (M8): a copy by code that is not restricted keeps the sandboxed creator of the original
+        std::unique_ptr<Datasource> cp(ds->copy());
+        UT_ASSERT_EQ(c, 0, cp->open(&xsink), "the copy of the sandbox-created datasource is opened");
+        UT_ASSERT_EQ(c, 0, cp->getConnectChoosers(ch, &xsink), "the record of the copy");
+        UT_ASSERT_EQ(c, 3, (int)ch.size(), "the copier, the creator of the original and the setter");
+        UT_ASSERT(c, ch.allowsUncontrolledApis(0), "Y2: the copier does not restrict");
+        UT_ASSERT(c, !ch.allowsUncontrolledApis(1), "Y2: the creator of the original restricts");
+        UT_ASSERT(c, !ch.allowsUncontrolledApis(), "Y2: the copy is restricted");
+        cp->close();
+        cp.reset();
+        ds.reset();
+        sp->waitForTerminationAndDeref(&xsink);
+    }
+
+    // the record constructor that DatasourceConfig::get() uses: a connection has the record of the pool, also when
+    // another thread creates it (DatasourceConfig::get() itself is tested by datasource-connect-chooser.qtest)
+    {
+        qore_ds_setter_t pool_setter = qore_ds_option_setter::getCaller();
+        qore_ds_pool_record rec{qore_ds_make_creators(pool_setter), pool_setter};
+        std::unique_ptr<Datasource> ds;
+        std::thread t([&ds, &rec, drv]() {
+            ds.reset(new Datasource(drv, nullptr, rec));
+            qore_ds_setter_t s = rec.setter;
+            qore_ds_private::get(*ds)->setPendingParam(QDCP_DB, "db", s);
+        });
+        t.join();
+        UT_ASSERT_EQ(c, 0, ds->open(&xsink), "the pool connection is opened");
+        QoreDatasourceConnectChoosers ch;
+        UT_ASSERT_EQ(c, 0, ds->getConnectChoosers(ch, &xsink), "the record of the pool connection is read");
+        UT_ASSERT_EQ(c, 1, (int)ch.size(), "the creator of the pool set the values: one entry");
+        ds->close();
+    }
+
+    UT_ASSERT(c, !xsink, "the record: no exception");
+    xsink.clear();
+}
+
+//! runs the tests of the locks of the connection values of a datasource (qore#6142; DEBUG builds only)
+static QoreValue f_dbg_run_datasource_pending_tests(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    UnitTestCounters c;
+    ut_datasource_pending_params_locked(c);
+    ut_datasource_pending_params_checks(c);
+    ut_datasource_connect_choosers(c);
+    return make_unit_test_result(c, xsink);
+}
+#endif
+
 static QoreValue f_run_debug_unit_tests(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     UnitTestCounters c;
     ut_qorevalue_operator_bool_null(c);
@@ -22252,6 +22831,31 @@ static QoreValue f_dbg_jit_recompile_native_code(const QoreListNode* params, Run
     return uvb->dbgRecompileNativeCode();
 }
 
+//! returns the number of types that the guard type profiles of a user function's IR count (issue #6421)
+/** A type that is destroyed is evicted from the profiles, so a test can check that no type of a deleted Program is
+    left in them
+
+    @param code a call reference to a user function with one variant
+
+    @return the number of types counted by the guard profiles of the function's IR, or -1 if the function has no IR
+
+    @throw DBG-ARGUMENT-ERROR the call reference does not refer to a user function with one variant
+*/
+static QoreValue f_dbg_ir_guard_profile_type_count(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    const ResolvedCallReferenceNode* code = get_param_value(params, 0).get<const ResolvedCallReferenceNode>();
+    const QoreFunction* qf = code->getFunction();
+    const AbstractQoreFunctionVariant* variant = qf && qf->numVariants() == 1 ? qf->first() : nullptr;
+    const UserVariantBase* uvb = variant ? variant->getUserVariantBase() : nullptr;
+    if (!uvb) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_ir_guard_profile_type_count() requires a call reference to "
+            "a user function with one variant");
+        return QoreValue();
+    }
+    const QoreIRFunction* ir = uvb->getCachedIR();
+    return ir ? (int64)ir->getGuardProfileTypeCount() : (int64)-1;
+}
+
 //! returns the number of background JIT compiles refused because a Program they refer to is being or was deleted
 static QoreValue f_dbg_get_bg_compile_refused_count(const QoreListNode* params, RuntimeConfig& rc,
         ExceptionSink* xsink) {
@@ -22395,16 +22999,18 @@ static QoreValue f_dbg_program_registered_with_id(const QoreListNode* params, Ru
     return rv;
 }
 
-//! returns the number of ThreadProgramData objects
-static QoreValue f_dbg_get_thread_program_data_count(const QoreListNode* params, RuntimeConfig& rc,
+//! returns the ID of the current thread's ThreadProgramData object, unique in the process
+static QoreValue f_dbg_get_thread_program_data_id(const QoreListNode* params, RuntimeConfig& rc,
         ExceptionSink* xsink) {
-    return ThreadProgramData::dbgLiveCount();
+    return get_thread_program_data()->dbgGetId();
 }
 
-//! waits until no more than the given number of ThreadProgramData objects exist; returns False on timeout
-static QoreValue f_dbg_wait_thread_program_data_count(const QoreListNode* params, RuntimeConfig& rc,
+//! waits until the ThreadProgramData object with the given ID has been destroyed; returns False on timeout
+/** With a timeout of 0, returns whether the object has been destroyed
+*/
+static QoreValue f_dbg_wait_thread_program_data_released(const QoreListNode* params, RuntimeConfig& rc,
         ExceptionSink* xsink) {
-    return ThreadProgramData::dbgWaitLiveCount(get_param_value(params, 0).getAsBigInt(),
+    return ThreadProgramData::dbgWaitReleased(get_param_value(params, 0).getAsBigInt(),
         get_param_value(params, 1).getAsBigInt());
 }
 
@@ -26372,6 +26978,8 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_get_ns_info", f_dbg_get_ns_info, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, hashTypeInfo);
     qns.addBuiltinVariant("run_debug_unit_tests", f_run_debug_unit_tests, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, hashTypeInfo);
 #ifdef DEBUG
+    qns.addBuiltinVariant("dbg_run_datasource_pending_tests", f_dbg_run_datasource_pending_tests, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, hashTypeInfo);
     qns.addBuiltinVariant("dbg_run_program_thread_hub_tests", f_dbg_run_program_thread_hub_tests, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, hashTypeInfo);
     qns.addBuiltinVariant("dbg_cancel_thread_after_end", f_dbg_cancel_thread_after_end, QCF_NO_FLAGS,
@@ -26461,6 +27069,8 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_async_io_pause_after_step_result", f_dbg_async_io_pause_after_step_result,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolTypeInfo, 1,
         boolTypeInfo, QORE_PARAM_NO_ARG, "pause");
+    qns.addBuiltinVariant("dbg_class_hierarchy_steps", f_dbg_class_hierarchy_steps, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_h2_client_hold_stream_registrations", f_dbg_h2_client_hold_stream_registrations,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
         boolTypeInfo, QORE_PARAM_NO_ARG, "hold");
@@ -26658,6 +27268,8 @@ void init_debug_functions(QoreNamespace& qns) {
         QDOM_DEBUG_HOOK, nothingTypeInfo, 1, QC_PROGRAM->getTypeInfo(), QORE_PARAM_NO_ARG, "pgm");
     qns.addBuiltinVariant("dbg_get_bg_compile_refused_count", f_dbg_get_bg_compile_refused_count, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_ir_guard_profile_type_count", f_dbg_ir_guard_profile_type_count, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, bigIntTypeInfo, 1, codeTypeInfo, QORE_PARAM_NO_ARG, "code");
     qns.addBuiltinVariant("dbg_force_finalize_cancel", f_dbg_force_finalize_cancel, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         nothingTypeInfo, 2, stringTypeInfo, QORE_PARAM_NO_ARG, "loop", bigIntTypeInfo, QORE_PARAM_NO_ARG, "index");
     qns.addBuiltinVariant("dbg_hold_bg_compile", f_dbg_hold_bg_compile, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
@@ -26688,10 +27300,10 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_program_registered_with_id", f_dbg_program_registered_with_id, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, boolTypeInfo, 2, QC_PROGRAM->getTypeInfo(), QORE_PARAM_NO_ARG, "pgm",
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "id_offset");
-    qns.addBuiltinVariant("dbg_get_thread_program_data_count", f_dbg_get_thread_program_data_count, QCF_NO_FLAGS,
+    qns.addBuiltinVariant("dbg_get_thread_program_data_id", f_dbg_get_thread_program_data_id, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
-    qns.addBuiltinVariant("dbg_wait_thread_program_data_count", f_dbg_wait_thread_program_data_count, QCF_NO_FLAGS,
-        QDOM_DEBUG_HOOK, boolTypeInfo, 2, bigIntTypeInfo, QORE_PARAM_NO_ARG, "count",
+    qns.addBuiltinVariant("dbg_wait_thread_program_data_released", f_dbg_wait_thread_program_data_released,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolTypeInfo, 2, bigIntTypeInfo, QORE_PARAM_NO_ARG, "id",
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
     qns.addBuiltinVariant("dbg_new_hashdecl_hash_without_sink", f_dbg_new_hashdecl_hash_without_sink, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, hashTypeInfo, 1, anyTypeInfo, QORE_PARAM_NO_ARG, "h");

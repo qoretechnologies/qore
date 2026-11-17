@@ -4011,6 +4011,12 @@ public:
         sml. */
     bool rebuildBaseClassSmlPhase(std::string& error);
 
+    //! marks the list of all ancestors of \a qc complete if it is (issue #6106)
+    /** @param resolved the classes of this binary whose base classes have been resolved; a base class that is not
+        there must be builtin or initialized; null if the base classes of every class have been resolved
+    */
+    void markSmlComplete(QoreClass* qc, const std::unordered_set<const QoreClass*>* resolved);
+
     //! Phase-split 2a-import — copy base-class members into derived
     //! classes.  Batch mode: must wait until every session has
     //! finished resolveMembers() so base classes' member maps are

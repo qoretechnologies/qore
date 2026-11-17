@@ -1745,9 +1745,12 @@ string resolve_url(string base, string reference, int options = 0) [flags=PURE,N
     |JavaScript, form data (\c application/x-www-form-urlencoded)|a byte order mark, else the \c charset parameter, else UTF-8 (RFC 9239, WHATWG URL)
     |any other text|a byte order mark, else the \c charset parameter, else the assumed encoding
 
-    An encoding declared in the body (an XML declaration, a \c meta element, or an \c \@charset rule) is ignored if
-    it is not a supported encoding, and a UTF-16 declaration in HTML or CSS means UTF-8, as the text could not have
-    been read to find it otherwise (WHATWG Encoding).  The \c charset parameter is used as given.
+    A character set name in the \c charset parameter or declared in the body (an XML declaration, a \c meta element,
+    or an \c \@charset rule) is untrusted data: it is used only if it selects an encoding as
+    @ref Qore::get_known_encoding() "get_known_encoding()" does (an encoding that %Qore knows, or a standard character
+    set), and, for a name declared in the body, only if iconv converts to that encoding; it is ignored otherwise, so
+    that the next rule of the table applies; a UTF-16 declaration in HTML or CSS
+    means UTF-8, as the text could not have been read to find it otherwise (WHATWG Encoding).
 
     The \c charset parameter of the \c Content-Type is read as in RFC 9110: parameter names match
     case-insensitively and only as whole names, and a quoted value (ex: <tt>charset="UTF-8"</tt>) is unquoted, with
@@ -1849,16 +1852,19 @@ hash<HttpContentTypeInfo> get_http_content_type_info(string content_type, string
 /** An HTTP server reports it in the header information of a request (the \c "accept-charset" key of the info hash
     of @ref Qore::Socket::readHTTPHeader() "Socket::readHTTPHeader()", and of \c cx."header-info" in an
     @ref HttpServer::HttpServer "HttpServer" request handler, which uses it as \c cx."response-encoding") for every
-    HTTP version.  The value is parsed as RFC 9110 section 12.5.2 defines it: a comma-separated list of charset names
+    HTTP version, with the values of repeated \c Accept-Charset field lines combined into one list (RFC 9110 section
+    5.3).  The value is parsed as RFC 9110 section 12.5.2 defines it: a comma-separated list of charset names
     (tokens, case-insensitive) or \c "*", each with an optional weight (<tt>;q=</tt><em>qvalue</em>, section 12.4.2; 1
     without one), with optional whitespace around the elements and before and after each \c ";"; other parameters,
     with a token or quoted-string value, are ignored, and an element with an invalid weight or another syntax error
     (such as a charset name that is not a token) is ignored.  The result is:
     - \c "utf8" if UTF-8 (\c "utf-8" or \c "utf8") has the highest weight of the acceptable charsets that %Qore
       supports, also with the same weight as another; \c "*" gives UTF-8 its weight if UTF-8 is not listed
-    - otherwise the name of the acceptable charset with the highest weight that %Qore supports (an encoding that
-      %Qore knows, by its name or an alias, and that iconv converts to), as given in the value; of charsets with the
-      same weight, the first in the list
+    - otherwise the name of the acceptable charset with the highest weight that %Qore supports (a name that
+      @ref Qore::get_known_encoding() "get_known_encoding()" accepts, of an encoding that iconv converts to), as given
+      in the value if it is a name or an alias of an encoding that %Qore knows, else (a label of a standard
+      character set, ex: \c "x-sjis") the name of the encoding that it selects; of charsets with the same weight,
+      the first in the list
     - \c "utf8" if there is no value, or no charset in it is acceptable (a weight of 0 means not acceptable) and
       supported, also when UTF-8 has a weight of 0 and \c "*" accepts any other charset: any character set is
       acceptable without the header (RFC 9110 section 12.5.2), and a server may disregard the header otherwise

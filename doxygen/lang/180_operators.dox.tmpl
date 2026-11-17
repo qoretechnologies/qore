@@ -824,6 +824,20 @@ if (!exists error_code)
     Removes the end-of-line marker(s) (\c '\\n' or \c '\\r\\n') from a string, or each string element in a list, or each hash key value in a hash (if the value is a string) and returns the number of characters removed.\n<br>
     To perform this operation on a non-lvalue expression, see the chomp() function.
 
+    @anchor keyword_operator_or_function
+    @par The Operator or the Function
+    \c chomp, @ref trim "trim" and @ref splice "splice" are operators and also functions: directly followed by
+    \c "(", as in <tt>chomp(str)</tt>, the name is the function, which returns a new value.  With white space before
+    the parenthesis, as in <tt>chomp (str)</tt>, it is the operator, which changes its lvalue, when the expression in
+    the parentheses can be an lvalue by its form (a variable, a member or element of one, a cast of one, or a name
+    that can be a variable, such as a constant's); when it cannot be one (a literal, a call or an operator other
+    than those, as in <tt>trim (" a" + "b ")</tt> or, for \c splice, when the first argument cannot be), it is the
+    function.  So <tt>trim (x)</tt> trims \c x itself, while
+    <tt>trim (x + "")</tt> returns a trimmed copy and does not change \c x.  As \c splice binds less tightly than
+    the other operators, its expression in parentheses is only the operand when nothing but the end of the expression
+    follows it: <tt>splice ("abcd", 1) + "x"</tt> is the operator, which refuses its arguments, while
+    <tt>splice("abcd", 1) + "x"</tt> is the function.
+
     @par Syntax
     <tt><b>chomp</b></tt><i>lvalue</i>
 
@@ -846,7 +860,8 @@ if (!exists error_code)
 
     @par Synopsis
     Removes whitespace characters from the beginning and end of a string, or each string element in a list, or each hash key value in a hash (if the value is a string) and returns the value processed (string, list, or hash).\n<br>
-    To perform this operation on a non-lvalue expression, see the trim() function.\n<br>
+    To perform this operation on a non-lvalue expression, see the trim() function, and see
+    @ref keyword_operator_or_function "the operator or the function" for \c trim with white space before \c "(".\n<br>
     The following whitespace characters are removed from the beginning and end of strings: <tt>' '</tt> (blank spaces), \c '\\n', \c '\\r', \c '\\t', \c '\\v' (vertical tab, ASCII 11), and \c '\\0' (null character).
 
     @par Syntax
@@ -2363,7 +2378,8 @@ if (x || y)
     @par Synopsis
     Removes and optionally inserts elements in lists, strings, and binary objects and returns the \a lvalue after processing. For a similar operator that returns the values removed, see the @ref extract "extract operator".\n<br>
     Works on strings, lists, and binary data in a similar way; removes elements from a list, characters from a string, or bytes from binary data and optionally inserts new ones. If no \a length_expression is given, splice removes all elements/characters/bytes from the list, string, or binary data lvalue starting at \a offset_expression (offsets begin at 0). Otherwise, a number of elements/characters/bytes equal to \a length_expression is removed (or up to the end of the list/string/data if applicable). If \a substitution_expression is present, then the removed elements/characters/bytes are substituted with the elements/string/bytes given by this expression.\n<br>
-    Note that string splice takes character offsets, which may not be the same as byte offsets for multi-byte character encodings, such as \c UTF-8
+    Note that string splice takes character offsets, which may not be the same as byte offsets for multi-byte character encodings, such as \c UTF-8; see
+    @ref keyword_operator_or_function "the operator or the function" for \c splice with white space before \c "(".
 
     @par Syntax
     <tt><b>splice</b></tt> \a lvalue, \a offset_expression<em>, [length_expression, [substitution_expression]]</em>

@@ -2454,6 +2454,93 @@ public:
    }
 };
 
+//! returns true if the value can be an lvalue after it is initialized: everything but values other than NOTHING,
+//! calls, list and hash literals and operators other than the ones that check_lvalue() accepts with an lvalue on
+//! their left
+/** A bareword or a scoped reference can be resolved to a variable when it is initialized, so it can be an lvalue
+*/
+static bool parse_may_be_lvalue(QoreValue n) {
+    // NOTHING is accepted as an lvalue, as by check_lvalue()
+    if (n.isNothing()) {
+        return true;
+    }
+    if (!n.hasNode()) {
+        return false;
+    }
+    AbstractQoreNode* node = n.getInternalNode();
+    switch (node->getType()) {
+        case NT_STRING:
+        case NT_DATE:
+        case NT_BINARY:
+        case NT_NUMBER:
+        case NT_LIST:
+        case NT_HASH:
+        case NT_PARSE_LIST:
+        case NT_PARSE_HASH:
+        case NT_FUNCTION_CALL:
+        case NT_METHOD_CALL:
+        case NT_STATIC_METHOD_CALL:
+        case NT_SELF_CALL:
+        case NT_PROGRAM_FUNC_CALL:
+        case NT_BACKQUOTE:
+            return false;
+        case NT_OPERATOR: {
+            if (QoreSquareBracketsOperatorNode* op = dynamic_cast<QoreSquareBracketsOperatorNode*>(node)) {
+                return parse_may_be_lvalue(op->getLeft());
+            }
+            if (QoreSquareBracketsRangeOperatorNode* op = dynamic_cast<QoreSquareBracketsRangeOperatorNode*>(node)) {
+                return parse_may_be_lvalue(op->get(0));
+            }
+            if (QoreHashObjectDereferenceOperatorNode* op
+                    = dynamic_cast<QoreHashObjectDereferenceOperatorNode*>(node)) {
+                return parse_may_be_lvalue(op->getLeft());
+            }
+            if (QoreCastOperatorNode* op = dynamic_cast<QoreCastOperatorNode*>(node)) {
+                return parse_may_be_lvalue(op->getExp());
+            }
+            // a cast before it is initialized
+            if (QoreParseCastOperatorNode* op = dynamic_cast<QoreParseCastOperatorNode*>(node)) {
+                return parse_may_be_lvalue(op->getExp());
+            }
+            return false;
+        }
+        default:
+            return true;
+    }
+}
+
+//! returns a call of the function with the operator's name when the operand of chomp, trim or splice is in
+//! parentheses of its own and cannot be an lvalue (for splice: the first of the arguments), or nullptr if the
+//! operator is used (issue #1867)
+/** "trim(x)" is a call of trim(), as the scanner reads a keyword directly followed by "(" as a function name, but
+    with white space in between, "trim (x)" is the operator, which needs an lvalue; an operand that can be an lvalue
+    keeps the operator, so that "chomp ($line);" changes $line as before, and an operand that cannot be one, which
+    the operator refuses, is the call of the function
+*/
+static FunctionCallNode* parse_keyword_paren_call(yyscan_t yyscanner, const YYLTYPE& kw, const YYLTYPE& operand,
+        const char* name, QoreValue arg) {
+    QoreParseState* state = yyget_extra(yyscanner);
+    // the record of the last expression in parentheses is not cleared: an operand without parentheses can only have
+    // its extent if that expression was in another file at the same position, and then it is not an lvalue only if
+    // the operator refuses it, so at worst a parse error is a call
+    if (operand.first_line != state->paren_first_line || operand.first_col != state->paren_first_col
+            || operand.last_line != state->paren_last_line || operand.last_col != state->paren_last_col) {
+        return nullptr;
+    }
+    // the elements of a list in its own parentheses are the arguments; a list in further parentheses is one
+    QoreParseListNode* l = state->paren_list ? arg.get<QoreParseListNode>() : nullptr;
+    if (parse_may_be_lvalue(l ? (l->size() ? l->get(0) : QoreValue()) : arg)) {
+        return nullptr;
+    }
+    const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(kw.first_line,
+        operand.last_line, kw.first_col, operand.last_col);
+    if (!l) {
+        l = new QoreParseListNode(loc);
+        l->add(arg, loc);
+    }
+    return qore_make_function_call(kw.semantic_policy, loc, strdup(name), l);
+}
+
 static QoreValue is_rewritable_op(QoreValue n) {
     qore_type_t nt = n.getType();
     if (nt == NT_OPERATOR) {
@@ -3661,7 +3748,21 @@ statement:
                     parse_error(*loc, "expression has no effect as a statement (%s)", v1.getTypeName());
                 }
             } else if (!v1.hasEffect() && (t != NT_VARREF || !v1.get<VarRefNode>()->parseIsDecl())) {
-                parse_error(*loc, "statement has no effect (%s)", v1.getTypeName());
+                // a list without parentheses whose first element is an assignment: the comma binds less tightly
+                // than the assignment, so only the first element is assigned (issue #1946)
+                // (a binary assignment operator: =, +=, |=, <<= etc., not in parentheses of its own)
+                QoreParseListNode* l = v1.getType() == NT_PARSE_LIST ? v1.get<QoreParseListNode>() : nullptr;
+                QoreValue e0 = l && !l->isFinalized() && l->size() ? l->get(0) : QoreValue();
+                const QoreOperatorNode* op0 = e0.getType() == NT_OPERATOR
+                    ? dynamic_cast<const QoreBinaryOperatorNode<LValueOperatorNode>*>(e0.getInternalNode())
+                    : nullptr;
+                if (op0 && !op0->getInParentheses()) {
+                    parse_error(*loc, "statement has no effect (list): the %s assigns only the first element of "
+                        "this list without parentheses, as the comma operator binds less tightly; put the list in "
+                        "parentheses to assign it (ex: 'x = (1, 2, 3)')", e0.getTypeName());
+                } else {
+                    parse_error(*loc, "statement has no effect (%s)", v1.getTypeName());
+                }
             }
         }
 
@@ -5932,16 +6033,27 @@ exp_c:
         ParseNode::bindSemanticPolicy($$, @$.semantic_policy);
     }
     | TOK_CHOMP exp {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col);
-        $$ = (new QoreChompOperatorNode(loc, $2));
+        if (FunctionCallNode* call = parse_keyword_paren_call(yyscanner, @1, @2, "chomp", $2)) {
+            $$ = call;
+        } else {
+            const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col);
+            $$ = (new QoreChompOperatorNode(loc, $2));
+        }
         ParseNode::bindSemanticPolicy($$, @$.semantic_policy);
     }
     | TOK_TRIM exp {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col);
-        $$ = (new QoreTrimOperatorNode(loc, $2));
+        if (FunctionCallNode* call = parse_keyword_paren_call(yyscanner, @1, @2, "trim", $2)) {
+            $$ = call;
+        } else {
+            const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col);
+            $$ = (new QoreTrimOperatorNode(loc, $2));
+        }
         ParseNode::bindSemanticPolicy($$, @$.semantic_policy);
     }
     | TOK_SPLICE exp {  // splice lvalue-list, offset, [length, list]
+      if (FunctionCallNode* call = parse_keyword_paren_call(yyscanner, @1, @2, "splice", $2)) {
+        $$ = call;
+      } else {
         QoreValue v2($2);  // Convert to QoreValue for method calls
         QoreParseListNode* l = v2.getType() == NT_PARSE_LIST ? v2.get<QoreParseListNode>() : nullptr;
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col);
@@ -5964,6 +6076,7 @@ exp_c:
             $$ = (QoreSpliceOperatorNode::create(@$.semantic_policy, loc, lv, offset, length, l->shift()));
             discard(l, 0);
         }
+      }
         ParseNode::bindSemanticPolicy($$, @$.semantic_policy);
     }
     | TOK_EXTRACT exp {  // extract lvalue-list, offset, [length, list]
@@ -6285,6 +6398,15 @@ exp_c:
     }
     | '(' exp ')' {
         $$ = ($2);
+        {
+            QoreParseState* state = yyget_extra(yyscanner);
+            state->paren_first_line = @1.first_line;
+            state->paren_first_col = @1.first_col;
+            state->paren_last_line = @3.last_line;
+            state->paren_last_col = @3.last_col;
+            QoreValue e($2);
+            state->paren_list = e.getType() == NT_PARSE_LIST && !e.get<QoreParseListNode>()->isFinalized();
+        }
         QoreValue v2($2);  // Convert to QoreValue for method calls
         switch (v2.getType()) {
             case NT_PARSE_LIST:

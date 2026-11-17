@@ -1,0 +1,131 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%exec-class KeywordSpaceParenCallTest
+
+#! chomp, trim and splice with white space before "(" (issue #1867): an argument that cannot be an lvalue is the
+#! function call, as without the white space; one that can be an lvalue keeps the operator, which changes it
+class KeywordSpaceParenCallTest inherits QUnit::Test {
+    constructor() : QUnit::Test("keyword space paren call", "1.0") {
+        addTestCase("function calls", \functionCalls());
+        addTestCase("operators on lvalues", \operators());
+        addTestCase("operands that are not one expression in parentheses", \otherOperands());
+        addTestCase("white space", \whiteSpace());
+        set_return_value(main());
+    }
+
+    #! an argument that cannot be an lvalue: the function, with the result of the call without the white space
+    private functionCalls() {
+        hash<string, auto> cases = {
+            "trim (\"x \")": "x",
+            "trim (\" a\" + \"b \")": "ab",
+            "trim (sprintf(\" %s \", \"f\"))": "f",
+            "chomp (\"x\\n\")": "x",
+            "chomp (\"a\" + \"\\n\")": "a",
+            "splice ((1, 2, 3), 1)": (1,),
+            "splice (\"abcd\", 1, 2)": "ad",
+            "splice ((1, 2, 3), 1, 1, (8, 9))": (1, 8, 9, 3),
+        };
+        foreach hash<auto> i in (cases.pairIterator()) {
+            assertEq(i.value, evalCode("return " + i.key + ";"), i.key);
+            # the same as the call without the white space
+            assertEq(i.value, evalCode("return " + replace(i.key, " (", "(") + ";"), i.key);
+        }
+        # a list in further parentheses is one argument, as without the white space (trim() has no list variant)
+        *string err = parseError("auto x = trim ((\" l \", \" m \"));");
+        assertRegex("no variant matching 'trim\\(list<string>\\)'", err);
+        assertEq(parseError("auto x = trim((\" l \", \" m \"));"), err);
+        # a list in its own parentheses is the arguments: trim() with two arguments
+        assertEq(parseError("auto x = trim(\" l \", \" m \");"), parseError("auto x = trim (\" l \", \" m \");"));
+    }
+
+    #! an argument that can be an lvalue: the operator, which changes it, as before
+    private operators() {
+        assertEq(("y", "y"), evalCode("string s = \" y \"; string r = trim (s); return (r, s);"));
+        assertEq("z", evalCode("string line = \"z\\n\"; chomp (line); return line;"));
+        assertEq((1,), evalCode("list<int> l = (1, 2, 3); splice (l, 1); return l;"));
+        assertEq("q", evalCode("hash<auto> h = {\"a\": \" q \"}; trim (h.a); return h.a;"));
+        assertEq("q", evalCode("hash<auto> h = {\"a\": \" q \"}; trim (h{\"a\"}); return h.a;"));
+        assertEq(" q", evalCode("list<string> l = (\" q\\n\",); chomp (l[0]); return l[0];"));
+        assertEq((1, 3), evalCode("hash<auto> h = {\"l\": (1, 2, 3)}; splice (h.l, 1, 1); return h.l;"));
+        assertEq("p", evalCode("auto a = \" p \"; trim (cast<string>(a)); return a;"));
+        assertEq("p", evalCode("*string a = \" p \"; trim (cast<*string>(a)); return a;"));
+        assertEq("y", evalCode("string s = \" y \"; trim ((s)); return s;"));
+        # NOTHING is accepted as an lvalue by the operator: with the parentheses, it is the operator as without them
+        # (the parse only: IR lowering cannot compile the operator with NOTHING, issue #6480); the function would
+        # be a parse error, as trim() and chomp() have no variant for NOTHING with %strict-args
+        foreach string kw in ("trim", "chomp") {
+            *string op = parseErrorNoWarn("auto x = " + kw + " NOTHING;");
+            assertEq(op, parseErrorNoWarn("auto x = " + kw + " (NOTHING);"), kw);
+            *string func = parseErrorNoWarn("auto x = " + kw + "(NOTHING);");
+            assertRegex("no variant matching", func, kw);
+            assertNeq(func, op, kw);
+        }
+        # members, static class variables and global variables
+        assertEq("q", evalCode("hash<auto> h = {\"a\": {\"b\": \" q \"}}; trim (h.a.b); return h.a.b;"));
+        Program p(PO_MODERN | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.parse("class C { public { string m = \" m \"; static string sv = \" v \"; } "
+            "string t() { trim (m); trim (self.m); return m; } } "
+            "our string g; "
+            "list<string> sub get() { C c(); trim (C::sv); g = \" g \"; trim (g); return (c.t(), C::sv, g); }",
+            "lvalues");
+        assertEq(("m", "v", "g"), p.callFunction("get"));
+        # an expression that is not an lvalue on an lvalue: a trimmed copy, the lvalue is unchanged
+        assertEq(("y", " y "), evalCode("string s = \" y \"; string r = trim (s + \"\"); return (r, s);"));
+        # without parentheses, the operator needs an lvalue, as before
+        *string err = parseError("trim \" x \";");
+        assertNeq(NOTHING, err);
+        assertRegex("expecting lvalue for trim", err);
+    }
+
+    #! an operand that starts with an expression in parentheses but is longer: the operator, as before
+    private otherOperands() {
+        assertEq("ab", evalCode("hash<auto> h = {\"a\": \"ab \"}; trim (h).a; return h.a;"));
+        *string err = parseError("trim (\" x \") + \"\";");
+        assertNeq(NOTHING, err);
+        # trim binds more tightly than +, so its operand is the expression in parentheses: the function
+        assertNothing(parseError("string s = trim (\" x \") + \"\";"));
+        assertEq("xy", evalCode("return trim (\" x \") + \"y\";"));
+    }
+
+    #! any white space between the keyword and the parenthesis
+    private whiteSpace() {
+        assertEq("x", evalCode("return trim\n(\"x \");"));
+        assertEq("x", evalCode("return trim\t  (\"x \");"));
+        assertEq("x", evalCode("return chomp\r\n(\"x\\n\");"));
+    }
+
+    #! returns the value of the code, run as the body of a function in a new Program
+    private auto evalCode(string body) {
+        Program p(PO_MODERN | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.parse("auto sub get() { " + body + " }\n", "code");
+        return p.callFunction("get");
+    }
+
+    #! returns the description of the parse error of the code as the body of a function with warnings disabled, or
+    #! NOTHING
+    private *string parseErrorNoWarn(string body) {
+        Program p(PO_MODERN | PO_NO_CHILD_PO_RESTRICTIONS);
+        try {
+            p.parse("nothing sub get() { " + body + " }\n", "code", 0);
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.desc;
+        }
+        return NOTHING;
+    }
+
+    #! returns the description of the parse error of the code as the body of a function, or NOTHING
+    private *string parseError(string body) {
+        Program p(PO_MODERN | PO_NO_CHILD_PO_RESTRICTIONS);
+        try {
+            p.parse("nothing sub get() { " + body + " }\n", "code");
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.desc;
+        }
+        return NOTHING;
+    }
+}
