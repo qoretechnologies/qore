@@ -11,17 +11,32 @@
 %requires ./PgsqlTestIsolation.qm
 %requires ./MysqlTestIsolation.qm
 %requires ./OracleTestIsolation.qm
+%requires ./MssqlTestIsolation.qm
+%requires ./FirebirdTestIsolation.qm
+%requires MssqlSqlUtilBase
+%requires FreetdsSqlUtil
+%requires XdbcFirebirdSqlUtilBase
+%requires JdbcFirebirdSqlUtil
 
 %try-module sqlite3
 %define NoSqlite3
 %endtry
 
+%try-module freetds
+%define NO_FREETDS
+%endtry
+
+%try-module jni
+%define NoJni
+%endtry
+
 %exec-class SqlUtilViewAlignmentTest
 
 #! Tests the alignment of the views of schema descriptions (issue #1427)
-/** The tests run on SQLite and, each in a schema or database of its own, on PostgreSQL, MySQL/MariaDB and Oracle
-    when \c QORE_DB_CONNSTR_PGSQL, \c QORE_DB_CONNSTR_MYSQL and \c QORE_DB_CONNSTR_ORACLE are set (an Oracle schema
-    of its own needs \c QORE_DB_CONNSTR_ORACLE_SYS)
+/** The tests run on SQLite and, each in a schema or database of its own, on PostgreSQL, MySQL/MariaDB, Oracle, SQL
+    Server and Firebird (through JDBC) when \c QORE_DB_CONNSTR_PGSQL, \c QORE_DB_CONNSTR_MYSQL,
+    \c QORE_DB_CONNSTR_ORACLE, \c QORE_DB_CONNSTR_FREETDS and \c QORE_DB_CONNSTR_JDBC_FIREBIRD are set (an Oracle
+    schema of its own needs \c QORE_DB_CONNSTR_ORACLE_SYS)
 */
 class SqlUtilViewAlignmentTest inherits QUnit::Test {
     public {
@@ -37,13 +52,15 @@ class SqlUtilViewAlignmentTest inherits QUnit::Test {
     }
 
     private {
-        #! connections by driver
+        #! connections by driver (\c "jdbc" is Firebird)
         hash<string, Datasource> dsh;
         #! why a database is skipped, by driver
         hash<string, string> skip = {
             "pgsql": "QORE_DB_CONNSTR_PGSQL is not set",
             "mysql": "QORE_DB_CONNSTR_MYSQL is not set",
             "oracle": "QORE_DB_CONNSTR_ORACLE is not set",
+            "freetds": "QORE_DB_CONNSTR_FREETDS is not set",
+            "jdbc": "no Firebird connection; set QORE_DB_CONNSTR_JDBC_FIREBIRD",
         };
     }
 
@@ -53,6 +70,8 @@ class SqlUtilViewAlignmentTest inherits QUnit::Test {
         addTestCase("MySQL: view alignment", sub () { checkDriver("mysql"); });
         addTestCase("Oracle: view alignment", sub () { checkDriver("oracle"); });
         addTestCase("invalid view descriptions", \errorTest());
+        addTestCase("SQL Server: view alignment", sub () { checkDriver("freetds"); });
+        addTestCase("Firebird: view alignment", sub () { checkDriver("jdbc"); });
         set_return_value(main());
     }
 
@@ -67,6 +86,28 @@ class SqlUtilViewAlignmentTest inherits QUnit::Test {
         connect("oracle", ENV.QORE_DB_CONNSTR_ORACLE, *string sub (string connstr) {
             return OracleRunSchema::getConnectionString(connstr, "SqlUtilViewAlignment");
         });
+%ifdef NO_FREETDS
+        skip.freetds = "freetds module unavailable";
+%else
+        connect("freetds", ENV.QORE_DB_CONNSTR_FREETDS, *string sub (string connstr) {
+            return MssqlRunDatabase::getConnectionString(connstr, "SqlUtilViewAlignment");
+        });
+        if (dsh.freetds && MssqlDatabase::isSybase(dsh.freetds)) {
+            skip.freetds = "the database is Sybase, not SQL Server";
+            remove dsh.freetds;
+        }
+%endif
+%ifdef NoJni
+        skip.jdbc = "no jni module";
+%else
+        connect("jdbc", ENV.QORE_DB_CONNSTR_JDBC_FIREBIRD, *string sub (string connstr) {
+            return FirebirdRunDatabase::getConnectionString(connstr, "SqlUtilViewAlignment");
+        });
+        if (dsh.jdbc && dsh.jdbc.getDriverRealName() !~ /^firebird/i) {
+            skip.jdbc = "not a Firebird connection";
+            remove dsh.jdbc;
+        }
+%endif
     }
 
     globalTearDown() {
@@ -79,6 +120,8 @@ class SqlUtilViewAlignmentTest inherits QUnit::Test {
         }
         MysqlRunDatabase::teardown();
         OracleRunSchema::teardown();
+        MssqlRunDatabase::teardown();
+        FirebirdRunDatabase::teardown();
     }
 
     #! opens the connection of a driver in the run's own schema or database, or records why it cannot be
@@ -143,7 +186,8 @@ class SqlUtilViewAlignmentTest inherits QUnit::Test {
                 }
             }
         }
-        checkViews(ds, driver != "mysql", True);
+        # view comments on PostgreSQL and Oracle; Firebird cannot rename views
+        checkViews(ds, inlist(driver, ("pgsql", "oracle")), driver != "jdbc");
     }
 
     #! checks the alignment of views
