@@ -309,6 +309,10 @@ enum class QoreDbgHttpHoldPoint : unsigned char {
     //! a read of a value of @ref ValueRecord found the lock that protects it taken, and is about to wait for it (see
     //! QoreRecordedValueReadLocker)
     ValueRead,
+    //! a thread that uses state that another thread can release in a teardown (the poll operation of an HTTP/3 client
+    //! connection, read for its error; the inner operation of an HTTP client ping poll operation) has taken it, and is
+    //! about to use it
+    TeardownRead,
     //! the number of hold points
     Count,
 };

@@ -188,6 +188,9 @@ protected:
     DLLLOCAL QoreHashNode* getReferencedErrorInfo() override;
 
 private:
+    //! Returns the poll operation with a new reference taken under @c attempts_mu_, or nullptr if there is none
+    DLLLOCAL Http3ClientPollOperationPriv* getReferencedPollOp();
+
     //! @name QoreObject refs — standalone C++ lifecycle, NOT DGC-visible
     /** @c sock_obj and @c poll_op_obj hold strong refs on the socket /
         poll-op QoreObjects.  They are raw, not stored in any qclass's
@@ -222,12 +225,16 @@ private:
         producing the happens-before edge that makes the pointer write
         visible without per-member atomics.
 
-        The @ref closeConnection path nulls these members under
-        @c attempts_mu_ (racing branch) or after disarming the poll op
-        (committed branch).  A Qore program calling closeConnection (or
-        `delete`) concurrently with another method on the same connection
-        violates the Qore object-lifetime contract — the outer QoreObject
-        ref held by the calling thread must outlive the method call.
+        Every write of these members is made under @c attempts_mu_: the
+        publication in @ref buildAndSubmit, the reassignment in
+        @ref onInnerHandshakeReady, the nulling in @ref onInnerHandshakeFailed
+        and @ref closeConnection (racing branch), and the release in the
+        destructor.  While the attempts race, the members alias the primary
+        attempt, whose teardown can release its poll operation at any time; a
+        reader that is not gated by @c isReady() (getReferencedErrorInfo(),
+        getActiveStreamCount()) therefore takes the poll operation with a
+        reference of its own under @c attempts_mu_ (getReferencedPollOp()) and
+        uses it after the lock is released.
 
         @{
     */

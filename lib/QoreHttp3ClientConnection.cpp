@@ -44,6 +44,7 @@
 #include "qore/intern/AsyncIoControllerPriv.h"
 #include "qore/intern/QuicSession.h"
 #include "qore/intern/QoreLibIntern.h"
+#include "qore/intern/ql_debug.h"
 
 #include <cstdio>
 
@@ -136,13 +137,24 @@ Http3ClientConnection::Http3ClientConnection(const char* target_host, int target
 Http3ClientConnection::~Http3ClientConnection() {
     ExceptionSink xsink;
     closeConnection(&xsink);
-    if (poll_op_obj) {
-        poll_op_obj->deref(&xsink);
+    // the members are written under attempts_mu_, as readers that are not gated by the connection's state take the
+    // poll operation under it; the objects are released after the lock
+    QoreObject* poll_op_obj_to_deref;
+    QoreObject* sock_obj_to_deref;
+    {
+        std::lock_guard<std::mutex> lk(attempts_mu_);
+        poll_op_obj_to_deref = poll_op_obj;
+        sock_obj_to_deref = sock_obj;
         poll_op_obj = nullptr;
-    }
-    if (sock_obj) {
-        sock_obj->deref(&xsink);
         sock_obj = nullptr;
+        poll_op_priv = nullptr;
+        sock_priv = nullptr;
+    }
+    if (poll_op_obj_to_deref) {
+        poll_op_obj_to_deref->deref(&xsink);
+    }
+    if (sock_obj_to_deref) {
+        sock_obj_to_deref->deref(&xsink);
     }
     if (client_cert_) {
         client_cert_->deref();
@@ -152,8 +164,6 @@ Http3ClientConnection::~Http3ClientConnection() {
         client_key_->deref();
         client_key_ = nullptr;
     }
-    poll_op_priv = nullptr;
-    sock_priv = nullptr;
     xsink.clear();
 }
 
@@ -783,10 +793,23 @@ int Http3ClientConnection::getActiveStreamCount() const {
     // been invalidated, report 0 (same as the existing !poll_op_priv
     // branch — this is a count accessor, not a state transition).
     MethodGuard g(const_cast<Http3ClientConnection*>(this));
-    if (!g.acquired() || !poll_op_priv) {
+    if (!g.acquired()) {
         return 0;
     }
-    return poll_op_priv->getActiveStreamCount();
+    // while the connection attempts race, the poll operation is the primary attempt's, which their teardown can
+    // release at any time: it is taken with a reference of its own
+    ExceptionSink xsink;
+    ReferenceHolder<Http3ClientPollOperationPriv> op(const_cast<Http3ClientConnection*>(this)->getReferencedPollOp(),
+        &xsink);
+    return op ? op->getActiveStreamCount() : 0;
+}
+
+Http3ClientPollOperationPriv* Http3ClientConnection::getReferencedPollOp() {
+    std::lock_guard<std::mutex> lk(attempts_mu_);
+    if (poll_op_priv) {
+        poll_op_priv->ref();
+    }
+    return poll_op_priv;
 }
 
 QoreHashNode* Http3ClientConnection::submitRequest(const char* method, const char* path,
@@ -1151,20 +1174,20 @@ void Http3ClientConnection::closeConnection(ExceptionSink* xsink) {
     // under debug / segfaults under release.  Null the members BEFORE
     // dropping into the clear loop so the post-loop path skips the
     // dangling-pointer branch.
-    bool was_racing;
     std::vector<std::shared_ptr<Attempt>> to_clear;
     {
         std::lock_guard<std::mutex> lk(attempts_mu_);
-        was_racing = !attempts_.empty();
-        to_clear = std::move(attempts_);
-        attempts_.clear();
-    }
-    if (was_racing) {
-        poll_op_priv = nullptr;
-        poll_op_obj = nullptr;
-        sock_priv = nullptr;
-        sock_obj = nullptr;
-        submitted_to_controller = false;
+        if (!attempts_.empty()) {
+            to_clear = std::move(attempts_);
+            attempts_.clear();
+            // nulled under the lock with the attempts moved out: a reader that took the primary attempt's poll
+            // operation under the lock holds a reference of its own
+            poll_op_priv = nullptr;
+            poll_op_obj = nullptr;
+            sock_priv = nullptr;
+            sock_obj = nullptr;
+            submitted_to_controller = false;
+        }
     }
     for (auto& a : to_clear) {
         if (a) {
@@ -1242,19 +1265,30 @@ void Http3ClientConnection::wakeController() const {
 }
 
 QoreHashNode* Http3ClientConnection::getReferencedErrorInfo() {
+    // the poll operation is taken with a reference of its own under attempts_mu_: while the connection attempts
+    // race, it is the primary attempt's, which their teardown (a failure of all attempts, a winner that is another
+    // attempt, or a close) can release at any time, and this read is not gated by the connection's state
+    ExceptionSink xsink;
+    ReferenceHolder<Http3ClientPollOperationPriv> op(&xsink);
+    std::unique_lock<std::mutex> lk(attempts_mu_);
     if (poll_op_priv) {
-        return poll_op_priv->getErrorInfo();
+        poll_op_priv->ref();
+        op = poll_op_priv;
+        lk.unlock();
+#ifdef DEBUG
+        // a test holds the thread here, with the operation taken, while another thread tears the attempt down
+        qore_dbg_http_hold(QoreDbgHttpHoldPoint::TeardownRead, this);
+#endif
+        return op->getErrorInfo();
     }
     // Happy-eyeballs all-fail path: attempts_ has been torn down and
     // poll_op_priv nulled.  Surface the cached error from the most
     // recent handshake failure.  Use ReferenceHolder so a bad_alloc
     // thrown by the intermediate QoreStringNode allocations does not
     // leak the hash.
-    std::lock_guard<std::mutex> lk(attempts_mu_);
     if (last_err_.empty() && last_desc_.empty()) {
         return nullptr;
     }
-    ExceptionSink xsink;
     ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), &xsink);
     h->setKeyValue("err",
         new QoreStringNode(last_err_.empty()
