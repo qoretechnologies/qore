@@ -1761,11 +1761,19 @@ hash<HttpContentTypeInfo> get_http_content_type_info(string content_type, string
 /** An HTTP server reports it in the header information of a request (the \c "accept-charset" key of the info hash
     of @ref Qore::Socket::readHTTPHeader() "Socket::readHTTPHeader()", and of \c cx."header-info" in an
     @ref HttpServer::HttpServer "HttpServer" request handler, which uses it as \c cx."response-encoding") for every
-    HTTP version:
-    - \c "utf8" if the value, or an element of it directly after a comma (without whitespace), begins with \c "*",
-      \c "utf8" or \c "utf-8" (case-insensitive; quality values are not considered)
-    - otherwise the value up to its first comma or semicolon, without leading and trailing whitespace
-    - \c "utf8" if that is empty or there is no value (RFC 2616 section 14.2: any character set is acceptable then)
+    HTTP version.  The value is parsed as RFC 9110 section 12.5.2 defines it: a comma-separated list of charset names
+    (tokens, case-insensitive) or \c "*", each with an optional weight (<tt>;q=</tt><em>qvalue</em>, section 12.4.2; 1
+    without one), with optional whitespace around the elements and before and after each \c ";"; other parameters,
+    with a token or quoted-string value, are ignored, and an element with an invalid weight or another syntax error
+    (such as a charset name that is not a token) is ignored.  The result is:
+    - \c "utf8" if UTF-8 (\c "utf-8" or \c "utf8") has the highest weight of the acceptable charsets that %Qore
+      supports, also with the same weight as another; \c "*" gives UTF-8 its weight if UTF-8 is not listed
+    - otherwise the name of the acceptable charset with the highest weight that %Qore supports (an encoding that
+      %Qore knows, by its name or an alias, and that iconv converts to), as given in the value; of charsets with the
+      same weight, the first in the list
+    - \c "utf8" if there is no value, or no charset in it is acceptable (a weight of 0 means not acceptable) and
+      supported, also when UTF-8 has a weight of 0 and \c "*" accepts any other charset: any character set is
+      acceptable without the header (RFC 9110 section 12.5.2), and a server may disregard the header otherwise
 
     @param accept_charset the \c Accept-Charset header value, if any
 
@@ -1773,7 +1781,7 @@ hash<HttpContentTypeInfo> get_http_content_type_info(string content_type, string
 
     @par Example:
     @code{.py}
-string enc = get_http_accept_charset("iso-8859-2;q=0.9");
+string enc = get_http_accept_charset("iso-8859-2;q=0.9, utf-8;q=0.5");
 # enc: "iso-8859-2"
     @endcode
 
@@ -1794,7 +1802,7 @@ string get_http_accept_charset(*string accept_charset) [flags=RET_VALUE_ONLY,NAM
         ++p;
     }
     std::string rv = qore_get_http_accept_charset(p);
-    // according to RFC 2616 section 14.2, any character set is acceptable without one; UTF-8 is used
+    // any character set is acceptable without one (RFC 9110 section 12.5.2); UTF-8 is used
     return rv.empty() ? new QoreStringNode("utf8") : new QoreStringNode(rv.c_str(), rv.size(), QCS_DEFAULT);
 }
 
