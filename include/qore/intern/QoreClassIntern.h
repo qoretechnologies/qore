@@ -76,6 +76,17 @@ DLLLOCAL extern std::atomic<int64> qore_class_hierarchy_steps;
 #endif
 #define OTF_BUILTIN CT_BUILTIN
 
+#ifdef DEBUG
+//! the parent class edges that the checks of the generic parent instantiations of classes have visited (qore#6423)
+/** Read by the dbg_generic_parent_check_steps() debug hook, so that a test can require a bound on the steps of the
+    checks independent of the timing
+*/
+DLLLOCAL extern std::atomic<int64> qore_generic_parent_check_steps;
+#define QORE_GENERIC_PARENT_CHECK_STEP() qore_generic_parent_check_steps.fetch_add(1, std::memory_order_relaxed)
+#else
+#define QORE_GENERIC_PARENT_CHECK_STEP()
+#endif
+
 // cannot use vector_map here for performance reasons with method lookups
 #ifdef HAVE_QORE_HASH_MAP
 #include <qore/hash_map_include.h>

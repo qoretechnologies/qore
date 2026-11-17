@@ -33,6 +33,7 @@
 #include "qore/intern/AssertStatement.h"
 #include "qore/intern/QoreJITIncludes.h"
 #include "qore/intern/QoreHandlerRun.h"
+#include "qore/intern/QorePseudoMethods.h"
 #include "qore/intern/JITRuntime.h"
 #include "qore/intern/QoreIRPointerSlot.h"
 #include "qore/intern/QoreJITException.h"
@@ -142,6 +143,7 @@
 #ifndef QORE_JIT_RUNTIME_GIVEN_ARGS_UNIT
 static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_check_stack", reinterpret_cast<void*>(&qore_rt_check_stack) },
+    { "qore_rt_check_stack_reserve", reinterpret_cast<void*>(&qore_rt_check_stack_reserve) },
     { "qore_rt_discard_on_block_exit", reinterpret_cast<void*>(&qore_rt_discard_on_block_exit) },
     { "qore_rt_add_any", reinterpret_cast<void*>(&qore_rt_add_any) },
     { "qore_rt_sub_any", reinterpret_cast<void*>(&qore_rt_sub_any) },
@@ -767,6 +769,15 @@ extern "C" DLLEXPORT int qore_rt_check_stack(ExceptionSink* xsink) {
     return 0;
 #endif
 }
+
+extern "C" DLLEXPORT int qore_rt_check_stack_reserve(ExceptionSink* xsink, int64_t reserve) {
+#ifdef QORE_MANAGE_STACK
+    assert(reserve > 0);
+    return check_stack_reserve(xsink, static_cast<size_t>(reserve));
+#else
+    return 0;
+#endif
+}
 #endif // QORE_JIT_RUNTIME_GIVEN_ARGS_UNIT
 
 // --- Forward declarations for Phase 5 fast-call builtins ---
@@ -1123,13 +1134,22 @@ static int clearConsumedArgCleanups(uint64_t** arg_cleanups, int nargs,
     if (!arg_cleanups) {
         return 0;
     }
+    // the last slot that holds a value: a call whose given slots hold nothing (the slot of a read through a reference
+    // when the local held no reference, issue #6262) releases nothing and constructs no exception sink
+    int last = nargs - 1;
+    while (last >= 0 && (!arg_cleanups[last] || !*arg_cleanups[last])) {
+        --last;
+    }
+    if (last < 0) {
+        return 0;
+    }
     // Argument cleanups must run even if the callee already raised an
     // exception.  Preserve the original exception and suppress any cleanup
     // exception in that case; otherwise report cleanup failures normally.
     bool had_exception = xsink && *xsink;
     ExceptionSink cleanup_sink;
     ExceptionSink* cleanup_xsink = had_exception ? &cleanup_sink : xsink;
-    for (int i = nargs - 1; i >= 0; --i) {
+    for (int i = last; i >= 0; --i) {
         uint64_t* slot = arg_cleanups[i];
         if (!slot) {
             continue;
@@ -4939,9 +4959,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_create_object_method_ref_aot(uint64_t obje
     QoreValue obj_val = fromBits(object_bits);
     QoreObject* obj = obj_val.getType() == NT_OBJECT ? obj_val.get<QoreObject>() : nullptr;
     if (!obj) {
-        xsink->raiseException("OBJECT-METHOD-REFERENCE-ERROR",
-            "expression does not evaluate to an object; got type '%s' instead", obj_val.getTypeName());
-        return toBits(QoreValue());
+        // issue #995: a reference to a pseudo-method of the value, as in ParseObjectMethodReferenceNode::makeReference()
+        return toBits(qore_make_pseudo_method_reference(&loc_builtin, obj_val, method_name, xsink));
     }
 
     // a static method of the receiver's declared class: the reference is bound to it, whatever the class of the
@@ -4976,6 +4995,12 @@ extern "C" DLLEXPORT uint64_t qore_rt_create_object_method_ref_aot(uint64_t obje
     if (!method) {
         method = obj_class->findStaticMethod(method_name, access);
         if (!method) {
+            // issue #995: a pseudo-method of objects or a member, looked up by name when called, as in
+            // ParseObjectMethodReferenceNode::makeReferenceForClass()
+            if (qore_object_has_pseudo_or_member_method(qore_class_private::get(*obj_class), method_name,
+                    runtime_get_class())) {
+                return toBits(QoreValue(new RunTimeObjectMethodReferenceNode(&loc_builtin, obj, method_name, true)));
+            }
             xsink->raiseException("OBJECT-METHOD-REFERENCE-ERROR",
                 "cannot resolve reference to %s::%s(): unknown method", obj->getClassName(), method_name);
             return toBits(QoreValue());
@@ -9714,6 +9739,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_closure_fast(uint64_t ref_bits, uint6
 
 extern "C" DLLEXPORT uint64_t qore_rt_call_closure_fast_consume_args(uint64_t ref_bits,
         uint64_t* args, uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink) {
+    // no array: the slots of reads through references that the call gives hold nothing (issue #6262)
+    if (!arg_cleanups) {
+        return qore_rt_call_closure_fast(ref_bits, args, nargs, xsink);
+    }
     return qore_rt_call_closure_fast_impl(ref_bits, args, arg_cleanups, nargs, xsink);
 }
 
@@ -11908,6 +11937,10 @@ static uint64_t qore_rt_call_with_args_impl(uint64_t expr_bits, uint64_t* args,
 //! such as a call of a method of self
 extern "C" DLLEXPORT uint64_t qore_rt_call_with_args_consume_args(uint64_t expr_bits,
         uint64_t* args, uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink) {
+    // no array: the slots of reads through references that the call gives hold nothing (issue #6262)
+    if (!arg_cleanups) {
+        return qore_rt_call_with_args(expr_bits, args, nargs, xsink);
+    }
     return qore_rt_call_with_args_impl(expr_bits, args, arg_cleanups, nargs, xsink);
 }
 #endif
@@ -12367,6 +12400,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_function_direct(const QoreFunction* f
 extern "C" DLLEXPORT uint64_t qore_rt_call_function_direct_consume_args(const QoreFunction* func,
         const AbstractQoreFunctionVariant* variant, QoreProgram* pgm,
         uint64_t* args, uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink) {
+    // no array: the slots of reads through references that the call gives hold nothing (issue #6262)
+    if (!arg_cleanups) {
+        return qore_rt_call_function_direct(func, variant, pgm, args, nargs, xsink);
+    }
     return qore_rt_call_function_direct_impl(func, variant, pgm, args, arg_cleanups, nargs, xsink);
 }
 
@@ -13718,6 +13755,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_fast(const QoreFunction* func,
 extern "C" DLLEXPORT uint64_t qore_rt_call_fast_consume_args(const QoreFunction* func,
         const AbstractQoreFunctionVariant* variant, QoreProgram* pgm,
         uint64_t* args, uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink) {
+    // no array: the slots of reads through references that the call gives hold nothing (issue #6262)
+    if (!arg_cleanups) {
+        return qore_rt_call_fast(func, variant, pgm, args, nargs, xsink);
+    }
     return qore_rt_call_fast_consume_impl(func, variant, pgm, args, arg_cleanups, nargs, xsink);
 }
 #endif // QORE_JIT_RUNTIME_GIVEN_ARGS_UNIT
@@ -14062,6 +14103,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_immediate_closure(
 extern "C" DLLEXPORT uint64_t qore_rt_call_immediate_closure_consume_args(
         const QoreClosureParseNode* cn, uint64_t* args, uint64_t** arg_cleanups,
         int nargs, ExceptionSink* xsink) {
+    // no array: the slots of reads through references that the call gives hold nothing (issue #6262)
+    if (!arg_cleanups) {
+        return qore_rt_call_immediate_closure(cn, args, nargs, xsink);
+    }
     return qore_rt_call_immediate_closure_impl(cn, args, arg_cleanups, nargs, xsink);
 }
 
@@ -14286,6 +14331,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_fast_with_target(uint64_t (*target_fn
 extern "C" DLLEXPORT uint64_t qore_rt_call_fast_with_target_consume_args(uint64_t (*target_fn)(ExceptionSink*),
         const AbstractQoreFunctionVariant* variant, uint64_t* args, uint64_t** arg_cleanups, int nargs,
         ExceptionSink* xsink) {
+    // no array: the slots of reads through references that the call gives hold nothing (issue #6262)
+    if (!arg_cleanups) {
+        return qore_rt_call_fast_with_target(target_fn, variant, args, nargs, xsink);
+    }
     return qore_rt_call_fast_with_target_consume_impl(target_fn, variant, args, arg_cleanups, nargs, xsink);
 }
 #endif // QORE_JIT_RUNTIME_GIVEN_ARGS_UNIT
@@ -14536,6 +14585,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_self_recursive(const AbstractQoreFunc
 //! qore_rt_call_self_recursive() for a call that gives the references of its temporary arguments to the call
 extern "C" DLLEXPORT uint64_t qore_rt_call_self_recursive_consume_args(const AbstractQoreFunctionVariant* variant,
         uint64_t* args, uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink) {
+    // no array: the slots of reads through references that the call gives hold nothing (issue #6262)
+    if (!arg_cleanups) {
+        return qore_rt_call_self_recursive(variant, args, nargs, xsink);
+    }
     return qore_rt_call_self_recursive_consume_impl(variant, args, arg_cleanups, nargs, xsink);
 }
 #endif // QORE_JIT_RUNTIME_GIVEN_ARGS_UNIT
@@ -14601,6 +14654,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_method_direct(const QoreMethod* metho
 
 extern "C" DLLEXPORT uint64_t qore_rt_call_method_direct_consume_args(const QoreMethod* method,
         uint64_t* args, uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink) {
+    // no array: the slots of reads through references that the call gives hold nothing (issue #6262)
+    if (!arg_cleanups) {
+        return qore_rt_call_method_direct(method, args, nargs, xsink);
+    }
     return qore_rt_call_method_direct_impl(method, args, arg_cleanups, nargs, xsink);
 }
 #endif // QORE_JIT_RUNTIME_GIVEN_ARGS_UNIT
@@ -15003,6 +15060,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_method_fast(const QoreMethod* method,
 extern "C" DLLEXPORT uint64_t qore_rt_call_method_fast_consume_args(const QoreMethod* method,
         const AbstractQoreFunctionVariant* variant, uint64_t* args, uint64_t** arg_cleanups,
         int nargs, ExceptionSink* xsink) {
+    // no array: the slots of reads through references that the call gives hold nothing (issue #6262)
+    if (!arg_cleanups) {
+        return qore_rt_call_method_fast(method, variant, args, nargs, xsink);
+    }
     return qore_rt_call_method_fast_impl(method, variant, args, arg_cleanups, nargs, xsink);
 }
 
@@ -21421,6 +21482,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_dot_eval_method_direct_consume_args(uint64
         const QoreMethod* method, const QoreClass* qc,
         const AbstractQoreFunctionVariant* variant, uint64_t* args,
         uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink) {
+    // no array: the slots of reads through references that the call gives hold nothing (issue #6262)
+    if (!arg_cleanups) {
+        return qore_rt_dot_eval_method_direct(base_bits, method, qc, variant, args, nargs, xsink);
+    }
     return qore_rt_dot_eval_method_direct_impl<true>(base_bits, method, qc, variant,
         args, arg_cleanups, nargs, xsink, nullptr);
 }
@@ -22880,6 +22945,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_static_method_direct_with_inst(
 extern "C" DLLEXPORT uint64_t qore_rt_call_static_method_direct_consume_args(const QoreMethod* method,
         const AbstractQoreFunctionVariant* variant, uint64_t* args, uint64_t** arg_cleanups, int nargs,
         ExceptionSink* xsink) {
+    // no array: the slots of reads through references that the call gives hold nothing (issue #6262)
+    if (!arg_cleanups) {
+        return qore_rt_call_static_method_direct(method, variant, args, nargs, xsink);
+    }
     return qore_rt_call_static_method_direct_impl(method, variant, args, arg_cleanups, nargs, xsink, nullptr);
 }
 

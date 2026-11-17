@@ -64,8 +64,9 @@ class CdsRestDataProviderNarrowedCallerHashTest inherits QUnit::Test {
 
     #! Runs the helper with CDS_URL set and this process's interpreter options; returns its output
     private string runHelper(list<string> classes) {
-        # interpreter options are the arguments before the script
-        list<string> opts = map $1, QORE_ARGV[1..], $1 =~ /^-/;
+        # the interpreter options are the arguments before the script; those after it are the test's own (such as
+        # the -v of run_tests.sh -v), which the helper's interpreter would refuse (issue #6250)
+        list<string> opts = TestInterpreter::interpreter_options(get_script_path());
         string helper = get_script_dir() + "CdsRestDataProviderAutoConfigHelper.q";
         string cmd = sprintf("env CDS_URL=%s %s %s %s %s 2>&1", shellQuote(CdsUrl), shellQuote(TestInterpreter::qore_interpreter()),
             (map shellQuote($1), opts).join(" "), shellQuote(helper), (map shellQuote($1), classes).join(" "));
