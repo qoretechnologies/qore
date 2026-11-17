@@ -321,13 +321,13 @@ enum qore_call_kind_e {
 //! The analysis of the code of a Program that the parse of the Program has initialized
 class QoreCompletionAnalyzer {
 public:
-    DLLLOCAL QoreCompletionAnalyzer(QoreProgram* pgm, QoreMissingReturnChecks& cache) : pgm(pgm), cache(cache) {
+    QoreCompletionAnalyzer(QoreProgram* pgm, QoreMissingReturnChecks& cache) : pgm(pgm), cache(cache) {
     }
 
     //! Returns whether the end of the code of the variant is certainly reachable
     /** The analysis of the code that the code calls is kept for the following calls
     */
-    DLLLOCAL qore_reach_e bodyEnd(const UserVariantBase* uvb) {
+    qore_reach_e bodyEnd(const UserVariantBase* uvb) {
         const StatementBlock* b = uvb->getStatementBlock();
         if (!b || !b->isParseInitialized()) {
             return QR_MAYBE;
@@ -351,12 +351,12 @@ private:
     //! Marks the code of a variant as being analyzed while it lives
     class InProgressHelper {
     public:
-        DLLLOCAL InProgressHelper(std::set<const UserVariantBase*>& in_progress, const UserVariantBase* uvb)
+        InProgressHelper(std::set<const UserVariantBase*>& in_progress, const UserVariantBase* uvb)
                 : in_progress(in_progress), uvb(uvb) {
             in_progress.insert(uvb);
         }
 
-        DLLLOCAL ~InProgressHelper() {
+        ~InProgressHelper() {
             in_progress.erase(uvb);
         }
 
@@ -368,16 +368,16 @@ private:
     //! Limits the depth of the analysis, which is recursive; deeper code is not analyzed
     class DepthHelper {
     public:
-        DLLLOCAL DepthHelper(unsigned& depth) : depth(depth) {
+        DepthHelper(unsigned& depth) : depth(depth) {
             ++depth;
         }
 
-        DLLLOCAL ~DepthHelper() {
+        ~DepthHelper() {
             --depth;
         }
 
         //! Returns true if the code at this depth cannot be analyzed
-        DLLLOCAL bool tooDeep() const {
+        bool tooDeep() const {
             return depth > 4096 || q_thread_stack_reserve_exceeded(QORE_PARSE_STACK_RESERVE);
         }
 
@@ -385,35 +385,35 @@ private:
         unsigned& depth;
     };
 
-    DLLLOCAL QoreCompletion block(const StatementBlock* b);
-    DLLLOCAL QoreCompletion statement(const AbstractStatement* s);
-    DLLLOCAL QoreCompletion optionalBlock(const StatementBlock* b) {
+    QoreCompletion block(const StatementBlock* b);
+    QoreCompletion statement(const AbstractStatement* s);
+    QoreCompletion optionalBlock(const StatementBlock* b) {
         return b ? block(b) : QoreCompletion();
     }
 
     //! The completion of an expression: only normal and thr are set
-    DLLLOCAL QoreCompletion expr(const QoreValue& v);
-    DLLLOCAL QoreCompletion operatorExpr(const QoreOperatorNode* op);
+    QoreCompletion expr(const QoreValue& v);
+    QoreCompletion operatorExpr(const QoreOperatorNode* op);
     //! The completion of the arguments of a call; @a user_args is set if an argument can be code or an object, with
     //! which a builtin can run user code
-    DLLLOCAL QoreCompletion callArgs(const FunctionCallBase* call, bool& user_args);
+    QoreCompletion callArgs(const FunctionCallBase* call, bool& user_args);
     //! Returns the completion of the call of the target after its arguments
-    DLLLOCAL QoreCompletion call(QoreCompletion args, const QoreCallOutcome& target);
+    QoreCompletion call(QoreCompletion args, const QoreCallOutcome& target);
 
     //! Returns what a call of the function or method can do
     /** @param f the function or method
         @param user_args true if the arguments can be code or objects, with which a builtin can run user code
         @param kind what @a f is
     */
-    DLLLOCAL QoreCallOutcome functionOutcome(const QoreFunction* f, bool user_args, qore_call_kind_e kind);
+    QoreCallOutcome functionOutcome(const QoreFunction* f, bool user_args, qore_call_kind_e kind);
     //! Returns what a call of the method, which is called without virtual dispatch, can do; a builtin method, which
     //! can call methods of its object that a user class overrides, is not known
-    DLLLOCAL QoreCallOutcome methodOutcome(const QoreMethod* m, bool user_args);
+    QoreCallOutcome methodOutcome(const QoreMethod* m, bool user_args);
     //! Returns what a call of the user variant can do
-    DLLLOCAL QoreCallOutcome variantOutcome(const AbstractQoreFunctionVariant* v);
+    QoreCallOutcome variantOutcome(const AbstractQoreFunctionVariant* v);
 
-    DLLLOCAL QoreCompletion selfCall(const SelfFunctionCallNode* call);
-    DLLLOCAL QoreCompletion dotCall(const QoreDotEvalOperatorNode* op);
+    QoreCompletion selfCall(const SelfFunctionCallNode* call);
+    QoreCompletion dotCall(const QoreDotEvalOperatorNode* op);
 };
 
 QoreCompletion QoreCompletionAnalyzer::block(const StatementBlock* b) {
@@ -1189,9 +1189,9 @@ void QoreMissingReturnChecks::run(QoreProgram* pgm) {
     // releases the variants, also if a check throws
     class ReleaseHelper {
     public:
-        DLLLOCAL ReleaseHelper(std::vector<AbstractQoreFunctionVariant*>& v) : v(v) {
+        ReleaseHelper(std::vector<AbstractQoreFunctionVariant*>& v) : v(v) {
         }
-        DLLLOCAL ~ReleaseHelper() {
+        ~ReleaseHelper() {
             for (AbstractQoreFunctionVariant* i : v) {
                 i->deref();
             }
