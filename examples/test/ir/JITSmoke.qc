@@ -1,201 +1,204 @@
-#!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
-# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# Copyright (C) 2026 Qore Technologies, s.r.o.
 
-%modern
-%no-child-restrictions
+# The cases of the JITSmoke-<n>.qtest tests: each runs one part of them, so that each takes a short time (all of them
+# took 70 s alone in a debug build, and more than the 300 s limit of run_tests.sh beside other tests: qore#6378), and
+# together they run every case (see addPartCase()); the parts are balanced by the time of their cases
 
-%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
-%requires QUnit
-%requires ../TestInterpreter.qm
-%requires FsUtil
-%requires ../ExecModeHarness.qm
-
-%exec-class JITSmokeTest
-
-class JITSmokeTest inherits QUnit::Test {
+class JITSmokeBase inherits QUnit::Test {
     private {
+        #! the part of the cases that this test runs (see addPartCase())
+        int part;
+
         string qore_bin;
     }
 
-    constructor() : QUnit::Test("JITSmokeTest", "1.0", \ARGV) {
+    constructor(string name, int part) : QUnit::Test(name, "1.0", \ARGV) {
+        self.part = part;
         qore_bin = TestInterpreter::qore_interpreter();
-        addTestCase("JIT integer arithmetic", \testJitIntArithmetic());
-        addTestCase("JIT integer comparisons", \testJitIntComparisons());
-        addTestCase("JIT float arithmetic", \testJitFloatArithmetic());
-        addTestCase("JIT float comparisons", \testJitFloatComparisons());
-        addTestCase("JIT mixed int/float arithmetic", \testJitMixedIntFloatArithmetic());
-        addTestCase("JIT mixed int/float comparisons", \testJitMixedIntFloatComparisons());
-        addTestCase("JIT boolean operations", \testJitBoolOps());
-        addTestCase("JIT control flow", \testJitControlFlow());
-        addTestCase("JIT bitwise operations", \testJitBitwiseOps());
-        addTestCase("JIT division by zero", \testJitDivisionByZero());
-        addTestCase("JIT nested if/else", \testJitNestedIfElse());
-        addTestCase("JIT loop computation", \testJitLoopComputation());
-        addTestCase("JIT fallback to IR", \testJitFallbackToIr());
-        addTestCase("JIT non-modern fallback", \testJitNonModernFallback());
-        addTestCase("JIT try/catch exception", \testJitTryCatch());
-        addTestCase("JIT float division by zero", \testJitFloatDivByZero());
-        addTestCase("JIT modulo by zero", \testJitModuloByZero());
-        addTestCase("JIT unary operations", \testJitUnaryOps());
-        addTestCase("JIT mixed arithmetic", \testJitMixedArithmetic());
-        addTestCase("JIT string operations", \testJitStringOps());
-        addTestCase("JIT switch statement", \testJitSwitch());
-        addTestCase("JIT while loop", \testJitWhileLoop());
-        addTestCase("JIT do-while loop", \testJitDoWhileLoop());
-        addTestCase("JIT correctness across modes", \testJitCorrectnessAcrossModes());
-        addTestCase("JIT hash construction and access", \testJitHashAccess());
-        addTestCase("JIT list construction and access", \testJitListOps());
-        addTestCase("JIT string concatenation", \testJitStringConcat());
-        addTestCase("JIT dynamic comparison ops", \testJitDynamicComparisons());
-        addTestCase("JIT dynamic bitwise ops", \testJitDynamicBitwise());
-        addTestCase("JIT dynamic unary ops", \testJitDynamicUnary());
-        addTestCase("JIT compound assignment ops", \testJitCompoundAssign());
-        addTestCase("JIT compound assign bitwise", \testJitCompoundAssignBitwise());
-        addTestCase("JIT compound assign float", \testJitCompoundAssignFloat());
-        addTestCase("JIT compound assign any", \testJitCompoundAssignAny());
-        addTestCase("JIT compound assign any bitwise", \testJitCompoundAssignAnyBitwise());
-        addTestCase("JIT compound assign any NOTHING", \testJitCompoundAssignAnyNothing());
-        addTestCase("JIT compound assign loop", \testJitCompoundAssignLoop());
-        addTestCase("JIT compound assign overflow", \testJitCompoundAssignOverflow());
-        addTestCase("JIT division inline zero-check", \testJitDivisionInlineZeroCheck());
-        addTestCase("JIT throw with list args", \testJitThrowList());
-        addTestCase("JIT multiple exceptions", \testJitMultipleExceptions());
-        addTestCase("JIT scoped object construction", \testJitScopedObjectConstruction());
+        addPartCase(1, "JIT integer arithmetic", \testJitIntArithmetic());
+        addPartCase(1, "JIT integer comparisons", \testJitIntComparisons());
+        addPartCase(1, "JIT float arithmetic", \testJitFloatArithmetic());
+        addPartCase(1, "JIT float comparisons", \testJitFloatComparisons());
+        addPartCase(1, "JIT mixed int/float arithmetic", \testJitMixedIntFloatArithmetic());
+        addPartCase(1, "JIT mixed int/float comparisons", \testJitMixedIntFloatComparisons());
+        addPartCase(1, "JIT boolean operations", \testJitBoolOps());
+        addPartCase(1, "JIT control flow", \testJitControlFlow());
+        addPartCase(1, "JIT bitwise operations", \testJitBitwiseOps());
+        addPartCase(1, "JIT division by zero", \testJitDivisionByZero());
+        addPartCase(1, "JIT nested if/else", \testJitNestedIfElse());
+        addPartCase(1, "JIT loop computation", \testJitLoopComputation());
+        addPartCase(1, "JIT fallback to IR", \testJitFallbackToIr());
+        addPartCase(1, "JIT non-modern fallback", \testJitNonModernFallback());
+        addPartCase(1, "JIT try/catch exception", \testJitTryCatch());
+        addPartCase(1, "JIT float division by zero", \testJitFloatDivByZero());
+        addPartCase(1, "JIT modulo by zero", \testJitModuloByZero());
+        addPartCase(1, "JIT unary operations", \testJitUnaryOps());
+        addPartCase(1, "JIT mixed arithmetic", \testJitMixedArithmetic());
+        addPartCase(1, "JIT string operations", \testJitStringOps());
+        addPartCase(1, "JIT switch statement", \testJitSwitch());
+        addPartCase(1, "JIT while loop", \testJitWhileLoop());
+        addPartCase(1, "JIT do-while loop", \testJitDoWhileLoop());
+        addPartCase(1, "JIT correctness across modes", \testJitCorrectnessAcrossModes());
+        addPartCase(1, "JIT hash construction and access", \testJitHashAccess());
+        addPartCase(1, "JIT list construction and access", \testJitListOps());
+        addPartCase(1, "JIT string concatenation", \testJitStringConcat());
+        addPartCase(1, "JIT dynamic comparison ops", \testJitDynamicComparisons());
+        addPartCase(1, "JIT dynamic bitwise ops", \testJitDynamicBitwise());
+        addPartCase(1, "JIT dynamic unary ops", \testJitDynamicUnary());
+        addPartCase(1, "JIT compound assignment ops", \testJitCompoundAssign());
+        addPartCase(1, "JIT compound assign bitwise", \testJitCompoundAssignBitwise());
+        addPartCase(1, "JIT compound assign float", \testJitCompoundAssignFloat());
+        addPartCase(1, "JIT compound assign any", \testJitCompoundAssignAny());
+        addPartCase(1, "JIT compound assign any bitwise", \testJitCompoundAssignAnyBitwise());
+        addPartCase(1, "JIT compound assign any NOTHING", \testJitCompoundAssignAnyNothing());
+        addPartCase(1, "JIT compound assign loop", \testJitCompoundAssignLoop());
+        addPartCase(1, "JIT compound assign overflow", \testJitCompoundAssignOverflow());
+        addPartCase(1, "JIT division inline zero-check", \testJitDivisionInlineZeroCheck());
+        addPartCase(1, "JIT throw with list args", \testJitThrowList());
+        addPartCase(1, "JIT multiple exceptions", \testJitMultipleExceptions());
+        addPartCase(1, "JIT scoped object construction", \testJitScopedObjectConstruction());
         # Phase 5b optimization tests
-        addTestCase("JIT hash key access fast-path", \testJitHashKeyFastPath());
-        addTestCase("JIT list index access fast-path", \testJitListIndexFastPath());
-        addTestCase("JIT string concat fast-path", \testJitStringConcatFastPath());
-        addTestCase("JIT any arithmetic fast-path", \testJitAnyArithFastPath());
-        addTestCase("JIT any comparison fast-path", \testJitAnyCmpFastPath());
-        addTestCase("JIT any arithmetic mixed types", \testJitAnyArithMixed());
-        addTestCase("JIT Phase 5b cross-mode correctness", \testJitPhase5bCrossMode());
+        addPartCase(1, "JIT hash key access fast-path", \testJitHashKeyFastPath());
+        addPartCase(1, "JIT list index access fast-path", \testJitListIndexFastPath());
+        addPartCase(1, "JIT string concat fast-path", \testJitStringConcatFastPath());
+        addPartCase(1, "JIT any arithmetic fast-path", \testJitAnyArithFastPath());
+        addPartCase(1, "JIT any comparison fast-path", \testJitAnyCmpFastPath());
+        addPartCase(1, "JIT any arithmetic mixed types", \testJitAnyArithMixed());
+        addPartCase(1, "JIT Phase 5b cross-mode correctness", \testJitPhase5bCrossMode());
         # Phase 5c debug info tests
-        addTestCase("JIT debug info compile", \testJitDebugInfoCompile());
-        addTestCase("JIT debug info multi-line", \testJitDebugInfoMultiLine());
+        addPartCase(1, "JIT debug info compile", \testJitDebugInfoCompile());
+        addPartCase(1, "JIT debug info multi-line", \testJitDebugInfoMultiLine());
         # Double-eval regression tests
-        addTestCase("side-effecting args", \testJitSideEffectingArgs());
-        addTestCase("tracked side effects", \testJitTrackedSideEffects());
-        addTestCase("nested call side effects", \testJitNestedCallSideEffects());
-        addTestCase("binary invoke try/catch", \testJitBinaryInvokeTryCatch());
-        addTestCase("call cross-mode", \testJitCallCrossMode());
+        addPartCase(1, "side-effecting args", \testJitSideEffectingArgs());
+        addPartCase(1, "tracked side effects", \testJitTrackedSideEffects());
+        addPartCase(1, "nested call side effects", \testJitNestedCallSideEffects());
+        addPartCase(1, "binary invoke try/catch", \testJitBinaryInvokeTryCatch());
+        addPartCase(1, "call cross-mode", \testJitCallCrossMode());
         # Bug fix regression tests
-        addTestCase("no-arg function call", \testJitNoArgCall());
-        addTestCase("int post-increment", \testJitIntPostIncrement());
-        addTestCase("int post-decrement", \testJitIntPostDecrement());
-        addTestCase("ternary operator", \testJitTernary());
-        addTestCase("inline optional assignment NULL dot-eval",
+        addPartCase(1, "no-arg function call", \testJitNoArgCall());
+        addPartCase(1, "int post-increment", \testJitIntPostIncrement());
+        addPartCase(1, "int post-decrement", \testJitIntPostDecrement());
+        addPartCase(1, "ternary operator", \testJitTernary());
+        addPartCase(1, "inline optional assignment NULL dot-eval",
             \testInlineOptionalAssignmentNullDotEval());
         # DotEval double-evaluation regression tests
-        addTestCase("dot-eval method call single eval", \testJitDotEvalSingleEval());
-        addTestCase("dot-eval invoke path single eval", \testJitDotEvalInvokeSingleEval());
-        addTestCase("dot-eval chained methods", \testJitDotEvalChained());
-        addTestCase("dot-eval hash member access", \testJitDotEvalHashMember());
+        addPartCase(1, "dot-eval method call single eval", \testJitDotEvalSingleEval());
+        addPartCase(1, "dot-eval invoke path single eval", \testJitDotEvalInvokeSingleEval());
+        addPartCase(1, "dot-eval chained methods", \testJitDotEvalChained());
+        addPartCase(1, "dot-eval hash member access", \testJitDotEvalHashMember());
         # Regex double-evaluation regression tests
-        addTestCase("regex match single eval", \testJitRegexMatchSingleEval());
-        addTestCase("regex match invoke single eval", \testJitRegexMatchInvokeSingleEval());
-        addTestCase("regex extract single eval", \testJitRegexExtractSingleEval());
-        addTestCase("regex extract invoke single eval", \testJitRegexExtractInvokeSingleEval());
-        addTestCase("IR-only condition local regex loop", \testIrOnlyConditionLocalRegexLoop());
-        addTestCase("IR-only maybe-NOTHING condition local", \testIrOnlyConditionLocalMaybeNothing());
-        addTestCase("IR-only optional hash local missing member", \testIrOnlyOptionalHashLocalMissingMember());
-        addTestCase("direct params survive scoped loop locals", \testDirectParamsSurviveScopedLoopLocals());
-        addTestCase("on_block_exit preserves parameter slots", \testOnBlockExitPreservesParameterSlots());
+        addPartCase(1, "regex match single eval", \testJitRegexMatchSingleEval());
+        addPartCase(1, "regex match invoke single eval", \testJitRegexMatchInvokeSingleEval());
+        addPartCase(1, "regex extract single eval", \testJitRegexExtractSingleEval());
+        addPartCase(1, "regex extract invoke single eval", \testJitRegexExtractInvokeSingleEval());
+        addPartCase(1, "IR-only condition local regex loop", \testIrOnlyConditionLocalRegexLoop());
+        addPartCase(1, "IR-only maybe-NOTHING condition local", \testIrOnlyConditionLocalMaybeNothing());
+        addPartCase(1, "IR-only optional hash local missing member", \testIrOnlyOptionalHashLocalMissingMember());
+        addPartCase(1, "direct params survive scoped loop locals", \testDirectParamsSurviveScopedLoopLocals());
+        addPartCase(1, "on_block_exit preserves parameter slots", \testOnBlockExitPreservesParameterSlots());
         # Optimized higher-order function tests
-        addTestCase("optimized foldl sum/prod", \testJitFoldlSumProd());
-        addTestCase("optimized foldl diff/min/max", \testJitFoldlDiffMinMax());
-        addTestCase("optimized map patterns", \testJitMapOptimized());
-        addTestCase("map with iterator objects", \testMapWithIteratorObjects());
-        addTestCase("optimized select patterns", \testJitSelectOptimized());
-        addTestCase("fused map+select patterns", \testJitFusedMapSelect());
-        addTestCase("fused map+foldl patterns", \testJitFusedMapFoldl());
-        addTestCase("IR foreach lowering", \testIRForeachLowering());
-        addTestCase("typed string concatenation", \testTypedStringConcat());
-        addTestCase("typed string equality", \testTypedStringEquality());
-        addTestCase("string switch optimization", \testStringSwitchOptimization());
-        addTestCase("final class devirtualization", \testFinalClassDevirtualization());
-        addTestCase("string builder optimization", \testStringBuilderOptimization());
-        addTestCase("native map with method call", \testNativeMapWithMethodCall());
-        addTestCase("native select with comparison", \testNativeSelectWithComparison());
-        addTestCase("native foldl with function call", \testNativeFoldlWithFunctionCall());
-        addTestCase("on_block_exit handlers", \testOnBlockExitHandlers());
-        addTestCase("on_block_exit in try-catch with invoke", \testOnBlockExitTryCatchInvoke());
-        addTestCase("cleanup exception catch", \testCleanupExceptionCatch());
-        addTestCase("on_block_exit top-level local update", \testOnBlockExitTopLevelLocalUpdate());
-        addTestCase("invoke method direct", \testInvokeMethodDirect());
-        addTestCase("big int loop correctness", \testBigIntLoopCorrectness());
-        addTestCase("invoke result in loop", \testInvokeResultInLoop());
-        addTestCase("big int boxing inline", \testBigIntBoxingInline());
-        addTestCase("lvalue compound assign NOTHING", \testLValueCompoundAssignNothing());
-        addTestCase("lvalue compound assign int fast path", \testLValueCompoundAssignInt());
-        addTestCase("lvalue compound assign float fast path", \testLValueCompoundAssignFloat());
-        addTestCase("lvalue compound assign string slow path", \testLValueCompoundAssignString());
-        addTestCase("lvalue compound assign loop", \testLValueCompoundAssignLoop());
-        addTestCase("lvalue compound assign bitwise", \testLValueCompoundAssignBitwise());
-        addTestCase("lvalue compound assign div/mod slow path", \testLValueCompoundAssignDivMod());
-        addTestCase("range lvalue delegate-to-AST", \testRangeLValueDelegate());
-        addTestCase("self member access", \testSelfMemberAccess());
-        addTestCase("static class variable access", \testStaticClassVarAccess());
-        addTestCase("new object instantiation", \testNewObjectInstantiation());
-        addTestCase("runtime constants", \testRuntimeConstants());
-        addTestCase("closure creation", \testClosureCreation());
-        addTestCase("foldr native", \testFoldrNative());
-        addTestCase("empty-list fold min/max returns NOTHING", \testEmptyListFoldMinMax());
-        addTestCase("map+select fused", \testMapSelectFused());
-        addTestCase("hash map native", \testHashMapNative());
-        addTestCase("hash map+select native", \testHashMapSelectNative());
-        addTestCase("hash map over typed hash list", \testHashMapOverTypedHashList());
-        addTestCase("map tuple over typed hash list", \testMapTupleOverTypedHashList());
-        addTestCase("typed container construction", \testTypedContainerConstruction());
-        addTestCase("call references", \testCallReferences());
-        addTestCase("parse references", \testParseReferences());
-        addTestCase("reference write-through", \testReferenceWriteThrough());
-        addTestCase("reference slot cache invalidation", \testReferenceSlotCacheInvalidation());
-        addTestCase("NOTHING input to iterators", \testNothingInputIterators());
-        addTestCase("VarRefNewObjectNode split", \testVarRefNewObjectSplit());
-        addTestCase("VarRefNewObjectNode typed containers", \testVrnTypedContainers());
-        addTestCase("direct function call", \testCallDirect());
-        addTestCase("function call in loop (stack safety)", \testCallInLoopStackSafety());
-        addTestCase("fast function call", \testFastCall());
-        addTestCase("fast method call", \testFastMethodCall());
-        addTestCase("fast closure/callref call", \testFastClosureCall());
-        addTestCase("IR-only body locals skip instantiation", \testIROnlyBodyLocals());
-        addTestCase("child Program JIT IR-only locals", \testChildProgramJitIROnlyLocals());
-        addTestCase("assert with IR-only locals", \testAssertIROnly());
-        addTestCase("on_block_exit with IR-only locals", \testOnBlockExitWithIROnlyLocals());
-        addTestCase("multi-function batch compilation", \testBatchCompilation());
-        addTestCase("direct-index foldl on typed lists", \testDirectIndexFoldl());
-        addTestCase("direct-index map on typed lists", \testDirectIndexMap());
-        addTestCase("call closure/callref direct", \testCallClosureDirect());
-        addTestCase("dot-eval method fast call", \testDotEvalMethodFastCall());
-        addTestCase("builtin function fast call", \testBuiltinFastCall());
-        addTestCase("specialized hash-key map opcodes", \testMapHashKeyOpcodes());
-        addTestCase("specialized hash-key select opcode", \testSelectHashKeyPositiveInt());
-        addTestCase("direct-index select on typed lists", \testDirectIndexSelect());
-        addTestCase("reference-output assigned state", \testReferenceOutputAssignedState());
-        addTestCase("hash key access skip invoke for plain hash", \testHashKeyAccessSkipInvoke());
-        addTestCase("hash key access int opcode", \testHashKeyAccessInt());
-        addTestCase("direct-index map with heap-allocated results", \testDirectIndexMapHeapResults());
-        addTestCase("hash map duplicate keys", \testHashMapDuplicateKeys());
-        addTestCase("hash map untyped list iterator", \testHashMapUntypedListIterator());
-        addTestCase("hash map typed assignment from untyped iterator", \testHashMapTypedAssignmentUntypedIterator());
-        addTestCase("hash key access int missing key", \testHashKeyAccessIntMissingKey());
-        addTestCase("weak assignment (:=)", \testWeakAssignment());
-        addTestCase("guard deopt fires on_block_exit handlers", \testGuardDeoptOnBlockExit());
-        addTestCase("reference compound assignment writes through", \testReferenceCompoundAssignment());
-        addTestCase("reference shift assignment writes through", \testReferenceShiftAssignment());
-        addTestCase("hash/list key store via closure", \testHashKeyStoreClosure());
-        addTestCase("map with single-value iterator", \testMapSingleValueIterator());
-        addTestCase("map with optional hash pairIterator", \testHashMapOptionalPairIterator());
-        addTestCase("cast expression type in map operator", \testCastExpressionTypeInMap());
-        addTestCase("map or_nothing from wildcard iterator", \testMapOrNothingFromWildcardIterator());
-        addTestCase("self.member += on uninitialized list", \testSelfMemberListAppend());
-        addTestCase("exception callstack regression", \testExceptionCallstack());
-        addTestCase("hash/list auto-vivification from NOTHING", \testAutoVivification());
-        addTestCase("list assignment decomposition", \testListAssignment());
-        addTestCase("extract via LValuePathTernary", \testExtractLValuePath());
-        addTestCase("enum value through typed param to enum lvalue", \testEnumParamLValue());
+        addPartCase(1, "optimized foldl sum/prod", \testJitFoldlSumProd());
+        addPartCase(1, "optimized foldl diff/min/max", \testJitFoldlDiffMinMax());
+        addPartCase(1, "optimized map patterns", \testJitMapOptimized());
+        addPartCase(1, "map with iterator objects", \testMapWithIteratorObjects());
+        addPartCase(1, "optimized select patterns", \testJitSelectOptimized());
+        addPartCase(1, "fused map+select patterns", \testJitFusedMapSelect());
+        addPartCase(1, "fused map+foldl patterns", \testJitFusedMapFoldl());
+        addPartCase(1, "IR foreach lowering", \testIRForeachLowering());
+        addPartCase(1, "typed string concatenation", \testTypedStringConcat());
+        addPartCase(1, "typed string equality", \testTypedStringEquality());
+        addPartCase(1, "string switch optimization", \testStringSwitchOptimization());
+        addPartCase(1, "final class devirtualization", \testFinalClassDevirtualization());
+        addPartCase(1, "string builder optimization", \testStringBuilderOptimization());
+        addPartCase(1, "native map with method call", \testNativeMapWithMethodCall());
+        addPartCase(1, "native select with comparison", \testNativeSelectWithComparison());
+        addPartCase(1, "native foldl with function call", \testNativeFoldlWithFunctionCall());
+        addPartCase(1, "on_block_exit handlers", \testOnBlockExitHandlers());
+        addPartCase(2, "on_block_exit in try-catch with invoke", \testOnBlockExitTryCatchInvoke());
+        addPartCase(2, "cleanup exception catch", \testCleanupExceptionCatch());
+        addPartCase(2, "on_block_exit top-level local update", \testOnBlockExitTopLevelLocalUpdate());
+        addPartCase(2, "invoke method direct", \testInvokeMethodDirect());
+        addPartCase(2, "big int loop correctness", \testBigIntLoopCorrectness());
+        addPartCase(2, "invoke result in loop", \testInvokeResultInLoop());
+        addPartCase(2, "big int boxing inline", \testBigIntBoxingInline());
+        addPartCase(2, "lvalue compound assign NOTHING", \testLValueCompoundAssignNothing());
+        addPartCase(2, "lvalue compound assign int fast path", \testLValueCompoundAssignInt());
+        addPartCase(2, "lvalue compound assign float fast path", \testLValueCompoundAssignFloat());
+        addPartCase(2, "lvalue compound assign string slow path", \testLValueCompoundAssignString());
+        addPartCase(2, "lvalue compound assign loop", \testLValueCompoundAssignLoop());
+        addPartCase(2, "lvalue compound assign bitwise", \testLValueCompoundAssignBitwise());
+        addPartCase(2, "lvalue compound assign div/mod slow path", \testLValueCompoundAssignDivMod());
+        addPartCase(2, "range lvalue delegate-to-AST", \testRangeLValueDelegate());
+        addPartCase(2, "self member access", \testSelfMemberAccess());
+        addPartCase(2, "static class variable access", \testStaticClassVarAccess());
+        addPartCase(2, "new object instantiation", \testNewObjectInstantiation());
+        addPartCase(2, "runtime constants", \testRuntimeConstants());
+        addPartCase(2, "closure creation", \testClosureCreation());
+        addPartCase(2, "foldr native", \testFoldrNative());
+        addPartCase(2, "empty-list fold min/max returns NOTHING", \testEmptyListFoldMinMax());
+        addPartCase(2, "map+select fused", \testMapSelectFused());
+        addPartCase(2, "hash map native", \testHashMapNative());
+        addPartCase(2, "hash map+select native", \testHashMapSelectNative());
+        addPartCase(2, "hash map over typed hash list", \testHashMapOverTypedHashList());
+        addPartCase(2, "map tuple over typed hash list", \testMapTupleOverTypedHashList());
+        addPartCase(2, "typed container construction", \testTypedContainerConstruction());
+        addPartCase(2, "call references", \testCallReferences());
+        addPartCase(2, "parse references", \testParseReferences());
+        addPartCase(2, "reference write-through", \testReferenceWriteThrough());
+        addPartCase(2, "reference slot cache invalidation", \testReferenceSlotCacheInvalidation());
+        addPartCase(2, "NOTHING input to iterators", \testNothingInputIterators());
+        addPartCase(2, "VarRefNewObjectNode split", \testVarRefNewObjectSplit());
+        addPartCase(2, "VarRefNewObjectNode typed containers", \testVrnTypedContainers());
+        addPartCase(2, "direct function call", \testCallDirect());
+        addPartCase(2, "function call in loop (stack safety)", \testCallInLoopStackSafety());
+        addPartCase(2, "fast function call", \testFastCall());
+        addPartCase(2, "fast method call", \testFastMethodCall());
+        addPartCase(2, "fast closure/callref call", \testFastClosureCall());
+        addPartCase(3, "IR-only body locals skip instantiation", \testIROnlyBodyLocals());
+        addPartCase(3, "child Program JIT IR-only locals", \testChildProgramJitIROnlyLocals());
+        addPartCase(3, "assert with IR-only locals", \testAssertIROnly());
+        addPartCase(3, "on_block_exit with IR-only locals", \testOnBlockExitWithIROnlyLocals());
+        addPartCase(3, "multi-function batch compilation", \testBatchCompilation());
+        addPartCase(3, "direct-index foldl on typed lists", \testDirectIndexFoldl());
+        addPartCase(3, "direct-index map on typed lists", \testDirectIndexMap());
+        addPartCase(3, "call closure/callref direct", \testCallClosureDirect());
+        addPartCase(3, "dot-eval method fast call", \testDotEvalMethodFastCall());
+        addPartCase(3, "builtin function fast call", \testBuiltinFastCall());
+        addPartCase(3, "specialized hash-key map opcodes", \testMapHashKeyOpcodes());
+        addPartCase(3, "specialized hash-key select opcode", \testSelectHashKeyPositiveInt());
+        addPartCase(3, "direct-index select on typed lists", \testDirectIndexSelect());
+        addPartCase(3, "reference-output assigned state", \testReferenceOutputAssignedState());
+        addPartCase(3, "hash key access skip invoke for plain hash", \testHashKeyAccessSkipInvoke());
+        addPartCase(3, "hash key access int opcode", \testHashKeyAccessInt());
+        addPartCase(3, "direct-index map with heap-allocated results", \testDirectIndexMapHeapResults());
+        addPartCase(3, "hash map duplicate keys", \testHashMapDuplicateKeys());
+        addPartCase(3, "hash map untyped list iterator", \testHashMapUntypedListIterator());
+        addPartCase(3, "hash map typed assignment from untyped iterator", \testHashMapTypedAssignmentUntypedIterator());
+        addPartCase(3, "hash key access int missing key", \testHashKeyAccessIntMissingKey());
+        addPartCase(3, "weak assignment (:=)", \testWeakAssignment());
+        addPartCase(3, "guard deopt fires on_block_exit handlers", \testGuardDeoptOnBlockExit());
+        addPartCase(3, "reference compound assignment writes through", \testReferenceCompoundAssignment());
+        addPartCase(3, "reference shift assignment writes through", \testReferenceShiftAssignment());
+        addPartCase(3, "hash/list key store via closure", \testHashKeyStoreClosure());
+        addPartCase(3, "map with single-value iterator", \testMapSingleValueIterator());
+        addPartCase(3, "map with optional hash pairIterator", \testHashMapOptionalPairIterator());
+        addPartCase(3, "cast expression type in map operator", \testCastExpressionTypeInMap());
+        addPartCase(3, "map or_nothing from wildcard iterator", \testMapOrNothingFromWildcardIterator());
+        addPartCase(3, "self.member += on uninitialized list", \testSelfMemberListAppend());
+        addPartCase(3, "exception callstack regression", \testExceptionCallstack());
+        addPartCase(3, "hash/list auto-vivification from NOTHING", \testAutoVivification());
+        addPartCase(3, "list assignment decomposition", \testListAssignment());
+        addPartCase(3, "extract via LValuePathTernary", \testExtractLValuePath());
+        addPartCase(3, "enum value through typed param to enum lvalue", \testEnumParamLValue());
         set_return_value(main());
+    }
+
+    #! adds the case \a name if it is in the part \a case_part that this test runs
+    private addPartCase(int case_part, string name, code call, *softlist<auto> args) {
+        if (case_part == part) {
+            addTestCase(name, call, args);
+        }
     }
 
     testEnumParamLValue() {

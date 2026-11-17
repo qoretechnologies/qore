@@ -54,6 +54,7 @@
 #include "qore/intern/QC_SocketPollOperation.h"
 #include "qore/intern/QC_SocketPollOperationBase.h"
 #include "qore/intern/QoreHttpClientObjectIntern.h"
+#include "qore/intern/qore_encoding_private.h"
 #include "qore/intern/QoreHttpBodyCharset.h"
 #include "qore/intern/QoreHttpHeaderPairs.h"
 #include "qore/intern/SocketSyncPoll.h"
@@ -2991,8 +2992,14 @@ struct qore_httpclient_priv {
             printd(5, "qore_httpclient_priv::processContentType() setting encoding to '%s' from content-type "
                 "header: '%s'\n", charset.value.c_str(), str);
 
-            // set new encoding
-            msock->socket->setEncoding(QEM.findCreate(charset.value.c_str()));
+            // set new encoding; the name is untrusted data, which selects only an encoding that Qore knows or a
+            // standard character set, so that it never makes the registry of encodings grow without limit; any
+            // other name leaves the socket's encoding unchanged, and the body is decoded by the rules for a
+            // message without a usable charset (from _qore_orig_content_type; qore#6460)
+            const QoreEncoding* enc = qore_find_untrusted_encoding(charset.value.data(), charset.value.size());
+            if (enc) {
+                msock->socket->setEncoding(enc);
+            }
             // strip the charset parameter from the content-type
             QoreStringNode* nc = new QoreStringNode(str, charset.begin, v->getEncoding());
             nc->trim_trailing();
@@ -3050,7 +3057,11 @@ struct qore_httpclient_priv {
 
             // check for misuse of this header by including a character encoding value
             if (!token.empty() && (!strncasecmp(token.c_str(), "iso", 3) || !strncasecmp(token.c_str(), "utf-", 4))) {
-                msock->socket->setEncoding(QEM.findCreate(token.c_str()));
+                // an untrusted name, as for the Content-Type charset above (qore#6460)
+                const QoreEncoding* enc = qore_find_untrusted_encoding(token.c_str(), token.size());
+                if (enc) {
+                    msock->socket->setEncoding(enc);
+                }
                 content_encoding = nullptr;
             } else if (!encoding_passthru && !token.empty()) {
                 bool ignore_encoding = false;

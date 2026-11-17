@@ -299,8 +299,8 @@ endmacro()
 
 macro(qore_mpfr_checks)
 
-set(CMAKE_REQUIRED_INCLUDES ${MPFR_INCLUDE_DIRS})
-set(CMAKE_REQUIRED_LIBRARIES ${MPFR_LIBRARIES})
+set(CMAKE_REQUIRED_INCLUDES ${MPFR_INCLUDE_DIRS} ${GMP_INCLUDE_DIRS})
+set(CMAKE_REQUIRED_LIBRARIES ${MPFR_LIBRARIES} ${GMP_LIBRARIES})
 
 check_cxx_symbol_exists(mpfr_divby0_p mpfr.h HAVE_MPFR_DIVBY0)
 check_cxx_symbol_exists(mpfr_regular_p mpfr.h HAVE_MPFR_REGULAR)

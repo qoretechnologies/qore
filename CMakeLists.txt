@@ -528,6 +528,8 @@ endif()
 find_package(OpenSSL REQUIRED)
 find_package(ZLIB REQUIRED)
 find_package(MPFR REQUIRED)
+# libqore calls GMP directly (qore#6278): it is linked explicitly, not only through libmpfr
+find_package(GMP REQUIRED)
 find_package(BZip2 REQUIRED)
 find_package(LibYAML REQUIRED)
 
@@ -1460,7 +1462,8 @@ endif()
 
 if (WIN32 OR MINGW OR MSYS)
     SET(CMAKE_DL_LIBS dl)
-    SET(MPFR_LIBRARIES mpfr gmp)
+    SET(MPFR_LIBRARIES mpfr)
+    SET(GMP_LIBRARIES gmp)
     SET(OPENSSL_LIBRARIES ssl crypto)
     SET(WINSOCKET_LIBRARIES ws2_32)
     SET(NO_SIGNAL_HANDLING ON)
@@ -2664,9 +2667,9 @@ if (WIN32 OR MINGW OR MSYS)
 endif (WIN32 OR MINGW OR MSYS)
 
 # Include CMAKE_BINARY_DIR first so QPP-generated files take precedence over autotools-generated ones
-target_include_directories(libqore PUBLIC ${CMAKE_BINARY_DIR} ${CMAKE_SOURCE_DIR}/include ${BZIP2_INCLUDE_DIR} ${ICONV_INCLUDE_DIR} ${MPFR_INCLUDE_DIRS} ${LIBQORE_OPTIONAL_INCLUDE_DIRS} ${OPENSSL_INCLUDE_DIR} ${PCRE2_INCLUDE_DIRS} ${ZLIB_INCLUDE_DIRS} ${LLVM_INCLUDE_DIRS})
+target_include_directories(libqore PUBLIC ${CMAKE_BINARY_DIR} ${CMAKE_SOURCE_DIR}/include ${BZIP2_INCLUDE_DIR} ${ICONV_INCLUDE_DIR} ${MPFR_INCLUDE_DIRS} ${GMP_INCLUDE_DIRS} ${LIBQORE_OPTIONAL_INCLUDE_DIRS} ${OPENSSL_INCLUDE_DIR} ${PCRE2_INCLUDE_DIRS} ${ZLIB_INCLUDE_DIRS} ${LLVM_INCLUDE_DIRS})
 
-set(QORE_LIBS ${BZIP2_LIBRARIES} ${CMAKE_DL_LIBS} ${CMAKE_THREAD_LIBS_INIT} ${ICONV_LIBRARY} ${LIBQORE_LIBS} ${LIBQORE_OPTIONAL_LIBS} ${MPFR_LIBRARIES} ${OPENSSL_LIBRARIES} ${PCRE2_LDFLAGS} ${ZLIB_LIBRARIES})
+set(QORE_LIBS ${BZIP2_LIBRARIES} ${CMAKE_DL_LIBS} ${CMAKE_THREAD_LIBS_INIT} ${ICONV_LIBRARY} ${LIBQORE_LIBS} ${LIBQORE_OPTIONAL_LIBS} ${MPFR_LIBRARIES} ${GMP_LIBRARIES} ${OPENSSL_LIBRARIES} ${PCRE2_LDFLAGS} ${ZLIB_LIBRARIES})
 
 # every shared library linked into libqore that uses OpenSSL must use the OpenSSL that Qore found
 include("${CMAKE_SOURCE_DIR}/cmake/QoreCheckSslConsumers.cmake")
@@ -2926,6 +2929,10 @@ add_executable(qore-aot-lvalue-path-ref-rv-test examples/test/ir/aot_lvalue_path
 target_include_directories(qore-aot-lvalue-path-ref-rv-test PRIVATE
     ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include)
 target_link_libraries(qore-aot-lvalue-path-ref-rv-test PRIVATE libqore)
+add_executable(qore-aot-ir-value-ids-test examples/test/ir/aot_ir_value_ids.cpp)
+target_include_directories(qore-aot-ir-value-ids-test PRIVATE
+    ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include)
+target_link_libraries(qore-aot-ir-value-ids-test PRIVATE libqore)
 add_executable(qore-aot-builtin-type-path-test examples/test/ir/aot_builtin_type_path_cache.cpp)
 target_include_directories(qore-aot-builtin-type-path-test PRIVATE
     ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include)
@@ -3038,6 +3045,7 @@ target_include_directories(qore-ir-phase0-smoke PRIVATE
     ${BZIP2_INCLUDE_DIR}
     ${ICONV_INCLUDE_DIR}
     ${MPFR_INCLUDE_DIRS}
+    ${GMP_INCLUDE_DIRS}
     ${LIBQORE_OPTIONAL_INCLUDE_DIRS}
     ${OPENSSL_INCLUDE_DIR}
     ${PCRE2_INCLUDE_DIRS}
@@ -3107,6 +3115,7 @@ target_include_directories(qore-ir-plugin-registry-smoke PRIVATE
     ${BZIP2_INCLUDE_DIR}
     ${ICONV_INCLUDE_DIR}
     ${MPFR_INCLUDE_DIRS}
+    ${GMP_INCLUDE_DIRS}
     ${LIBQORE_OPTIONAL_INCLUDE_DIRS}
     ${OPENSSL_INCLUDE_DIR}
     ${PCRE2_INCLUDE_DIRS}

@@ -16479,8 +16479,17 @@ bool QoreAOTBinaryDeserializer::resolveTypesAndMembers(std::string& error) {
 // the pass safely completes the cross-session sml without
 // duplicates.
 bool QoreAOTBinaryDeserializer::rebuildBaseClassSmlPhase(std::string& error) {
-    for (size_t i = 0; i < class_list.size(); ++i) {
-        if (preexisting_classes.count(static_cast<uint32_t>(i))) {
+    // the classes are processed in topological order (bases before derived) when it is known, so that each class's
+    // list is marked complete before its subclasses are processed (issue #6106)
+    std::vector<uint32_t> order;
+    if (topo_order.empty()) {
+        order.reserve(class_list.size());
+        for (size_t i = 0; i < class_list.size(); ++i) {
+            order.push_back(static_cast<uint32_t>(i));
+        }
+    }
+    for (uint32_t i : (topo_order.empty() ? order : topo_order)) {
+        if (i >= class_list.size() || preexisting_classes.count(i)) {
             continue;
         }
         QoreClass* qc = class_list[i];
@@ -16504,6 +16513,8 @@ bool QoreAOTBinaryDeserializer::rebuildBaseClassSmlPhase(std::string& error) {
             // to call repeatedly — BCSMList::add skips duplicates.
             base_priv->scl->addBaseClassesToSubclass(base, qc, bcn->is_virtual);
         }
+        // every session's base classes have been resolved now
+        markSmlComplete(qc, nullptr);
     }
     return true;
 }
@@ -17659,12 +17670,17 @@ bool QoreAOTBinaryDeserializer::resolveClassBases(std::string& error) {
             (int)count, (int)topo_order.size());
     }
 
+    // the classes of this binary whose base classes have been resolved
+    std::unordered_set<const QoreClass*> resolved;
+    qoreAOTReserveAdditional(resolved, count);
+
     // Resolve base classes in topological order (bases before derived)
     for (uint32_t idx : topo_order) {
         if (idx >= count || !class_list[idx] || preexisting_classes.count(idx)) {
             continue;
         }
         QoreClass* qc = class_list[idx];
+        resolved.insert(qc);
 
         for (auto& pbc : pending_bases[idx]) {
             const QoreClass* base = resolveClassRefForSession(pbc.base_path.c_str());
@@ -17709,11 +17725,38 @@ bool QoreAOTBinaryDeserializer::resolveClassBases(std::string& error) {
                 return false;
             }
         }
+        markSmlComplete(qc, &resolved);
     }
 
     // Clear pending data
     pending_bases.clear();
     return true;
+}
+
+// Marks the list of all ancestors of a class (BCList::sml) complete when it is, so that the base classes do not have
+// to be walked again for each subclass and the deserialization of a deep hierarchy does not take time that grows with
+// the cube of its depth or more (issue #6106).  A base class's ancestors are only known to be all attached when it
+// is in \a resolved, or when it is builtin or initialized (loaded or parsed before); with \a resolved null, every
+// class's base classes have been resolved.
+void QoreAOTBinaryDeserializer::markSmlComplete(QoreClass* qc,
+        const std::unordered_set<const QoreClass*>* resolved) {
+    qore_class_private* priv = qore_class_private::get(*qc);
+    if (!priv->scl || priv->scl->smlComplete()) {
+        return;
+    }
+    if (resolved) {
+        for (auto* bcn : *priv->scl) {
+            const QoreClass* base = bcn->sclass;
+            if (!base) {
+                return;
+            }
+            const qore_class_private* base_priv = qore_class_private::get(*base);
+            if (!base_priv->sys && !base_priv->initialized && !resolved->count(base)) {
+                return;
+            }
+        }
+    }
+    priv->scl->setSmlComplete();
 }
 
 bool QoreAOTBinaryDeserializer::resolveInstanceMembers(std::string& error) {
@@ -20759,6 +20802,8 @@ bool QoreAOTBinaryDeserializer::commitClassesPrepare(std::string& error) {
         // parsing a subclass while other threads run the class - repeats the resolution and writes the class's
         // parse state while it is in use.
         priv->parse_resolve_hierarchy = true;
+        // and its hierarchy is not initialized again for a subclass (issue #6106)
+        priv->hierarchy_initialized = true;
     }
 
     return true;

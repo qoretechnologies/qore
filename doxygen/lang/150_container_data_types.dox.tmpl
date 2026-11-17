@@ -32,6 +32,13 @@ list list = (
 );
     @endcode \n
     Trailing commas can be left on the end of a list (or a @ref hash "hash"), making it easier to insert and remove elements at the end of a multi-line list.\n\n
+    @anchor list_assignment_parentheses
+    A list that is assigned needs its parentheses, as the comma operator binds less tightly than the assignment
+    operators: <tt>l = 1, 2, 3;</tt> is a list whose first element assigns \c 1 to \c l; as its other elements have
+    no effect, it is a parse error that names the cause.  When another element has an effect, the statement is
+    valid and assigns only the first element (<tt>l = 1, f();</tt> assigns \c 1 and calls \c f()).  Write
+    <tt>l = (1, 2, 3);</tt> (see also
+    @ref broken-list-parsing "%broken-list-parsing").\n\n
     List elements are dereferenced using square brackets: \c "[" and \c "]". The first element in a list has index zero.\n\n
     <b>Example:</b>
     @code{.py}

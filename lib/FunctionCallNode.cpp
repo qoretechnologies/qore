@@ -492,10 +492,17 @@ QORE_INTERN_ALWAYS_INLINE QoreValue AbstractMethodCallNode::execImpl(LexicalSema
             return qore_method_private::evalNormalVariantWithPolicy<Lexical>(policy, *method, xsink, rc, o,
                 reinterpret_cast<const QoreExternalMethodVariant*>(variant), args, explicit_inst);
         }
-        return runtime_arg_names
-            ? execNamed(policy, o, method, c_str, ctx, rc, xsink)
-            : qore_method_private::evalWithPolicy<Lexical>(policy, *method, xsink, rc, o, args, ctx, nullptr, nullptr,
-                explicit_inst);
+        if (runtime_arg_names) {
+            return execNamed(policy, o, method, c_str, ctx, rc, xsink);
+        }
+        // a static method called through an object (not through self in a method: s()) checks the object after the
+        // arguments, as the call of a variant resolved at parse time does above (issue #6056)
+        if (qore_method_private::get(*method)->static_flag && getType() != NT_SELF_CALL) {
+            return qore_method_private::evalStaticOnObject<Lexical>(policy, *method, xsink, rc, o, args, ctx,
+                nullptr, explicit_inst);
+        }
+        return qore_method_private::evalWithPolicy<Lexical>(policy, *method, xsink, rc, o, args, ctx, nullptr,
+            nullptr, explicit_inst);
     }
     return execByNameImpl<Lexical>(policy, o, c_str, ctx, rc, xsink);
 }
@@ -590,7 +597,12 @@ __attribute__((noinline, cold)) QoreValue AbstractMethodCallNode::execNamed(Lexi
                         return qore_call_ref_invoke_named(ref, getEvalTmpArgs(args_copy), *runtime_arg_names,
                             policy, xsink);
                     }
-                    return qore_call_ref_invoke_named(ref, args, *runtime_arg_names, policy, xsink);
+                    // the object is checked again after the arguments (issue #6056)
+                    QoreListNodeEvalOptionalRefHolder call_args(xsink);
+                    if (evalArgsCheckObject(o, c_str, ctx, call_args, xsink)) {
+                        return QoreValue();
+                    }
+                    return qore_call_ref_invoke_named(ref, *call_args, *runtime_arg_names, policy, xsink);
                 }
             }
             // otherwise the pseudo-method of the name, with the names bound to its parameters (as
@@ -598,9 +610,17 @@ __attribute__((noinline, cold)) QoreValue AbstractMethodCallNode::execNamed(Lexi
             QoreClass* pseudo_class = nullptr;
             if (const QoreMethod* pm = pseudo_classes_find_method(NT_OBJECT, c_str, pseudo_class)) {
                 ReferenceHolder<QoreListNode> args_copy(xsink);
-                const QoreListNode* call_args = tmp_args ? getEvalTmpArgs(args_copy) : args;
+                if (tmp_args) {
+                    return NMETHF(qore_method_private::get(*pm)->func)->evalPseudoMethodNamed(xsink, rc,
+                        QoreValue(o), getEvalTmpArgs(args_copy), true, ctx, *runtime_arg_names, policy);
+                }
+                // the object is checked again after the arguments (issue #6056)
+                QoreListNodeEvalOptionalRefHolder call_args(xsink);
+                if (evalArgsCheckObject(o, c_str, ctx, call_args, xsink)) {
+                    return QoreValue();
+                }
                 return NMETHF(qore_method_private::get(*pm)->func)->evalPseudoMethodNamed(xsink, rc, QoreValue(o),
-                    call_args, tmp_args, ctx, *runtime_arg_names, policy);
+                    *call_args, false, ctx, *runtime_arg_names, policy);
             }
             // a method of the name is handled by the class's methodGate() method, which takes its arguments by
             // position: a named call of it is refused, as at parse time
@@ -616,13 +636,29 @@ __attribute__((noinline, cold)) QoreValue AbstractMethodCallNode::execNamed(Lexi
         }
     }
     const QoreTypeParamInstantiation* explicit_inst = getExplicitTypeParamInstantiation();
+    // a static method called through an object (not through self in a method: s()) checks the object after the
+    // arguments (issue #6056)
+    bool check_receiver = getType() != NT_SELF_CALL;
     if (tmp_args) {
         ReferenceHolder<QoreListNode> args_copy(xsink);
         return qore_method_private::evalNamed(*m, xsink, rc, o, getEvalTmpArgs(args_copy), true, ctx, nullptr,
-            explicit_inst, *runtime_arg_names, policy);
+            explicit_inst, *runtime_arg_names, policy, nullptr, check_receiver);
     }
     return qore_method_private::evalNamed(*m, xsink, rc, o, args, false, ctx, nullptr, explicit_inst,
-        *runtime_arg_names, policy);
+        *runtime_arg_names, policy, nullptr, check_receiver);
+}
+
+int AbstractMethodCallNode::evalArgsCheckObject(QoreObject* o, const char* c_str, const qore_class_private* ctx,
+        QoreListNodeEvalOptionalRefHolder& call_args, ExceptionSink* xsink) const {
+    call_args.assignEval(args);
+    if (*xsink) {
+        return -1;
+    }
+    if (!o->isValid()) {
+        qore_raise_deleted_missing_method_call_after_args(o, c_str, ctx, xsink);
+        return -1;
+    }
+    return 0;
 }
 
 const QoreTypeInfo* FunctionCallBase::getCallReturnTypeInfo(QoreFunction* func) const {

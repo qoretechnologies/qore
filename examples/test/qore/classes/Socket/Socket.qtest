@@ -538,8 +538,9 @@ class SocketTest inherits QUnit::Test {
             {"ct": 'text/xml ;charset="ISO-8859-2" ;x=y', "charset": "ISO-8859-2", "bct": "text/xml;x=y",
                 "enc": "ISO-8859-2"},
             {"ct": "text/plain; charset='UTF-8'", "charset": "UTF-8", "bct": "text/plain", "enc": "UTF-8"},
-            # a ';' in a quoted-string is part of the value and does not end the parameter
-            {"ct": 'text/xml; charset="x;y"; a=b', "charset": "x;y", "bct": "text/xml; a=b", "enc": "x;y"},
+            # a ';' in a quoted-string is part of the value and does not end the parameter; a charset that selects
+            # no encoding is reported as given and ignored: XML is read in UTF-8 (qore#6460)
+            {"ct": 'text/xml; charset="x;y"; a=b', "charset": "x;y", "bct": "text/xml; a=b", "enc": "UTF-8"},
             # a quoted-pair is decoded
             {"ct": 'text/xml; charset="UTF\-8"', "charset": "UTF-8", "bct": "text/xml", "enc": "UTF-8"},
             # only a whole parameter name matches

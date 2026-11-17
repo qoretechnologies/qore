@@ -1,0 +1,69 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%exec-class ListAssignmentWithoutParensTest
+
+#! a statement that assigns a list without parentheses (issue #1946): the error says that only the first element is
+#! assigned, instead of only "statement has no effect (list)"
+class ListAssignmentWithoutParensTest inherits QUnit::Test {
+    constructor() : QUnit::Test("list assignment without parentheses", "1.0") {
+        addTestCase("assignments of a list without parentheses", \assignments());
+        addTestCase("other lists", \otherLists());
+        set_return_value(main());
+    }
+
+    private assignments() {
+        hash<string, string> cases = {
+            "auto l = 1, 2, 3;": "assignment \\(=\\) operator",
+            "list<int> l = 1, 2, 3;": "assignment \\(=\\) operator",
+            "list<int> l; l = 1, 2, 3;": "assignment \\(=\\) operator",
+            "int a; a += 1, 2;": "\\+= operator",
+            "auto x; x = \"a\", \"b\";": "assignment \\(=\\) operator",
+            "auto x; x = NOTHING, 2;": "assignment \\(=\\) operator",
+            "int a; a -= 1, 2;": "-= operator",
+            "int a; a *= 1, 2;": "\\*= operator",
+            "int a; a /= 1, 2;": "/= operator",
+            "int a; a |= 1, 2;": "\\|= operator",
+            "int a; a <<= 1, 2;": "<<= operator",
+            "int a; int b; (a, b) = 1, 2;": "list assignment operator",
+            "int a; int b; a = b = 1, 2;": "assignment \\(=\\) operator",
+        };
+        foreach hash<auto> i in (cases.pairIterator()) {
+            *string err = parseError(i.key);
+            assertNeq(NOTHING, err, i.key);
+            assertRegex("^statement has no effect \\(list\\): the " + i.value + " expression assigns only the first "
+                "element of this list without parentheses, as the comma operator binds less tightly; put the list "
+                "in parentheses to assign it", err, i.key);
+        }
+    }
+
+    private otherLists() {
+        # a list without an assignment keeps the general message
+        assertEq("statement has no effect (list)", parseError("1, 2;"));
+        assertEq("statement has no effect (list)", parseError("list<auto> l = (1,); l[0], 2;"));
+        # an assignment in parentheses of its own as the first element was written that way on purpose
+        assertEq("statement has no effect (list)", parseError("int a; (a = 1), 2;"));
+        # a list in parentheses after an assignment is assigned
+        assertNothing(parseError("list<int> l = (1, 2, 3);"));
+        # a list of assignments has an effect and is valid
+        assertNothing(parseError("int a; int b; a = 1, b = 2;"));
+        # as is a list whose other element has an effect: only the first element is assigned
+        assertNothing(parseError("auto l; l = 1, foo();"));
+    }
+
+    #! returns the description of the first parse error of the code as the body of a function, or NOTHING
+    private *string parseError(string body) {
+        Program p(PO_MODERN | PO_NO_CHILD_PO_RESTRICTIONS);
+        try {
+            p.parse("auto sub foo() {} nothing sub get() { " + body + " }\n", "list");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("PARSE-EXCEPTION", ex.err, body);
+            return ex.desc;
+        }
+        return NOTHING;
+    }
+}

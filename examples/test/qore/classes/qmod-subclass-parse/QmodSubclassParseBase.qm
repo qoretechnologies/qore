@@ -1,0 +1,159 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# module of qmod-subclass-parse.qtest (issue #6106): a hierarchy whose classes are used by other threads while a
+# Program parses subclasses of them
+
+%modern
+
+module QmodSubclassParseBase {
+    version = "1.0";
+    desc = "test module for qmod-subclass-parse.qtest";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+}
+
+public namespace QmodSubclassParseBase {
+public class Root {
+    public { int r = 1; }
+    constructor() {}
+    destructor() {}
+    int f() { return 0; }
+    abstract int ab();
+}
+public class M0 inherits Root {
+    public { int m0 = 0; }
+    constructor() {}
+    int mm0() { return 0; }
+    int ab() { return -0; }
+}
+public class A0 inherits M0 {
+    public { int a0 = 0; }
+    constructor() : M0() {}
+    destructor() {}
+    int f() { return 0; }
+    int ab() { return 0; }
+}
+public class A1 inherits A0 {
+    public { int a1 = 1; }
+    constructor() : A0() {}
+    destructor() {}
+    int f() { return 1; }
+    int ab() { return 1; }
+}
+public class A2 inherits A1 {
+    public { int a2 = 2; }
+    constructor() : A1() {}
+    destructor() {}
+    int f() { return 2; }
+    int ab() { return 2; }
+}
+public class A3 inherits A2 {
+    public { int a3 = 3; }
+    constructor() : A2() {}
+    destructor() {}
+    int f() { return 3; }
+    int ab() { return 3; }
+}
+public class M4 inherits Root {
+    public { int m4 = 4; }
+    constructor() {}
+    int mm4() { return 4; }
+    int ab() { return -4; }
+}
+public class A4 inherits A3, M4 {
+    public { int a4 = 4; }
+    constructor() : A3(), M4() {}
+    destructor() {}
+    int f() { return 4; }
+    int ab() { return 4; }
+}
+public class A5 inherits A4 {
+    public { int a5 = 5; }
+    constructor() : A4() {}
+    destructor() {}
+    int f() { return 5; }
+    int ab() { return 5; }
+}
+public class A6 inherits A5 {
+    public { int a6 = 6; }
+    constructor() : A5() {}
+    destructor() {}
+    int f() { return 6; }
+    int ab() { return 6; }
+}
+public class A7 inherits A6 {
+    public { int a7 = 7; }
+    constructor() : A6() {}
+    destructor() {}
+    int f() { return 7; }
+    int ab() { return 7; }
+}
+public class M8 inherits Root {
+    public { int m8 = 8; }
+    constructor() {}
+    int mm8() { return 8; }
+    int ab() { return -8; }
+}
+public class A8 inherits A7, M8 {
+    public { int a8 = 8; }
+    constructor() : A7(), M8() {}
+    destructor() {}
+    int f() { return 8; }
+    int ab() { return 8; }
+}
+public class A9 inherits A8 {
+    public { int a9 = 9; }
+    constructor() : A8() {}
+    destructor() {}
+    int f() { return 9; }
+    int ab() { return 9; }
+}
+public class A10 inherits A9 {
+    public { int a10 = 10; }
+    constructor() : A9() {}
+    destructor() {}
+    int f() { return 10; }
+    int ab() { return 10; }
+}
+public class A11 inherits A10 {
+    public { int a11 = 11; }
+    constructor() : A10() {}
+    destructor() {}
+    int f() { return 11; }
+    int ab() { return 11; }
+}
+public class M12 inherits Root {
+    public { int m12 = 12; }
+    constructor() {}
+    int mm12() { return 12; }
+    int ab() { return -12; }
+}
+public class A12 inherits A11, M12 {
+    public { int a12 = 12; }
+    constructor() : A11(), M12() {}
+    destructor() {}
+    int f() { return 12; }
+    int ab() { return 12; }
+}
+public class A13 inherits A12 {
+    public { int a13 = 13; }
+    constructor() : A12() {}
+    destructor() {}
+    int f() { return 13; }
+    int ab() { return 13; }
+}
+public class A14 inherits A13 {
+    public { int a14 = 14; }
+    constructor() : A13() {}
+    destructor() {}
+    int f() { return 14; }
+    int ab() { return 14; }
+}
+public class A15 inherits A14 {
+    public { int a15 = 15; }
+    constructor() : A14() {}
+    destructor() {}
+    int f() { return 15; }
+    int ab() { return 15; }
+}
+}
