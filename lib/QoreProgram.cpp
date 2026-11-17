@@ -2805,6 +2805,9 @@ int qore_program_private::internParseCommit(bool standard_parse) {
             // the top-level code and the namespaces are not in a class (classes set their own context): the Program can
             // be parsed while a method runs (ex: in Program::parse()), and the method's class is then the thread's class
             ClassOnlySubstitutionHelper class_helper(nullptr);
+            // the functional operators decide which operands are statements of their own when all the code has been
+            // initialized (qore#6288)
+            QoreElementScopeParseHelper element_scope_helper;
 
             // initialize new statements second (for "our" and "my" declarations)
             // also initializes namespaces, constants, etc
@@ -2942,7 +2945,10 @@ void qore_program_private::addStatement(AbstractStatement* s, const QoreNativePa
 
         // initialize expression
         QoreParseContext parse_context;
-        block->parseInit(parse_context);
+        {
+            QoreElementScopeParseHelper element_scope_helper;
+            block->parseInit(parse_context);
+        }
         // an expression is never committed: it runs the checks that a commit runs for the classes it instantiates,
         // so "new C()" of a class with abstract methods is refused as in any other code, and no check is left for
         // the Program's next commit
