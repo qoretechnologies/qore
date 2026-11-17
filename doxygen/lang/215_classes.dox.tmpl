@@ -673,6 +673,18 @@ D::p = new Program(PO_NEW_STYLE);
     @subsection public_members Public Member Declarations
     If a class has a public member declaration (a <tt>public</tt> block, even an empty one or one that declares only constants or static class variables), or inherits a class with one, then only those members declared as public can be accessed from outside the class, and from within the class only members explicitly declared can be accessed as well (unless the class also defines a @ref memberGate_methods "memberGate() method"). In this way typographical errors in member names can be caught (at parse time if types are declared).
 
+    @subsection member_method_names Members With the Name of a Method
+    Since %Qore 3.0, accessing a member that is not declared and that has the name of a method of the class (a method
+    of the class or of a class that it inherits, normal or static, except the \c private:internal methods of a base
+    class) is a parse exception in every mode when the class of the object is known at parse time and has no
+    @ref memberGate_methods "memberGate() method" (for reading) or member write gate (for writing), and also with the
+    old-style <tt>$.</tt> syntax inside the class, for which a \c memberGate() method is not called: it is almost
+    always a method call without its argument list, ex:
+    @code{.py}
+HashIterator i(h);
+while (i.next) {}  # parse exception: the call is i.next()
+    @endcode
+
     @subsection private_members Private Members
     Members declared <b><tt>private</tt></b> can only be accessed within the class hierarchy; trying to access private members form outside the class hierarchy will result in either a parse or runtime exception, depending on when the illegal access is caught.  This access modifier, when used without any modifiers, is equivalent to <tt><b>private:hierarchy</b></tt> and is functionally identical to C++'s \a protected access modifier.\n\n
     Members declared as <tt><b>private:internal</b></tt> are not available outside the class, even in classes in the same class hierarchy, providing strong encapsulation of the declared member.  This can be used to ensure that the declared member can be changed in later versions of the class without affecting API compatibility.\n\n
@@ -689,7 +701,8 @@ D::p = new Program(PO_NEW_STYLE);
     @code{.py} self."&member-name"@endcode
 
     @subsection memberGate_methods memberGate() Method
-    If the class implements a \c memberGate() method, then whenever a non-existent member of the class is accessed (read), this method will be called with the name of the member as the sole argument, so that the class can create the member (or react in some other way) on demand. This method is also called when methods of the same class try to access (read) non-existent methods, but is not called from within the \c memberGate() method itself.
+    If the class implements a \c memberGate() method, then whenever a non-existent member of the class is accessed (read), this method will be called with the name of the member as the sole argument, so that the class can create the member (or react in some other way) on demand. This method is also called when methods of the same class try to access (read) non-existent members (except with
+    the old-style <tt>$.</tt> syntax), but is not called from within the \c memberGate() method itself.
 
     @note User-defined \c memberGate() methods must be explicitly implemented in each class. Since %Qore 3.0,
     builtin member gates are inherited, including by Qore subclasses, unless the subclass defines its own gate.

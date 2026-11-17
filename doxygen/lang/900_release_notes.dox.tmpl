@@ -112,6 +112,11 @@
     definition in a namespace block, as it does at the top level (see
     @ref outofline_methods_in_namespaces "out-of-line methods in namespaces"; issue #6384).
 
+    @par An Undeclared Member With the Name of a Method Is a Parse Error
+    Accessing a member that is not declared and that has the name of a method of the object's class, such as
+    <tt>i.next</tt> for <tt>i.next()</tt>, is now a parse exception in every mode, also without type declarations
+    (see @ref member_method_names; issue #2967).
+
     @par Parse Directives Are Not Allowed in an Expression
     A parse directive in the source of an @ref Qore::Expression "Expression" is now a parse exception and is not
     applied; it changed the parse state of the Program that the expression was created in (see

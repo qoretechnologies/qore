@@ -3728,9 +3728,16 @@ public:
             }
             int rc = 0;
             if ((pflag & PF_FOR_ASSIGNMENT) ? !member_write_gate : !parseHasMemberGate()) {
-                // one error for one access: in a class that declares its members, an undeclared member is an
-                // illegal access whatever the parse options; otherwise it is an error only if types are required
-                if (parseHasPublicMembersInHierarchy()) {
+                // one error for one access: an undeclared member with the name of a method of the class is the
+                // method without its call (issue #2967), in every mode; in a class that declares its members, an
+                // undeclared member is an illegal access whatever the parse options; otherwise it is an error only if
+                // types are required
+                qore_class_private* self = const_cast<qore_class_private*>(this);
+                if (self->parseFindNormalMethodIntern(mem, this) || self->parseFindStaticMethodIntern(mem, this)) {
+                    parse_error(*loc, "member '%s' of class '%s' is not declared, and '%s' is a method of the class: "
+                        "a method is called with an argument list, as in %s()", mem, name.c_str(), mem, mem);
+                    rc = -1;
+                } else if (parseHasPublicMembersInHierarchy()) {
                     parse_error(*loc, "illegal access to unknown member '%s' in class '%s' which has a public " \
                         "member list (or inherited public member list)", mem, name.c_str());
                     rc = -1;
@@ -3792,8 +3799,17 @@ public:
             return rc;
         }
         if (!omi) {
-            // one error for one access; see parseCheckMemberAccess()
-            if (parseHasPublicMembersInHierarchy()) {
+            // one error for one access; see parseCheckMemberAccess(): an undeclared member with the name of a method
+            // of the class is the method without its call (issue #2967), unless a gate handles the access
+            qore_class_private* self = const_cast<qore_class_private*>(this);
+            if (((pflag & PF_FOR_ASSIGNMENT) ? !member_write_gate : !memberGate)
+                    && (self->parseFindNormalMethodIntern(mem, this) || self->parseFindStaticMethodIntern(mem, this))) {
+                parse_error(*loc, "member '%s' of class '%s' is not declared, and '%s' is a method of the class: "
+                    "a method is called with an argument list, as in %s()", mem, name.c_str(), mem, mem);
+                if (!rc) {
+                    rc = -1;
+                }
+            } else if (parseHasPublicMembersInHierarchy()) {
                 parse_error(*loc, "illegal access to unknown member '%s' in class '%s' which has a public member " \
                     "list (or inherited public member list)", mem, name.c_str());
                 if (!rc) {
