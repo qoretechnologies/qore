@@ -9256,6 +9256,21 @@ static bool qore_ir_is_enum_lvalue_type(const QoreTypeInfo* ti) {
     return QoreTypeInfo::getReturnEnum(ti) != nullptr;
 }
 
+//! Returns true if the change of a local of type \a ti by a fused local int instruction can raise an exception
+/** The fused instructions IncrementLocalInt and AddAssignLocalInt store the integer that they compute in the local
+    directly (the IR interpreter) or with LValueHelper (the runtime helpers of native code for a variable on the runtime
+    stack or a closure-bound variable), which raises an exception if the local's type refuses it.  An int or softint
+    local, with or without "*", accepts every integer: its change cannot raise, and the instruction gets no exception
+    edge for it, which would make the handler of an enclosing try block reachable from the operation and constrain the
+    optimization of the code around it.  An enum lvalue never takes the fused path (see qore_ir_is_enum_lvalue_type());
+    any other type is given the handler, as an exception that it raises goes to the handler of an enclosing try block
+    (qore#6197)
+*/
+static bool qore_ir_fused_int_change_may_raise(const QoreTypeInfo* ti) {
+    return ti != bigIntTypeInfo && ti != bigIntOrNothingTypeInfo && ti != softBigIntTypeInfo
+        && ti != softBigIntOrNothingTypeInfo;
+}
+
 // documented in QoreIRLowering.h
 QoreIRValue QoreIRLowering::compoundAssignmentResult(bool needs_rv, const VarRefNode* var,
         const QoreValue& left, QoreIRValue result, std::string& error, const char* context) {
@@ -9335,8 +9350,13 @@ QoreIRValue QoreIRLowering::lowerPlusEquals(const QoreValue& expr, std::string& 
             // the instruction reads the source as a load of it reads it: a source of no type can hold a reference,
             // whose read raises an exception if the referenced lvalue is gone; and the change of the target, which
             // the JIT makes with a runtime helper for a variable on the runtime stack, raises an exception if the
-            // variable refuses it, which goes to the handler of an enclosing try block (qore#6197)
-            inst->exception_target = getCurrentExceptionTarget();
+            // variable's type refuses it (see qore_ir_fused_int_change_may_raise()); either exception goes to the
+            // handler of an enclosing try block (qore#6197)
+            if (qore_ir_fused_int_change_may_raise(left_var->getTypeInfo())) {
+                inst->exception_target = getCurrentExceptionTarget();
+            } else {
+                setReferenceLoadExceptionTarget(inst, right_var->ref.id->getTypeInfo());
+            }
             if (parse_context) {
                 parse_context->markLocalAssignment(left_var->ref.id, true,
                     left_var->getTypeInfo());
@@ -9348,8 +9368,11 @@ QoreIRValue QoreIRLowering::lowerPlusEquals(const QoreValue& expr, std::string& 
             auto* inst = builder.createIncrementLocalInt(
                 left_var->ref.id, right_expr.getAsBigInt(), op->loc);
             // an exception raised by the change goes to the handler of an enclosing try block (see
-            // QoreIRIncrementLocalIntInstruction)
-            inst->exception_target = getCurrentExceptionTarget();
+            // QoreIRIncrementLocalIntInstruction); the change of an int or softint local cannot raise one (see
+            // qore_ir_fused_int_change_may_raise())
+            if (qore_ir_fused_int_change_may_raise(left_var->getTypeInfo())) {
+                inst->exception_target = getCurrentExceptionTarget();
+            }
             if (parse_context) {
                 parse_context->markLocalAssignment(left_var->ref.id, true,
                     left_var->getTypeInfo());
@@ -9582,8 +9605,11 @@ QoreIRValue QoreIRLowering::lowerMinusEquals(const QoreValue& expr, std::string&
         auto* inst = builder.createIncrementLocalInt(
             left_var->ref.id, delta, op->loc);
         // an exception raised by the change goes to the handler of an enclosing try block (see
-        // QoreIRIncrementLocalIntInstruction)
-        inst->exception_target = getCurrentExceptionTarget();
+        // QoreIRIncrementLocalIntInstruction); the change of an int or softint local cannot raise one (see
+        // qore_ir_fused_int_change_may_raise())
+        if (qore_ir_fused_int_change_may_raise(left_var->getTypeInfo())) {
+            inst->exception_target = getCurrentExceptionTarget();
+        }
         if (parse_context) {
             parse_context->markLocalAssignment(left_var->ref.id, true,
                 left_var->getTypeInfo());
@@ -10377,8 +10403,11 @@ QoreIRValue QoreIRLowering::lowerPreIncDec(const QoreValue& expr, const QoreValu
             if (isLocalOrClosureVar(var)) {
                 auto* inst = builder.createIncrementLocalInt(var->ref.id, increment ? 1 : -1, loc);
                 // an exception raised by the change goes to the handler of an enclosing try block (see
-                // QoreIRIncrementLocalIntInstruction)
-                inst->exception_target = getCurrentExceptionTarget();
+                // QoreIRIncrementLocalIntInstruction); the change of an int or softint local cannot raise one (see
+                // qore_ir_fused_int_change_may_raise())
+                if (qore_ir_fused_int_change_may_raise(var->getTypeInfo())) {
+                    inst->exception_target = getCurrentExceptionTarget();
+                }
                 if (parse_context) {
                     parse_context->markLocalAssignment(var->ref.id, true,
                         var->getTypeInfo());
