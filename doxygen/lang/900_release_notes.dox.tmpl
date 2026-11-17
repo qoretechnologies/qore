@@ -1439,6 +1439,9 @@
         @ref httpclientiointro "HttpClientIo" I/O with HTTP/2 and HTTP/3; the \c http_version option accepts
         \c "auto" (the default), \c "2.0" and \c "3.0"
       - connection texts can be translated (see @ref connectionprovider_presentation)
+      - connection option errors name the options but no longer contain the options provided or the values of
+        sensitive options, which can be credentials (see @ref connectionprovider_3_1;
+        <a href="https://github.com/qoretechnologies/qore/issues/6467">issue 6467</a>)
       - see @ref connectionprovider_3_1 for all changes
 
     - @ref dataproviderintro "DataProvider" module
@@ -2099,6 +2102,9 @@
     - a keyword used as a member or method name after the @ref dot_operator ". operator" can have white space or a
       line break between it and the dot (<tt>h. keys()</tt>), as any other name can, instead of being read as the
       keyword's operator (see @ref keywords; issue #525)
+    - the option, login and URL errors of the data provider, REST, SMTP, Telnet, WebSocket and other client modules no
+      longer contain option values, tokens or URL passwords (see @ref connectionprovider_3_1;
+      <a href="https://github.com/qoretechnologies/qore/issues/6467">issue 6467</a>)
     - when more than one class of a hierarchy declares a member with an initialization expression, the value that a
       later one replaces is released, so that an object that a base class stored there is destroyed (see
       @ref member_initialization; issue #6411)
