@@ -1194,6 +1194,12 @@ struct QoreRuntimePoState {
     bool sandboxed;
     //! the module Program whose code the override was set for; see QoreCallParseOptionsOverride::override_pgm
     const QoreProgram* override_pgm;
+    //! the functional-domain restrictions of the code that started the thread, when module code started it
+    /** The calling code of module code that runs on the thread when no Program that is not a module's is on the
+        thread's stack (see qore_caller_restricts_domain()); set for the life of the thread by
+        QoreThreadRuntimeParseOptionsHelper (qore#6337)
+    */
+    QoreParseOptions thread_caller_restrictions;
 };
 
 class RuntimeParseOptionsOverrideHelper {
@@ -1269,11 +1275,13 @@ struct QoreThreadRuntimeParseOptions {
         while the options can be installed, which would make an unrelated Program match them
     */
     QoreCallParseOptionsOverride override;
+    //! the functional-domain restrictions of the calling code (see QoreRuntimePoState::thread_caller_restrictions)
+    QoreParseOptions caller_domain_restrictions;
 
     DLLLOCAL QoreThreadRuntimeParseOptions() = default;
 
     DLLLOCAL QoreThreadRuntimeParseOptions(const QoreThreadRuntimeParseOptions& old) : po(old.po),
-            override(old.override) {
+            override(old.override), caller_domain_restrictions(old.caller_domain_restrictions) {
         refPrograms();
     }
 
@@ -1283,6 +1291,7 @@ struct QoreThreadRuntimeParseOptions {
             QoreThreadRuntimeParseOptions copy(other);
             std::swap(po, copy.po);
             std::swap(override, copy.override);
+            std::swap(caller_domain_restrictions, copy.caller_domain_restrictions);
         }
         return *this;
     }
@@ -1573,6 +1582,12 @@ DLLLOCAL int qore_sandbox_manager_check_change(const QoreSandboxManager* sm, con
     Fails closed: true if the governing sandbox cannot be resolved for lack of memory.
 */
 DLLLOCAL bool qore_caller_is_sandboxed();
+
+//! returns the domains of \a domain that the code calling a module's user variant that declares them is restricted from
+/** As qore_caller_restricts_domain(), but the initialization of library module code is not a call by the code that
+    loads the module; only the restricting functional domains are returned, not the positive options (qore#6337)
+*/
+DLLLOCAL int64 qore_caller_denied_user_domains(int64 domain);
 
 //! Keeps the code that parses code or loads a module in another Program the caller of what runs there (issue #5659)
 /** Parsing code in a Program and loading a module into it (Program::parse(), Program::loadModule(), and their

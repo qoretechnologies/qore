@@ -1843,6 +1843,12 @@ public:
 
     DLLLOCAL virtual const AbstractQoreFunctionVariant* getAbstractFunctionVariant() const = 0;
 
+    //! raises INVALID-FUNCTION-ACCESS and returns -1 if the calling code is restricted from the declared domain
+    /** For a variant of a module's code that declares a functional domain: the code of the module that calls it can
+        call it for code that is restricted from the domain (qore#6337)
+    */
+    DLLLOCAL QORE_INTERN_NOINLINE int checkCallerDomain(const char* name, ExceptionSink* xsink) const;
+
     //! Returns the functional domains declared on this variant in Qore source (QDOM_* bits)
     DLLLOCAL int64 getDeclaredDomain() const {
         return declared_domain;
@@ -2224,6 +2230,11 @@ public:
     //! @param allow_type_parameters allow a separately validated concrete specialization
     DLLLOCAL bool isStaticallyFastCallEligible(bool allow_type_parameters = false) const {
         if (isSynchronized() || reads_implicit_args) {
+            return false;
+        }
+        // a module's variant that declares a functional domain checks the restrictions of the calling code when it
+        // is entered (checkCallerDomain()), which the fast-call, inline and summary paths would skip (qore#6337)
+        if (declared_domain && qore_program_is_module(pgm)) {
             return false;
         }
         if (!allow_type_parameters && signature.hasTypeParameters()) {

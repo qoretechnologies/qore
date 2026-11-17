@@ -71,7 +71,8 @@ rest (class domain, builtins) is checked as before.
   cross-Program call that evaluates the arguments first (`QoreCallProgramEntryHelper`) hides the marker while they
   are evaluated and re-targets it to the evaluated list (`QoreCallReferenceArgEvalHelper`).  In-place references
   (parse-tree `Local*`/`Deferred*` nodes) record nothing.
-- Variants bound at parse time are not checked again (as builtins); module-internal calls are therefore free.
+- Variants bound at parse time are not checked again (as builtins), except a module's own variants that declare a
+  domain, which check the calling code when they are entered (qore#6337, below).
 - **Module code may use the domains its module declares** (C2, David 2026-11-12: a header declaration means the
   module itself ensures safety for restricted callers): the restrictions that a declared domain is checked against
   do not include the domains that the module of the **calling code** declares in its header and that apply to it
@@ -100,7 +101,35 @@ rest (class domain, builtins) is checked as before.
   `\o.m()` on an object of a caller subclass was refused).  Implicit base class constructors stay checked against
   the code running `new` (see below: no module code runs for a module subclass without its own constructor); an
   explicit base constructor list in the module is module code.  A module that hands out a generic dispatcher (`\call_function()`
-  or a `call_object_method()` wrapper that it creates) lets its callers reach its declared code through it.
+  or a `call_object_method()` wrapper that it creates) lets its callers reach the builtin code of its declared domains
+  through it, but not its own code that declares a domain (qore#6337, below).
+- **A module's own code that declares a domain is checked against the calling code when it is entered** (qore#6337,
+  David's decision (a): domains are checked against the restricted code that started the call chain, so an
+  undeclared function, method or constructor of the module does not reach its declared code for that code; threads
+  keep the restriction; no opt-out).  The C2 relief above remains for builtin code and for the variant lookups; a
+  user variant of a module's Program with `declared_domain` raises INVALID-FUNCTION-ACCESS at the top of
+  `UserVariantBase::evalIntern()` (`checkCallerDomain()`) if `qore_caller_denied_user_domains()` gives any of its
+  domains: the restricting options of the nearest Program on the stack that is not a module's (as
+  `qore_caller_restricts_domain()`, #6257), and those of a sandboxed caller that the module code runs with.  Every
+  mode reaches `evalIntern()` for such a variant because `isStaticallyFastCallEligible()` refuses it, which excludes
+  it from the JIT and AOT fast-call, batch and summary paths and from IR interpreter inlining.  Exceptions and
+  extensions:
+  - the initialization of library module code is not a call by the code that loads it: the walk stops at the
+    module initialization barrier (`QoreModuleInitSandboxBarrierHelper`, not under a lift), and the caller
+    restrictions of a sandboxed caller are not taken there, so `init: registered` stays allowed
+  - a thread that module code starts has only the module's Program on its stack: `QoreThreadRuntimeParseOptions`
+    captures the calling code's restricting options (`caller_domain_restrictions`, also when the module has no
+    override in effect: `currentRestrictsNothing()` is false then), and `QoreThreadRuntimeParseOptionsHelper`
+    installs them as `QoreRuntimePoState::thread_caller_restrictions`, which the walk uses when it finds no Program
+    that is not a module's; it survives `setCleared()`, as it describes the thread.  `qore_caller_restricts_domain()`
+    uses the same fallback, so the SqlUtil checks of #6257 hold on such threads too
+  - a call reference that module code creates and the caller calls is refused the same way: the calling code is on
+    the stack; `user-functional-domains-modes.qtest` cases `own`, `own_dyn`, `closure`, `ref_module*`, `own_cf`,
+    `own_iter`, `own_ref_obj`, `own_thread` and `own_thread_ref` are refused for a restricted Program, with and
+    without a `SandboxManager`, and allowed for one without the restriction
+  - `sqlutil-caller-database.qtest`: a module that opens a table for the caller (`module-chain`) is now refused by
+    the `[dom=DATABASE]` constructor variant when it is entered (INVALID-FUNCTION-ACCESS), before SqlUtil's own
+    data-dependent check (PERMISSION-DENIED)
 - The thread's module definition context (`ThreadData::qmd`) applies only while its module's Program is parsed
   (`QoreModuleDefContext::getDefinitionProgram()`, `get_module_def_context()`): a Program that a module's `init`
   closure parses applied its own `module` block to the loading module (qore#5938: a nested `version` key raised

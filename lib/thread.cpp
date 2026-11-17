@@ -5910,10 +5910,49 @@ static bool qore_program_restricts(const QoreProgram* pgm, const QoreParseOption
     return qore_program_private::getParseOptions(*pgm).hasAny(dom);
 }
 
+//! the parse options that are functional-domain restrictions: not the positive options (PO_ALLOW_*) or PO_IN_MODULE
+static QoreParseOptions qore_restricting_domain_options() {
+    static const QoreParseOptions restricting = QoreParseOptions(QDOM_ALL) & ~QoreParseOptions::POSITIVE_OPTIONS
+        & ~QoreParseOptions(PO_IN_MODULE);
+    return restricting;
+}
+
+//! returns the functional-domain restrictions of the code that calls the module code running on the thread
+/** @param td the current thread's data
+    @param mib a module initialization barrier that the walk stops at: the code that loads library module code does
+    not call the module's initialization, or nullptr
+*/
+static QoreParseOptions qore_get_caller_domain_restrictions(ThreadData* td,
+        const ThreadData::ModuleInitBarrier* mib = nullptr) {
+    // the calling code is the nearest Program on the call stack that is not a module's: a module's own options are
+    // those of the Program that loaded it first, which say nothing about the code that calls it now
+    const QoreProgram* pgm = td->current_pgm;
+    if (pgm && !qore_program_is_module_inline(pgm)
+            && (!mib || td->current_pgm_ctx != mib->ctx || pgm != mib->pgm)) {
+        return qore_program_private::getParseOptions(*pgm) & qore_restricting_domain_options();
+    }
+    for (const ProgramThreadCountContextHelper* ch = td->current_pgm_ctx; ch; ch = ch->getOldContext()) {
+        if (mib && (ch == mib->ctx || ch->getOldContext() == mib->ctx)) {
+            return QoreParseOptions();
+        }
+        const QoreProgram* old_pgm = ch->getOldProgram();
+        if (old_pgm && !qore_program_is_module_inline(old_pgm)) {
+            return qore_program_private::getParseOptions(*old_pgm) & qore_restricting_domain_options();
+        }
+    }
+    // a builtin call of a module function made for another Program (QoreProgram::callFunction()): the Program of the
+    // call
+    if (!mib && td->call_program_context && !qore_program_is_module_inline(td->call_program_context)) {
+        return qore_program_private::getParseOptions(*td->call_program_context) & qore_restricting_domain_options();
+    }
+    // no code of a Program that is not a module's is on the stack: the code that started the thread, if module code
+    // started it (qore#6337), or the embedding application calls the module code
+    return mib ? QoreParseOptions() : td->runtime_po_state.thread_caller_restrictions;
+}
+
 bool qore_caller_restricts_domain(int64 domain) {
     // only the restricting options are domains; the positive options (PO_ALLOW_*) and PO_IN_MODULE are not
-    const QoreParseOptions dom = QoreParseOptions(domain) & ~QoreParseOptions::POSITIVE_OPTIONS
-        & ~QoreParseOptions(PO_IN_MODULE);
+    const QoreParseOptions dom = QoreParseOptions(domain) & qore_restricting_domain_options();
     ThreadData* td = thread_data.get();
     // before the library is initialized, only the embedding application runs
     if (!dom || !td) {
@@ -5924,25 +5963,22 @@ bool qore_caller_restricts_domain(int64 domain) {
     if (td->runtime_po_state.caller_restrictions.hasAny(dom)) {
         return true;
     }
-    // the calling code is the nearest Program on the call stack that is not a module's: a module's own options are
-    // those of the Program that loaded it first, which say nothing about the code that calls it now
-    const QoreProgram* pgm = td->current_pgm;
-    if (pgm && !qore_program_is_module_inline(pgm)) {
-        return qore_program_restricts(pgm, dom);
+    return qore_get_caller_domain_restrictions(td).hasAny(dom);
+}
+
+int64 qore_caller_denied_user_domains(int64 domain) {
+    const QoreParseOptions dom = QoreParseOptions(domain) & qore_restricting_domain_options();
+    ThreadData* td = thread_data.get();
+    if (!dom || !td) {
+        return QDOM_DEFAULT;
     }
-    for (const ProgramThreadCountContextHelper* ch = td->current_pgm_ctx; ch; ch = ch->getOldContext()) {
-        const QoreProgram* old_pgm = ch->getOldProgram();
-        if (old_pgm && !qore_program_is_module_inline(old_pgm)) {
-            return qore_program_restricts(old_pgm, dom);
-        }
-    }
-    // a builtin call of a module function made for another Program (QoreProgram::callFunction()): the Program of the
-    // call
-    if (td->call_program_context && !qore_program_is_module_inline(td->call_program_context)) {
-        return qore_program_restricts(td->call_program_context, dom);
-    }
-    // no code of a Program that is not a module's is on the stack: the embedding application calls the module code
-    return false;
+    // the initialization of library module code that another Program loads is not a call by that Program (see
+    // QoreModuleInitSandboxBarrierHelper); under a lift it is
+    const ThreadData::ModuleInitBarrier* mib = (td->module_init_barriers.empty()
+        || td->module_init_barriers.back().lift) ? nullptr : &td->module_init_barriers.back();
+    QoreParseOptions denied = mib ? QoreParseOptions() : (td->runtime_po_state.caller_restrictions & dom);
+    denied |= qore_get_caller_domain_restrictions(td, mib) & dom;
+    return denied.getLo();
 }
 
 //! returns the ID of the current Program of the thread, or QORE_NO_PROGRAM_ID
@@ -7031,8 +7067,11 @@ void RuntimeParseOptionsOverrideHelper::setCleared() {
     old = *state;
     // an empty override leaves the runtime parse options as they are (see apply_runtime_po_override())
     QoreParseOptions po = state->po;
+    // the restrictions of the code that started the thread are those of the thread, not of a call
+    QoreParseOptions thread_caller_restrictions = state->thread_caller_restrictions;
     *state = QoreRuntimePoState();
     state->po = po;
+    state->thread_caller_restrictions = thread_caller_restrictions;
 }
 
 void QoreThreadRuntimeParseOptions::refPrograms() {
@@ -7071,7 +7110,9 @@ bool QoreThreadRuntimeParseOptions::currentRestrictsNothing() {
         && !td->runtime_po_state.module_pgm
         && !td->runtime_po_state.app_pgm_id
         && !td->runtime_po_state.sandboxed
-        && !td->runtime_po_state.override_pgm;
+        && !td->runtime_po_state.override_pgm
+        // module code called by restricted code passes the restrictions on to the threads that it starts (qore#6337)
+        && !qore_get_caller_domain_restrictions(td);
 }
 
 QoreThreadRuntimeParseOptions QoreThreadRuntimeParseOptions::capture() {
@@ -7086,6 +7127,7 @@ QoreThreadRuntimeParseOptions QoreThreadRuntimeParseOptions::capture() {
     rv.override.app_pgm_id = td->runtime_po_state.app_pgm_id;
     rv.override.sandboxed = td->runtime_po_state.sandboxed;
     rv.override.override_pgm = td->runtime_po_state.override_pgm;
+    rv.caller_domain_restrictions = qore_get_caller_domain_restrictions(td);
     rv.refPrograms();
     return rv;
 }
@@ -7100,6 +7142,8 @@ QoreThreadRuntimeParseOptionsHelper::QoreThreadRuntimeParseOptionsHelper(const Q
     override_helper->set(td, o->override);
     // the options were computed with the override in the starting thread
     td->runtime_po_state.po = o->po;
+    // the restrictions of the code that started the thread (qore#6337); restored with the override
+    td->runtime_po_state.thread_caller_restrictions = o->caller_domain_restrictions;
 }
 
 bool runtime_module_call_override_in_effect(const QoreProgram* module_pgm) {

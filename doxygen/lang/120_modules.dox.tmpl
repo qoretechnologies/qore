@@ -1606,12 +1606,15 @@ xcrun notarytool submit MyModule.zip --keychain-profile my-notary-profile --wait
       use the capability for its caller checks the caller first
       (@ref Qore::Program::getCallerCapabilityMask() "Program::getCallerCapabilityMask()"); what the module does for its
       own work (its threads, waits and thread data) needs no such declaration.  The module's own code may use the
-      functionality of the declared domains also when a call is resolved at run time
+      builtin functionality of the declared domains also when a call is resolved at run time
       (@ref Qore::call_function() "call_function()", a method call on an untyped value, a call reference that the
       module's code creates), for a sandboxed caller too; the same calls that the caller's code makes are checked
-      against the caller's restrictions.  A module that gives its callers a generic way to call its code (a call
-      reference to @ref Qore::call_function() "call_function()" that it creates, for example) lets them reach its
-      declared code through it.  Since %Qore 3.0
+      against the caller's restrictions.  The module's own functions and methods that declare a domain are checked
+      against the code that calls the module when they are entered: code restricted from the domain cannot reach them
+      through other code of the module either (a function or method of the module that does not declare the domain, a
+      call that the module resolves at run time, a call reference that the module creates, or a thread that the module
+      starts, whose calling code is the code that called the module when the thread was started); the \c init closure
+      of the module is not a call by the code that loads it.  Since %Qore 3.0
     - \c init: (optional) if present, must be a closure that will be executed when the module is loaded; this can be
       used to initialize the module, for example
     - \c del: (optional) if present, must be a closure that will be executed when the module is unloaded; this can be
