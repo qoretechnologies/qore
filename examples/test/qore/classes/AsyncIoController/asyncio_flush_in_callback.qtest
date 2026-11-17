@@ -65,6 +65,9 @@ class AsyncIoFlushInCallbackTest inherits QUnit::Test {
     }
 
     flushWaitsForOthersTest() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("needs a debug build of the library for dbg_async_io_wait_flush_blocked()");
+        }
         Counter other_entered(1);
         Counter release_other(1);
         bool other_done;
@@ -81,13 +84,14 @@ class AsyncIoFlushInCallbackTest inherits QUnit::Test {
         });
         assertEq(0, other_entered.waitForZero(HangTimeout), "the other callback runs");
 
-        Queue flushing();
         AsyncIoController::addTimerDelay(0s, sub () {
-            flushing.push(True);
             AsyncIoController::flushCallbacks();
             result.push(other_done);
         });
-        flushing.get(HangTimeout);
+        # the other callback is released only once the flush waits for it: a flush that did not wait for the
+        # callbacks of the other workers would not block
+        assertTrue(call_function("dbg_async_io_wait_flush_blocked", HangTimeout),
+            "the flush in the callback waits for the callback of the other worker");
         release_other.dec();
         assertTrue(result.get(HangTimeout), "the flush returns after the callback of the other worker has ended");
     }

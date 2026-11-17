@@ -4061,6 +4061,10 @@ public class HttpAsyncSocketIoController {
             dispatch_counter = dispatch_count;
             dispatch_counter.inc();
         }
+        # until it is handed to the handler pool, the dispatch runs in this thread (the callback dispatcher worker),
+        # where an inline handler, or a preparation of the request, that stops or releases the server waits for a
+        # drain, which ends this dispatch (see waitDrain())
+        Priv::running_dispatch = dispatch_counter;
         # the dispatch is ended (see endDispatch()) on each of its exits below: after the result was handled, first
         # thing on an error, or by the handler-pool task (an on_exit block here costs every request, qore#5899)
 
@@ -4076,11 +4080,14 @@ public class HttpAsyncSocketIoController {
                 handled1 = True;
             }
         } catch (hash<ExceptionInfo> ex) {
-            # the dispatch ends here: the connection is closed below
-            if (draining) {
-                endDispatch(dispatch_uh, dispatch_counter);
-            } else {
-                dispatch_counter.dec();
+            # the dispatch ends here, unless a drain in this thread ended it: the connection is closed below
+            if (Priv::running_dispatch) {
+                Priv::running_dispatch = NOTHING;
+                if (draining) {
+                    endDispatch(dispatch_uh, dispatch_counter);
+                } else {
+                    dispatch_counter.dec();
+                }
             }
             log(LoggerLevel::ERROR, "Error handling inline request: %s: %s", ex.err, ex.desc);
             dispatchOnError(dispatch_target, dispatch_sock, ex, dispatch_listener, dispatch_cx,
@@ -4093,10 +4100,14 @@ public class HttpAsyncSocketIoController {
         }
         # the result was handled: the dispatch ends after it (outside the try, so that it ends once)
         if (handled1) {
-            if (draining) {
-                endDispatch(dispatch_uh, dispatch_counter);
-            } else {
-                dispatch_counter.dec();
+            # the dispatch ends here, unless a drain in this thread ended it
+            if (Priv::running_dispatch) {
+                Priv::running_dispatch = NOTHING;
+                if (draining) {
+                    endDispatch(dispatch_uh, dispatch_counter);
+                } else {
+                    dispatch_counter.dec();
+                }
             }
             return;
         }
@@ -4112,11 +4123,14 @@ public class HttpAsyncSocketIoController {
                 handled2 = True;
             }
         } catch (hash<ExceptionInfo> ex) {
-            # the dispatch ends here: the connection is closed below
-            if (draining) {
-                endDispatch(dispatch_uh, dispatch_counter);
-            } else {
-                dispatch_counter.dec();
+            # the dispatch ends here, unless a drain in this thread ended it: the connection is closed below
+            if (Priv::running_dispatch) {
+                Priv::running_dispatch = NOTHING;
+                if (draining) {
+                    endDispatch(dispatch_uh, dispatch_counter);
+                } else {
+                    dispatch_counter.dec();
+                }
             }
             log(LoggerLevel::ERROR, "Error preparing request for %y: %s: %s",
                 dispatch_uh, ex.err, ex.desc);
@@ -4130,10 +4144,14 @@ public class HttpAsyncSocketIoController {
         }
         # the result was handled: the dispatch ends after it (outside the try, so that it ends once)
         if (handled2) {
-            if (draining) {
-                endDispatch(dispatch_uh, dispatch_counter);
-            } else {
-                dispatch_counter.dec();
+            # the dispatch ends here, unless a drain in this thread ended it
+            if (Priv::running_dispatch) {
+                Priv::running_dispatch = NOTHING;
+                if (draining) {
+                    endDispatch(dispatch_uh, dispatch_counter);
+                } else {
+                    dispatch_counter.dec();
+                }
             }
             return;
         }
@@ -4183,6 +4201,8 @@ public class HttpAsyncSocketIoController {
             }
         };
 
+        # the handler-pool task runs the dispatch in its own thread, which a drain there ends (see waitDrain())
+        Priv::running_dispatch = NOTHING;
         # the task ends the dispatch once it is submitted
         try {
             submitToHandlerPool(dispatch_target, request_handler);
@@ -4280,6 +4300,10 @@ public class HttpAsyncSocketIoController {
             dispatch_counter = dispatch_count;
             dispatch_counter.inc();
         }
+        # until it is handed to the handler pool, the dispatch runs in this thread (the callback dispatcher worker),
+        # where an inline handler, or a preparation of the request, that stops or releases the server waits for a
+        # drain, which ends this dispatch (see waitDrain())
+        Priv::running_dispatch = dispatch_counter;
         # the dispatch is ended (see endDispatch()) on each of its exits below: after the result was handled, first
         # thing on an error, or by the handler-pool task (an on_exit block here costs every request, qore#5899)
 
@@ -4294,11 +4318,14 @@ public class HttpAsyncSocketIoController {
                 handled3 = True;
             }
         } catch (hash<ExceptionInfo> ex) {
-            # the dispatch ends here: the connection is closed below
-            if (draining) {
-                endDispatch(dispatch_uh, dispatch_counter);
-            } else {
-                dispatch_counter.dec();
+            # the dispatch ends here, unless a drain in this thread ended it: the connection is closed below
+            if (Priv::running_dispatch) {
+                Priv::running_dispatch = NOTHING;
+                if (draining) {
+                    endDispatch(dispatch_uh, dispatch_counter);
+                } else {
+                    dispatch_counter.dec();
+                }
             }
             log(LoggerLevel::ERROR, "Error preparing request after body read for %y: %s: %s",
                 dispatch_uh, ex.err, ex.desc);
@@ -4309,10 +4336,14 @@ public class HttpAsyncSocketIoController {
         }
         # the result was handled: the dispatch ends after it (outside the try, so that it ends once)
         if (handled3) {
-            if (draining) {
-                endDispatch(dispatch_uh, dispatch_counter);
-            } else {
-                dispatch_counter.dec();
+            # the dispatch ends here, unless a drain in this thread ended it
+            if (Priv::running_dispatch) {
+                Priv::running_dispatch = NOTHING;
+                if (draining) {
+                    endDispatch(dispatch_uh, dispatch_counter);
+                } else {
+                    dispatch_counter.dec();
+                }
             }
             return;
         }
@@ -4356,6 +4387,8 @@ public class HttpAsyncSocketIoController {
             }
         };
 
+        # the handler-pool task runs the dispatch in its own thread, which a drain there ends (see waitDrain())
+        Priv::running_dispatch = NOTHING;
         # the task ends the dispatch once it is submitted
         try {
             submitToHandlerPool(dispatch_target, request_handler);

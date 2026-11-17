@@ -1782,7 +1782,7 @@ void QoreCallDispatcher::waitForIdle() {
         // so a blocked continuePoll() (OAuth2 refresh / happy-eyeballs) does
         // not wedge this barrier — see active_continue_poll in the header.
         if ((active_processing - active_continue_poll - own) > 0) {
-            idle_cond.wait(m);
+            idleWait();
             continue;
         }
         // Any queued non-continuePoll (callback) item still pending?  Queued
@@ -1797,7 +1797,7 @@ void QoreCallDispatcher::waitForIdle() {
         if (!pending_callback) {
             break;
         }
-        idle_cond.wait(m);
+        idleWait();
     }
 }
 
@@ -1812,6 +1812,20 @@ bool QoreCallDispatcher::dbgWaitAllIdle(int timeout_ms) {
             return false;
         }
         idle_cond.wait(m, static_cast<int>(remaining_ms));
+    }
+    return true;
+}
+
+bool QoreCallDispatcher::dbgWaitIdleWaiter(int timeout_ms) {
+    int64 deadline_us = q_get_monotonic_us() + static_cast<int64>(timeout_ms) * 1000;
+    AutoLocker al(m);
+    // dbg_idle_waiter_cond is signaled when a thread blocks in waitForIdle()
+    while (!dbg_idle_waiters) {
+        int64 remaining_ms = (deadline_us - q_get_monotonic_us()) / 1000;
+        if (remaining_ms <= 0) {
+            return false;
+        }
+        dbg_idle_waiter_cond.wait(m, static_cast<int>(remaining_ms));
     }
     return true;
 }
@@ -8971,6 +8985,17 @@ void AsyncIoControllerPriv::dbgSetOwnerShuttingDown(const std::string& owner, bo
     } else {
         cd->clearOwnerShuttingDown(owner);
     }
+}
+
+bool AsyncIoControllerPriv::dbgWaitFlushBlocked(int timeout_ms) {
+    ensureCallDispatcher();
+    // as in flushCallbacks(): the dispatcher's lock is not taken with the controller's held
+    QoreCallDispatcher* cd;
+    {
+        AutoLocker al(m);
+        cd = call_dispatcher;
+    }
+    return cd ? cd->dbgWaitIdleWaiter(timeout_ms) : false;
 }
 #endif
 

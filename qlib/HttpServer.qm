@@ -6367,6 +6367,9 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         bool no_new_dedicated = False;
         int id;
 
+        #! the test hook that stop() calls once it has marked the listener as stopping (see dbgSetStoppingHook())
+        static *code<nothing(HttpListener)> dbg_stopping_hook;
+
         # socket handler hash
         hash<string, AbstractHttpSocketHandlerInterface> shh;
 
@@ -6679,6 +6682,11 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
             hash<auto> hdr, AbstractHttpRequestHandler handler, hash<auto> header_info) {
         try {
             hash<HttpResponseInfo> resp = handler.handleInlineRequest(cx, hdr, NOTHING);
+            # the handler released the last reference to the server, whose stop closed the connections: the request
+            # has no response to give (qore#6508)
+            if (!serv) {
+                return <HttpServerAsyncIo::HttpRequestResultInfo>{"close": True};
+            }
             if ((resp.body instanceof InputStream) || resp.chunked_body || resp.send_callback) {
                 throw "INLINE-HANDLER-ERROR", "the handler returned a streamed message body; an inline handler must "
                     "return the message body as a string or binary value";
@@ -7095,6 +7103,20 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         background stop();
     }
 
+    #! @cond nodoc
+    #! Sets the test hook that stop() calls once it has marked the listener as stopping; a debug build of the library only
+    /** @param hook the hook, called with the listener in the thread of the stop, or @ref nothing to remove it
+
+        @throw HTTPLISTENER-DEBUG-ERROR the library is not a debug build
+    */
+    static dbgSetStoppingHook(*code<nothing(HttpListener)> hook) {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            throw "HTTPLISTENER-DEBUG-ERROR", "the test hooks of HttpListener need a debug build of the library";
+        }
+        dbg_stopping_hook = hook;
+    }
+    #! @endcond
+
     stop(*bool silent) {
         # A stop that runs in a thread that runs a request of this listener does not wait for that request, which
         # ends only when the stop has returned to it: the request released the last reference to the server, whose
@@ -7118,6 +7140,12 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
             }
 
             exit = True;
+        }
+
+        # test hook (a debug build of the library only): the listener is marked as stopping, so that another stop
+        # returns at once (see dbgSetStoppingHook())
+        if (Option::HAVE_LIBRARY_DEBUGGING && dbg_stopping_hook) {
+            dbg_stopping_hook(self);
         }
 
         # wait for all connection threads to terminate
