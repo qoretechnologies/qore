@@ -285,6 +285,8 @@ class ExecModeMarkerTest(unittest.TestCase):
         # - ir-guard-profile-types (#6421): its checks run in child processes that set their own --exec-mode
         # - number-round-exact (#6278): its probes run in child processes that set their own --exec-mode and in qcc
         #   executables
+        # - include-failure-diagnostics (#6509): its checks run the command line in child processes started without an
+        #   execution mode
         self.assertEqual(sorted(["examples/test/ir/AOTConstantImportStale.qtest",
                                  "examples/test/ir/JITFinalizeCancellation.qtest",
                                  "examples/test/ir/ir-guard-profile-types/ir-guard-profile-types.qtest",
@@ -342,6 +344,7 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/module-cpp-api/plugin-order/plugin-order-identity.qtest",
                                  "examples/test/ir/GenericCacheRelease.qtest",
                                  "examples/test/qore/parser/nested-callable-types.qtest",
+                                 "examples/test/qore/parser/include-failure-diagnostics.qtest",
                                  "examples/test/ir/jit-teardown-at-exit/JitTeardownAtExit-1.qtest",
                                  "examples/test/ir/jit-teardown-at-exit/JitTeardownAtExit-2.qtest",
                                  "examples/test/ir/jit-teardown-at-exit/JitTeardownAtExit-3.qtest",

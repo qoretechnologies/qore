@@ -2095,6 +2095,8 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - an @ref include "%include" of a file that does not exist raises \c PARSE-EXCEPTION at the directive, with its
+      location, instead of \c PARSE-ERROR without one (issue #6509)
     - an absolute date literal without its day (<tt>2015-11-</tt>) is no longer read as a date with a day made of
       the text after it, which also ignored a UTC offset there (<tt>2015-11-+10</tt> is now the integer \c 1994), and
       a leap second in a date literal (<tt>2016-12-31T23:59:60Z</tt>) is a parse error that says so, also where
