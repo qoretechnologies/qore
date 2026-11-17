@@ -901,11 +901,4 @@ DLLLOCAL inline const ResolvedCallReferenceNodeIntern* qore_get_resolved_call_re
     return dynamic_cast<const ResolvedCallReferenceNodeIntern*>(r);
 }
 
-//! Returns a call reference value as a ResolvedCallReferenceNode, otherwise nullptr (a value of another type)
-/** The same result as dynamic_cast<ResolvedCallReferenceNode*>(): a closure and the library's own references are
-    identified by their type, as is a sandbox-bound reference; only a value of another class (a module's call
-    reference, or not a call reference) is tested with the dynamic_cast.
-*/
-DLLLOCAL ResolvedCallReferenceNode* qore_get_resolved_call_reference(AbstractQoreNode* n);
-
 #endif

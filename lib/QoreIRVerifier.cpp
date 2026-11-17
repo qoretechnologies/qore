@@ -2025,6 +2025,15 @@ bool QoreIRVerifier::verify(const QoreIRFunction& func, std::string& error) {
             } else {
                 saw_non_phi = true;
             }
+            // CallIndirect is reserved: no lowering emits it (call references use CallClosureDirect), and neither the
+            // IR interpreter nor the LLVM lowering executes it
+            const QoreIRInvokeInstruction* reserved_invoke = inst->opcode == QoreIROpcode::Invoke
+                ? qore_ir_inst_cast<const QoreIRInvokeInstruction*>(inst.get()) : nullptr;
+            if (inst->opcode == QoreIROpcode::CallIndirect
+                    || (reserved_invoke && reserved_invoke->invoke_opcode == QoreIROpcode::CallIndirect)) {
+                error = "reserved opcode CallIndirect (297) in block '" + block->name + "'";
+                return false;
+            }
             if (inst->opcode == QoreIROpcode::Invoke) {
                 auto* invoke_inst = qore_ir_inst_cast<const QoreIRInvokeInstruction*>(inst.get());
                 if (!invoke_inst || !invoke_inst->normal_target

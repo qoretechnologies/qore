@@ -16052,50 +16052,6 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_method_fast_consume_args(const QoreMe
     return qore_rt_call_method_fast_impl(method, variant, args, arg_cleanups, nargs, xsink);
 }
 
-// --- Fast call reference/closure call ---
-
-extern "C" DLLEXPORT uint64_t qore_rt_call_ref_fast(uint64_t ref_bits, uint64_t* args, int nargs,
-        ExceptionSink* xsink) {
-    if (check_stack(xsink)) {
-        return toBits(QoreValue());
-    }
-    QoreValue ref_val = fromBits(ref_bits);
-    if (!ref_val.hasNode()) {
-        xsink->raiseException("JIT-ERROR", "call reference value is not a node");
-        return toBits(QoreValue());
-    }
-
-    // The call reference is a ResolvedCallReferenceNode (closure, function ref, method ref, etc.): a closure, the
-    // library's own references and a sandbox-bound reference are identified without the string comparisons of a
-    // dynamic_cast, which tests any other value (a module's reference; anything else raises the error below, in a
-    // release build too)
-    ResolvedCallReferenceNode* ref_node = qore_get_resolved_call_reference(ref_val.getInternalNode());
-    if (!ref_node) {
-        xsink->raiseException("JIT-ERROR", "call reference is not a ResolvedCallReferenceNode");
-        return toBits(QoreValue());
-    }
-
-    // Build QoreListNode from the NaN-boxed args array
-    // Use pushIntern() to preserve complex types (e.g., hash<string, bool>)
-    ReferenceHolder<QoreListNode> arg_list(nargs > 0 ? new QoreListNode(autoTypeInfo) : nullptr, xsink);
-    if (nargs > 0) {
-        qore_list_private* priv = qore_list_private::get(**arg_list);
-        priv->reserve(nargs);
-        for (int i = 0; i < nargs; ++i) {
-            QoreValue val = fromBits(args[i]);
-            if (val.needsRef()) {
-                val.refSelf();
-            }
-            priv->pushIntern(val);
-        }
-    }
-
-    // Call execValue() directly — avoids the dynamic_cast chain and AST node copy
-    // that qore_rt_call_with_args() performs
-    QoreValue result = ref_node->invoke(*arg_list, xsink);
-    return toBits(result);
-}
-
 // --- On-block-exit handler support for JIT ---
 
 //! An on_block_exit handler registered by native code; its body is a native function

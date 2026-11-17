@@ -3043,23 +3043,6 @@ const ResolvedCallReferenceNode* qore_get_sandbox_bound_callback(const AbstractQ
     return static_cast<const AbstractCallReferenceNode*>(callback)->getSandboxBoundCallback();
 }
 
-ResolvedCallReferenceNode* qore_get_resolved_call_reference(AbstractQoreNode* n) {
-    ResolvedCallReferenceNode* rv;
-    if (n->getType() == NT_RUNTIME_CLOSURE) {
-        // only QoreClosureBase's constructor gives NT_RUNTIME_CLOSURE
-        rv = static_cast<ResolvedCallReferenceNode*>(n);
-    } else if (const ResolvedCallReferenceNodeIntern* ri = qore_get_listed_call_reference_intern(n)) {
-        rv = const_cast<ResolvedCallReferenceNodeIntern*>(ri);
-    } else if (SandboxBoundCallReference* sb = qore_exact_node_cast<SandboxBoundCallReference>(n)) {
-        rv = sb;
-    } else {
-        // a module's call reference, the base classes of the references in the parse tree, or not a call reference
-        return dynamic_cast<ResolvedCallReferenceNode*>(n);
-    }
-    assert(rv == dynamic_cast<ResolvedCallReferenceNode*>(n));
-    return rv;
-}
-
 ResolvedCallReferenceNode* qore_bind_sandbox_call(const ResolvedCallReferenceNode* callback, bool trusted,
         ExceptionSink* xsink) {
     if (trusted) {
