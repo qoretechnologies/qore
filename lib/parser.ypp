@@ -2798,6 +2798,15 @@ DLLLOCAL void yyerror(YYLTYPE* loc, yyscan_t scanner, const char* str) {
     }
     //printd(5, "yyerror() location: %d:%d - %d:%d \"%s\"\n", loc->first_line, loc->first_col, loc->last_line, loc->last_col, str);
     const QoreProgramLocation* qloc = qore_program_private::get(*getProgram())->getLocation(loc->first_line, loc->last_line, loc->first_col, loc->last_col);
+    // a syntax error in the statement (up to the next ;, { or }) that a line that starts with % and a name that no
+    // parse directive's rule matched begins: an unknown or invalid parse directive (issue #56)
+    if (state->line_start_directive_active && state->line_start_directive_loc
+            && !strcmp(state->line_start_directive_loc->getFileValue(), qloc->getFileValue())
+            // a known directive at the end of the input without a newline is valid; its rule needs the newline
+            && !(strstr(str, "end of file") && qore_parse_directive_known(state->line_start_directive))) {
+        parse_error(*qloc, "%s (%s)", qore_parse_directive_error(state->line_start_directive).c_str(), str);
+        return;
+    }
     const char* hint = qore_syntax_hint(str);
     if (hint) {
         parse_error(*qloc, "%s; %s", str, hint);

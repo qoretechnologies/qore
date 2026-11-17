@@ -2044,6 +2044,9 @@
       some of them only at the end of the statement (issue #6262)
     - a module blacklisted with @ref Qore::qore_add_module_to_blacklist() "qore_add_module_to_blacklist()" is also
       refused when it is a @ref separated_modules "separated module", however it is loaded (issue #6450)
+    - a line that starts with an unknown parse directive, such as <tt>%%require mymod</tt>, gives an error that names it
+      and suggests the closest parse directive, instead of "syntax error, unexpected identifier" (see
+      @ref unknown_parse_directives "unknown parse directives"; issue #56)
     - a sleep with @ref Qore::usleep() "usleep()" or @ref Qore::sleep() "sleep()" that a signal interrupted while
       it slept with \c nanosleep() (2) slept its whole time again instead of the time that was left (issue #6364)
     - an out-of-line method definition in a namespace block resolves its class path relative to that namespace
