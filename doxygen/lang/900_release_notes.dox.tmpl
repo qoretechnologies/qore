@@ -307,6 +307,11 @@
     refuse text that is no number or date.  Code that catches a refused value by its error code must use the new
     codes.  See @ref dataprovider_v3_11.
 
+    @par File Pollers Keep Polling After an Error in a File Event Handler
+    When a \c singleFileEvent() (or an observer it notifies) throws, a @ref filepollererrors "FilePoller" now logs the
+    error and retries that file at the next poll, and an @ref ftppollererrors "FtpPoller" or \c SftpPoller after the
+    \c "error_delay", instead of stopping polling; code that relied on the stop must call \c stop() itself.
+
     @par date() Raises an Exception for Text After a Date or Time
     @ref Qore::date(string) "date(string)" and @ref Qore::TimeZone::date(string) "TimeZone::date(string)" raise
     \c INVALID-DATE for text after a date or time other than white space, a zone designator, \c UTC, \c GMT or the
@@ -1439,7 +1444,16 @@
       - resources with their metadata (see @ref filelocationhandler_resources), and \c conn:// locations
       - see @ref filelocationhandler_v3_0 for all changes
 
+    - @ref filepollerintro "FilePoller" module
+      - an error while a polled file is handled (ex: an observer that refuses the file event) keeps the file for the
+        next poll instead of stopping polling (see @ref filepollererrors;
+        <a href="https://github.com/qoretechnologies/qore/issues/6400">issue 6400</a>)
+      - see @ref file_poller_2_1 for all changes
+
     - @ref ftppollerintro "FtpPoller" module
+      - an error while a polled file is handled (ex: an observer that refuses the file event) keeps the remote file
+        and retries the poll after the \c "error_delay" option's delay instead of stopping polling (see
+        @ref ftppollererrors; <a href="https://github.com/qoretechnologies/qore/issues/6400">issue 6400</a>)
       - see @ref ftppollerv2_2 for all changes
 
     - @ref gmaildataproviderintro "GmailDataProvider" module
