@@ -4892,6 +4892,10 @@ static bool isInterpreterNativeIntProgram(const QoreIRFunction* ir,
         QoreIRCallDirectInstruction::NativeLeafKind::IntProgram);
 }
 
+static QORE_INTERN_NOINLINE bool computeInterpreterNativeLeafState(QoreIRCallDirectInstruction* inst, int nargs);
+
+//! returns true if the callee of \a inst runs as a native leaf of the interpreter; the state is computed on the first
+//! call (computeInterpreterNativeLeafState()) and cached in the instruction
 static bool ensureInterpreterNativeLeafState(QoreIRCallDirectInstruction* inst, int nargs) {
     static constinit QoreEnvFlag all_disabled_env("QORE_DISABLE_IR_NATIVE_LEAF_INLINE");
     const bool all_disabled = all_disabled_env.get();
@@ -4907,6 +4911,14 @@ static bool ensureInterpreterNativeLeafState(QoreIRCallDirectInstruction* inst, 
             std::memory_order_acq_rel, std::memory_order_acquire)) {
         return expected > 0;
     }
+    return computeInterpreterNativeLeafState(inst, nargs);
+}
+
+//! computes and caches the native leaf state of the callee of \a inst (see ensureInterpreterNativeLeafState())
+/** Out of line, so that the objects that it needs, such as the code blocks of the callee (QoreIRCodeBlocks, #6201),
+    give the per-call check of the cached state no frame to set up
+*/
+static QORE_INTERN_NOINLINE bool computeInterpreterNativeLeafState(QoreIRCallDirectInstruction* inst, int nargs) {
     auto reject = [&]() {
         inst->native_leaf_state.store(-1, std::memory_order_release);
         return false;
