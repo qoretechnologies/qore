@@ -184,6 +184,9 @@ $env:QORE_CONNECTION_PROVIDERS="MyConnectionProvider;OtherConnectionProvider"
 
 
     @section connectionprovider_3_1 ConnectionProvider 3.1
+    - @ref ConnectionProvider::ConnectionSchemeCache::validateConnectionOptions() "ConnectionSchemeCache::validateConnectionOptions()"
+      checks the elements of a list option against the values of its allowed element values; it refused every
+      non-empty list, its allowed elements too (issue #6490)
     - @ref ConnectionProvider::AbstractConnection::parseUrl() "AbstractConnection::parseUrl()" is declared to return
       \c hash<auto>, as a connection with another URL scheme returns its own hash (see @ref override_return_types)
     - a sandboxed caller is refused the I/O of a connection whose class belongs to a module that registers a data

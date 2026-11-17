@@ -2037,6 +2037,8 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - @ref connectionproviderintro "ConnectionProvider" module: a list connection option with allowed element values
+      accepts its allowed elements; every non-empty list was refused (see @ref connectionprovider_3_1; issue #6490)
     - when more than one class of a hierarchy declares a member with an initialization expression, the value that a
       later one replaces is released, so that an object that a base class stored there is destroyed (see
       @ref member_initialization; issue #6411)
