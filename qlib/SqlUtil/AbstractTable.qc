@@ -145,6 +145,53 @@ public class AbstractTable inherits AbstractSqlUtilBase {
             "union_all": "hash/list",
             "intersect": "hash/list",
             "except": "hash/list",
+            # recursive queries (since SqlUtil 3.11.0)
+            "recursive": Type::Hash,
+        };
+
+        #! the keys of the @ref select_option_recursive "recursive" select option
+        /** @since %SqlUtil 3.11.0
+        */
+        const hash<string, bool> RecursiveQueryKeys = {
+            "name": True,
+            "columns": True,
+            "anchor": True,
+            "step": True,
+            "union": True,
+            "depth": True,
+            "max_depth": True,
+        };
+
+        #! the select options that cannot be combined with the @ref select_option_recursive "recursive" select option
+        /** @since %SqlUtil 3.11.0
+        */
+        const list<string> RecursiveQueryRefusedOptions = ("superquery", "forupdate", "forupdate_no_key",
+            "partition");
+
+        #! the select options that the anchor and the step of a recursive query cannot have
+        /** @since %SqlUtil 3.11.0
+        */
+        const list<string> RecursiveQueryMemberRefusedOptions = ("recursive", "superquery", "forupdate",
+            "forupdate_no_key", "orderby", "desc", "limit", "offset", "union", "union_all", "intersect", "except");
+
+        #! the default name of the common table expression of a recursive query
+        /** @since %SqlUtil 3.11.0
+        */
+        const string RecursiveQueryDefaultName = "rcte";
+
+        #! the Qore type names that a cast in the anchor of a recursive query can give, and their types
+        /** @since %SqlUtil 3.11.0
+        */
+        const hash<string, string> RecursiveQueryCastTypes = {
+            "integer": Type::Int,
+            "int": Type::Int,
+            "number": Type::Number,
+            "float": Type::Float,
+            "string": Type::String,
+            "date": Type::Date,
+            "binary": Type::Binary,
+            "boolean": Type::Boolean,
+            "bool": Type::Boolean,
         };
 
         #! the set operator select options and their SQL keywords in standard SQL
@@ -617,6 +664,13 @@ public class AbstractTable inherits AbstractSqlUtilBase {
         bool inDb = False;
         #! manual edits
         bool manual = False;
+
+        #! True if the object stands for the common table expression of a recursive query
+        /** Its SQL name is its name as an identifier, without a schema (see @ref select_option_recursive)
+
+            @since %SqlUtil 3.11.0
+        */
+        bool recursive_cte = False;
 
         #! the comment of the table, once it is known (see table_comment_known)
         /** @since %SqlUtil 3.11.0
@@ -5898,6 +5952,11 @@ string sql = table.getSelectSql(sh, \args);
             getColumnsUnlocked();
         }
 
+        # issue #3544: a recursive query selects from its common table expression
+        if (exists qh.recursive) {
+            return getRecursiveSelectSqlIntern(qh, \args, opt);
+        }
+
         # we first get column & table info in case we are referencing a table through a synonym
         # so the getSelectSqlName() will refer to the proper schema owner
         return getSelectSqlStringIntern(qh, getSelectSqlName(qh), \args, NOTHING, opt);
@@ -5921,6 +5980,12 @@ string sql = table.getSelectSql(sh, \args);
             "args": args ?? (),
         };
         on_success args = info.args;
+
+        # issue #3544: a recursive query is a select of its own, which cannot be a superquery
+        if (exists info.query_hash.recursive) {
+            throw "RECURSIVE-QUERY-ERROR", sprintf("%s: the \"recursive\" select option can only be given in the "
+                "select option hash of a select, not in a superquery", getDesc());
+        }
 
         # issue #2961: the set operators combine this select with other selects; the ordering and paging options
         # apply to the combined result, which is selected from as a superquery
@@ -6410,6 +6475,11 @@ string sql = table.getSelectSql(sh, \args);
                 if (sh) {
                     t.validateOptionsIntern("OPTION-ERROR", t.getSelectOptions(), \sh);
                 }
+                # issue #3544: the WITH clause of a recursive query is at the start of the statement
+                if (exists sh.recursive) {
+                    throw "RECURSIVE-QUERY-ERROR", sprintf("%s: a select of the %y select option cannot be a "
+                        "recursive query", getDesc(), key);
+                }
                 string osql = t.getSelectSqlStringIntern(sh, \info.args, opt);
                 # a select with ordering or paging, or with set operators of its own, is selected from, as a member
                 # of a set operation cannot have them
@@ -6443,6 +6513,482 @@ string sql = table.getSelectSql(sh, \args);
         }
         throw "SELECT-ERROR", sprintf("%s: the \"table\" key of the %y select option expects an AbstractTable or Table "
             "object or a table name; got %y instead", getDesc(), key, table.type());
+    }
+
+    #! Returns @ref True if the database supports recursive queries
+    /** @return @ref True if the database supports the @ref select_option_recursive "recursive" select option;
+        @ref False if a select with it raises \c RECURSIVE-QUERY-ERROR
+
+        @see @ref select_option_recursive
+
+        @since %SqlUtil 3.11.0
+    */
+    bool supportsRecursiveQueries() {
+        return !exists getRecursiveQueryUnsupportedReasonImpl();
+    }
+
+    #! Returns the record type of a recursive query
+    /** @param recursive the value of the @ref select_option_recursive "recursive" select option
+        @param opt optional call options; the \c "tablecode" option is used to resolve table names
+
+        @return the fields of the rows of the common table expression: a column of the anchor that is a column of a
+        table, or a @ref SqlUtil::cop_as() "cop_as()" of one, has the type of that column, a
+        @ref SqlUtil::cop_cast() "cop_cast()" the type that it gives, a @ref SqlUtil::cop_value() "cop_value()" the
+        type of its value, and the depth column is an \c int; the type of any other column is \c auto
+
+        @throw RECURSIVE-QUERY-ERROR invalid recursive query, or the database does not support recursive queries
+
+        @see @ref select_option_recursive
+
+        @since %SqlUtil 3.11.0
+    */
+    hash<string, AbstractDataField> getRecursiveQueryRecordType(hash<auto> recursive, *hash<auto> opt) {
+        if (!columns) {
+            l.lock();
+            on_exit l.unlock();
+            getColumnsUnlocked();
+        }
+        hash<auto> rq = prepareRecursiveQueryIntern(recursive, opt);
+        AbstractTable cte = rq.cte;
+        hash<string, AbstractDataField> rv();
+        foreach string col in (rq.columns) {
+            string key = col.lwr();
+            if (col == rq.depth) {
+                rv{key} = new QoreDataField(key, "the depth of the row in the recursive query", IntType);
+            } else if (rq.typed{col}) {
+                rv{key} = cte.getColumnDataField(col);
+            } else {
+                rv{key} = new QoreDataField(key, "a column of the recursive query", AutoType);
+            }
+        }
+        return rv;
+    }
+
+    #! Returns @ref nothing if the database supports recursive queries, otherwise why it does not
+    /** The default implementation returns that the driver does not support them; a driver whose database supports
+        them overrides it
+
+        @return @ref nothing if the database supports the @ref select_option_recursive "recursive" select option,
+        otherwise a description of why it does not, for the message of \c RECURSIVE-QUERY-ERROR
+
+        @since %SqlUtil 3.11.0
+    */
+    private *string getRecursiveQueryUnsupportedReasonImpl() {
+        return sprintf("the %s driver does not support recursive queries", ds.getDriverName());
+    }
+
+    #! Returns the SQL keyword(s) that start the WITH clause of a recursive query
+    /** @return \c "with recursive" by default; a driver whose database has no \c RECURSIVE keyword overrides it
+
+        @since %SqlUtil 3.11.0
+    */
+    private string getRecursiveWithSqlImpl() {
+        return "with recursive";
+    }
+
+    #! Returns @ref True if the database supports \c UNION (without \c ALL) between the anchor and the step of a recursive query
+    /** @since %SqlUtil 3.11.0
+    */
+    private bool recursiveQuerySupportsUnionDistinctImpl() {
+        return True;
+    }
+
+    #! Returns the largest \c max_depth of a recursive query that the database can run, or @ref nothing if it has no limit
+    /** @since %SqlUtil 3.11.0
+    */
+    private *int getRecursiveQueryMaxDepthLimitImpl() {
+    }
+
+    #! Returns the SQL of a recursive query from its WITH clause and the select from its common table expression
+    /** The default implementation returns the WITH clause followed by the select; a driver overrides it to add a
+        clause for the recursion limit of the database
+
+        @param with_sql the WITH clause, with the common table expression
+        @param select_sql the select from the common table expression
+        @param rq the prepared recursive query; \c max_depth is the depth limit of the query, if any
+
+        @return the SQL of the recursive query
+
+        @since %SqlUtil 3.11.0
+    */
+    private string getRecursiveQuerySqlImpl(string with_sql, string select_sql, hash<auto> rq) {
+        return with_sql + " " + select_sql;
+    }
+
+    #! the prefix of the key of the depth limit in the where hash of the step of a recursive query
+    /** a disposable unique prefix, which is removed from the column name (see @ref where_clauses)
+    */
+    const RecursiveDepthWherePrefix = "35440:";
+
+    #! Marks the object as the common table expression of a recursive query
+    private setRecursiveCte() {
+        recursive_cte = True;
+    }
+
+    #! Returns the SQL of a recursive query (issue #3544)
+    private string getRecursiveSelectSqlIntern(hash<auto> qh, reference<list<auto>> args, *hash<auto> opt) {
+        foreach string key in (RecursiveQueryRefusedOptions) {
+            if (exists qh{key}) {
+                throw "RECURSIVE-QUERY-ERROR", sprintf("%s: the %y select option cannot be combined with the "
+                    "\"recursive\" select option", getDesc(), key);
+            }
+        }
+        hash<auto> rq = prepareRecursiveQueryIntern(qh.recursive, opt);
+        if (!exists args) {
+            args = ();
+        }
+        AbstractTable anchor_table = rq.anchor_table;
+        AbstractTable step_table = rq.step_table;
+        AbstractTable cte = rq.cte;
+        # the values are bound in the order of the SQL: the anchor, the step and the select from the CTE
+        string anchor_sql = anchor_table.getSelectSqlStringIntern(rq.anchor, \args, opt);
+        string step_sql = step_table.getSelectSqlStringIntern(rq.step, \args, opt);
+        string select_sql = cte.getSelectSqlStringIntern(qh - "recursive", cte.getSqlName(), \args, NOTHING, opt);
+        string with_sql = sprintf("%s %s (%s) as (%s %s %s)", getRecursiveWithSqlImpl(), cte.getSqlName(),
+            (foldl $1 + ", " + $2, (map cte.getColumnSqlName($1), rq.columns)), anchor_sql,
+            rq.union_all ? "union all" : "union", step_sql);
+        return getRecursiveQuerySqlImpl(with_sql, select_sql, rq);
+    }
+
+    #! Validates a recursive query and prepares its parts (issue #3544)
+    /** @return a hash with the following keys:
+        - \c cte: the table object that stands for the common table expression
+        - \c name: the name of the common table expression
+        - \c columns: the columns of the common table expression, with the depth column, if any
+        - \c typed: the columns whose type is known
+        - \c anchor_table, \c anchor: the table and the select option hash of the anchor
+        - \c step_table, \c step: the table and the select option hash of the step, joined with the common table
+          expression
+        - \c union_all: @ref True for \c UNION \c ALL
+        - \c depth: the depth column, if any
+        - \c max_depth: the depth limit, if any
+    */
+    private hash<auto> prepareRecursiveQueryIntern(hash<auto> recursive, *hash<auto> opt) {
+        if (*hash<auto> unknown = recursive - keys RecursiveQueryKeys) {
+            throw "RECURSIVE-QUERY-ERROR", sprintf("%s: the \"recursive\" select option has unknown key(s) %y; "
+                "known keys: %y", getDesc(), keys unknown, keys RecursiveQueryKeys);
+        }
+        if (*string why = getRecursiveQueryUnsupportedReasonImpl()) {
+            throw "RECURSIVE-QUERY-ERROR", sprintf("%s: %s", getDesc(), why);
+        }
+
+        # the name of the CTE and its columns
+        auto name = recursive.name ?? RecursiveQueryDefaultName;
+        checkRecursiveQueryName(name, "the name of the common table expression");
+        if (recursive.columns.typeCode() != NT_LIST || !recursive.columns) {
+            throw "RECURSIVE-QUERY-ERROR", sprintf("%s: the \"columns\" key of the \"recursive\" select option must "
+                "give the list of the columns of the common table expression; got %y instead", getDesc(),
+                recursive.columns);
+        }
+        list<string> cols = ();
+        hash<string, bool> col_map;
+        foreach auto col in (recursive.columns) {
+            checkRecursiveQueryName(col, "a column of the common table expression");
+            if (col_map{col.lwr()}) {
+                throw "RECURSIVE-QUERY-ERROR", sprintf("%s: the column %y of the common table expression is given "
+                    "more than once", getDesc(), col);
+            }
+            col_map{col.lwr()} = True;
+            cols += col;
+        }
+
+        # the depth column and limit
+        *string depth;
+        if (exists recursive.depth) {
+            checkRecursiveQueryName(recursive.depth, "the depth column");
+            depth = recursive.depth;
+            if (col_map{depth.lwr()}) {
+                throw "RECURSIVE-QUERY-ERROR", sprintf("%s: the depth column %y is also a column of the common table "
+                    "expression", getDesc(), depth);
+            }
+        }
+        *int max_depth;
+        if (exists recursive.max_depth) {
+            if (recursive.max_depth.typeCode() != NT_INT || recursive.max_depth < 0) {
+                throw "RECURSIVE-QUERY-ERROR", sprintf("%s: the \"max_depth\" key of the \"recursive\" select option "
+                    "must be an integer that is not negative; got %y instead", getDesc(), recursive.max_depth);
+            }
+            if (!depth) {
+                throw "RECURSIVE-QUERY-ERROR", sprintf("%s: the \"max_depth\" key of the \"recursive\" select option "
+                    "needs the \"depth\" key, which gives the depth column", getDesc());
+            }
+            max_depth = recursive.max_depth;
+            *int limit = getRecursiveQueryMaxDepthLimitImpl();
+            if (exists limit && max_depth > limit) {
+                throw "RECURSIVE-QUERY-ERROR", sprintf("%s: the %s driver runs recursive queries to a depth of at "
+                    "most %d; \"max_depth\" is %d", getDesc(), ds.getDriverName(), limit, max_depth);
+            }
+        }
+
+        # UNION ALL or UNION
+        bool union_all;
+        switch (recursive."union") {
+            case NOTHING:
+            case "all":
+                union_all = True;
+                break;
+            case "distinct":
+                if (!recursiveQuerySupportsUnionDistinctImpl()) {
+                    throw "RECURSIVE-QUERY-ERROR", sprintf("%s: the %s driver needs UNION ALL in a recursive query; "
+                        "use \"union\": \"all\" with \"depth\" and \"max_depth\"", getDesc(), ds.getDriverName());
+                }
+                union_all = False;
+                break;
+            default:
+                throw "RECURSIVE-QUERY-ERROR", sprintf("%s: the \"union\" key of the \"recursive\" select option "
+                    "must be \"all\" or \"distinct\"; got %y instead", getDesc(), recursive."union");
+        }
+
+        # the anchor and the step
+        AbstractTable anchor_table;
+        hash<auto> anchor = getRecursiveQueryMemberIntern("anchor", recursive.anchor, cols.size(), opt,
+            \anchor_table);
+        AbstractTable step_table;
+        hash<auto> step = getRecursiveQueryMemberIntern("step", recursive.step, cols.size(), opt, \step_table);
+
+        # the descriptions of the columns of the CTE from the anchor's columns
+        hash<string, hash<auto>> desc_columns;
+        hash<string, bool> typed;
+        foreach string col in (cols) {
+            *hash<auto> cdesc = getRecursiveQueryColumnDescIntern(anchor_table, anchor, anchor.columns[$#], opt);
+            if (cdesc) {
+                typed{col} = True;
+            } else {
+                # an expression of an unknown type; the description is only used to name the column
+                cdesc = {"qore_type": Type::String, "size": 4000};
+            }
+            desc_columns{col} = cdesc;
+        }
+        if (depth) {
+            desc_columns{depth} = {"qore_type": Type::Int, "notnull": True};
+            cols += depth;
+        }
+        AbstractTable cte = new Table(ds, {"columns": desc_columns}, name).getTable();
+        cte.setRecursiveCte();
+
+        # the step references the CTE by a join
+        *string cte_alias;
+        foreach hash<auto> i in (step.join.pairIterator()) {
+            if (i.value.typeCode() != NT_HASH || !i.value.opt.recursive_cte) {
+                continue;
+            }
+            if (cte_alias) {
+                throw "RECURSIVE-QUERY-ERROR", sprintf("%s: the step of the recursive query joins the common table "
+                    "expression more than once", getDesc());
+            }
+            cte_alias = i.value.alias;
+            step.join{i.key}.table = cte;
+            remove step.join{i.key}.opt;
+        }
+        if (!cte_alias) {
+            throw "RECURSIVE-QUERY-ERROR", sprintf("%s: the step of the recursive query does not join the common "
+                "table expression; use join_inner_recursive() or join_left_recursive() in its \"join\" option",
+                getDesc());
+        }
+
+        if (depth) {
+            # the anchor's rows have depth 0, and each step adds 1
+            anchor.columns = appendRecursiveQueryColumn(anchor.columns, cop_value(0));
+            step.columns = appendRecursiveQueryColumn(step.columns, cop_plus(cte_alias + "." + depth, cop_value(1)));
+            if (exists max_depth) {
+                hash<auto> cond = {cte_alias + "." + depth: op_lt(max_depth)};
+                switch (step."where".typeCode()) {
+                    case NT_NOTHING:
+                        step."where" = cond;
+                        break;
+                    case NT_LIST:
+                        # a list of conditions is an "or" of them: the limit is added to each
+                        step."where" = map {RecursiveDepthWherePrefix + cte_alias + "." + depth: op_lt(max_depth)}
+                            + $1, step."where";
+                        break;
+                    default:
+                        if (step."where" instanceof hash<DataProviderExpression>) {
+                            throw "RECURSIVE-QUERY-ERROR", sprintf("%s: the where clause of the step of a recursive "
+                                "query with \"max_depth\" must be a where hash or a list of where hashes; got a "
+                                "DPQL expression", getDesc());
+                        }
+                        step."where" = {RecursiveDepthWherePrefix + cte_alias + "." + depth: op_lt(max_depth)}
+                            + step."where";
+                        break;
+                }
+            }
+        }
+
+        return {
+            "cte": cte,
+            "name": name,
+            "columns": cols,
+            "typed": typed,
+            "anchor_table": anchor_table,
+            "anchor": anchor,
+            "step_table": step_table,
+            "step": step,
+            "union_all": union_all,
+            "depth": depth,
+            "max_depth": max_depth,
+        };
+    }
+
+    #! Returns the given columns of a select with another column, in a list that can hold any column
+    private static list<auto> appendRecursiveQueryColumn(list<auto> cols, auto col) {
+        list<auto> rv = ();
+        foreach auto c in (cols) {
+            push rv, c;
+        }
+        push rv, col;
+        return rv;
+    }
+
+    #! Checks the name of the common table expression of a recursive query or of one of its columns
+    private checkRecursiveQueryName(auto name, string what) {
+        if (name.typeCode() != NT_STRING) {
+            throw "RECURSIVE-QUERY-ERROR", sprintf("%s: %s must be a string; got type %y instead", getDesc(), what,
+                name.type());
+        }
+        AbstractSqlUtilBase::checkIdentifier(name, ds.getDriverName());
+        # a name with a dot is read as an alias and a column in a column reference
+        if (name =~ /\./ || name =~ /^[0-9]+:/) {
+            throw "RECURSIVE-QUERY-ERROR", sprintf("%s: %s %y cannot have a \".\" or start with digits and a \":\"",
+                getDesc(), what, name);
+        }
+    }
+
+    #! Returns the select option hash of the anchor or the step of a recursive query, with its table
+    private hash<auto> getRecursiveQueryMemberIntern(string key, auto member, int count, *hash<auto> opt,
+            reference<AbstractTable> t) {
+        if (member.typeCode() != NT_HASH) {
+            throw "RECURSIVE-QUERY-ERROR", sprintf("%s: the %y key of the \"recursive\" select option expects a "
+                "select option hash or a hash with \"table\" and \"select\" keys; got type %y instead", getDesc(),
+                key, member.type());
+        }
+        t = self;
+        *hash<auto> sh;
+        if (member.hasKey("table") || member.hasKey("select")) {
+            if (*hash<auto> other = member - ("table", "select")) {
+                throw "RECURSIVE-QUERY-ERROR", sprintf("%s: the %y key of the \"recursive\" select option has a hash "
+                    "with unknown keys %y; expecting \"table\" and \"select\"", getDesc(), key, keys other);
+            }
+            if (exists member.table) {
+                t = getSetOperandTableIntern(key, member.table, opt);
+                validateSetOperationDatasource(t, "recursive query " + key);
+            }
+            if (member.select.typeCode() != NT_HASH) {
+                throw "RECURSIVE-QUERY-ERROR", sprintf("%s: the \"select\" key of the %y of the recursive query "
+                    "expects a select option hash; got type %y instead", getDesc(), key, member.select.type());
+            }
+            sh = member.select;
+        } else {
+            sh = member;
+        }
+        t.validateOptionsIntern("OPTION-ERROR", t.getSelectOptions(), \sh);
+        foreach string opt_key in (RecursiveQueryMemberRefusedOptions) {
+            if (exists sh{opt_key}) {
+                throw "RECURSIVE-QUERY-ERROR", sprintf("%s: the %y of a recursive query cannot have the %y select "
+                    "option", getDesc(), key, opt_key);
+            }
+        }
+        if (sh.columns.typeCode() != NT_LIST || sh.columns.size() != count) {
+            throw "RECURSIVE-QUERY-ERROR", sprintf("%s: the %y of the recursive query must give a list of %d "
+                "column(s) in its \"columns\" option, one for each column of the common table expression; got %y "
+                "instead", getDesc(), key, count, sh.columns);
+        }
+        return sh;
+    }
+
+    #! Returns the description of the column of a recursive query that the given column of its anchor gives, or @ref nothing if its type is not known
+    private *hash<auto> getRecursiveQueryColumnDescIntern(AbstractTable t, hash<auto> anchor, auto col,
+            *hash<auto> opt) {
+        switch (col.typeCode()) {
+            case NT_STRING: {
+                # a column of the anchor's table or of a table that it joins
+                col =~ s/^[0-9]+://;
+                AbstractTable ct = t;
+                *string prefix = (col =~ x/^(\w+)\..+/)[0];
+                if (prefix) {
+                    splice col, 0, prefix.size() + 1;
+                    if (prefix != anchor.alias) {
+                        *AbstractTable jt = getRecursiveQueryJoinTableIntern(anchor, prefix, opt);
+                        if (!jt) {
+                            return;
+                        }
+                        ct = jt;
+                    }
+                }
+                *AbstractColumn c = ct.describe(){col};
+                if (!c) {
+                    return;
+                }
+                hash<auto> desc = c.getDescriptionHash();
+                # the description gives the type of the column only
+                return desc{"qore_type", "native_type", "size", "scale"};
+            }
+            case NT_HASH: {
+                switch (col.cop) {
+                    case COP_AS:
+                        return getRecursiveQueryColumnDescIntern(t, anchor, col.column, opt);
+                    case COP_CAST: {
+                        string type = col.arg[0];
+                        hash<auto> desc;
+                        if (RecursiveQueryCastTypes{type.lwr()}) {
+                            desc.qore_type = RecursiveQueryCastTypes{type.lwr()};
+                        } else {
+                            desc.native_type = type;
+                        }
+                        if (exists col.arg[1] && col.arg[1] != "*") {
+                            desc.size = col.arg[1];
+                        }
+                        if (exists col.arg[2]) {
+                            desc.scale = col.arg[2];
+                        }
+                        if (desc.qore_type == Type::String && !exists desc.size) {
+                            desc.size = 4000;
+                        }
+                        return desc;
+                    }
+                    case COP_VALUE: {
+                        switch (col.arg.typeCode()) {
+                            case NT_INT: return {"qore_type": Type::Int};
+                            case NT_FLOAT: return {"qore_type": Type::Float};
+                            case NT_NUMBER: return {"qore_type": Type::Number};
+                            case NT_DATE: return {"qore_type": Type::Date};
+                            case NT_STRING: return {"qore_type": Type::String, "size": max(col.arg.length(), 1)};
+                        }
+                        return;
+                    }
+                }
+                return;
+            }
+        }
+    }
+
+    #! Returns the table that the anchor of a recursive query joins with the given alias or name, if any
+    private *AbstractTable getRecursiveQueryJoinTableIntern(hash<auto> anchor, string alias, *hash<auto> opt) {
+        foreach auto js in (anchor.join.iterator()) {
+            if (js.typeCode() != NT_HASH) {
+                continue;
+            }
+            auto table = js.table;
+            *string jname = js.alias;
+            if (!jname) {
+                if (table.typeCode() == NT_STRING) {
+                    jname = table;
+                } else if (table instanceof AbstractTable || table instanceof Table) {
+                    jname = table.getName();
+                }
+            }
+            if (jname != alias) {
+                continue;
+            }
+            if (table.typeCode() == NT_STRING) {
+                return getSubtableFromString(table, opt);
+            }
+            if (table instanceof AbstractTable) {
+                return table;
+            }
+            if (table instanceof Table) {
+                return cast<Table>(table).getTable();
+            }
+        }
     }
 
     #! Returns the SQL keyword of a set operator
@@ -13257,6 +13803,11 @@ on_exit printf("SQL> %s\n", sql);
         validateSetOperationDatasource(source, operation);
 
         source.validateOptionsIntern("OPTION-ERROR", source.getSelectOptions(), \select_hash);
+        # issue #3544: not yet supported; see issue #6495
+        if (exists select_hash.recursive) {
+            throw "RECURSIVE-QUERY-ERROR", sprintf("%s: the \"recursive\" select option is not supported by "
+                "%s", getDesc(), operation);
+        }
         args = ();
         return source.getSelectSqlStringIntern(select_hash, \args, opt);
     }

@@ -1107,6 +1107,12 @@
     and order and page the combined result; see @ref select_option_set_operators
     (<a href="https://github.com/qoretechnologies/qore/issues/2961">issue 2961</a>).
 
+    @par Recursive Queries in SqlUtil
+    The \c "recursive" select option of @ref sqlutilintro "SqlUtil" and search option of \c DbTableDataProvider
+    run a recursive query (a recursive common table expression) on PostgreSQL, MySQL, MariaDB, Oracle, SQL Server,
+    Firebird and SQLite, with each database's SQL and recursion limits; see @ref select_option_recursive
+    (<a href="https://github.com/qoretechnologies/qore/issues/3544">issue 3544</a>).
+
     @par Language and Runtime
     @parblock
     - @ref modern "%modern" bundles new-style syntax, required types, strict arguments, strong encapsulation and all

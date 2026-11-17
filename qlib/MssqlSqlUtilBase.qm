@@ -186,6 +186,9 @@ hash<auto> desc = {
     schema alignment.
 
     @subsection MssqlSqlUtilBasev11 MssqlSqlUtilBase v1.1
+    - implemented @ref select_option_recursive "recursive queries" on SQL Server; a query with a \c max_depth sets the
+      recursion limit of the statement to it with \c MAXRECURSION; Sybase raises \c RECURSIVE-QUERY-ERROR
+      (<a href="https://github.com/qoretechnologies/qore/issues/3544">issue 3544</a>)
     - the triggers of a table on SQL Server are read from the database: a table with triggers is aligned with no
       change, and a changed trigger, or an encrypted one, whose definition cannot be read, is dropped and created;
       each alignment created the triggers again, which failed as they existed.  A trigger of the table that the
@@ -2070,6 +2073,11 @@ public class MssqlDatabase inherits SqlUtil::AbstractDatabase {
 
 #! provides the Mssql-specific implementation of the SqlUtil::AbstractTable interface
 public class MssqlTable inherits SqlUtil::AbstractTable {
+    #! the largest recursion limit that the \c MAXRECURSION hint of SQL Server can give
+    /** @since MssqlSqlUtilBase 1.1
+    */
+    const MssqlMaxRecursionLimit = 32767;
+
     public {
         #! sybase flag
         bool is_sybase;
@@ -2842,7 +2850,53 @@ public class MssqlTable inherits SqlUtil::AbstractTable {
 
     #! returns the name of the table to be used in SQL (with a possible qualifiers for schema, etc)
     string getSqlName() {
+        # issue #3544: the common table expression of a recursive query has no schema
+        if (recursive_cte) {
+            return mssql_get_sql_identifier(name);
+        }
         return mssql_get_sql_identifier(schema) + "." + mssql_get_sql_identifier(name);
+    }
+
+    #! Returns @ref nothing for SQL Server, which supports recursive queries; Sybase does not
+    /** @since MssqlSqlUtilBase 1.1
+    */
+    private *string getRecursiveQueryUnsupportedReasonImpl() {
+        if (is_sybase) {
+            return "the Sybase database does not support recursive queries";
+        }
+    }
+
+    #! Returns \c "with": SQL Server has no \c RECURSIVE keyword
+    /** @since MssqlSqlUtilBase 1.1
+    */
+    private string getRecursiveWithSqlImpl() {
+        return "with";
+    }
+
+    #! Returns @ref False: a recursive query needs \c UNION \c ALL on SQL Server
+    /** @since MssqlSqlUtilBase 1.1
+    */
+    private bool recursiveQuerySupportsUnionDistinctImpl() {
+        return False;
+    }
+
+    #! Returns the SQL of a recursive query
+    /** SQL Server ends a recursive query with an error after 100 levels of recursion by default: a query with a
+        \c max_depth sets the limit of the statement to it (the limit that runs it exactly) with a \c MAXRECURSION
+        hint, or removes the limit for a \c max_depth above 32767, the largest limit that the hint can give, as
+        \c max_depth bounds the recursion; a query without \c max_depth keeps the default limit
+
+        @since MssqlSqlUtilBase 1.1
+    */
+    private string getRecursiveQuerySqlImpl(string with_sql, string select_sql, hash<auto> rq) {
+        string sql = with_sql + " " + select_sql;
+        if (exists rq.max_depth) {
+            # MAXRECURSION 0 is no limit, so a query with a max_depth of 0 has a limit of 1
+            sql += sprintf(" option (maxrecursion %d)", rq.max_depth > MssqlMaxRecursionLimit
+                ? 0
+                : (rq.max_depth ?: 1));
+        }
+        return sql;
     }
 
     #! returns a name as an SQL identifier for SQL Server and Sybase
