@@ -47,6 +47,29 @@ hash<auto> h = {};
 
     Use @ref exists "exists" (not a comparison with \c 0, \c "" or @ref False) to test whether such a variable has been assigned, or declare it with an @ref int_or_nothing_type "or-nothing type" (\c *int) to say that "no value" is an expected state.
 
+    @anchor variable_initializer_scope
+    @subsection variable_initializer_scope A Variable Has No Value in Its Own Initializer
+    A variable is declared before its initialization expression is evaluated, so the variable is in scope in that expression but has no value there yet; any use of the variable in its own initialization expression is therefore a parse error, in every execution mode and with every set of parse options:
+    @code{.py}
+int a = a + 1;          # parse error: local variable 'a' is used in its own initialization expression
+list<auto> l = (l,);    # parse error
+int y = 5;
+{
+    int y = y + 1;      # parse error: y is the variable declared here, not the y of the outer block
+}
+    @endcode
+
+    This applies to the declarations of local variables (also with @ref my "my" and in old-style programs), to the arguments of an implied constructor call in a declaration (ex: <tt>MyClass c(c);</tt>), to the iterated expression of a @ref foreach "foreach statement" that declares its variable, and to the initialization expressions of class members and static class variables.  The declarations of global variables (@ref our "our" and \c thread_local) are not affected: a global variable keeps its value when its declaration runs again (in a function, a loop, or the top-level code of a @ref Qore::Program "Program" that is run again), so its declaration can use its previous value (ex: <tt>sub counter() { our int n = n + 1; return n; }</tt>).  Neither is a member that redeclares a member that an ancestor class (at any level, in any parent list) declares with an initialization expression and without <tt>private:internal</tt> access: such an initializer runs first, and in the usual case the redeclared member reads the value it assigns.  The parse-time check takes the class's own parent classes into account with any inheritance access, while a <tt>private:internal</tt> member of an ancestor, and the members of an ancestor that another ancestor inherits with <tt>private:internal</tt> access, do not count, and the redeclared member is refused if no other ancestor initializes it.  When such an ancestor is reached both through <tt>private:internal</tt> inheritance and through another path (a diamond), the redeclaration is accepted although it reads no value, as it was before %Qore 3.0.  The use of a variable as an operand of @ref exists "exists" or in a @ref lvalue_references "reference" (<tt>\\a</tt>) is a use as well.  An assignment of a declared variable to itself (<tt>int a = a;</tt>) is reported as an illegal assignment of the variable to itself.
+
+    A use of the variable in the body of a @ref closure "closure" created in the initialization expression is allowed: the closure captures the variable and reads it when it is called, after the variable has been assigned, as in a closure that calls itself:
+    @code{.py}
+code fact = int sub (int n) { return n <= 1 ? 1 : n * fact(n - 1); };
+    @endcode
+
+    A @ref list_assignment "list assignment" that declares variables (ex: <tt>(int x, int y) = (y, 1);</tt>) is not affected: its right-hand side is parsed before its variables are declared, so it uses a variable of the same name that is declared outside of it.
+
+    @since %Qore 3.0 a use of a variable in its own initialization expression is a parse error; before, it read the variable with no value (ex: <tt>int a = a + 1</tt> assigned \c 1)
+
     @subsection readonly_local_variables Read-Only Local Variables
     A local variable can be declared with \c const to make the binding read-only after its initializer has run:
     @code{.py}

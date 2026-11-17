@@ -2928,7 +2928,11 @@ static bool buildValueUseCounts(const QoreIRFunction& func,
             if (inst->result.isValid() && inst->result.id < def_block.size()) {
                 def_block[inst->result.id] = block.get();
                 def_scope[inst->result.id] = inst->temp_scope_id;
-                def_by_call[inst->result.id] = arg_start >= 0 || qore_ir_is_sequence_temp(inst);
+                // a RefSelf gives the value a reference of the frame's own: the value of a fold or of a functional
+                // operator over a single value, whose source has been released (see lowerWithSourceRelease()), which
+                // a call takes over as a call's value (f(foldl $1 + $2, l); issue #6262)
+                def_by_call[inst->result.id] = arg_start >= 0 || qore_ir_is_sequence_temp(inst)
+                    || inst->opcode == QoreIROpcode::RefSelf;
                 def_by_variable_read[inst->result.id] = qore_ir_reads_variable_for_call_arg(inst->opcode);
                 def_inst[inst->result.id] = inst;
                 def_pos[inst->result.id] = static_cast<uint32_t>(inst_pos);
@@ -2963,7 +2967,11 @@ static bool buildValueUseCounts(const QoreIRFunction& func,
                         return;
                     }
                     if (phi_inst) {
-                        ++phi_uses[operand.id];
+                        // a Phi that is its own incoming value on a loop's back edge (the accumulator of foldl $1, l)
+                        // does not use it otherwise: the Phi after the loop can take its value over (issue #6262)
+                        if (operand.id != inst->result.id) {
+                            ++phi_uses[operand.id];
+                        }
                     } else if (def_block[operand.id] != block.get()) {
                         used_elsewhere[operand.id] = 1;
                     }
@@ -2979,6 +2987,13 @@ static bool buildValueUseCounts(const QoreIRFunction& func,
             def_by_call[phi->result.id] = 1;
         }
     }
+    // a new list or hash that the frame owns: a literal, or the result container of map and hash map, which a Phi
+    // takes over as a call's value (the source of a fold, c ? (mk(), mk()) : (); the value of map; issue #6262)
+    auto is_new_container = [](QoreIROpcode op) -> bool {
+        return op == QoreIROpcode::CreateEmptyList || op == QoreIROpcode::CreateSizedList
+            || op == QoreIROpcode::MakeList || op == QoreIROpcode::MakeHash
+            || op == QoreIROpcode::MakeHashConstKeys;
+    };
     for (const QoreIRPhiInstruction* phi : phis) {
         for (const auto& inc : phi->incoming) {
             // the element that an iterator gives owns its slot too (see IteratorNext): the first element of a fold
@@ -2992,7 +3007,8 @@ static bool buildValueUseCounts(const QoreIRFunction& func,
                     && (def_by_call[inc.value.id] || (def_inst[inc.value.id]
                         && (def_inst[inc.value.id]->opcode == QoreIROpcode::IteratorNext
                             || def_inst[inc.value.id]->opcode == QoreIROpcode::AddAny
-                            || def_inst[inc.value.id]->opcode == QoreIROpcode::SubAny)))
+                            || def_inst[inc.value.id]->opcode == QoreIROpcode::SubAny
+                            || is_new_container(def_inst[inc.value.id]->opcode))))
                     && phi_uses[inc.value.id] == 1 && !used_elsewhere[inc.value.id]) {
                 phi_takes_incoming[inc.value.id] = 1;
             }
@@ -3017,8 +3033,9 @@ static bool buildValueUseCounts(const QoreIRFunction& func,
                             || !used_elsewhere[id] || !def_inst[id] || !def_block[id]) {
                         continue;
                     }
+                    // the result container of map and hash map: a new list or hash (issue #6262)
                     if (!def_by_call[id] && def_inst[id]->opcode != QoreIROpcode::IteratorNext
-                            && def_inst[id]->opcode != QoreIROpcode::CreateEmptyList) {
+                            && !is_new_container(def_inst[id]->opcode)) {
                         continue;
                     }
                     candidates[id] = block.get();
@@ -4213,6 +4230,9 @@ private:
     the caller's claim rather than taking a second one.
     @return a state > 0 when the call site may be inlined; any value <= 0 means the caller
     must use the generic call path.
+
+    @note ensureInterpreterResolvedInlineIRCallStateFast() repeats its first two checks (a resolved and an ineligible
+    call site) inline; the two must stay in sync
 */
 template <typename DirectCallInst>
 static int8_t ensureInterpreterResolvedInlineIRCallState(DirectCallInst* inst, const QoreMethod* method,
@@ -4282,6 +4302,39 @@ static int8_t ensureInterpreterResolvedInlineIRCallState(DirectCallInst* inst, c
         ? QORE_IR_INLINE_DIRECT_PARAMS : QORE_IR_INLINE_BOXED_PARAMS;
     inst->inline_ir_state.store(eligible_state, std::memory_order_release);
     return eligible_state;
+}
+
+//! ensureInterpreterResolvedInlineIRCallState() out of line, for the call sites that inline its fast path
+template <typename DirectCallInst>
+static QORE_INTERN_NOINLINE int8_t ensureInterpreterResolvedInlineIRCallStateSlow(DirectCallInst* inst,
+        const QoreMethod* method, const AbstractQoreFunctionVariant* variant, QoreProgram* caller_pgm, int nargs,
+        bool reject_copy_method) {
+    return ensureInterpreterResolvedInlineIRCallState(inst, method, variant, caller_pgm, nargs, reject_copy_method);
+}
+
+//! ensureInterpreterResolvedInlineIRCallState() with its fast paths always inlined
+/** For the call sites inlined into execute(), where GCC does not inline a function of this size, so that whether the
+    fast paths (a resolved call site and an ineligible one) are inlined does not depend on the size of the rest of the
+    single compilation unit (issue #6381)
+
+    @note repeats the first two checks of ensureInterpreterResolvedInlineIRCallState(), which must stay in sync with
+    them (any other state takes the slow path, which checks it again)
+*/
+template <typename DirectCallInst>
+static QORE_INTERN_ALWAYS_INLINE int8_t ensureInterpreterResolvedInlineIRCallStateFast(DirectCallInst* inst,
+        const QoreMethod* method, const AbstractQoreFunctionVariant* variant, QoreProgram* caller_pgm, int nargs,
+        bool reject_copy_method) {
+    int8_t state = inst->inline_ir_state.load(std::memory_order_acquire);
+    if (state > 0 && inst->cached_callee_ir && inst->cached_uvb) {
+        // the acquire load above is the edge that publishes the payload to this thread
+        return state;
+    }
+    // ex: a callee whose code is compiled, which the tiered and JIT modes call through the generic call path
+    if (state == QORE_IR_INLINE_INELIGIBLE) {
+        return QORE_IR_INLINE_INELIGIBLE;
+    }
+    return ensureInterpreterResolvedInlineIRCallStateSlow(inst, method, variant, caller_pgm, nargs,
+        reject_copy_method);
 }
 
 //! Sets the location of a call instruction as the call site of the call that it makes for the scope's lifetime
@@ -6053,8 +6106,13 @@ static bool executeInterpreterInlineIRMethodTarget(DirectMethodInst* inst, const
     return true;
 }
 
+// always inlined into the call sites of execute() (irCallMethodDirect(), irInvokeMethodDirect()), and so also into
+// the cold irCallMethodDirectGiven() and irInvokeMethodDirectGiven() (QoreIRInterpreterGivenArgs.cpp): GCC inlines
+// it, a function not declared inline, only within the limit of --param max-inline-insns-auto, and whether it does
+// depended on the size of the rest of the single compilation unit, as did the cost of the method calls in the IR
+// (issue #6381)
 template <bool GIVEN = false, typename DirectMethodInst>
-static bool tryExecuteInterpreterInlineIRMethod(DirectMethodInst* inst, QoreObject* self,
+static QORE_INTERN_ALWAYS_INLINE bool tryExecuteInterpreterInlineIRMethod(DirectMethodInst* inst, QoreObject* self,
         QoreProgram* caller_pgm, uint64_t* args, int nargs, QoreValue& result, ExceptionSink* xsink,
         bool* may_invalidate_external_caches = nullptr, uint64_t** arg_cleanups = nullptr) {
     if (!self || !caller_pgm) {
@@ -6064,7 +6122,7 @@ static bool tryExecuteInterpreterInlineIRMethod(DirectMethodInst* inst, QoreObje
     if (receiver_type_info && QoreTypeInfo::getParameterizedClassType(receiver_type_info)) {
         return false;
     }
-    int8_t inline_state = ensureInterpreterResolvedInlineIRCallState(
+    int8_t inline_state = ensureInterpreterResolvedInlineIRCallStateFast(
         inst, inst->method, inst->variant, caller_pgm, nargs, true);
     if (inline_state <= 0) {
         return false;

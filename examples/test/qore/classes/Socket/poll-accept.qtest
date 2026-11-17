@@ -18,7 +18,10 @@
     pending in the accept queue.
 
     The test creates listener sockets, connects clients, and verifies that
-    poll() detects the pending connections promptly.
+    poll() detects the pending connections.  It makes no timing assumption: the server side of a connection becomes
+    acceptable when the kernel has processed the client's final ACK, which on a loaded machine can take any time, so
+    each poll waits for readiness with a timeout that only guards against a hang; a poll that misses the
+    level-triggered event of a pending connection fails at that timeout (issue #6416).
 */
 class PollAcceptTest inherits QUnit::Test {
     public {
@@ -28,8 +31,8 @@ class PollAcceptTest inherits QUnit::Test {
         # Number of listeners for multi-listener test
         const NumListeners = 6;
 
-        # Maximum time (ms) poll() should take to detect a pending connection
-        const MaxPollTime = 100;
+        # The timeout (ms) of a poll for a pending connection; only a guard against a hang
+        const PollHangGuard = 30000;
     }
 
     constructor() : Test("PollAcceptTest", "1.0") {
@@ -53,44 +56,16 @@ class PollAcceptTest inherits QUnit::Test {
         client.setNoDelay(True);
         client.connectINET(info.address, info.port, 10s, info.family);
 
-        # Small delay to ensure connection is in accept queue
-        usleep(10000);  # 10ms
-
         # Poll should detect the pending connection
         list<hash<SocketPollInfo>> poll_list = (
             cast<hash<SocketPollInfo>>({"events": SOCK_POLLIN, "socket": listener}),
         );
 
-        # NOTE: elapsed time must be measured with the monotonic clock; now_us() reads CLOCK_REALTIME and
-        # is subject to NTP steps on virtualized CI runners
-        int start_us = clock_get_monotonic_us();
-        list<auto> ready = Socket::poll(poll_list, MaxPollTime);
-        date elapsed = microseconds(clock_get_monotonic_us() - start_us);
-
-        if (!ready) {
-            # poll() returned empty - check if accept would succeed anyway
-            bool accept_would_work = False;
-            try {
-                # Try non-blocking accept
-                *Socket accepted = listener.accept(0);
-                if (accepted) {
-                    accept_would_work = True;
-                }
-            } catch (hash<ExceptionInfo> ex) {
-                # No connection or timeout - expected
-            }
-            if (accept_would_work) {
-                # BUG: poll() failed to detect the pending connection!
-                fail("poll() failed to detect pending accept - accept() succeeded after poll() timeout "
-                    + sprintf("(poll returned empty after %y)", elapsed));
-                return;
-            }
+        list<auto> ready = Socket::poll(poll_list, PollHangGuard);
+        if (ready.size() != 1) {
+            fail(sprintf("poll() should detect the pending accept; it reported %d socket(s)", ready.size()));
+            return;
         }
-
-        assertEq(1, ready.size(), "poll() should detect pending accept");
-        # poll() must return because it detected readiness, not because it hit its own timeout
-        assertTrue(elapsed < milliseconds(MaxPollTime),
-            sprintf("poll() should return before its %dms timeout (took %y)", MaxPollTime, elapsed));
 
         # Clean up - accept the connection
         Socket accepted = listener.accept(0);
@@ -118,42 +93,17 @@ class PollAcceptTest inherits QUnit::Test {
         client.setNoDelay(True);
         client.connectINET(target_info.address, target_info.port, 10s, target_info.family);
 
-        # Small delay
-        usleep(10000);
-
         # Poll all listeners
         list<hash<SocketPollInfo>> poll_list = ();
         foreach Socket l in (listeners) {
             push poll_list, cast<hash<SocketPollInfo>>({"events": SOCK_POLLIN, "socket": l});
         }
 
-        # NOTE: monotonic clock; see testBasicPollAccept()
-        int start_us = clock_get_monotonic_us();
-        list<auto> ready = Socket::poll(poll_list, MaxPollTime);
-        date elapsed = microseconds(clock_get_monotonic_us() - start_us);
-
-        if (!ready) {
-            # Check if accept would succeed on target listener
-            bool accept_would_work = False;
-            try {
-                *Socket accepted = listeners[target_idx].accept(0);
-                if (accepted) {
-                    accept_would_work = True;
-                }
-            } catch (hash<ExceptionInfo> ex) {
-                # Expected if no connection
-            }
-            if (accept_would_work) {
-                fail(sprintf("poll() on %d listeners returned empty after %y but accept() "
-                    "succeeded on listener %d", NumListeners, elapsed, target_idx));
-                return;
-            }
+        list<auto> ready = Socket::poll(poll_list, PollHangGuard);
+        if (ready.size() != 1) {
+            fail(sprintf("poll() should detect exactly one pending accept; it reported %d socket(s)", ready.size()));
+            return;
         }
-
-        assertEq(1, ready.size(), "poll() should detect exactly one pending accept");
-        # poll() must return because it detected readiness, not because it hit its own timeout
-        assertTrue(elapsed < milliseconds(MaxPollTime),
-            sprintf("poll() should return before its %dms timeout (took %y)", MaxPollTime, elapsed));
 
         # Verify it's the correct listener
         string ready_hash = ready[0].socket.uniqueHash();
@@ -167,9 +117,6 @@ class PollAcceptTest inherits QUnit::Test {
 
     #! Stress test - run multiple iterations to catch intermittent failures
     testStressPollAccept() {
-        int failures = 0;
-        int false_negatives = 0;  # poll() missed but accept() worked
-
         for (int iter = 0; iter < Iterations; ++iter) {
             Socket listener();
             listener.bind("localhost:0");
@@ -180,38 +127,19 @@ class PollAcceptTest inherits QUnit::Test {
             client.setNoDelay(True);
             client.connectINET(info.address, info.port, 10s, info.family);
 
-            usleep(5000);  # 5ms
-
             list<hash<SocketPollInfo>> poll_list = (
                 cast<hash<SocketPollInfo>>({"events": SOCK_POLLIN, "socket": listener}),
             );
 
-            list<auto> ready = Socket::poll(poll_list, MaxPollTime);
-
-            if (!ready) {
-                ++failures;
-                # Check if it's a false negative
-                try {
-                    *Socket accepted = listener.accept(0);
-                    if (accepted) {
-                        ++false_negatives;
-                    }
-                } catch () {
-                    # Expected
-                }
-            } else {
-                # Clean up
-                Socket accepted = listener.accept(0);
+            list<auto> ready = Socket::poll(poll_list, PollHangGuard);
+            if (ready.size() != 1) {
+                fail(sprintf("poll() did not detect the pending accept of iteration %d of %d", iter + 1,
+                    Iterations));
+                return;
             }
+            Socket accepted = listener.accept(0);
+            assertTrue(accepted.isOpen(), sprintf("iteration %d: the accepted socket is open", iter + 1));
         }
-
-        if (false_negatives > 0) {
-            fail(sprintf("poll() missed %d/%d pending accepts (accept() succeeded after poll() timeout)",
-                false_negatives, Iterations));
-            return;
-        }
-
-        assertEq(0, failures, sprintf("poll() should detect all pending accepts (%d iterations)", Iterations));
     }
 
     #! Test that verifies a non-blocking accept() returns NOTHING without a connection and a pending connection

@@ -16,7 +16,7 @@
 
 %exec-class CompoundAssignmentAstParityPart13
 
-#! runs part 13 of 28 of the cases of CompoundAssignmentAstParityBase: /=: the ir mode and the qcc-compiled executable
+#! runs part 13 of 70 of CompoundAssignmentAstParityBase: -=: the jit mode, slice 2 of 3 of the functions
 class CompoundAssignmentAstParityPart13 inherits CompoundAssignmentAstParityBase {
     constructor() : CompoundAssignmentAstParityBase("CompoundAssignmentAstParityPart13", 13) {
     }

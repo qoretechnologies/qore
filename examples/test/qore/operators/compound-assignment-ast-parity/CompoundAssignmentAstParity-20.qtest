@@ -16,7 +16,7 @@
 
 %exec-class CompoundAssignmentAstParityPart20
 
-#! runs part 20 of 28 of the cases of CompoundAssignmentAstParityBase: %= |=: the default mode
+#! runs part 20 of 70 of CompoundAssignmentAstParityBase: -=: the default mode, slice 3 of 3 of the functions
 class CompoundAssignmentAstParityPart20 inherits CompoundAssignmentAstParityBase {
     constructor() : CompoundAssignmentAstParityBase("CompoundAssignmentAstParityPart20", 20) {
     }

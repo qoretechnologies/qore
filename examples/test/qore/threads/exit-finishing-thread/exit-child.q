@@ -8,8 +8,8 @@
 %require-types
 %strict-args
 
-# the thread is held for up to 3 seconds after it has released its TID
-call_function("dbg_hold_next_thread_finish", 3000);
+# the thread is held for up to 30 seconds after it has released its TID
+call_function("dbg_hold_next_thread_finish", 30000);
 Counter c(1);
 background sub () { c.dec(); }();
 c.waitForZero();

@@ -34,6 +34,7 @@
 #include <qore/Qore.h>
 #include "qore/intern/QoreHttpBodyCharset.h"
 #include "qore/intern/QoreHttpHeaderPairs.h"
+#include "qore/intern/qore_encoding_private.h"
 
 #include <cctype>
 #include <iconv.h>
@@ -567,59 +568,185 @@ QoreHttpContentTypeInfo qore_get_http_content_type_info(const char* content_type
     return rv;
 }
 
+// skips optional whitespace (RFC 9110 section 5.6.3)
+static const char* skip_http_ows(const char* p) {
+    while (*p == ' ' || *p == '\t') {
+        ++p;
+    }
+    return p;
+}
+
+// returns true if c is a token character (tchar, RFC 9110 section 5.6.2)
+static bool is_http_tchar(char c) {
+    return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9')
+        || (c && strchr("!#$%&'*+-.^_`|~", c));
+}
+
+// returns the end of the token at p (p if there is none)
+static const char* skip_http_token(const char* p) {
+    while (is_http_tchar(*p)) {
+        ++p;
+    }
+    return p;
+}
+
+// returns the weight of a qvalue (RFC 9110 section 12.4.2: "0" [ "." 0*3DIGIT ] / "1" [ "." 0*3("0") ]) in
+// thousandths, or -1 if [p, end) is not a qvalue
+static int parse_http_qvalue(const char* p, const char* end) {
+    if (p == end || (*p != '0' && *p != '1')) {
+        return -1;
+    }
+    int rv = (*p++ - '0') * 1000;
+    if (p == end) {
+        return rv;
+    }
+    if (*p++ != '.') {
+        return -1;
+    }
+    int scale = 100;
+    if (end - p > 3) {
+        return -1;
+    }
+    for (; p < end; ++p, scale /= 10) {
+        if (!isdigit(static_cast<unsigned char>(*p))) {
+            return -1;
+        }
+        rv += (*p - '0') * scale;
+    }
+    return rv > 1000 ? -1 : rv;
+}
+
+// returns true if the response can be sent in the charset: an encoding that Qore knows already (by its name or an
+// alias, case-insensitive) and that iconv converts to, by the name that Qore converts with; the value is untrusted
+// request data, and the server registers the encoding that it chooses, so a name that Qore does not know is never
+// chosen (iconv also accepts names with characters that it ignores, so that it would accept an unbounded number of
+// them)
+static bool is_supported_http_charset(const std::string& name) {
+    const QoreEncoding* enc = QoreEncodingManager::find(name.c_str());
+    if (!enc) {
+        return false;
+    }
+    iconv_t cd = iconv_open(qore_encoding_private::get(*enc)->getIconvTargetCode(), "UTF-8");
+    if (cd == (iconv_t)-1) {
+        return false;
+    }
+    iconv_close(cd);
+    return true;
+}
+
 std::string qore_get_http_accept_charset(const char* t) {
     assert(t);
-    // see if we have "*" or utf8 or utf-8, in which case set it
-    // otherwise set the first charset in the list
-    const char* a = t;
-    const char* div = nullptr;
-    bool utf8 = false;
-    bool ok = true;
-    while (*a) {
-        if (ok) {
-            if (*a == '*') {
-                utf8 = true;
+    // RFC 9110 section 12.5.2: Accept-Charset = #( ( token / "*" ) weight ), weight = OWS ";" OWS "q=" qvalue
+    // (section 12.4.2), and the list syntax of section 5.6.1: elements separated by commas with optional whitespace,
+    // empty elements ignored
+    // the acceptable charset with the highest weight that is supported, and its weight; an equal weight keeps the
+    // earlier one
+    std::string best;
+    int best_q = 0;
+    // the weights of "*" and UTF-8, if given (the first occurrence), else -1
+    int star_q = -1;
+    int utf8_q = -1;
+    const char* p = t;
+    while (*p) {
+        p = skip_http_ows(p);
+        // the charset: a token or "*"; "*" is a token character
+        const char* name = p;
+        p = skip_http_token(p);
+        std::string cs(name, p - name);
+        // the parameters: only the weight ("q", case-insensitive; 1 without it) is defined; any other parameter is
+        // ignored, with a token or quoted-string value (section 5.6.6)
+        int q = 1000;
+        bool valid = true;
+        // the parameters are parsed to the end after an error too, so that a comma in a quoted string never ends the
+        // element
+        while (true) {
+            p = skip_http_ows(p);
+            if (*p != ';') {
                 break;
             }
-            ok = false;
-            if (*a == 'u' || *a == 'U') {
-                ++a;
-                if (*a == 't' || *a == 'T') {
-                    ++a;
-                    if (*a == 'f' || *a == 'F') {
-                        ++a;
-                        if (*a == '-') {
-                            ++a;
-                        }
-                        if (*a == '8') {
-                            utf8 = true;
-                            break;
-                        }
-                    }
+            p = skip_http_ows(p + 1);
+            const char* pname = p;
+            p = skip_http_token(p);
+            bool is_q = p - pname == 1 && (*pname == 'q' || *pname == 'Q');
+            if (p == pname || *p != '=') {
+                // a parameter without a name or a value (a trailing ";" is allowed)
+                if (p != pname || (*p != ',' && *p && *p != ' ' && *p != '\t')) {
+                    valid = false;
+                    break;
                 }
                 continue;
             }
-        } else if (*a == ',') {
-            if (!div) {
-                div = a;
+            ++p;
+            const char* val = p;
+            if (*p == '"') {
+                // a quoted-string: up to the closing quote, with backslash escapes
+                for (++p; *p && *p != '"'; ++p) {
+                    if (*p == '\\' && p[1]) {
+                        ++p;
+                    }
+                }
+                if (*p != '"') {
+                    valid = false;
+                    break;
+                }
+                ++p;
+                if (is_q) {
+                    valid = false;
+                }
+                continue;
             }
-            ok = true;
-        } else if (*a == ';') {
-            if (!div) {
-                div = a;
+            p = skip_http_token(p);
+            if (is_q) {
+                int pq = parse_http_qvalue(val, p);
+                if (pq < 0) {
+                    valid = false;
+                } else {
+                    q = pq;
+                }
+            } else if (p == val) {
+                valid = false;
             }
         }
-        ++a;
+        // anything else before the next comma outside a quoted string makes the element invalid
+        if (*p && *p != ',') {
+            valid = false;
+            bool quoted = false;
+            for (; *p && (quoted || *p != ','); ++p) {
+                if (*p == '"') {
+                    quoted = !quoted;
+                } else if (quoted && *p == '\\' && p[1]) {
+                    ++p;
+                }
+            }
+        }
+        if (*p == ',') {
+            ++p;
+        }
+        if (cs.empty() || !valid) {
+            continue;
+        }
+        if (cs == "*") {
+            if (star_q < 0) {
+                star_q = q;
+            }
+            continue;
+        }
+        if (!strcasecmp(cs.c_str(), "utf-8") || !strcasecmp(cs.c_str(), "utf8")) {
+            if (utf8_q < 0) {
+                utf8_q = q;
+            }
+            continue;
+        }
+        // q=0 means not acceptable
+        if (q > best_q && is_supported_http_charset(cs)) {
+            best = cs;
+            best_q = q;
+        }
     }
-    if (utf8) {
+    // UTF-8, given or matched by "*" when not given, is chosen over another charset with the same weight
+    int u = utf8_q >= 0 ? utf8_q : star_q;
+    if (u > 0 && u >= best_q) {
         return "utf8";
     }
-    QoreString ac;
-    if (div) {
-        ac.concat(t, div - t);
-    } else {
-        ac.concat(t);
-    }
-    ac.trim();
-    return std::string(ac.c_str(), ac.size());
+    return best;
 }
