@@ -3253,6 +3253,9 @@
       the same error message in every execution mode, as in the AST interpreter
     - threads that create, run and delete @ref Qore::Expression "Expression" objects of the same Program at the same
       time no longer crash the process (issue #6493)
+    - the internal threads that join ended threads no longer receive process signals meant for the application or for
+      Qore's signal thread, and a thread whose thread-local destructors block no longer delays the end of the threads
+      that end after it, for which @ref Qore::exit() "exit()" waited too (issue #6433)
 
     @section qore_2_2_1 Qore 2.2.1
 
