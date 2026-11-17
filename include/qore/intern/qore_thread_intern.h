@@ -2773,6 +2773,10 @@ protected:
 // raises STACK-LIMIT-EXCEEDED and returns -1 if the stack of the thread is exhausted; see thread.cpp
 DLLLOCAL int check_stack(ExceptionSink* xsink);
 
+// raises STACK-LIMIT-EXCEEDED and returns -1 if the stack of the thread cannot take \a reserve more bytes before its
+// stack check would fail (the frame of a compiled function, qore#6414); see thread.cpp
+DLLLOCAL int check_stack_reserve(ExceptionSink* xsink, size_t reserve);
+
 //! Keeps the Program of a reference from being deleted while the reference's lvalue is used
 /** A reference can outlive the Program whose lvalue it refers to: a function of the Program can return one, and the
     Program's variables and code are freed with the Program, while the reference keeps their addresses (its lvalue
