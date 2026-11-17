@@ -1,0 +1,129 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# RcLazyMod.qm - test module: deferred registrations made by the initialization of a library module (qore#6337)
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%requires DataProvider
+%requires ConnectionProvider
+
+module RcLazyMod {
+    version = "1.0";
+    desc = "test module making deferred registrations in its initialization";
+    author = "Qore Technologies, s.r.o.";
+    license = "MIT";
+    init = sub () { RcLazyMod::Init::run(); };
+    domains = "PROCESS";
+}
+
+#! The public definitions of the test module
+public namespace RcLazyMod {
+#! The app whose actions the module's initialization registers lazily
+public const LazyApp = "QoreTestRcLazyApp";
+#! The app that the module's initialization registers as pending
+public const PendingApp = "QoreTestRcPendingApp";
+#! The app whose actions registerLate() registers lazily after the module's initialization
+public const LateApp = "QoreTestRcLateApp";
+#! The connection scheme that the module's initialization registers as pending
+public const Scheme = "qoretestrcscheme";
+
+#! The class of the connection scheme
+public class RcConnection {
+}
+
+#! The module's state
+class State {
+    public {
+        #! the runs of each deferred registration
+        static hash<string, int> calls = {"lazy": 0, "pending": 0, "scheme": 0, "late": 0};
+        #! a closure created by the module's initialization
+        static *code init_closure;
+    }
+}
+
+#! Code with a functional domain, which code restricted from it cannot call
+public int sub tagged() [dom=PROCESS_CONTROL] {
+    return 42;
+}
+
+#! Returns the number of runs of the given deferred registration
+public int sub getCalls(string key) {
+    return State::calls{key};
+}
+
+#! Returns the closure that the module's initialization created
+public code sub getInitClosure() {
+    return State::init_closure;
+}
+
+#! Returns a closure created after the module's initialization
+public code sub getLateClosure() {
+    return auto sub () { return tagged(); };
+}
+
+#! Registers the actions of LateApp lazily with a closure created now, after the module's initialization
+/** Its closure is not deferred module initialization: a reader restricted from the domain of what it registers
+    cannot run it
+*/
+public sub registerLate() {
+    DataProviderActionCatalog::registerLazyAppActions(LateApp, sub () {
+        ++State::calls.late;
+        register_action(LateApp, "late-action");
+    });
+}
+
+sub register_app(string name) {
+    DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+        "name": name,
+        "display_name": name,
+        "short_desc": "restricted caller test app",
+        "desc": "restricted caller test app",
+        "groups": (AppGroup::DataTransformation,),
+        "logo": "data",
+        "logo_mime_type": MimeTypeSvg,
+        "logo_file_name": "rc.svg",
+    });
+}
+
+sub register_action(string app, string action) {
+    DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+        "app": app,
+        "path": "/" + action,
+        "action": action,
+        "display_name": action,
+        "short_desc": "restricted caller test action",
+        "desc": "restricted caller test action",
+        "action_code": DPAT_API,
+    });
+}
+
+#! The module's initialization
+class Init {
+    static run() {
+        register_app(LazyApp);
+        DataProviderActionCatalog::registerLazyAppActions(LazyApp, sub () {
+            ++State::calls.lazy;
+            register_action(LazyApp, "lazy-action");
+        });
+        DataProviderActionCatalog::registerPendingApp(PendingApp, sub () {
+            ++State::calls.pending;
+            register_app(PendingApp);
+            register_action(PendingApp, "pending-action");
+        });
+        ConnectionSchemeCache::registerPendingScheme(Scheme, sub () {
+            ++State::calls.scheme;
+            ConnectionSchemeCache::registerScheme(Scheme, <ConnectionSchemeInfo>{
+                "display_name": "restricted caller test scheme",
+                "short_desc": "restricted caller test scheme",
+                "desc": "restricted caller test scheme",
+                "schemes": {Scheme: True},
+                "base_scheme_map": {Scheme: Scheme},
+                "cls": Class::forName("RcLazyMod::RcConnection"),
+            });
+        });
+        register_app(LateApp);
+        State::init_closure = auto sub () { return tagged(); };
+    }
+}
+}
