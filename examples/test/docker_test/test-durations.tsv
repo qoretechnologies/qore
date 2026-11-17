@@ -1094,7 +1094,6 @@ examples/test/qlib/HttpServer/HttpServerFastRoutesExample.qtest	0.0	0.0	-	0.0	0.
 examples/test/qlib/HttpServer/HttpServerFastRoutesHttp2.qtest	1.0	1.0	-	2.0	2.0	-	-	1.0	2.0	1.0
 examples/test/qlib/HttpServer/HttpServerFastRoutesHttp3.qtest	1.0	0.0	-	2.0	1.0	-	-	1.0	1.0	1.0
 examples/test/qlib/HttpServer/HttpServerFastRoutesParity.qtest	2.0	0.0	-	1.0	1.0	-	-	2.0	1.0	1.0
-examples/test/qlib/HttpServer/HttpServerFastRoutesPerf.qtest	-	-	-	-	-	-	23.0	-	-	-
 examples/test/qlib/HttpServer/HttpServerFastRoutesSoak.qtest	7.0	6.0	-	6.0	6.0	-	-	7.0	7.0	6.0
 examples/test/qlib/HttpServer/HttpServerFieldLines.qtest	1.0	1.0	-	0.0	0.0	-	-	0.0	0.0	1.0
 examples/test/qlib/HttpServer/HttpServerH2H3StreamingUpload.qtest	1.0	1.0	-	1.0	1.0	-	-	1.0	1.0	1.0
