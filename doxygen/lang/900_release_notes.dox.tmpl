@@ -201,6 +201,11 @@
     and @ref Qore::Program::callStaticMethodArgs() "Program::callStaticMethodArgs()" call private static methods only for
     the class and its subclasses (\c METHOD-IS-PRIVATE, or \c RUNTIME-OVERLOAD-ERROR for a private variant), as documented.
 
+    @par Members Holding Code Are Callable Only Where the Member Is Accessible
+    A member holding code (a closure or a call reference) is callable as a method only where the member itself is
+    accessible, in every execution mode; calling a private member that holds code from outside its class raises
+    \c METHOD-DOES-NOT-EXIST, as for a private method (issue #6487).
+
     @par Debugger Callbacks Run With the Cancellation Deferred
     The notification methods of a @ref Qore::DebugProgram "DebugProgram" run with the cancellation of the thread
     deferred, so a thread that is cancelled or interrupted while it is stopped in the debugger stays stopped until the
