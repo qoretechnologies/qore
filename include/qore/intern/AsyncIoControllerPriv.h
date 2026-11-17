@@ -485,6 +485,10 @@ public:
         indefinitely (OAuth2 refresh / happy-eyeballs via waitForNotifier())
         and is torn down via cancel()/cancelByOwner() + op completion, not via
         this barrier — waiting for it here deadlocks shutdown.
+
+        Called on a worker of this dispatcher (a callback that flushes the callbacks, or a destructor that its
+        release of an object runs, such as that of a server's async I/O controller stopped in a callback), it does
+        not wait for the callback that the worker runs, which ends only when this call has returned (qore#6508).
     */
     DLLLOCAL void waitForIdle();
 

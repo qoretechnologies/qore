@@ -322,6 +322,13 @@ static thread_local bool in_async_continue_poll_worker = false;
 //! worker's own call chain.
 static thread_local bool on_callback_worker = false;
 
+//! The dispatcher whose active_processing count, as a callback that waitForIdle() waits for (not a continuePoll()
+//! dispatch), includes the item that this worker thread processes; null when the thread processes no such item
+/** Read by QoreCallDispatcher::waitForIdle(), which does not wait for the calling worker's own callback: it ends only
+    when the wait has returned (qore#6508).  Set and cleared under the dispatcher's lock with the count.
+*/
+static thread_local const QoreCallDispatcher* counted_callback_dispatcher = nullptr;
+
 bool qore_on_async_io_thread() {
     return on_async_io_thread;
 }
@@ -1765,13 +1772,16 @@ void QoreCallDispatcher::stop(ExceptionSink* xsink) {
 }
 
 void QoreCallDispatcher::waitForIdle() {
+    // the callback that the calling thread runs as a worker of this dispatcher, if any, is not waited for: it ends
+    // only when this call has returned (qore#6508)
+    int own = counted_callback_dispatcher == this ? 1 : 0;
     AutoLocker al(m);
     while (true) {
         // A callback (non-continuePoll) still being processed by a worker?
         // active_continue_poll is a subset of active_processing; subtract it
         // so a blocked continuePoll() (OAuth2 refresh / happy-eyeballs) does
         // not wedge this barrier — see active_continue_poll in the header.
-        if ((active_processing - active_continue_poll) > 0) {
+        if ((active_processing - active_continue_poll - own) > 0) {
             idle_cond.wait(m);
             continue;
         }
@@ -2037,6 +2047,9 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
             // happy-eyeballs and are torn down via cancel, not flush).
             if (async_item.type == DT_CONTINUE_POLL) {
                 ++active_continue_poll;
+            } else {
+                // the callback of this worker, which waitForIdle() called on this worker does not wait for
+                counted_callback_dispatcher = this;
             }
             // Track per-program active count for targeted flush
             if (async_item.pgm) {
@@ -2549,6 +2562,8 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
             --active_processing;
             if (async_item.type == DT_CONTINUE_POLL) {
                 --active_continue_poll;
+            } else {
+                counted_callback_dispatcher = nullptr;
             }
             if (async_item.pgm) {
                 auto it = active_per_program.find(async_item.pgm);

@@ -1,0 +1,94 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+/*  Tests that AsyncIoController::flushCallbacks() called in a callback of the async I/O controller (directly, or in a
+    destructor that the callback's release of an object runs, as that of the async I/O controller of an HttpServer
+    that a handler stopped) does not wait for that callback, which ends only when the flush has returned: the flush
+    waited for it forever (qore#6508).  It still waits for the callbacks of the other workers.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class AsyncIoFlushInCallbackTest
+
+#! Upper bound for any wait that a regression turns into a hang
+const HangTimeout = 30s;
+
+#! An object whose destructor flushes the callbacks of the async I/O controller
+class FlushingObject {
+    private {
+        Queue flushed;
+    }
+
+    constructor(Queue flushed) {
+        self.flushed = flushed;
+    }
+
+    destructor() {
+        AsyncIoController::flushCallbacks();
+        flushed.push(gettid());
+    }
+}
+
+class AsyncIoFlushInCallbackTest inherits QUnit::Test {
+    constructor() : Test("AsyncIoFlushInCallbackTest", "1.0") {
+        addTestCase("a callback flushes the callbacks", \flushInCallbackTest());
+        addTestCase("a destructor that a callback runs flushes the callbacks", \flushInDestructorTest());
+        addTestCase("a flush in a callback waits for the callbacks of other workers", \flushWaitsForOthersTest());
+        set_return_value(main());
+    }
+
+    flushInCallbackTest() {
+        Queue flushed();
+        AsyncIoController::addTimerDelay(0s, sub () {
+            AsyncIoController::flushCallbacks();
+            flushed.push(gettid());
+        });
+        assertNeq(gettid(), flushed.get(HangTimeout), "the flush in the callback returns");
+    }
+
+    flushInDestructorTest() {
+        Queue flushed();
+        {
+            *FlushingObject obj = new FlushingObject(flushed);
+            # the callback holds the last reference to the object when it ends
+            AsyncIoController::addTimerDelay(0s, sub () {
+                FlushingObject o = obj;
+                remove obj;
+            });
+        }
+        assertNeq(gettid(), flushed.get(HangTimeout), "the flush in the destructor that the callback runs returns");
+    }
+
+    flushWaitsForOthersTest() {
+        Counter other_entered(1);
+        Counter release_other(1);
+        bool other_done;
+        Queue result();
+        on_exit if (release_other.getCount()) {
+            release_other.dec();
+        }
+
+        # a callback on another worker, which the flush waits for
+        AsyncIoController::addTimerDelay(0s, sub () {
+            other_entered.dec();
+            release_other.waitForZero();
+            other_done = True;
+        });
+        assertEq(0, other_entered.waitForZero(HangTimeout), "the other callback runs");
+
+        Queue flushing();
+        AsyncIoController::addTimerDelay(0s, sub () {
+            flushing.push(True);
+            AsyncIoController::flushCallbacks();
+            result.push(other_done);
+        });
+        flushing.get(HangTimeout);
+        release_other.dec();
+        assertTrue(result.get(HangTimeout), "the flush returns after the callback of the other worker has ended");
+    }
+}
