@@ -446,14 +446,10 @@ class SqlUtilRecursiveQueryTest inherits QUnit::Test {
                     assertEq(1001, link.selectRows({"recursive": path(CycleStart)}).size(), "MariaDB limit");
                     break;
                 }
-                # MySQL ends the query with error 3636; the mysql driver loses an error raised while the rows are
-                # fetched (issue #6497), so the query returns no rows or some rows then
-                try {
-                    *list<auto> l = link.selectRows({"recursive": path(CycleStart)});
-                    assertTrue(l.size() < 1001, "MySQL limit: rows");
-                } catch (hash<ExceptionInfo> ex) {
-                    assertRegex("Recursive query aborted after 1001 iterations", ex.desc, "MySQL limit");
-                }
+                # MySQL ends the query with error 3636 while the rows are fetched; the mysql driver raises it since
+                # issue #6497 was fixed
+                checkError(sub () { link.selectRows({"recursive": path(CycleStart)}); }, "^DBI:MYSQL:FETCH-ERROR$",
+                    "Recursive query aborted after 1001 iterations", "MySQL limit");
                 break;
             }
         }
