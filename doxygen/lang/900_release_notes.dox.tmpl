@@ -874,6 +874,12 @@
     functions do for an argument outside their domain (see @ref undefined_arithmetic); 2.2.1 raised
     \c INVALID-POW-ARGUMENTS (issue #1034).
 
+    @par HTTP Servers Choose the Response Encoding from Accept-Charset by Its Weights
+    An HTTP server takes the response encoding of a request (\c cx."response-encoding") from \c Accept-Charset as
+    RFC 9110 defines it, with weights and optional whitespace (see
+    @ref Qore::get_http_accept_charset() "get_http_accept_charset()"); 2.2.1 took the first charset unless the value
+    or an element directly after a comma began with UTF-8 or \c "*", whatever the weights (issue #6343).
+
     @subsection qore_3_0_0_new_features New Features in Qore
     @par Strict Number Parsing
     @ref parse_int(string, string, bool) "parse_int()", @ref parse_float(string, string, bool) "parse_float()" and
