@@ -22432,16 +22432,18 @@ static QoreValue f_dbg_program_registered_with_id(const QoreListNode* params, Ru
     return rv;
 }
 
-//! returns the number of ThreadProgramData objects
-static QoreValue f_dbg_get_thread_program_data_count(const QoreListNode* params, RuntimeConfig& rc,
+//! returns the ID of the current thread's ThreadProgramData object, unique in the process
+static QoreValue f_dbg_get_thread_program_data_id(const QoreListNode* params, RuntimeConfig& rc,
         ExceptionSink* xsink) {
-    return ThreadProgramData::dbgLiveCount();
+    return get_thread_program_data()->dbgGetId();
 }
 
-//! waits until no more than the given number of ThreadProgramData objects exist; returns False on timeout
-static QoreValue f_dbg_wait_thread_program_data_count(const QoreListNode* params, RuntimeConfig& rc,
+//! waits until the ThreadProgramData object with the given ID has been destroyed; returns False on timeout
+/** With a timeout of 0, returns whether the object has been destroyed
+*/
+static QoreValue f_dbg_wait_thread_program_data_released(const QoreListNode* params, RuntimeConfig& rc,
         ExceptionSink* xsink) {
-    return ThreadProgramData::dbgWaitLiveCount(get_param_value(params, 0).getAsBigInt(),
+    return ThreadProgramData::dbgWaitReleased(get_param_value(params, 0).getAsBigInt(),
         get_param_value(params, 1).getAsBigInt());
 }
 
@@ -26602,10 +26604,10 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_program_registered_with_id", f_dbg_program_registered_with_id, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, boolTypeInfo, 2, QC_PROGRAM->getTypeInfo(), QORE_PARAM_NO_ARG, "pgm",
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "id_offset");
-    qns.addBuiltinVariant("dbg_get_thread_program_data_count", f_dbg_get_thread_program_data_count, QCF_NO_FLAGS,
+    qns.addBuiltinVariant("dbg_get_thread_program_data_id", f_dbg_get_thread_program_data_id, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
-    qns.addBuiltinVariant("dbg_wait_thread_program_data_count", f_dbg_wait_thread_program_data_count, QCF_NO_FLAGS,
-        QDOM_DEBUG_HOOK, boolTypeInfo, 2, bigIntTypeInfo, QORE_PARAM_NO_ARG, "count",
+    qns.addBuiltinVariant("dbg_wait_thread_program_data_released", f_dbg_wait_thread_program_data_released,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolTypeInfo, 2, bigIntTypeInfo, QORE_PARAM_NO_ARG, "id",
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
     qns.addBuiltinVariant("dbg_new_hashdecl_hash_without_sink", f_dbg_new_hashdecl_hash_without_sink, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, hashTypeInfo, 1, anyTypeInfo, QORE_PARAM_NO_ARG, "h");
