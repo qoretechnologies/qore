@@ -16,7 +16,7 @@
 
 %exec-class CompoundAssignmentOrNothingPlainPart1
 
-#! runs part 1 of 4 of the cases of CompoundAssignmentOrNothingPlainBase: the ir mode and the qcc-compiled executable
+#! runs part 1 of 12 of CompoundAssignmentOrNothingPlainBase: the AST output against the rules, and the ir mode
 class CompoundAssignmentOrNothingPlainPart1 inherits CompoundAssignmentOrNothingPlainBase {
     constructor() : CompoundAssignmentOrNothingPlainBase("CompoundAssignmentOrNothingPlainPart1", 1) {
     }

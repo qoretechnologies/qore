@@ -4002,7 +4002,11 @@ void qore_class_private::addBuiltinMemberWithAccessors(const char* mem, ClassAcc
     if (access == Public && !has_public_memdecl) {
         has_public_memdecl = true;
     }
-    has_member_accessors = true;
+    // written only when it changes: a member added to a published class (module-jni) is added while other threads
+    // read the class's flags without a lock
+    if (!has_member_accessors) {
+        has_member_accessors = true;
+    }
 }
 
 QoreValue qore_class_private::evalMemberAccessorGet(QoreObject* self, const char* mem, const QoreMemberInfo& mi,
@@ -4675,9 +4679,15 @@ void qore_class_private::parseImportMembers(qore_class_private& qc, ClassAccess 
                 "access: '%s' this access: '%s'\n", this, name.c_str(), qc.name.c_str(), i.first,
                 i.second->exp.getTypeName(), privpub(access), privpub(mi->access));
 
-            if (!mi->getClass()->equal(*i.second->getClass())) {
-                mi->getClass()->parseCheckClassHierarchyMembers(i.first, *(i.second), *mi);
+            if (!mi->getClass()->equal(*i.second->getClass())
+                    && mi->getClass()->parseCheckClassHierarchyMembers(i.first, *(i.second), *mi)) {
+                // the declarations cannot be combined: the hierarchy is a parse error
+                continue;
             }
+            // issue #6393: both declarations are the same member in the object, so the contexts of the base class
+            // member apply to this class too: a private:internal member of an ancestor of the base class keeps its
+            // own storage when this class initializes it
+            mi->addContextMap(*i.second);
             continue;
         }
         i.second->parseInit(i.first, selfid);
@@ -9473,6 +9483,26 @@ void QoreMemberInfo::addContextAccess(const QoreMemberInfo& mi, const qore_class
         member_info_list->insert(member_info_list->begin(), &mi);
     }
 #endif
+}
+
+void QoreMemberInfo::addContextMap(const QoreMemberInfo& mi) {
+    if (!mi.cls_context_map) {
+        return;
+    }
+    if (!cls_context_map) {
+        cls_context_map = new cls_context_map_t;
+        assert(!member_info_list);
+        member_info_list = new member_info_list_t;
+    }
+    for (auto& i : *mi.cls_context_map) {
+        // an entry already present is kept, as addContextAccess() keeps it; it gives the same storage
+        cls_context_map_t::iterator ci = cls_context_map->lower_bound(i.first);
+        if (ci == cls_context_map->end() || ci->first != i.first) {
+            cls_context_map->insert(ci, i);
+        } else {
+            assert(ci->second == i.second);
+        }
+    }
 }
 
 void QoreMemberInfo::addContextAccessForClass(const qore_class_private* class_ctx,

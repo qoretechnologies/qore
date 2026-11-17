@@ -23479,7 +23479,7 @@ static QoreValue evalDivideEquals(const QoreValue& lvalue, const QoreValue& righ
     }
 
     if (right.getType() == NT_NUMBER || v.getType() == NT_NUMBER) {
-        if (right.getAsFloat() == 0.0) {
+        if (qore_number_divisor_is_zero(right)) {
             xsink->raiseException("DIVISION-BY-ZERO",
                 "division by zero in arbitrary-precision numeric expression");
             return QoreValue();

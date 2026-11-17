@@ -116,9 +116,11 @@
 #include <arpa/inet.h>
 #include <cerrno>
 #include <cstdlib>
+#include <cstddef>
 #include <cstring>
 #include <fcntl.h>
 #include <netinet/in.h>
+#include <netinet/tcp.h>
 #include <poll.h>
 #include <sched.h>
 #include <sys/ioctl.h>
@@ -129,6 +131,7 @@
 #include <unistd.h>
 
 #include <atomic>
+#include <csignal>
 #include <unordered_map>
 #include <chrono>
 #include <condition_variable>
@@ -1314,7 +1317,7 @@ static void ut_fork_waits_for_lock_holders(UnitTestCounters& c) {
         "encodings", "utc_offset_zones", "module_options", "app_registry", "complex_types", "external_types",
         "aot_deferred_types", "builtin_locations", "class_ids", "scan_waits", "node_watches", "async_io_logger",
         "cipher_cache", "digest_cache", "jit_cache", "jit_bg_queue", "aot_pending_constants",
-        "aot_regex_cache", "llvm_target_init", "environment",
+        "aot_regex_cache", "llvm_target_init", "environment", "program_thread_containers",
         nullptr,
     };
     for (const char** name = names; *name; ++name) {
@@ -17015,56 +17018,209 @@ static int64 dbg_unacknowledged_bytes(int fd) {
     return getsockopt(fd, SOL_SOCKET, SO_NWRITE, &n, &len) || n < 0 ? 0 : n;
 #elif defined(TIOCOUTQ)
     int n = 0;
-    return ::ioctl(fd, TIOCOUTQ, &n) || n < 0 ? 0 : n;
+    if (::ioctl(fd, TIOCOUTQ, &n) || n <= 0) {
+        return 0;
+    }
+#if defined(__linux__) && defined(TCP_INFO)
+    // the count is the difference of the sequence numbers, which includes the FIN of a socket shut down for writing:
+    // it is not data, and a peer whose window is 0 can take it (Linux 6.10 or later accepts a bare FIN then)
+    struct tcp_info ti;
+    socklen_t len = sizeof ti;
+    if (!getsockopt(fd, IPPROTO_TCP, TCP_INFO, &ti, &len)
+            && (ti.tcpi_state == TCP_FIN_WAIT1 || ti.tcpi_state == TCP_CLOSING || ti.tcpi_state == TCP_LAST_ACK)) {
+        --n;
+    }
+#endif
+    return n;
 #else
     return 0;
 #endif
 }
 
-//! blocks until the peer has acknowledged everything written on \a fd, or the connection has ended; no timer is
-//! involved
+//! returns the receive window that the peer last advertised for \a fd, in bytes, or -1 if the system does not tell
+/** The window that the other end of the connection (the client of a test's peer) advertised, as this end sees it:
+    \c tcpi_snd_wnd, the window that this end may send into, of \c struct \c tcp_connection_info (macOS,
+    \c TCP_CONNECTION_INFO) or \c struct \c tcp_info (Linux 5.4 or later, \c TCP_INFO), when the system's headers have
+    the member (a build-time check: \c HAVE_TCP_CONNECTION_INFO_TCPI_SND_WND, \c HAVE_TCP_INFO_TCPI_SND_WND).
+    \c tcpi_rcv_wnd would be this end's own advertised window, which says nothing about whether the other end can
+    take what this end has written.  Without the member, or when the kernel does not fill it in, the window is
+    unknown, and dbg_wait_send_buffer_empty() waits as it did before it checked the window.
+*/
+static int64 dbg_peer_window(int fd) {
+#if defined(HAVE_TCP_CONNECTION_INFO_TCPI_SND_WND) && defined(TCP_CONNECTION_INFO)
+    struct tcp_connection_info ti;
+    socklen_t len = sizeof ti;
+    if (getsockopt(fd, IPPROTO_TCP, TCP_CONNECTION_INFO, &ti, &len)
+            || len < offsetof(struct tcp_connection_info, tcpi_snd_wnd) + sizeof ti.tcpi_snd_wnd) {
+        return -1;
+    }
+    return ti.tcpi_snd_wnd;
+#elif defined(HAVE_TCP_INFO_TCPI_SND_WND) && defined(TCP_INFO)
+    struct tcp_info ti;
+    socklen_t len = sizeof ti;
+    // a kernel older than the headers fills in less: the member is used only if the kernel filled it in
+    if (getsockopt(fd, IPPROTO_TCP, TCP_INFO, &ti, &len)
+            || len < offsetof(struct tcp_info, tcpi_snd_wnd) + sizeof ti.tcpi_snd_wnd) {
+        return -1;
+    }
+    return ti.tcpi_snd_wnd;
+#else
+    return -1;
+#endif
+}
+
+//! the most milliseconds that dbg_wait_send_buffer_empty() waits before it looks at the connection again
+/** The wait is a bounded poll, not a wait for an event, because neither system has an event for every change that
+    decides it (the bytes not acknowledged, the window that the peer advertised, the state of the connection):
+    - Linux: there is no poll or epoll event for the peer's acknowledgement (snd_una advancing) or for a change of
+      its window: \c POLLOUT only reports room in the send buffer and is level-triggered, so while there is room it
+      is reported at once and cannot be waited on, and while the buffer is full it reports an acknowledgement that
+      frees room, but not one that only changes the window; the count (\c TIOCOUTQ) and the window and state
+      (\c TCP_INFO) can only be read, not waited for.
+    - macOS: the write filter (\c EVFILT_WRITE) fires when the stack wakes the socket's writers, which TCP does when
+      an acknowledgement frees data from the send buffer; an acknowledgement that frees nothing, such as a window
+      update or the answer to a window probe that sets the window to 0, and a change of the connection's state, wake
+      no writer, so the filter does not fire for them.
+    An acknowledgement that frees room still ends the wait at once where the system reports it.  The interval only
+    paces the checks of what has no event: it changes how soon the wait sees the outcome, never the outcome, which
+    is decided by the state read at each check.
+*/
+static constexpr int DbgAckCheckMs = 10;
+
+//! returns true if the TCP connection of \a fd is closed: reset by the peer, or fully closed
+/** The count of bytes not acknowledged (the difference of the sequence numbers that \c TIOCOUTQ and \c SO_NWRITE
+    give) is not cleared when a reset discards the send buffer, so it stays above 0 once the connection is closed:
+    nothing left can then arrive, and the wait is over.  On macOS, a connection whose state cannot be read (the stack
+    dropped it) is closed too.  False if the system does not tell.
+*/
+static bool dbg_tcp_closed(int fd) {
+#if defined(DARWIN) && defined(TCP_CONNECTION_INFO)
+    struct tcp_connection_info ti;
+    socklen_t len = sizeof ti;
+    // the option fails for a connection that the stack dropped (ECONNRESET, for example), which is closed as well;
+    // TCPS_CLOSED is 0 (netinet/tcp_fsm.h)
+    return getsockopt(fd, IPPROTO_TCP, TCP_CONNECTION_INFO, &ti, &len) || !ti.tcpi_state;
+#elif defined(__linux__) && defined(TCP_INFO)
+    struct tcp_info ti;
+    socklen_t len = sizeof ti;
+    return !getsockopt(fd, IPPROTO_TCP, TCP_INFO, &ti, &len) && ti.tcpi_state == TCP_CLOSE;
+#else
+    return false;
+#endif
+}
+
+//! returns the bytes left unacknowledged on \a fd and the window that the peer advertised, from consistent readings
+/** The two values are read with two calls: an acknowledgement between them could pair a count with a window that
+    already took it into account, so they are read until the count is the same before and after the window.
+
+    @param wnd set to the window, or -1 if it is unknown
+*/
+static int64 dbg_unacknowledged_and_window(int fd, int64& wnd) {
+    int64 left = dbg_unacknowledged_bytes(fd);
+    while (true) {
+        wnd = dbg_peer_window(fd);
+        int64 again = dbg_unacknowledged_bytes(fd);
+        if (again == left) {
+            return left;
+        }
+        left = again;
+    }
+}
+
+//! blocks until the peer has acknowledged everything written on \a fd, or the peer's receive window is closed
 /** A reset (\c SO_LINGER 0) discards the data in the send buffer that has not been sent; on macOS a small write made
     while an earlier one is unacknowledged is held back (Nagle), and loopback delivery is not synchronous with send(),
-    so a reset made at once discards the end of what was written (as for issue #6320).  The peer acknowledges data
-    when it arrives, whether its program reads it or not, so this only waits if more was written than the peer's
-    receive buffer takes.
+    so a reset made at once discards the end of what was written (as for issue #6320).
+
+    The peer acknowledges data as it arrives, whether its program reads it or not, as far as its receive window.  The
+    window can open further without a read (macOS grows the receive buffer as data arrives, Linux grows the window
+    within the buffer, and a peer that does not read can acknowledge late, so the window last seen can be stale), so
+    data beyond the window last seen can still arrive, and the wait goes on for it.  Only a window of 0 with data left
+    unacknowledged means that nothing more can arrive until the peer's program reads: the wait then ends with the
+    number of bytes left.  With the window unknown (see dbg_peer_window()), the wait goes on until everything is
+    acknowledged.
+
+    The wait wakes up for each acknowledgement that frees room in the send buffer, and looks at the connection again
+    after at most \c DbgAckCheckMs milliseconds otherwise.  Once the connection reports its end (a shutdown of the
+    socket, or the peer's FIN), it is looked at every \c DbgAckCheckMs milliseconds until everything is acknowledged
+    or the window is 0: the data written before a shutdown is still sent, and a reset discards it.
+
+    The descriptor is used without the socket's lock: the socket must not be closed by another thread meanwhile.
+
+    @param wnd set to the window that the peer advertised when the wait ended without everything acknowledged
+
+    @return 0 if everything written was acknowledged (or the connection was reset, which discards it), otherwise the
+    number of bytes left when the peer's window was 0
 */
-static void dbg_wait_send_buffer_empty(int fd) {
+static int64 dbg_wait_send_buffer_empty(int fd, int64& wnd) {
+    bool ended = false;
 #ifdef DARWIN
     // the write filter fires for each change of the send buffer's space, as the peer acknowledges data
     int kq = kqueue();
     if (kq < 0) {
-        return;
+        return 0;
     }
     ON_BLOCK_EXIT([kq] () { ::close(kq); });
     struct kevent kev;
     EV_SET(&kev, fd, EVFILT_WRITE, EV_ADD | EV_CLEAR, 0, 0, nullptr);
     if (kevent(kq, &kev, 1, nullptr, 0, nullptr) < 0) {
-        return;
-    }
-    while (dbg_unacknowledged_bytes(fd) > 0) {
-        struct kevent out;
-        int rc = kevent(kq, nullptr, 0, &out, 1, nullptr);
-        if (rc < 0 && errno == EINTR) {
-            continue;
-        }
-        if (rc <= 0 || (out.flags & (EV_EOF | EV_ERROR))) {
-            return;
-        }
-    }
-#else
-    // loopback acknowledges data as it is delivered, before send() returns, so this normally does not wait
-    while (dbg_unacknowledged_bytes(fd) > 0) {
-        pollfd pfd = {fd, POLLOUT, 0};
-        if (::poll(&pfd, 1, -1) < 0 && errno != EINTR) {
-            return;
-        }
-        if (pfd.revents & (POLLHUP | POLLERR | POLLNVAL)) {
-            return;
-        }
-        sched_yield();
+        ended = true;
     }
 #endif
+    while (int64 left = dbg_unacknowledged_and_window(fd, wnd)) {
+        // a closed connection (reset by the peer) discarded what was left
+        if (dbg_tcp_closed(fd)) {
+            return 0;
+        }
+        if (!wnd) {
+            return left;
+        }
+        if (ended) {
+            // the descriptor reports its end at once: only the interval paces the checks
+            ::poll(nullptr, 0, DbgAckCheckMs);
+            continue;
+        }
+#ifdef DARWIN
+        struct timespec ts = {0, DbgAckCheckMs * 1000000L};
+        struct kevent out;
+        int rc = kevent(kq, nullptr, 0, &out, 1, &ts);
+        if (rc < 0 && errno != EINTR) {
+            ended = true;
+        } else if (rc > 0 && (out.flags & (EV_EOF | EV_ERROR))) {
+            ended = true;
+        }
+#else
+        // POLLOUT is level-triggered: with room in the send buffer it is reported at once, so it is only waited for
+        // when the buffer is full, where an acknowledgement frees room; otherwise only the interval paces the checks
+        pollfd pfd = {fd, 0, 0};
+        if (::poll(&pfd, 1, 0) >= 0 && !(pfd.revents & (POLLHUP | POLLERR | POLLNVAL))) {
+            pollfd out = {fd, POLLOUT, 0};
+            if (::poll(&out, 1, 0) == 0) {
+                ::poll(&out, 1, DbgAckCheckMs);
+            } else {
+                ::poll(nullptr, 0, DbgAckCheckMs);
+            }
+        } else {
+            ended = true;
+        }
+#endif
+    }
+    return 0;
+}
+
+//! Debug-only: returns the receive window that the peer of a TCP socket last advertised, or -1 if the system does
+//! not tell (see dbg_peer_window()); without it, dbg_reset_socket() cannot tell data that cannot arrive
+static QoreValue f_dbg_tcp_peer_window(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    const QoreObject* obj = get_param_value(params, 0).get<const QoreObject>();
+    ReferenceHolder<QoreSocketObject> sock(obj
+        ? reinterpret_cast<QoreSocketObject*>(const_cast<QoreObject*>(obj)->getReferencedPrivateData(CID_SOCKET,
+            xsink))
+        : nullptr, xsink);
+    if (*xsink || !sock) {
+        return -1;
+    }
+    int fd = sock->getPollableDescriptor();
+    return fd < 0 ? -1 : dbg_peer_window(fd);
 }
 
 //! Debug-only: closes a socket so that its connection is reset at once, once what was written on it has arrived
@@ -17072,7 +17228,10 @@ static void dbg_wait_send_buffer_empty(int fd) {
     makes first, which on macOS discards unread data and ends the connection with a FIN.  Tests use it to have a peer
     reset a connection deterministically.  The close is made once the peer has acknowledged all the data written on
     the socket (see dbg_wait_send_buffer_empty()), so that the reset does not discard the end of an answer still in
-    the send buffer.  DEBUG builds only.
+    the send buffer.  The socket must not be closed by another thread while the function runs.  DEBUG builds only.
+
+    @throw DBG-RESET-SOCKET-ERROR the peer's receive window is 0 while data written on the socket is left
+    unacknowledged: it can only arrive once the peer's program reads; the socket is not closed
 */
 static QoreValue f_dbg_reset_socket(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     const QoreObject* obj = get_param_value(params, 0).get<const QoreObject>();
@@ -17089,7 +17248,13 @@ static QoreValue f_dbg_reset_socket(const QoreListNode* params, RuntimeConfig& r
     }
     int fd = sock->getPollableDescriptor();
     if (fd >= 0) {
-        dbg_wait_send_buffer_empty(fd);
+        int64 wnd = -1;
+        if (int64 left = dbg_wait_send_buffer_empty(fd, wnd)) {
+            xsink->raiseException("DBG-RESET-SOCKET-ERROR", "dbg_reset_socket(): " QLLD " bytes written on the "
+                "socket are not acknowledged, and the peer's receive window is 0: they can only arrive once the "
+                "peer's program reads; the connection is not reset", left);
+            return QoreValue();
+        }
     }
     sock->dbgResetOnClose();
     sock->close();
@@ -18413,6 +18578,277 @@ static QoreValue f_dbg_release_parse_start_gate(const QoreListNode* params, Runt
     return QoreValue();
 }
 
+namespace {
+//! the gate of dbg_arm_parse_scope_gate() (issues #6175, #6207)
+struct QoreDbgParseScopeGate {
+    std::mutex m;
+    std::condition_variable cv;
+    bool armed = false;
+    //! the Program whose scoped options stop the parse, or nullptr for any Program
+    QoreProgram* pgm = nullptr;
+    std::string kind;
+    //! the options that the other thread sets
+    int64 set_options = 0;
+    //! the warnings that the other thread disables
+    int disable_warnings = 0;
+    //! true if the parse waits for an observer thread (dbg_parse_scope_gate_wait())
+    bool observer = false;
+    //! the Program whose scoped options stopped the parse
+    QoreProgram* fired_pgm = nullptr;
+    //! the options that the parsing thread had then
+    QoreParseOptions scope_options;
+    //! the error of the other thread's change, if any
+    std::string other_error;
+    //! the options of the Program that another thread read then (QoreProgram::getParseOptions())
+    QoreParseOptions other_options;
+    //! the options that a call entering the Program from another thread took then
+    QoreParseOptions other_call_options;
+    //! the options of the Program when the scoped options ended
+    QoreParseOptions end_options;
+    int end_warn_mask = 0;
+    bool ended = false;
+    //! the observer is done
+    bool observer_done = false;
+    //! the gate was closed by dbg_parse_scope_gate_result()
+    bool closed = false;
+};
+
+QoreDbgParseScopeGate parse_scope_gate;
+}
+
+void qore_dbg_parse_scope_begin(QoreProgram* pgm, const char* kind) {
+    int64 set_options;
+    int disable_warnings;
+    {
+        std::lock_guard<std::mutex> lg(parse_scope_gate.m);
+        if (!parse_scope_gate.armed || (parse_scope_gate.pgm && parse_scope_gate.pgm != pgm)
+                || parse_scope_gate.kind != kind) {
+            return;
+        }
+        parse_scope_gate.armed = false;
+        set_options = parse_scope_gate.set_options;
+        disable_warnings = parse_scope_gate.disable_warnings;
+    }
+    // another thread reads the options of the Program, as Program::getParseOptions() does and as a call that enters
+    // the Program does, and then changes them as Program::setParseOptions() and Program::disableWarning() do; this
+    // thread waits for it, so that it is done while the scoped options are in effect
+    QoreParseOptions other_options, other_call_options;
+    std::string other_error;
+    std::thread other([pgm, set_options, disable_warnings, &other_options, &other_call_options, &other_error]() {
+        other_options = pgm->getParseOptions();
+        other_call_options = qore_program_private::getParseOptions(*pgm);
+        if (!set_options && !disable_warnings) {
+            return;
+        }
+        // a Qore thread, so that the API can raise its exceptions
+        QoreForeignThreadHelper qfth;
+        if (!qfth) {
+            other_error = "the thread could not be registered";
+            return;
+        }
+        if (set_options) {
+            ExceptionSink xsink;
+            pgm->setParseOptions(QoreParseOptions(set_options), &xsink);
+            if (xsink) {
+                QoreValue err = xsink.getExceptionErr();
+                QoreStringValueHelper str(err);
+                other_error = str->c_str();
+                xsink.clear();
+            }
+        }
+        if (disable_warnings) {
+            pgm->disableWarning(disable_warnings);
+        }
+    });
+    other.join();
+    // the options that this thread sees then
+    QoreParseOptions scope_options = pgm->getParseOptions();
+    std::unique_lock<std::mutex> ul(parse_scope_gate.m);
+    parse_scope_gate.scope_options = scope_options;
+    parse_scope_gate.other_error = other_error;
+    parse_scope_gate.other_options = other_options;
+    parse_scope_gate.other_call_options = other_call_options;
+    parse_scope_gate.fired_pgm = pgm;
+    parse_scope_gate.cv.notify_all();
+    if (parse_scope_gate.observer) {
+        // the observer thread reads the options now
+        parse_scope_gate.cv.wait(ul, [] { return parse_scope_gate.observer_done || parse_scope_gate.closed; });
+    }
+}
+
+void qore_dbg_parse_scope_end(QoreProgram* pgm, const char* kind) {
+    std::lock_guard<std::mutex> lg(parse_scope_gate.m);
+    if (parse_scope_gate.fired_pgm != pgm || parse_scope_gate.kind != kind || parse_scope_gate.ended) {
+        return;
+    }
+    parse_scope_gate.end_options = pgm->getParseOptions();
+    parse_scope_gate.end_warn_mask = qore_program_private::getParseWarnOptions(pgm).warn_mask;
+    parse_scope_gate.ended = true;
+}
+
+//! Debug-only: stops a parse when the next scoped options of a kind are in effect (issues #6175, #6207, #6382)
+/** When scoped options of the Program (any Program if \a pgm is NOTHING) of the kind given are in effect
+    (\c "statement": the options of a statement while it is initialized, \c "push": the options of a file with
+    \%push-parse-options once one of its directives has changed them, \c "header": the restrictions of a module
+    header; or \c "directive": a parse directive has changed the Program's own options), another thread reads the options of the Program as Program::getParseOptions() does and as a call
+    entering the Program does, and then sets the options \a set_options with Program::setParseOptions() and disables
+    the warnings \a disable_warnings; the parse goes on once it has.  With \a observer, the parse waits then until
+    dbg_parse_scope_gate_continue() is called by a thread that dbg_parse_scope_gate_wait() released.
+    dbg_parse_scope_gate_result() gives the options seen and the options once the scoped options have ended, and closes
+    the gate.  One-shot.  DEBUG builds only.
+*/
+static QoreValue f_dbg_arm_parse_scope_gate(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    QoreProgram* p = nullptr;
+    const QoreObject* obj = get_param_value(params, 0).get<const QoreObject>();
+    if (obj) {
+        ReferenceHolder<QoreProgram> pgm(static_cast<QoreProgram*>(obj->getReferencedPrivateData(CID_PROGRAM,
+            xsink)), xsink);
+        if (!pgm) {
+            return QoreValue();
+        }
+        p = *pgm;
+    }
+    QoreStringNodeValueHelper kind(get_param_value(params, 1));
+    std::lock_guard<std::mutex> lg(parse_scope_gate.m);
+    parse_scope_gate.armed = true;
+    parse_scope_gate.pgm = p;
+    parse_scope_gate.kind = kind->c_str();
+    parse_scope_gate.set_options = get_param_value(params, 2).getAsBigInt();
+    parse_scope_gate.disable_warnings = static_cast<int>(get_param_value(params, 3).getAsBigInt());
+    parse_scope_gate.observer = get_param_value(params, 4).getAsBool();
+    parse_scope_gate.fired_pgm = nullptr;
+    parse_scope_gate.scope_options = QoreParseOptions();
+    parse_scope_gate.other_error.clear();
+    parse_scope_gate.other_options = QoreParseOptions();
+    parse_scope_gate.other_call_options = QoreParseOptions();
+    parse_scope_gate.end_options = QoreParseOptions();
+    parse_scope_gate.end_warn_mask = 0;
+    parse_scope_gate.ended = false;
+    parse_scope_gate.observer_done = false;
+    parse_scope_gate.closed = false;
+    return QoreValue();
+}
+
+//! Debug-only: waits until the gate of dbg_arm_parse_scope_gate() stops a parse or is closed; DEBUG builds only
+/** @return True if a parse is stopped (call dbg_parse_scope_gate_continue() then), False if the gate was closed
+    without stopping one
+*/
+static QoreValue f_dbg_parse_scope_gate_wait(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    std::unique_lock<std::mutex> ul(parse_scope_gate.m);
+    parse_scope_gate.cv.wait(ul, [] { return parse_scope_gate.fired_pgm || parse_scope_gate.closed; });
+    return parse_scope_gate.fired_pgm && !parse_scope_gate.closed;
+}
+
+//! Debug-only: lets a parse stopped by the gate of dbg_arm_parse_scope_gate() go on; DEBUG builds only
+static QoreValue f_dbg_parse_scope_gate_continue(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    std::lock_guard<std::mutex> lg(parse_scope_gate.m);
+    parse_scope_gate.observer_done = true;
+    parse_scope_gate.cv.notify_all();
+    return QoreValue();
+}
+
+//! Debug-only: returns the result of the gate of dbg_arm_parse_scope_gate() and closes it; DEBUG builds only
+/** @return a hash: \c fired: True if scoped options stopped a parse, \c ended: True if they have ended since,
+    \c scope_options: the low word of the options that the parsing thread had then, after the other thread's
+    change, \c scope_option_names: the names
+    of all of them, \c other_error: the error code of the other thread's change, if it failed, \c other_options:
+    the low word of the options that another thread read then (Program::getParseOptions()), \c other_call_options:
+    the low word of the options that a call entering the Program took then, \c options: the low word of the options
+    of the Program when the scoped options ended, \c warn_mask: its warning mask then
+*/
+static QoreValue f_dbg_parse_scope_gate_result(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    std::lock_guard<std::mutex> lg(parse_scope_gate.m);
+    parse_scope_gate.armed = false;
+    parse_scope_gate.closed = true;
+    parse_scope_gate.cv.notify_all();
+    ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), xsink);
+    h->setKeyValue("fired", static_cast<bool>(parse_scope_gate.fired_pgm), xsink);
+    h->setKeyValue("ended", parse_scope_gate.ended, xsink);
+    h->setKeyValue("scope_options", parse_scope_gate.scope_options.getLo(), xsink);
+    h->setKeyValue("scope_option_names", QoreParseOptionsData(parse_scope_gate.scope_options).toStringList(xsink),
+        xsink);
+    if (!parse_scope_gate.other_error.empty()) {
+        h->setKeyValue("other_error", new QoreStringNode(parse_scope_gate.other_error), xsink);
+    }
+    h->setKeyValue("other_options", parse_scope_gate.other_options.getLo(), xsink);
+    h->setKeyValue("other_call_options", parse_scope_gate.other_call_options.getLo(), xsink);
+    h->setKeyValue("options", parse_scope_gate.end_options.getLo(), xsink);
+    h->setKeyValue("warn_mask", static_cast<int64>(parse_scope_gate.end_warn_mask), xsink);
+    return h.release();
+}
+
+//! Debug-only: returns the number of scoped options of the Program in effect in any thread; DEBUG builds only
+static QoreValue f_dbg_parse_scope_count(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    const QoreObject* obj = get_param_value(params, 0).get<const QoreObject>();
+    ReferenceHolder<QoreProgram> pgm(static_cast<QoreProgram*>(obj->getReferencedPrivateData(CID_PROGRAM,
+        xsink)), xsink);
+    if (!pgm) {
+        return QoreValue();
+    }
+    return static_cast<int64>(qore_program_private::get(**pgm)->pwo.parse_options.getOverlayCount());
+}
+
+//! Debug-only: creates a child process with fork() while another thread has scoped options of the Program in effect
+/** The other thread gives the Program scoped options (as a statement does while it is initialized) and keeps them
+    until fork() has returned in the parent; the child runs the code given and exits with the value it returns (99 if
+    it raised an exception).  The thread does not exist in the child, so its scoped options must not be counted there
+    (issue #6207).  DEBUG builds only.
+
+    @return the exit status of the child (-1 if it did not exit normally)
+
+    @throw DBG-FORK-ERROR fork() failed
+*/
+static QoreValue f_dbg_fork_while_parse_scope_active(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    const QoreObject* obj = get_param_value(params, 0).get<const QoreObject>();
+    const ResolvedCallReferenceNode* child_code = get_param_value(params, 1).get<const ResolvedCallReferenceNode>();
+    ReferenceHolder<QoreProgram> pgm(static_cast<QoreProgram*>(obj->getReferencedPrivateData(CID_PROGRAM,
+        xsink)), xsink);
+    if (!pgm) {
+        return QoreValue();
+    }
+    const SyncParseOptions& po = qore_program_private::get(**pgm)->pwo.parse_options;
+    std::mutex m;
+    std::condition_variable cv;
+    bool active = false;
+    bool release = false;
+    std::thread holder([&]() {
+        ParseOptionsOverlayFrame frame(ParseOptionsOverlayFrame::STATEMENT);
+        frame.po = po.load() | QoreParseOptions(PO_NO_GUI);
+        frame.link(po);
+        std::unique_lock<std::mutex> ul(m);
+        active = true;
+        cv.notify_all();
+        cv.wait(ul, [&release] { return release; });
+    });
+    {
+        std::unique_lock<std::mutex> ul(m);
+        cv.wait(ul, [&active] { return active; });
+    }
+    pid_t pid = fork();
+    if (!pid) {
+        ExceptionSink child_xsink;
+        ValueHolder rv(child_code->invoke(nullptr, &child_xsink), &child_xsink);
+        int status = child_xsink ? 99 : static_cast<int>(rv->getAsBigInt());
+        child_xsink.clear();
+        _exit(status);
+    }
+    int fork_errno = errno;
+    {
+        std::lock_guard<std::mutex> lg(m);
+        release = true;
+        cv.notify_all();
+    }
+    holder.join();
+    if (pid < 0) {
+        xsink->raiseErrnoException("DBG-FORK-ERROR", fork_errno, "fork() failed");
+        return QoreValue();
+    }
+    return ut_wait_child(pid);
+}
+
 //! Debug-only: creates a child process with fork() while another thread holds the lock of a registered fork handler
 /** The other thread takes the lock as the handler's prepare handler does, and releases it when the prepare handlers
     reach the handler, so fork() waits for it.  The child takes and releases the lock in the same way, runs the code
@@ -18603,6 +19039,184 @@ static QoreValue f_dbg_fork_while_thread_wait_lock_held(const QoreListNode* para
         return QoreValue();
     }
     return ut_wait_child(pid);
+}
+
+namespace {
+//! parks the first thread that is added to the thread counts of a given Program inside that change, with the stripe
+//! lock of the Program's thread containers held; see dbg_hold_thread_container_change()
+struct ThreadContainerHold {
+    std::mutex m;
+    std::condition_variable cv;
+    //! the Program whose change is held, or null if no hold is armed; only compared, never dereferenced
+    const qore_program_private_base* pgm = nullptr;
+    //! a thread was parked in the change (stays set when it continues)
+    bool held = false;
+    //! the parked thread may continue
+    bool release = false;
+    //! the parked thread has continued with the change
+    bool continued = false;
+    //! the fork prepare handler of the stripe locks was reached while the thread was parked
+    bool hook_saw_held = false;
+};
+
+ThreadContainerHold& thread_container_hold() {
+    // not destroyed: a parked thread can use it while static objects are destroyed
+    static ThreadContainerHold* h = new ThreadContainerHold;
+    return *h;
+}
+
+//! called with the stripe lock held when a thread is added to the thread counts of a Program
+void thread_container_hold_hook(const qore_program_private_base* pp) {
+    ThreadContainerHold& h = thread_container_hold();
+    std::unique_lock<std::mutex> l(h.m);
+    if (!h.pgm || h.pgm != pp || h.held) {
+        return;
+    }
+    h.held = true;
+    h.cv.notify_all();
+    h.cv.wait(l, [&h]() { return h.release; });
+    h.continued = true;
+    h.cv.notify_all();
+}
+
+//! the fork prepare hook: releases the parked thread when the prepare handler reaches the stripe locks
+void thread_container_fork_hook(const char* name) {
+    if (strcmp(name, "program_thread_containers")) {
+        return;
+    }
+    ThreadContainerHold& h = thread_container_hold();
+    std::lock_guard<std::mutex> lg(h.m);
+    h.hook_saw_held = h.held && !h.release;
+    h.release = true;
+    h.cv.notify_all();
+}
+
+//! releases a parked thread and disarms the hold; the hold's mutex must be held
+void thread_container_hold_disarm(ThreadContainerHold& h) {
+    h.release = true;
+    h.pgm = nullptr;
+    h.cv.notify_all();
+}
+}
+
+//! Debug-only: arms a hold of the next thread that enters the given Program for the first time
+/** The thread is parked inside the change of the Program's thread counts, with the lock that fork() waits for held,
+    until dbg_fork_while_thread_container_held() calls fork() or dbg_hold_thread_container_change_clear() is called.
+    DEBUG builds only.
+
+    @throw DBG-ARGUMENT-ERROR a hold is already armed, or a thread of a previous hold has not continued yet
+*/
+static QoreValue f_dbg_hold_thread_container_change(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    const QoreObject* obj = get_param_value(params, 0).get<const QoreObject>();
+    ReferenceHolder<QoreProgram> pgm(static_cast<QoreProgram*>(obj->getReferencedPrivateData(CID_PROGRAM,
+        xsink)), xsink);
+    if (!pgm) {
+        return QoreValue();
+    }
+    ThreadContainerHold& h = thread_container_hold();
+    std::lock_guard<std::mutex> lg(h.m);
+    if (h.pgm || (h.held && !h.continued)) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "a thread container hold is already armed or still held");
+        return QoreValue();
+    }
+    h.pgm = static_cast<const qore_program_private_base*>(qore_program_private::get(**pgm));
+    h.held = false;
+    h.release = false;
+    h.continued = false;
+    h.hook_saw_held = false;
+    qore_program_private_base::dbg_thread_container_hook.store(thread_container_hold_hook);
+    return QoreValue();
+}
+
+//! Debug-only: releases a thread parked by dbg_hold_thread_container_change() and disarms the hold
+static QoreValue f_dbg_hold_thread_container_change_clear(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    ThreadContainerHold& h = thread_container_hold();
+    std::lock_guard<std::mutex> lg(h.m);
+    thread_container_hold_disarm(h);
+    qore_program_private_base::dbg_thread_container_hook.store(nullptr);
+    return QoreValue();
+}
+
+//! Debug-only: creates a child process with fork() while a thread is parked in a change of a Program's thread counts
+/** Waits until the thread armed with dbg_hold_thread_container_change() is parked, then calls fork(); the parked thread
+    is released when the prepare handler of the Programs' thread container locks is reached, so fork() waits until it
+    has finished the change.  The child exits with 98 at once if one of those locks is not free; otherwise it runs the
+    code given and exits with the value it returns (99 if it raised an exception; it is ended by SIGALRM if it does not
+    exit within 120 seconds).  The hold is disarmed in any case.  DEBUG builds only.
+
+    @return a hash: \c status: the exit status of the child (-1 if it did not exit normally), \c waited: True if the
+    prepare handler was reached while the thread was parked, \c changed: True if the parked thread had finished the
+    change when fork() returned in the parent
+
+    @throw DBG-FORK-ERROR no hold is armed, no thread was parked within 120 seconds, or fork() failed
+*/
+static QoreValue f_dbg_fork_while_thread_container_held(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    const ResolvedCallReferenceNode* child_code = get_param_value(params, 0).get<const ResolvedCallReferenceNode>();
+    ThreadContainerHold& h = thread_container_hold();
+    {
+        std::unique_lock<std::mutex> l(h.m);
+        if (!h.pgm) {
+            xsink->raiseException("DBG-FORK-ERROR", "no thread container hold is armed");
+            return QoreValue();
+        }
+        // a bound for a broken test only: the thread is parked when it enters the Program
+        if (!h.cv.wait_for(l, std::chrono::seconds(120), [&h]() { return h.held; })) {
+            thread_container_hold_disarm(h);
+            qore_program_private_base::dbg_thread_container_hook.store(nullptr);
+            xsink->raiseException("DBG-FORK-ERROR", "no thread was parked in a change of the Program's thread counts");
+            return QoreValue();
+        }
+    }
+    qore_fork_prepare_hook = thread_container_fork_hook;
+    pid_t pid = fork();
+    if (!pid) {
+        // only this thread exists: the locks of the thread containers must be free
+        for (auto& shard : qore_program_private_base::thread_container_shards) {
+            if (!shard.lock.try_lock()) {
+                _exit(98);
+            }
+            shard.lock.unlock();
+        }
+        // a child that waits forever is ended instead
+        sigset_t set;
+        sigemptyset(&set);
+        sigaddset(&set, SIGALRM);
+        pthread_sigmask(SIG_UNBLOCK, &set, nullptr);
+        signal(SIGALRM, SIG_DFL);
+        alarm(120);
+        int status = 0;
+        if (child_code) {
+            ExceptionSink child_xsink;
+            ValueHolder rv(child_code->invoke(nullptr, &child_xsink), &child_xsink);
+            status = child_xsink ? 99 : static_cast<int>(rv->getAsBigInt());
+            child_xsink.clear();
+        }
+        _exit(status);
+    }
+    int fork_errno = errno;
+    qore_fork_prepare_hook = nullptr;
+    bool waited, changed;
+    {
+        std::lock_guard<std::mutex> lg(h.m);
+        waited = h.hook_saw_held;
+        changed = h.continued;
+        // releases the parked thread if the prepare handler did not
+        thread_container_hold_disarm(h);
+    }
+    qore_program_private_base::dbg_thread_container_hook.store(nullptr);
+    if (pid < 0) {
+        xsink->raiseErrnoException("DBG-FORK-ERROR", fork_errno, "fork() failed");
+        return QoreValue();
+    }
+    int status = ut_wait_child(pid);
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+    rv->setKeyValue("status", status, xsink);
+    rv->setKeyValue("waited", waited, xsink);
+    rv->setKeyValue("changed", changed, xsink);
+    return rv.release();
 }
 
 namespace {
@@ -21527,6 +22141,49 @@ static QoreValue f_dbg_ir_returns_pass_through_without_thread_data(const QoreLis
         return QoreValue();
     }
     return rv;
+}
+
+//! removes the installed native code of a user function without recompiling it, as a recompilation does while it
+//! runs, so that a test can call the function while it has none (qore#6317)
+/** @param code a call reference to a user function with one variant
+
+    @return True if native code was installed (with JIT or tiered execution), False if not
+
+    @throw DBG-ARGUMENT-ERROR the call reference does not refer to a user function with one variant
+*/
+static QoreValue f_dbg_jit_drop_native_code(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    const ResolvedCallReferenceNode* code = get_param_value(params, 0).get<const ResolvedCallReferenceNode>();
+    const QoreFunction* qf = code->getFunction();
+    const AbstractQoreFunctionVariant* variant = qf && qf->numVariants() == 1 ? qf->first() : nullptr;
+    const UserVariantBase* uvb = variant ? variant->getUserVariantBase() : nullptr;
+    if (!uvb) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_jit_drop_native_code() requires a call reference to a user "
+            "function with one variant");
+        return QoreValue();
+    }
+    return uvb->dbgDropNativeCode();
+}
+
+//! recompiles a user function to native code as a recompilation after deoptimizations does: alone, not in a batch,
+//! so that its recursive calls are made with the native self-recursive call helper (qore#6317)
+/** @param code a call reference to a user function with one variant
+
+    @return True if the function has native code after the recompilation (with JIT or tiered execution), False if not
+
+    @throw DBG-ARGUMENT-ERROR the call reference does not refer to a user function with one variant
+*/
+static QoreValue f_dbg_jit_recompile_native_code(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    const ResolvedCallReferenceNode* code = get_param_value(params, 0).get<const ResolvedCallReferenceNode>();
+    const QoreFunction* qf = code->getFunction();
+    const AbstractQoreFunctionVariant* variant = qf && qf->numVariants() == 1 ? qf->first() : nullptr;
+    const UserVariantBase* uvb = variant ? variant->getUserVariantBase() : nullptr;
+    if (!uvb) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_jit_recompile_native_code() requires a call reference to "
+            "a user function with one variant");
+        return QoreValue();
+    }
+    return uvb->dbgRecompileNativeCode();
 }
 
 //! returns the number of background JIT compiles refused because a Program they refer to is being or was deleted
@@ -25189,6 +25846,18 @@ static QoreValue f_dbg_env_read_race_result(const QoreListNode* params, RuntimeC
 /** Tests that a failed entry leaves the thread as it was (ProgramThreadCountContextHelper; issue #6198); several sites
     can be armed, each fails once; -1 disarms all of them
 */
+//! Holds the next background thread that releases its TID for up to the given milliseconds before it leaves the
+//! process's background thread count (issue #6405)
+static QoreValue f_dbg_hold_next_thread_finish(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    qore_dbg_hold_next_thread_finish(static_cast<int>(get_param_value(params, 0).getAsBigInt()));
+    return QoreValue();
+}
+
+//! Waits until a finishing background thread is held by dbg_hold_next_thread_finish(); returns False on timeout
+static QoreValue f_dbg_wait_thread_finish_held(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    return qore_dbg_wait_thread_finish_held(static_cast<int>(get_param_value(params, 0).getAsBigInt()));
+}
+
 static QoreValue f_dbg_fail_next_program_entry(const QoreListNode* params, RuntimeConfig& rc,
         ExceptionSink* xsink) {
     qore_dbg_fail_next_program_entry(static_cast<int>(get_param_value(params, 0).getAsBigInt()));
@@ -25199,6 +25868,29 @@ static QoreValue f_dbg_fail_next_program_entry(const QoreListNode* params, Runti
 //! current thread
 /** Tests that a character offset in the ASCII text at the start of a UTF-8 string is O(1) (issue #6138)
 */
+//! Returns True if the string is a view onto another string's buffer
+/** Tests that a slice that does not reach the end of its parent is copied when it is taken, and a slice that reaches
+    it is a zero-copy view (issue #6239)
+*/
+//! Returns the capacity of the buffer that the string owns, or 0 for a view
+/** Tests that a slice in the middle of a string is copied with an exact allocation (issue #6239)
+*/
+static QoreValue f_dbg_string_capacity(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    const qore_string_private* p = qore_string_private::get(*get_param_value(params, 0).get<const QoreStringNode>());
+    return p->view_parent ? 0 : static_cast<int64>(p->allocated);
+}
+
+//! Returns the known ASCII prefix of the string (the cache of issue #6138)
+static QoreValue f_dbg_string_ascii_prefix(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    return static_cast<int64>(qore_string_private::get(*get_param_value(params, 0).get<const QoreStringNode>())
+        ->getAsciiPrefix());
+}
+
+static QoreValue f_dbg_string_is_view(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    const QoreStringNode* str = get_param_value(params, 0).get<const QoreStringNode>();
+    return qore_string_private::get(*str)->view_parent != nullptr;
+}
+
 static QoreValue f_dbg_get_string_scan_bytes(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     return qore_dbg_string_scan_bytes;
 }
@@ -25379,11 +26071,21 @@ void init_debug_functions(QoreNamespace& qns) {
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, hashTypeInfo, 1, objectTypeInfo, QORE_PARAM_NO_ARG, "target");
     qns.addBuiltinVariant("dbg_sandbox_cpu_used", f_dbg_sandbox_cpu_used, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_hold_next_thread_finish", f_dbg_hold_next_thread_finish, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, nothingTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "ms");
+    qns.addBuiltinVariant("dbg_wait_thread_finish_held", f_dbg_wait_thread_finish_held, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, boolTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
     qns.addBuiltinVariant("dbg_fail_next_program_entry", f_dbg_fail_next_program_entry,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "site");
     qns.addBuiltinVariant("dbg_get_string_scan_bytes", f_dbg_get_string_scan_bytes, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_string_is_view", f_dbg_string_is_view, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolTypeInfo, 1,
+        stringTypeInfo, QORE_PARAM_NO_ARG, "str");
+    qns.addBuiltinVariant("dbg_string_capacity", f_dbg_string_capacity, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo,
+        1, stringTypeInfo, QORE_PARAM_NO_ARG, "str");
+    qns.addBuiltinVariant("dbg_string_ascii_prefix", f_dbg_string_ascii_prefix, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        bigIntTypeInfo, 1, stringTypeInfo, QORE_PARAM_NO_ARG, "str");
     qns.addBuiltinVariant("dbg_set_ascii_prefix_cache", f_dbg_set_ascii_prefix_cache, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         boolTypeInfo, 1, boolTypeInfo, QORE_PARAM_NO_ARG, "enable");
     qns.addBuiltinVariant("dbg_sandbox_fail_next_budgets", f_dbg_sandbox_fail_next_budgets,
@@ -25521,6 +26223,8 @@ void init_debug_functions(QoreNamespace& qns) {
         QC_SOCKET->getTypeInfo(), QORE_PARAM_NO_ARG, "sock");
     qns.addBuiltinVariant("dbg_reset_socket", f_dbg_reset_socket, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
         QC_SOCKET->getTypeInfo(), QORE_PARAM_NO_ARG, "sock");
+    qns.addBuiltinVariant("dbg_tcp_peer_window", f_dbg_tcp_peer_window, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        bigIntTypeInfo, 1, QC_SOCKET->getTypeInfo(), QORE_PARAM_NO_ARG, "sock");
     qns.addBuiltinVariant("dbg_force_ssl_error_ssl", f_dbg_force_ssl_error_ssl, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         nothingTypeInfo, 1, QC_SOCKET->getTypeInfo(), QORE_PARAM_NO_ARG, "sock");
     qns.addBuiltinVariant("dbg_ssl_close_notify_count", f_dbg_ssl_close_notify_count, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
@@ -25626,6 +26330,10 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_ir_returns_pass_through_without_thread_data",
         f_dbg_ir_returns_pass_through_without_thread_data, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolTypeInfo, 1,
         codeTypeInfo, QORE_PARAM_NO_ARG, "code");
+    qns.addBuiltinVariant("dbg_jit_drop_native_code", f_dbg_jit_drop_native_code, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        boolTypeInfo, 1, codeTypeInfo, QORE_PARAM_NO_ARG, "code");
+    qns.addBuiltinVariant("dbg_jit_recompile_native_code", f_dbg_jit_recompile_native_code, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, boolTypeInfo, 1, codeTypeInfo, QORE_PARAM_NO_ARG, "code");
     qns.addBuiltinVariant("dbg_closure_call_cache_program_misses", f_dbg_closure_call_cache_program_misses,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_program_registered_with_id", f_dbg_program_registered_with_id, QCF_NO_FLAGS,
@@ -25920,9 +26628,30 @@ void init_debug_functions(QoreNamespace& qns) {
         QORE_PARAM_NO_ARG, "child");
     qns.addBuiltinVariant("dbg_fork_while_thread_wait_lock_held", f_dbg_fork_while_thread_wait_lock_held,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo, 1, codeTypeInfo, QORE_PARAM_NO_ARG, "child");
+    qns.addBuiltinVariant("dbg_arm_parse_scope_gate", f_dbg_arm_parse_scope_gate, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        nothingTypeInfo, 5, QC_PROGRAM->getOrNothingTypeInfo(), QORE_PARAM_NO_ARG, "pgm", stringTypeInfo,
+        QORE_PARAM_NO_ARG, "kind", bigIntTypeInfo, QORE_PARAM_NO_ARG, "set_options", bigIntTypeInfo,
+        QORE_PARAM_NO_ARG, "disable_warnings", boolTypeInfo, QORE_PARAM_NO_ARG, "observer");
+    qns.addBuiltinVariant("dbg_parse_scope_gate_wait", f_dbg_parse_scope_gate_wait, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        boolTypeInfo);
+    qns.addBuiltinVariant("dbg_parse_scope_gate_continue", f_dbg_parse_scope_gate_continue, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, nothingTypeInfo);
+    qns.addBuiltinVariant("dbg_parse_scope_gate_result", f_dbg_parse_scope_gate_result, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, hashTypeInfo);
+    qns.addBuiltinVariant("dbg_parse_scope_count", f_dbg_parse_scope_count, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        bigIntTypeInfo, 1, QC_PROGRAM->getTypeInfo(), QORE_PARAM_NO_ARG, "pgm");
+    qns.addBuiltinVariant("dbg_fork_while_parse_scope_active", f_dbg_fork_while_parse_scope_active, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, bigIntTypeInfo, 2, QC_PROGRAM->getTypeInfo(), QORE_PARAM_NO_ARG, "pgm", codeTypeInfo,
+        QORE_PARAM_NO_ARG, "child");
     qns.addBuiltinVariant("dbg_fork_while_parse_options_locked", f_dbg_fork_while_parse_options_locked, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo, 2, QC_PROGRAM->getTypeInfo(), QORE_PARAM_NO_ARG, "pgm", codeTypeInfo,
         QORE_PARAM_NO_ARG, "child");
+    qns.addBuiltinVariant("dbg_hold_thread_container_change", f_dbg_hold_thread_container_change, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, nothingTypeInfo, 1, QC_PROGRAM->getTypeInfo(), QORE_PARAM_NO_ARG, "pgm");
+    qns.addBuiltinVariant("dbg_hold_thread_container_change_clear", f_dbg_hold_thread_container_change_clear,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo);
+    qns.addBuiltinVariant("dbg_fork_while_thread_container_held", f_dbg_fork_while_thread_container_held,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, hashTypeInfo, 1, codeOrNothingTypeInfo, QORE_PARAM_NO_ARG, "child");
     qns.addBuiltinVariant("dbg_ref_set_unique_remove_key", f_dbg_ref_set_unique_remove_key, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, autoTypeInfo, 4, referenceTypeInfo, QORE_PARAM_NO_ARG, "ref", stringTypeInfo,
         QORE_PARAM_NO_ARG, "set_key", autoTypeInfo, QORE_PARAM_NO_ARG, "val", stringTypeInfo, QORE_PARAM_NO_ARG,

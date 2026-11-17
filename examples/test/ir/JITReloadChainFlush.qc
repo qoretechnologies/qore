@@ -1,19 +1,8 @@
-#!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
-# test-exec-mode: children - its checks run in child processes that set their own execution modes, and in qcc executables
-# test-platform: macos - the JIT and AOT code generation of the flush of the reload chains of a large function
 # Copyright 2026 Qore Technologies, s.r.o.
 
-%modern
-%no-child-restrictions
-
-%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
-%requires QUnit
-%requires FsUtil
-%requires ../ExecModeHarness.qm
-%requires ../TestInterpreter.qm
-
-%exec-class JITReloadChainFlushTest
+# the cases of the JITReloadChainFlush-<n>.qtest tests (qore#6409): each runs one part of them, so that each takes a
+# short time, and together they run every case (see addPartCase())
 
 #! The flush of the reload chains of a function with many tracked locals (qore#6299)
 /** At each temp boundary, the native code of a function rotates the reload tracker of each tracked local into its
@@ -27,8 +16,13 @@
     The tables of the helpers give their slots by their indexes in the cleanup frame of the function: the entry block
     stored the address of each slot in arrays, thousands of stores without a call between them that made LLVM's code
     generation superlinear; the test checks that the entry block stores no address.
+
+    The cases are in three parts (see addPartCase()), JITReloadChainFlush-<n>.qtest, so that each runs for a short
+    time (the whole test took 112 s alone in a debug build and was killed at the runner's 300 s limit under load,
+    qore#6409): part 1 checks the growth of the code, part 2 the results in every mode, with the inline flush and in
+    executables made by qcc, and part 3 a function under the threshold and the entry block.
 */
-class JITReloadChainFlushTest inherits QUnit::Test {
+class JITReloadChainFlushBase inherits QUnit::Test {
     public {
         #! the catch blocks of the smaller and of the larger function
         const Small = 40;
@@ -40,22 +34,32 @@ class JITReloadChainFlushTest inherits QUnit::Test {
     }
 
     private {
+        #! the part of the cases that this test runs (see addPartCase())
+        int part;
+
         string qore_bin;
         string qcc_bin;
         #! the library path of the qcc compiles and of the executables
         string lib_env;
     }
 
-    constructor() : QUnit::Test("JITReloadChainFlushTest", "1.0", \ARGV) {
+    constructor(string name, int part) : QUnit::Test(name, "1.0", \ARGV) {
+        self.part = part;
         qore_bin = TestInterpreter::qore_interpreter();
         string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
         qcc_bin = TestInterpreter::qcc_compiler() ?? "qcc";
         lib_env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s", libqore_dir, libqore_dir);
-        addTestCase("the code of a function with many tracked locals grows linearly", \testLinear());
-        addTestCase("the flushes keep the results and the order of the destructors of the AST", \testResults());
-        addTestCase("a function under the threshold keeps the inline flush", \testInline());
-        addTestCase("the entry block of a large function stores no slot address", \testEntryBlock());
+        addPartCase(1, "the code of a function with many tracked locals grows linearly", \testLinear());
+        addPartCase(2, "the flushes keep the results and the order of the destructors of the AST", \testResults());
+        addPartCase(3, "a function under the threshold keeps the inline flush", \testInline());
+        addPartCase(3, "the entry block of a large function stores no slot address", \testEntryBlock());
         set_return_value(main());
+    }
+
+    private addPartCase(int case_part, string name, code call, *softlist<auto> args) {
+        if (case_part == part) {
+            addTestCase(name, call, args);
+        }
     }
 
     #! Returns a script with a function of \a n catch blocks, each with an int and an object local and a handler

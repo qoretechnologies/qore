@@ -1,0 +1,21 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - JIT code generation and linking, EH frame registration and the end of the process
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - every check runs the script in a child process that sets its own --exec-mode
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../TestInterpreter.qm
+
+%include JitTeardownAtExit.qc
+
+%exec-class JitTeardownAtExitPart3
+
+#! runs part 3 of 3 of the cases of JitTeardownAtExitBase: valgrind in tiered execution
+class JitTeardownAtExitPart3 inherits JitTeardownAtExitBase {
+    constructor() : JitTeardownAtExitBase("JIT teardown at exit part 3", 3) {
+    }
+}

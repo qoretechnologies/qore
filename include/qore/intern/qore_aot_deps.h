@@ -138,6 +138,13 @@ DLLEXPORT bool qore_aot_source_parse_active();
 */
 DLLEXPORT bool qore_check_modern_parse_options(const QoreParseOptions& po, std::string& error);
 
+//! Returns the parse options that an AOT executable records for code compiled in a Program created with \a base
+/** The options of the Program at the end of the parse (\a final) with the options given for it (the command line),
+    except the compatibility options that %modern does not allow: one that the Program no longer has was disabled or
+    reset by the code's own %modern (issue #6382), and must not be added back
+*/
+DLLEXPORT QoreParseOptions qore_aot_merge_parse_options(const QoreParseOptions& final, const QoreParseOptions& base);
+
 //! Set the active build-group source-symbol manifest for the current thread.
 /** The manifest lets standalone source compiles prefer declarations provided by
     the current build group over same-name symbols from already-loaded modules

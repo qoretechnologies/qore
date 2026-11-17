@@ -284,6 +284,19 @@ public:
 
         statement_list.erase_to_end(hwm);
         native_parse_info = committed_native_parse_info;
+
+        // the top-level local variables that the failed parse declared are not the Program's, and a parse that no
+        // other one has committed is still the first one, which can declare them (issue #678)
+        first = committed_first;
+        if (lvars) {
+            assert(lvars->size() >= committed_lvars);
+            if (committed_lvars) {
+                lvars->lv.resize(committed_lvars);
+            } else {
+                delete lvars;
+                lvars = nullptr;
+            }
+        }
     }
 
     // local vars are not instantiated here because they are instantiated by the QoreProgram object
@@ -301,6 +314,7 @@ public:
         assert(!lvars);
         lvars = new LVList(*lvl);
         inherited_lvars = lvl->size();
+        markCommitted();
     }
 
     DLLLOCAL void setupLVList(QoreParseContext& parse_context) {
@@ -324,6 +338,15 @@ protected:
     statement_list_t::iterator ehwm;
     // true only the first time parseInit() is called
     bool first;
+    // the values of first and of the size of lvars that a rollback restores: those of the last commit (issue #678)
+    bool committed_first = true;
+    size_t committed_lvars = 0;
+
+    //! Records the top-level local variables and the state of the first parse that a rollback restores
+    DLLLOCAL void markCommitted() {
+        committed_first = first;
+        committed_lvars = lvars ? lvars->size() : 0;
+    }
     // the number of the local vars at the beginning of lvars that are inherited from the parent program; they are
     // instantiated at runtime for the code of the parent program, but they are not visible to the code of this program
     unsigned inherited_lvars = 0;

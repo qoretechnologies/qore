@@ -1079,8 +1079,8 @@ enum class QoreIROpcode : uint16_t {
         LeAny, GtAny and GeAny for operands that the parser found may hold such a value only for some of their values
         (an or-nothing or a union type that includes the plugin's type, auto, or no type).  They dispatch to the
         plugin operation for such a value, as the AST operator does, and compare as the Any opcode otherwise; the
-        result need not be a boolean.  A switch case with an operator compares with the Any opcode, as the AST's
-        CaseNodeWithOperator compares without plugins.
+        result need not be a boolean.  A switch case with an operator compares as the operator does in the condition
+        of an if statement, plugins included (qore#6252).
     */
     EqPlugin = 432,
     NePlugin = 433,

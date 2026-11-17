@@ -237,11 +237,14 @@ QoreStringNode* QoreStringNode::makeView(QoreStringNode* parent, size_t byte_off
     // terminator of its own, made by a copy on its first read, which a read of a string shared between threads cannot
     // make safely (issue #6239); such a part is copied here, as almost every use of it would copy it anyway
     if (byte_offset + byte_len != pp->len) {
-        QoreStringNode* part = new QoreStringNode(pp->getEncoding());
-        if (byte_len) {
-            part->concat(pp->effective_buf() + byte_offset, byte_len);
-        }
-        return part;
+        // an exact allocation, as materialize() makes, and the part of the string's known ASCII prefix that the
+        // copy holds (see qore_string_private::asciiPrefixStorage())
+        size_t prefix = pp->getAsciiPrefix();
+        prefix = prefix > byte_offset ? std::min(prefix - byte_offset, byte_len) : 0;
+        qore_string_private* cp = new qore_string_private;
+        cp->encoding = pp->getEncoding();
+        cp->adoptCopy(pp->effective_buf() + byte_offset, byte_len, prefix);
+        return new QoreStringNode(cp);
     }
 
     // Collapse view-of-view: never chain. If parent is itself a view, hop once.

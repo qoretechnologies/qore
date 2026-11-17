@@ -59,7 +59,8 @@ show("closure if auto int", ca(1));
 code ct = auto sub (*DataFrame::ColumnRef c) { try { return c > 1.5; } catch (hash<ExceptionInfo> ex) { return ex.err; } };
 show("closure try *ColumnRef", ct(df.column("a")));
 show("closure try NOTHING", ct(NOTHING));
-# a case with an operator compares without plugins, as the AST's CaseNodeWithOperator does
+# a case with an operator matches as "if (value OP x)" does (qore#6252): "c > 5" dispatches to the plugin, and its
+# non-empty RowMask is true, so the first case matches
 code cs = auto sub (auto c) { switch (c) { case > 5: return "gt"; case == 2: return "eq"; } return "no"; };
 show("closure case ColumnRef", cs(df.column("a")));
 show("closure case int", cs(7));

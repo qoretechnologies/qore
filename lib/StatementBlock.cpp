@@ -801,6 +801,7 @@ void TopLevelStatementBlock::parseCommit(QoreProgram* pgm) {
     }
     hwm = statement_list.last();
     committed_native_parse_info = native_parse_info;
+    markCommitted();
 }
 
 TopLevelStatementBlock::~TopLevelStatementBlock() {
@@ -861,6 +862,7 @@ void TopLevelStatementBlock::setLVarsFromAOTContext(QoreAOTContext* ctx) {
             }
         }
         lvars = new LVList(top_locals.data(), static_cast<int>(top_locals.size()));
+        markCommitted();
         return;
     }
     // Update the LVList entries from the AOT context

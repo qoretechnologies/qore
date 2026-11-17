@@ -438,6 +438,11 @@ static bool expressionMayCreateNodeTemp(const QoreValue& val) {
     if (auto* var_ref = dynamic_cast<const VarRefNode*>(node)) {
         return !isImmediateCleanupFreeType(var_ref->getTypeInfo());
     }
+    // the value of the switch statement in the comparison of a switch case is held by the switch statement
+    // (qore#6252)
+    if (dynamic_cast<const QoreSwitchValueOperatorNode*>(node)) {
+        return false;
+    }
     if (auto* rt_const = qore_get_runtime_constant_ref_node(node)) {
         if (auto* ce = rt_const->getConstantEntry()) {
             return !isImmediateCleanupFreeType(ce->typeInfo);
@@ -3791,9 +3796,9 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             }
             // Check for range operators - not supported for SwitchInt
             if (auto* op_case = dynamic_cast<const CaseNodeWithOperator*>(node)) {
-                op_log_func_t op_func = op_case->getOpFunc();
-                // Only soft equality is compatible with SwitchInt
-                if (op_func != QoreLogicalEqualsOperatorNode::softEqual) {
+                // only equality is compatible with SwitchInt: an int switch value compared with an int case value is
+                // equal as the SwitchInt compares them
+                if (op_case->getOperator() != QoreSwitchCaseOperator::Equals) {
                     use_switch_int = false;
                     break;
                 }
@@ -3990,46 +3995,43 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
                 }
                 match_value = inst->result;
             } else if (auto* op_case = dynamic_cast<const CaseNodeWithOperator*>(node)) {
-                QoreIRValue case_val = lowerExpression(node->val, error);
-                if (!case_val.isValid()) {
+                // the case matches when value OP x is true as the condition of an if statement: its comparison is
+                // lowered as the condition of an if statement, with the switch value as its left operand (qore#6252)
+                const QoreValue& cmp = op_case->getComparison();
+                if (!cmp) {
+                    error = "the comparison of a switch case with an operator was not parse-initialized";
                     return false;
                 }
-                op_log_func_t op_func = op_case->getOpFunc();
-                QoreIROpcode cmp_op = QoreIROpcode::EqAny;
-                QoreValue cmp_expr;
-                if (op_func == QoreLogicalGreaterThanOrEqualsOperatorNode::doGreaterThanOrEquals) {
-                    cmp_op = selectComparisonOpcode(switch_expr, node->val, QoreIROpcode::GeInt,
-                        QoreIROpcode::GeFloat, QoreIROpcode::GeAny);
-                    cmp_expr = QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(node->loc,
-                        switch_expr.refSelf(), node->val.refSelf()));
-                } else if (op_func == QoreLogicalLessThanOrEqualsOperatorNode::doLessThanOrEquals) {
-                    cmp_op = selectComparisonOpcode(switch_expr, node->val, QoreIROpcode::LeInt,
-                        QoreIROpcode::LeFloat, QoreIROpcode::LeAny);
-                    cmp_expr = QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(node->loc,
-                        switch_expr.refSelf(), node->val.refSelf()));
-                } else if (op_func == QoreLogicalLessThanOperatorNode::doLessThan) {
-                    cmp_op = selectComparisonOpcode(switch_expr, node->val, QoreIROpcode::LtInt,
-                        QoreIROpcode::LtFloat, QoreIROpcode::LtAny);
-                    cmp_expr = QoreValue(new QoreLogicalLessThanOperatorNode(node->loc, switch_expr.refSelf(),
-                        node->val.refSelf()));
-                } else if (op_func == QoreLogicalGreaterThanOperatorNode::doGreaterThan) {
-                    cmp_op = selectComparisonOpcode(switch_expr, node->val, QoreIROpcode::GtInt,
-                        QoreIROpcode::GtFloat, QoreIROpcode::GtAny);
-                    cmp_expr = QoreValue(new QoreLogicalGreaterThanOperatorNode(node->loc, switch_expr.refSelf(),
-                        node->val.refSelf()));
-                } else if (op_func == QoreLogicalEqualsOperatorNode::softEqual) {
-                    cmp_op = selectComparisonOpcode(switch_expr, node->val, QoreIROpcode::EqInt,
-                        QoreIROpcode::EqAny, QoreIROpcode::EqAny);
-                    cmp_expr = QoreValue(new QoreLogicalEqualsOperatorNode(node->loc, switch_expr.refSelf(),
-                        node->val.refSelf()));
-                } else {
-                    error = "unsupported switch case operator for IR lowering";
+                struct SwitchCaseValueHelper {
+                    QoreIRValue& value;
+                    QoreValue& expr;
+                    QoreIRValue old;
+                    QoreValue old_expr;
+                    SwitchCaseValueHelper(QoreIRValue& value, QoreValue& expr, QoreIRValue new_value,
+                            QoreValue new_expr) : value(value), expr(expr), old(value), old_expr(expr) {
+                        value = new_value;
+                        expr = new_expr;
+                    }
+                    ~SwitchCaseValueHelper() {
+                        value = old;
+                        expr = old_expr;
+                    }
+                } switch_case_value_helper(switch_case_value, switch_case_expr, switch_val, switch_expr);
+                // the temporaries created by the comparison are released before the case code runs, as for the
+                // condition of an if statement
+                bool cmp_needs_cleanup = expressionMayCreateNodeTemp(cmp);
+                if (cmp_needs_cleanup) {
+                    builder.createPushTempMark(node->loc);
+                }
+                QoreIRValue cond = lowerConditionValue(cmp, error);
+                if (!cond.isValid()) {
                     return false;
                 }
-                ValueHolder cmp_holder(cmp_expr, nullptr);
-                match_value = lowerBinaryOpOrInvoke(cmp_op, cmp_expr, switch_val, case_val, node->loc, error);
-                if (!match_value.isValid()) {
-                    return false;
+                match_value = !cmp_needs_cleanup || conditionValueSurvivesDiscardTemps(cmp)
+                    ? cond
+                    : builder.createUnaryOp(QoreIROpcode::ToBool, cond, node->loc)->result;
+                if (cmp_needs_cleanup) {
+                    createDiscardTemps(node->loc);
                 }
             } else {
                 // Use SwitchCaseMatch which calls CaseNode::matches(),
@@ -6822,6 +6824,14 @@ QoreIRValue QoreIRLowering::lowerExpressionImpl(const QoreValue& expr, std::stri
     if (stackReserveReached(error)) {
         return QoreIRValue();
     }
+    // the value of the switch statement in the comparison of a case with an operator (qore#6252)
+    if (expr.hasNode() && dynamic_cast<const QoreSwitchValueOperatorNode*>(expr.getInternalNode())) {
+        if (!switch_case_value.isValid()) {
+            error = "switch value outside the comparison of a switch case";
+            return QoreIRValue();
+        }
+        return switch_case_value;
+    }
     const std::string& registry_error = getIRExprRegistryValidationError();
     if (!registry_error.empty()) {
         error = registry_error;
@@ -7439,6 +7449,11 @@ bool QoreIRLowering::getAnalysis(const QoreValue& expr, QoreParseAnalysis& analy
     analysis.clear();
     if (expr.hasNode()) {
         const AbstractQoreNode* node = expr.getInternalNode();
+        // the value of the switch statement in the comparison of a case with an operator has the analysis of the
+        // switch expression, whose value it is (qore#6252)
+        if (dynamic_cast<const QoreSwitchValueOperatorNode*>(node)) {
+            return switch_case_expr ? getAnalysis(switch_case_expr, analysis) : false;
+        }
         auto* parse_node = dynamic_cast<const ParseNode*>(node);
         if (parse_node) {
             analysis = parse_node->getParseAnalysis();
@@ -8449,6 +8464,11 @@ const QoreTypeInfo* QoreIRLowering::getGuaranteedTypeForValue(const QoreValue* e
     }
     if (!expr || !parse_context) {
         return nullptr;
+    }
+    // the value of the switch statement in the comparison of a case with an operator has the guaranteed type of the
+    // switch expression, whose value it is (qore#6252)
+    if (expr->hasNode() && dynamic_cast<const QoreSwitchValueOperatorNode*>(expr->getInternalNode())) {
+        return switch_case_expr ? getGuaranteedTypeForValue(&switch_case_expr, nullptr) : nullptr;
     }
     if (LocalVar* local = getLocalVarFromValue(*expr)) {
         const QoreTypeInfo* type = parse_context->guaranteedType(local);
@@ -15723,6 +15743,40 @@ static bool qore_ir_conversion_accepts_type(QoreIROpcode opcode, const QoreTypeI
     return !type->return_vec.empty();
 }
 
+//! Returns true if the expression is a comparison that can give a buffer at runtime although the parser types it bool
+/** An operand that can be a buffer (an untyped one, auto, a union with a buffer) makes the comparison elementwise at
+    runtime: its result is a buffer<bool>, where the parse type is bool (the parser types the comparison as the buffer
+    result only when it knows the types of the operands); a conversion that is chosen by the parse type would convert
+    that buffer as a bool (qore#6264)
+*/
+static bool qore_ir_comparison_may_give_buffer(const QoreValue& expr) {
+    const AbstractQoreNode* node = expr.getInternalNode();
+    if (!node) {
+        return false;
+    }
+    QoreValue left, right;
+    if (auto* eq = dynamic_cast<const QoreLogicalEqualsOperatorNode*>(node)) {
+        left = eq->getLeft();
+        right = eq->getRight();
+    } else if (auto* lt = dynamic_cast<const QoreLogicalLessThanOperatorNode*>(node)) {
+        left = lt->getLeft();
+        right = lt->getRight();
+    } else if (auto* le = dynamic_cast<const QoreLogicalLessThanOrEqualsOperatorNode*>(node)) {
+        left = le->getLeft();
+        right = le->getRight();
+    } else if (auto* gt = dynamic_cast<const QoreLogicalGreaterThanOperatorNode*>(node)) {
+        left = gt->getLeft();
+        right = gt->getRight();
+    } else if (auto* ge = dynamic_cast<const QoreLogicalGreaterThanOrEqualsOperatorNode*>(node)) {
+        left = ge->getLeft();
+        right = ge->getRight();
+    } else {
+        return false;
+    }
+    return QoreTypeInfo::parseReturns(getExprTypeInfo(left), NT_BUFFER) != QTI_NOT_EQUAL
+        || QoreTypeInfo::parseReturns(getExprTypeInfo(right), NT_BUFFER) != QTI_NOT_EQUAL;
+}
+
 QoreIRValue QoreIRLowering::lowerBuiltinTypeConversion(const QoreValue& expr, std::string& error) {
     const AbstractQoreNode* node = expr.getInternalNode();
     auto* call = qore_get_function_call_node(node);
@@ -15773,6 +15827,11 @@ QoreIRValue QoreIRLowering::lowerBuiltinTypeConversion(const QoreValue& expr, st
         const QoreTypeInfo* arg_type = getGuaranteedTypeForValue(&arg, nullptr);
         checked = !qore_ir_conversion_accepts_type(opcode, arg_type)
             && !qore_ir_conversion_accepts_type(opcode, getExprTypeInfo(arg));
+        // a comparison of operands that can be buffers is typed bool but gives a buffer for a buffer operand, which
+        // the builtin does not accept (qore#6264)
+        if (!checked && qore_ir_comparison_may_give_buffer(arg)) {
+            checked = true;
+        }
     }
     // Lower the single argument
     std::vector<QoreIRValue> operands;
