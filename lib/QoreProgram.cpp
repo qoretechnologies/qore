@@ -4080,7 +4080,8 @@ int qore_program_private::initDeferredCode() {
     server side debug library.
 */
 void ThreadLocalProgramData::dbgAttach(ExceptionSink* xsink) {
-    if (runState == DBG_RS_DETACH) {
+    // a thread that the debugger does not want is not offered to it again (#3293)
+    if (runState == DBG_RS_DETACH && !dbg_dont_attach.load(std::memory_order_acquire)) {
         DebugRunStateEnum rs = runState;
         const AbstractStatement* rts = runToStatement;
         functionCallLevel = 0;
@@ -5690,6 +5691,10 @@ void QoreDebugProgram::removeProgram(QoreProgram *pgm) {
 
 QoreListNode* QoreDebugProgram::getAllProgramObjects() {
    return priv->getAllProgramObjects();
+}
+
+bool QoreDebugProgram::attachThread(QoreProgram* pgm, int tid) const {
+   return priv->attachThread(pgm, tid);
 }
 
 int QoreDebugProgram::breakProgramThread(QoreProgram *pgm, int tid) const {

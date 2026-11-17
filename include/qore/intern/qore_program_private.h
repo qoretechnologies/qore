@@ -311,6 +311,11 @@ public:
     /**
         Executed from any thread to set pending attach flag
     */
+    //! offers the thread to the debugger again on its next entry (#3293)
+    DLLLOCAL void dbgClearDontAttach() {
+        dbg_dont_attach.store(false, std::memory_order_release);
+    }
+
     DLLLOCAL void dbgPendingAttach() {
         printd(5, "ThreadLocalProgramData::dbgPendingAttach(), this: %p\n", this);
         attachFlag.store(1, std::memory_order_release);
@@ -346,12 +351,24 @@ private:
 
     // thread debug types, field is read/write only in thread being debugged, no locking is needed
     DebugRunStateEnum runState = DBG_RS_DETACH;
+    //! set when the debugger does not want the thread (DBG_RS_DONT_ATTACH): it is not offered to the debugger again
+    /** Cleared when the Program's debugger changes and by DebugProgram::attachThread(), in other threads; the data
+        and the flag end with the thread, so a thread that gets the same TID later is offered again (#3293)
+    */
+    std::atomic<bool> dbg_dont_attach{false};
     // used to implement "to to statement" debugger command, reset it when program is interrupted
     const AbstractStatement* runToStatement = nullptr;
     // when stepover or until return we need calls function calls
     int functionCallLevel = 0;
 
     DLLLOCAL inline void setRunState(DebugRunStateEnum rs, const AbstractStatement* rts) {
+        // the debugger does not want the thread: it is detached and not offered again (#3293)
+        if (rs == DBG_RS_DONT_ATTACH) {
+            runState = DBG_RS_DETACH;
+            runToStatement = nullptr;
+            dbg_dont_attach.store(true, std::memory_order_release);
+            return;
+        }
         assert(rs < DBG_RS_STOPPED); // DBG_RS_STOPPED is wrong value when program is running
         if (rs == DBG_RS_UNTIL_RETURN) {
             functionCallLevel = 1;  // function called only when runState is not DBG_RS_UNTIL_RETURN
@@ -6034,6 +6051,8 @@ public:
         printd(5, "qore_program_private::attachDebug, dpgm: %p, pgm_data_map: size:%d\n",
             dpgm.load(std::memory_order_relaxed), (int)(pgm_data_map.size()));
         for (auto& i : pgm_data_map) {
+            // a new debugger is offered every thread (#3293)
+            i.second->dbgClearDontAttach();
             if (!i.first->canRunDebugCallbacks()) {
                 continue;
             }
@@ -6054,6 +6073,8 @@ public:
         printd(5, "qore_program_private::detachDebug, dpgm: %p, pgm_data_map: size:%d\n",
             dpgm.load(std::memory_order_relaxed), (int)(pgm_data_map.size()));
         for (auto& i : pgm_data_map) {
+            // the debugger's wish ends with it (#3293)
+            i.second->dbgClearDontAttach();
             if (!i.first->canRunDebugCallbacks()) {
                 continue;
             }
@@ -6080,6 +6101,19 @@ public:
             rv.insert(i.first);
         }
         return rv;
+    }
+
+    //! offers a thread that the debugger did not want to the debugger again; returns false if the thread has no data
+    //! in the Program (#3293)
+    DLLLOCAL bool attachThread(int tid) {
+        AutoLocker al(tlock);
+        for (auto& i : pgm_data_map) {
+            if (i.first->gettid() == tid) {
+                i.second->dbgClearDontAttach();
+                return true;
+            }
+        }
+        return false;
     }
 
     DLLLOCAL int breakProgramThread(int tid) {
@@ -6851,6 +6885,14 @@ public:
         CallbackRef cr(dpgm, xsink);
         AutoQoreCounterDec ad(&debug_program_counter);
         dpgm->onExit(pgm, statement, returnValue, rs, rts, xsink);
+    }
+
+    DLLLOCAL bool attachThread(QoreProgram* pgm, int tid) {
+        QoreAutoRWReadLocker al(&tlock);
+        if (qore_program_map.find(pgm) == qore_program_map.end()) {
+            return false;
+        }
+        return pgm->priv->attachThread(tid);
     }
 
     DLLLOCAL int breakProgramThread(QoreProgram* pgm, int tid) {

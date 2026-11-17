@@ -893,6 +893,12 @@
     @ref dc_v0_1_3 "DebugProgramControl" stops once per exception and a step after an exception stop goes to its
     handler (<a href="https://github.com/qoretechnologies/qore/issues/5906">issue 5906</a>).
 
+    @par Debuggers Can Decline a Thread
+    A debugger can set @ref Qore::DebugDontAttach "DebugDontAttach" as the run state of an event, as for a thread of
+    another program that calls into the debugged program: the thread is not offered to it again until
+    @ref Qore::DebugProgram::attachThread() "DebugProgram::attachThread()"
+    (<a href="https://github.com/qoretechnologies/qore/issues/3293">issue 3293</a>).
+
     @par Functional-Domain Declarations on Functions and Methods
     Functions and methods written in %Qore declare the @ref function_domains "functional domains" they provide with an
     attribute list (<tt>sub f() [dom=PROCESS_CONTROL]</tt>), which a restricted Program cannot reference or call, and a
