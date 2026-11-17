@@ -901,6 +901,12 @@
     %Qore knows or a standard character set (see @ref Qore::get_known_encoding() "get_known_encoding()"); any other
     name is ignored, and the text is read as without one; 2.2.1 registered such names as encodings (issue #6460).
 
+    @par Binary Deserialization Accepts Only Known Character Encodings
+    @ref Qore::Serializable "Serializable" raises \c DESERIALIZATION-ERROR for a string in binary serialized data
+    whose encoding name selects neither an encoding that %Qore knows nor a standard character set, unless the
+    @ref Qore::QDF_REGISTER_ENCODINGS "QDF_REGISTER_ENCODINGS" flag is given; 2.2.1 registered every such name as an
+    encoding (issue #6483).
+
     @subsection qore_3_0_0_new_features New Features in Qore
     @par Strict Number Parsing
     @ref parse_int(string, string, bool) "parse_int()", @ref parse_float(string, string, bool) "parse_float()" and

@@ -40,6 +40,7 @@
 #include "qore/intern/qore_list_private.h"
 #include "qore/intern/RuntimeConfig.h"
 #include "qore/intern/QorePluginRegistry.h"
+#include "qore/intern/qore_encoding_private.h"
 #include <qore/QoreEnumDecl.h>
 
 #include <string>
@@ -2148,7 +2149,7 @@ QoreValue QoreSerializable::deserializeValueFromStream(ExceptionSink* xsink, Str
 
         case qore_stream_type::STRING:
         case qore_stream_type::UTF8_STRING:
-            return deserializeStringFromStream(reader, code, xsink);
+            return deserializeStringFromStream(reader, code, flags, xsink);
 
         case qore_stream_type::INT1:
         case qore_stream_type::INT2:
@@ -2315,7 +2316,7 @@ QoreHashNode* QoreSerializable::deserializeHashFromStream(ExceptionSink* xsink, 
             return nullptr;
         }
 
-        SimpleRefHolder<QoreStringNode> key(deserializeStringFromStream(reader, code, xsink));
+        SimpleRefHolder<QoreStringNode> key(deserializeStringFromStream(reader, code, flags, xsink));
         if (*xsink) {
             return nullptr;
         }
@@ -2384,7 +2385,8 @@ int QoreSerializable::readStringFromStream(StreamReader& reader, QoreString& str
     return 0;
 }
 
-QoreStringNode* QoreSerializable::deserializeStringFromStream(StreamReader& reader, qore_stream_type code, ExceptionSink* xsink) {
+QoreStringNode* QoreSerializable::deserializeStringFromStream(StreamReader& reader, qore_stream_type code,
+        int64 flags, ExceptionSink* xsink) {
     SimpleRefHolder<QoreStringNode> str(new QoreStringNode);
 
     const QoreEncoding* enc;
@@ -2394,7 +2396,24 @@ QoreStringNode* QoreSerializable::deserializeStringFromStream(StreamReader& read
         if (readStringFromStream(reader, enc_str, "encoding", xsink)) {
             return nullptr;
         }
-        enc = QEM.findCreate(&enc_str);
+        // a name that selects neither a known encoding nor a standard character set would register a new
+        // encoding for the life of the process, so it is registered only with QDF_REGISTER_ENCODINGS (issue #6483)
+        enc = qore_find_untrusted_encoding(enc_str.c_str(), enc_str.size());
+        if (!enc) {
+            if (flags & QDF_REGISTER_ENCODINGS) {
+                enc = QEM.findCreate(&enc_str);
+            } else {
+                if (memchr(enc_str.c_str(), '\0', enc_str.size())) {
+                    xsink->raiseException("DESERIALIZATION-ERROR", "the character encoding name of a string in the "
+                        "serialized data has a NUL character");
+                } else {
+                    xsink->raiseException("DESERIALIZATION-ERROR", "the character encoding '%s' of a string in the "
+                        "serialized data is not known; use the Qore::QDF_REGISTER_ENCODINGS flag to register it, "
+                        "for trusted data only", enc_str.c_str());
+                }
+                return nullptr;
+            }
+        }
     } else {
         assert(code == qore_stream_type::UTF8_STRING);
         enc = QCS_UTF8;

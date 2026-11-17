@@ -383,6 +383,15 @@ constexpr size_t QDF_STATIC_CLASS_VARS = (1 << 0);
 //! Deserialization flag: deserialize and merge static class vars; implies QDF_STATIC_CLASS_VARS
 constexpr size_t QDF_MERGE_STATIC_CLASS_VARS = (1 << 1) | QDF_STATIC_CLASS_VARS;
 
+//! Deserialization flag: register the character encoding of a string in binary serialized data that is not known
+/** Without it, a string whose encoding name selects neither an encoding that %Qore knows nor a standard character
+    set raises a \c DESERIALIZATION-ERROR exception, as each new name registers an encoding for the life of the
+    process; use it only for trusted data
+
+    @since %Qore 3.0
+*/
+constexpr size_t QDF_REGISTER_ENCODINGS = (1 << 2);
+
 //! serialization context object used in builtin serializer methods
 /** @since %Qore 0.9
 */

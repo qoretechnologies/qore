@@ -1,0 +1,107 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%exec-class DeserializationEncodingsTest
+
+#! The character encoding name of a string in binary serialized data selects only an encoding that Qore knows or a
+#! standard character set, unless the data is deserialized with QDF_REGISTER_ENCODINGS (issue #6483)
+/** The strings are serialized in ISO-8859-1, which every platform's iconv supports, and the encoding name is replaced
+    in the data; selecting an encoding by its name converts nothing, so the names that the test selects need no iconv
+    support
+*/
+public class DeserializationEncodingsTest inherits QUnit::Test {
+    constructor() : QUnit::Test("DeserializationEncodings", "1.0") {
+        # hash keys are serialized in the default encoding, with its name when it is not UTF-8, so the only encoding
+        # name in the data is then that of the string under test
+        if (get_default_encoding() != "UTF-8") {
+            addTestCase("skip", sub () { testSkip("the default encoding is not UTF-8"); });
+            set_return_value(main());
+            return;
+        }
+        addTestCase("unknown encoding name", \unknownEncodingTest());
+        addTestCase("unknown encoding name registered with QDF_REGISTER_ENCODINGS", \registerEncodingTest());
+        addTestCase("known encoding names", \knownEncodingTest());
+        addTestCase("standard character set names", \standardCharsetTest());
+        addTestCase("nested values and a name with a NUL character", \otherPathsTest());
+        set_return_value(main());
+    }
+
+    #! Returns binary serialized data of an ISO-8859-1 string whose encoding name is replaced by another one
+    private binary getStream(string enc_name) {
+        return getStreamFor(convert_encoding("abc", "ISO-8859-1"), binary(enc_name));
+    }
+
+    #! Returns binary serialized data of a value with one ISO-8859-1 string, whose encoding name is replaced
+    /** The name is written as a 1-byte size (type code 7) followed by its bytes; both are replaced
+    */
+    private binary getStreamFor(auto val, binary enc_name) {
+        assertLt(128, enc_name.size(), "the replacement name has a 1-byte size");
+        binary data = Serializable::serialize(val);
+        string hex = data.toHex();
+        string from = "070a" + binary("ISO-8859-1").toHex();
+        int pos = hex.find(from);
+        # the name occurs once, at a byte boundary
+        assertTrue(pos >= 0 && !(pos % 2) && hex.find(from, pos + 1) == -1, "the encoding name is found once");
+        return parse_hex_string(replace(hex, from, sprintf("07%02x", enc_name.size()) + enc_name.toHex()));
+    }
+
+    unknownEncodingTest() {
+        string name = sprintf("X-QORE-6483-%d", getpid());
+        assertEq(NOTHING, get_known_encoding(name), "the name is not known before");
+        binary data = getStream(name);
+        assertThrows("DESERIALIZATION-ERROR", "is not known", \Serializable::deserialize(), (data,));
+        assertThrows("DESERIALIZATION-ERROR", "is not known", \Serializable::deserializeToData(), (data,));
+        assertThrows("DESERIALIZATION-ERROR", "is not known", \Serializable::deserialize(),
+            (new BinaryInputStream(data),));
+        # the name was not registered
+        assertEq(NOTHING, get_known_encoding(name), "the name is not known after");
+    }
+
+    registerEncodingTest() {
+        string name = sprintf("Y-QORE-6483-%d", getpid());
+        assertEq(NOTHING, get_known_encoding(name), "the name is not known before");
+        binary data = getStream(name);
+        string str = Serializable::deserialize(data, QDF_REGISTER_ENCODINGS);
+        assertEq(name, str.encoding(), "the string has the new encoding");
+        assertEq(binary("abc"), binary(str));
+        # the name was registered, so it is known now, also without the flag
+        assertEq(name, get_known_encoding(name));
+        assertEq(name, Serializable::deserialize(data).encoding());
+    }
+
+    knownEncodingTest() {
+        # a built-in encoding
+        binary data = Serializable::serialize(convert_encoding("abc", "ISO-8859-1"));
+        string str = Serializable::deserialize(data);
+        assertEq("ISO-8859-1", str.encoding());
+        assertEq("abc", convert_encoding(str, "UTF-8"));
+        # names in another case and aliases select the built-in encodings
+        assertEq("ISO-8859-1", Serializable::deserialize(getStream("iso-8859-1")).encoding());
+        assertEq("ISO-8859-1", Serializable::deserialize(getStream("latin1")).encoding());
+        assertEq("US-ASCII", Serializable::deserialize(getStream("us-ascii")).encoding());
+        # UTF-8 strings have no encoding name in the data
+        assertEq("UTF-8", Serializable::deserialize(Serializable::serialize("abc")).encoding());
+    }
+
+    standardCharsetTest() {
+        # names and labels of standard character sets that have no built-in encoding select them
+        assertEq("EUC-KR", Serializable::deserialize(getStream("EUC-KR")).encoding());
+        assertEq("Shift_JIS", Serializable::deserialize(getStream("x-sjis")).encoding());
+        # with QDF_REGISTER_ENCODINGS too: a label is not registered as an encoding of its own
+        assertEq("Shift_JIS", Serializable::deserialize(getStream("csShiftJIS"), QDF_REGISTER_ENCODINGS).encoding());
+    }
+
+    otherPathsTest() {
+        string name = sprintf("Z-QORE-6483-%d", getpid());
+        string latin1 = convert_encoding("k", "ISO-8859-1");
+        # a value nested in lists
+        binary data = getStreamFor((1, (2, latin1)), binary(name));
+        assertThrows("DESERIALIZATION-ERROR", "is not known", \Serializable::deserialize(), (data,));
+        assertEq(NOTHING, get_known_encoding(name), "the name was not registered");
+        # a name with a NUL character
+        data = getStreamFor(latin1, parse_hex_string("49534f00383835392d31"));
+        assertThrows("DESERIALIZATION-ERROR", "NUL character", \Serializable::deserialize(), (data,));
+    }
+}
