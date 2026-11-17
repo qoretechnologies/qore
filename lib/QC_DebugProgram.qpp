@@ -318,7 +318,7 @@ bool DebugProgram::attachThread(ProgramControl[QoreProgram] program, int thread_
 
     @since %Qore 3.0
  */
-nothing DebugProgram::onRunExit(ProgramControl[QoreProgram] program, int statement_id, reference return_value, reference run_state, reference run_to_statement_id) [flags=NAMED_ARGS] {
+nothing DebugProgram::onRunExit(ProgramControl[QoreProgram] program, int[doc] statement_id, reference[doc] return_value, reference[doc] run_state, reference[doc] run_to_statement_id) [flags=NAMED_ARGS] {
    self->evalMethod("onExit", args, xsink);
 }
 
