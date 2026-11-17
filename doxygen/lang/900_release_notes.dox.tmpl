@@ -1468,6 +1468,10 @@
         @ref ftppollererrors; <a href="https://github.com/qoretechnologies/qore/issues/6400">issue 6400</a>)
       - a relative \c "path" is polled relative to the login directory; a relative path failed on every poll
         (<a href="https://github.com/qoretechnologies/qore/issues/6457">issue 6457</a>)
+      - a failed setup of a new connection given with
+        @ref FtpPoller::FtpPoller::updateOptions() "FtpPoller::updateOptions()" is retried after the
+        \c "error_delay" option's delay without the state of the previous connection; it was never retried (see
+        @ref ftppollererrors; <a href="https://github.com/qoretechnologies/qore/issues/6456">issue 6456</a>)
       - see @ref ftppollerv2_2 for all changes
 
     - @ref gmaildataproviderintro "GmailDataProvider" module
