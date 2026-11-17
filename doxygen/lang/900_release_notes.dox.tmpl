@@ -3163,6 +3163,10 @@
       @ref Qore::get_local_vars() "get_local_vars()" and @ref Qore::set_local_var_value() "set_local_var_value()"
       from the calls it makes or from a debugger's callbacks in the same thread
       (<a href="https://github.com/qoretechnologies/qore/issues/5871">issue 5871</a>)
+    - a compound assignment or increment of an lvalue of a soft type that converts the value that the operator assigns
+      (ex: <tt>softstring s = "2"; s *= 2;</tt>, \c softbool with \c +=, \c softint with <tt>*= 1.5</tt>) is no
+      longer a \c PARSE-TYPE-ERROR, as an assignment of the same value is not; the lvalue holds the converted value
+      (issue #6304)
     - a call of a method that a class does not have, of the name of a member whose type can hold code (\c auto, no
       type, or a code type), is no longer checked at parse time against the pseudo-method of objects of the same name,
       which refused a call that the member's code accepts; the member's code is called at run time, and a named call
