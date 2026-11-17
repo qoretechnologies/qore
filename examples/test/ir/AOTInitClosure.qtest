@@ -1,0 +1,222 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in children that set their own execution modes, qcc executables and modules
+# test-platform: macos - the AOT code generation and linking of closures called in initializer functions
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+%requires ../TestInterpreter.qm
+
+%exec-class AOTInitClosureTest
+
+#! A closure called in an initializer that qcc compiles to an init function links (qore#6336)
+/** qcc compiles the initializers of constants, of static class variables and the init closure of a module to init
+    functions, which are lowered without the closure bodies that define the native dispatch functions of the closures
+    that a function calls immediately.  The call site of an immediately called closure declared the dispatch function
+    <tt>\<init function\>_closure_native_dispatch_\<slot\></tt> anyway, so the executable or module failed to link
+    with that symbol undefined; an init function calls such a closure through the generic runtime helper.
+
+    This test checks that executables and modules made by qcc at -O0 and -O3 link, and that their results match the
+    AST (and the ir, jit and tiered modes): the constant of the issue, closures with native int, float and bool
+    results and arguments, nested closures, a closure that catches an exception, closures in class constants, in
+    static class variables and in a global variable, and in a module, also in its init closure.
+*/
+class AOTInitClosureTest inherits QUnit::Test {
+    public {
+        #! the execution modes compared with the AST
+        const Modes = ("ir", "jit", "tiered");
+        #! the qcc optimization levels
+        const OptLevels = ("-O0", "-O3");
+
+        #! the declarations with closures called in initializers; \c pub is the prefix of the exported ones
+        const Code = "%snamespace InitClosure {
+# the constant of the issue
+%sconst C = ((int sub () { return 1; })(), 2);
+# native int, float and bool results and arguments
+%sconst I = (int sub (int a, int b) { return a * b; })(6, 7);
+%sconst F = (float sub (float x) { return x * 1.5; })(2.0);
+%sconst B = (bool sub (int x) { return x > 1; })(2);
+%sconst S = (string sub (string s) { return s + \"!\"; })(\"hi\");
+# nested immediately called closures
+%sconst N = (int sub () { return (int sub (int y) { return y + 1; })(5) * 2; })();
+# a closure that catches an exception
+%sconst E = (string sub () { try { throw \"ERR\", \"x\"; } catch (hash<ExceptionInfo> ex) { return ex.err; } })();
+# a closure called in a map
+%sconst M = map (int sub (int v) { return v * 3; })($1), (1, 2, 3);
+# a constant that uses another constant initialized by a closure
+%sconst D = C[0] + (int sub (int v) { return v + I; })(1);
+
+%sclass K {
+    public {
+        const KC = (int sub (int v) { return v + 100; })(I);
+        static int sv = (int sub () { return 9; })() + 1;
+        static list<auto> svl = map (auto sub (auto v) { return v * 2; })($1), (1, 2, 3);
+    }
+}
+
+%sstring sub run() {
+    return sprintf(\"rv:%%y\\n\", (C, I, F, B, S, N, E, M, D, K::KC, K::sv, K::svl));
+}
+}
+";
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        #! the library path of the qcc compiles and of the executables
+        string lib_env;
+    }
+
+    constructor() : QUnit::Test("AOTInitClosureTest", "1.0", \ARGV) {
+        # never the test's own executable when it runs compiled with qcc (TestInterpreter)
+        qore_bin = TestInterpreter::qore_interpreter();
+        qcc_bin = TestInterpreter::qcc_compiler() ?? "qcc";
+        # the library of the interpreter, in its directory: a bare name is resolved through the PATH first
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(resolveCommand(qore_bin));
+        lib_env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s", libqore_dir, libqore_dir);
+        addTestCase("closures in initializers in an executable", \testExecutable());
+        addTestCase("closures in initializers and the init closure of a module", \testModule());
+        set_return_value(main());
+    }
+
+    #! Returns the path of \a cmd: \a cmd itself if it has a directory, else the file that the PATH names
+    private static string resolveCommand(string cmd) {
+        if (cmd =~ /\//) {
+            return cmd;
+        }
+        *string found = trim(backquote(sprintf("command -v '%s' 2>/dev/null", replace(cmd, "'", "'\\''"))));
+        return found ? found : cmd;
+    }
+
+    #! Returns the declarations with each prefix of \c Code set to \a pub
+    private static string getCode(string pub) {
+        list<string> args = ();
+        int n = Code.split("%s").size() - 1;
+        for (int i = 0; i < n; ++i) {
+            args += pub;
+        }
+        return vsprintf(Code, args);
+    }
+
+    #! Returns the script: the declarations, a global variable initialized by a closure, and the output
+    private static string getScript() {
+        return "%modern\n\n" + getCode("") + "
+our int g = (int sub () { return 3; })();
+print(InitClosure::run());
+printf(\"g:%d\\n\", g);
+";
+    }
+
+    #! Writes \a code to \a path
+    private static writeFile(string path, string code) {
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(code);
+        f.close();
+    }
+
+    #! Returns the output of the script \a path in \a mode
+    private string runMode(string path, string mode) {
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s -b --enable-debug "
+            "--exec-mode=%s %s", qore_bin, mode, path));
+        assertEq(0, r.rc, sprintf("%s: exit status (output: %y)", mode, r.out));
+        return r.stdout;
+    }
+
+    #! Returns the reference output of the script \a path (the AST's), checking that it matches \a re
+    private string getExpected(string path, string re) {
+        string expected = runMode(path, "ast");
+        assertRegex(re, expected, "the AST prints the result lines");
+        foreach string mode in (Modes) {
+            assertEq(expected, runMode(path, mode), sprintf("%s: %s", path, mode));
+        }
+        return expected;
+    }
+
+    #! Compiles \a src with qcc to \a out with the options \a opts
+    private compile(string src, string out, string opts) {
+        int rc;
+        string output = backquote(sprintf("%s %s %s -o %s %s 2>&1", lib_env, qcc_bin, opts, out, src), \rc);
+        assertEq(0, rc, sprintf("qcc %s %s: exit status (output: %s)", opts, src, output.substr(-2000)));
+    }
+
+    #! Returns the output of the executable \a exe
+    private string runExe(string exe) {
+        int rc;
+        # -b must be the first argument of a compiled program
+        string out = backquote(sprintf("%s %s -b", lib_env, exe), \rc);
+        assertEq(0, rc, sprintf("%s: exit status (output: %y)", exe, out));
+        return out;
+    }
+
+    testExecutable() {
+        TmpDir dir("qore-aot-init-closure-");
+        string src = join_paths(dir.path, "init.qr");
+        writeFile(src, getScript());
+        string expected = getExpected(src, "^rv:\\[\\[1, 2\\], 42, 3\\.0, True, \"hi!\", 12, \"ERR\", \\[3, 6, 9\\], "
+            "44, 142, 10, \\[2, 4, 6\\]\\]\ng:3\n$");
+        foreach string opt in (OptLevels) {
+            string exe = src + opt;
+            compile(src, exe, opt);
+            assertEq(expected, runExe(exe), "qcc " + opt);
+        }
+    }
+
+    #! Writes a script that loads the module from the directory \a mod_dir of \a dir and prints its results
+    /** @return the path of the script
+    */
+    private static string writeProbe(string dir, string mod_dir) {
+        string prog = join_paths(dir, "probe-" + mod_dir + ".qr");
+        writeFile(prog, sprintf("%%modern\n%%append-module-path %s\n%%requires InitClosure\n"
+            "print(InitClosure::run());\nprintf(\"init:%%d\\n\", InitClosure::initv);\n", join_paths(dir, mod_dir)));
+        return prog;
+    }
+
+    testModule() {
+        TmpDir dir("qore-aot-init-closure-");
+        string script = join_paths(dir.path, "init.qr");
+        writeFile(script, getScript());
+        string expected = getExpected(script, "^rv:\\[");
+        expected = expected.split("\n")[0] + "\ninit:8\n";
+        # the source of the module, in a directory of its own
+        mkdir(join_paths(dir.path, "src"));
+        string src = join_paths(dir.path, "src", "InitClosure.qm");
+        writeFile(src, "%modern
+
+module InitClosure {
+    version = \"1.0\";
+    desc = \"closures called in initializers\";
+    author = \"Qore Technologies, s.r.o.\";
+    license = \"MIT\";
+    init = sub () {
+        InitClosure::initv = (int sub (int v) { return v * 2; })(4);
+    };
+}
+
+" + getCode("public ") + "
+public namespace InitClosure {
+    public our int initv;
+}
+");
+        # the module from source
+        string src_prog = writeProbe(dir.path, "src");
+        assertEq(expected, runMode(src_prog, "ast"), "module source");
+        string prog = writeProbe(dir.path, "mods");
+        mkdir(join_paths(dir.path, "mods"));
+        string qmod = join_paths(dir.path, "mods", "InitClosure.qmod");
+        foreach string opt in (OptLevels) {
+            compile(src, qmod, opt + " --module");
+            foreach string mode in (("ast",) + Modes) {
+                assertEq(expected, runMode(prog, mode), sprintf("module qcc %s: %s", opt, mode));
+            }
+            unlink(qmod);
+        }
+    }
+}

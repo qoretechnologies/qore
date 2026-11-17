@@ -439,7 +439,7 @@ constexpr OpcodeInfo OPCODE_REGISTRY[QORE_IR_MAX_OPCODE + 1] = {
     { QoreIROpcode::ContextRow, "ContextRow"                    , true , false, false,  0, "Evaluate current context row", false, true , "ContextRowNode", true , false, true , false, false }, // 367
     { QoreIROpcode::RefSelf, "RefSelf"                       , false, false, false,  1, "Create owned reference to value", false, false, "ParseNode", true , false, false, false, false }, // 368
     { QoreIROpcode::DebugBlock, "DebugBlock"                    , false, false, false,  0, "Debug-only StatementBlock entry marker", false, false, "ParseNode", false, false, false, false, false }, // 369
-    { QoreIROpcode::CheckException, "CheckException"                , false, false, false,  0, "Route pending cleanup exception to the active handler", false, true , "ParseNode", false, false, false, false, false }, // 370
+    { QoreIROpcode::CheckException, "CheckException"                , false, false, false, OPCODE_MIN_OPERANDS(0), "Route pending cleanup exception to the active handler", false, true , "ParseNode", false, false, false, false, false }, // 370
     { QoreIROpcode::NewComplexBuffer, "NewComplexBuffer"              , false, false, false, OPCODE_MIN_OPERANDS(0), "NewComplexBuffer", false, true , "ParseNode", true , false, false, false, false }, // 371
     { QoreIROpcode::PluginUnary, "PluginUnary"                   , false, false, false,  1, "Dispatch module-registered unary plugin operation", true , true , "PluginOperation", true , false, false, false, false }, // 372
     { QoreIROpcode::PluginBinary, "PluginBinary"                  , false, false, false,  2, "Dispatch module-registered binary plugin operation", true , true , "PluginOperation", true , false, false, false, false }, // 373
@@ -507,6 +507,7 @@ constexpr OpcodeInfo OPCODE_REGISTRY[QORE_IR_MAX_OPCODE + 1] = {
     { QoreIROpcode::LePlugin, "LePlugin"                       , false, false, false,  2, "<= that may dispatch to a plugin operation", false, true , "ParseNode", true , false, true , false, true  }, // 435
     { QoreIROpcode::GtPlugin, "GtPlugin"                       , false, false, false,  2, "> that may dispatch to a plugin operation", false, true , "ParseNode", true , false, true , false, true  }, // 436
     { QoreIROpcode::GePlugin, "GePlugin"                       , false, false, false,  2, ">= that may dispatch to a plugin operation", false, true , "ParseNode", true , false, true , false, true  }, // 437
+    { QoreIROpcode::HandlerReturn, "HandlerReturn"                  , false, false, false, OPCODE_MIN_OPERANDS(0), "Hand the value of a return in a handler run out of line to its function", true , true , "ReturnStatement", false, false, false, false, false }, // 438
 };
 
 //! Returns true if row i of OPCODE_REGISTRY is the opcode with value i, for every row

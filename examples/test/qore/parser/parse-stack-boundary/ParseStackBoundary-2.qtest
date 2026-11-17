@@ -1,0 +1,23 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its module loads in the primary thread run in child processes of the qore under test
+# test-platform: macos - thread stack sizes and the parse-time stack limit
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%include ParseStackBoundary.qc
+
+%exec-class ParseStackBoundaryPart2
+
+#! runs part 2 of 5 of the cases of ParseStackBoundaryBase: chains of modules, module initialization
+class ParseStackBoundaryPart2 inherits ParseStackBoundaryBase {
+    constructor() : ParseStackBoundaryBase("ParseStackBoundaryPart2", 2) {
+    }
+}

@@ -2,13 +2,15 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 # test-exec-mode: children - its checks run in child processes that set their own execution modes
-# test-platform: macos - JIT code generation of handlers that share their handler functions
+# test-platform: macos - JIT and AOT code generation of handlers that share their handler functions
 
 %modern
 %no-child-restrictions
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
 %requires QUnit
+%requires FsUtil
+%requires ../../../TestInterpreter.qm
 %requires ../../../ExecModeHarness.qm
 
 %exec-class NestedHandlerLoweringTimeTest
@@ -17,10 +19,11 @@
 /** A handler's body is lowered inline at the exits of its block and compiled to a handler function of its own, and so
     were the handlers nested in it, each time: a handler nested n deep was lowered 2^n times, each copy with a handler
     function of its own, so that the functions of NestedHandlerLoweringTime.q, whose handlers are nested 16 and 12
-    deep, took many minutes to lower and to compile to native code.  The copies of a handler now share its handler
-    function, in the IR and in the native code.  NestedHandlerLoweringTime.q gives the output of the AST interpreter
-    in every execution mode, also where an exception runs the shared handler functions out of line; without the fix,
-    the child processes take longer than the time limit of the test run.
+    deep, took many minutes to lower and to compile to native code, also with qcc.  The copies of a handler now share
+    its handler function, in the IR and in the native code.  NestedHandlerLoweringTime.q gives
+    the output of the AST interpreter in every execution mode and compiled with qcc, also where an exception runs the
+    shared handler functions out of line; without the fix, the child processes take longer than the time limit of the
+    test run.
 */
 class NestedHandlerLoweringTimeTest inherits QUnit::Test {
     public {
@@ -77,16 +80,19 @@ throw 0x20001000 11: \"LEVEL-11\" 0,1,2,3,4,5,6,7,8,9,10,11,core
     private {
         string qore_bin;
         string libqore_dir;
+        string qcc_bin;
         string script;
     }
 
     constructor() : QUnit::Test("NestedHandlerLoweringTimeTest", "1.0") {
-        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        qore_bin = TestInterpreter::qore_interpreter();
         libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
         script = get_script_dir() + "/NestedHandlerLoweringTime.q";
         foreach string mode in (ExecModeHarness::ExecModes) {
             addTestCase(mode + ": handlers nested 16 deep", \modeTest(), (mode,));
         }
+        addTestCase("qcc -O0: handlers nested 16 deep", \aotTest());
         set_return_value(main());
     }
 
@@ -95,5 +101,15 @@ throw 0x20001000 11: \"LEVEL-11\" 0,1,2,3,4,5,6,7,8,9,10,11,core
         string output = ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s --exec-mode=%s %s",
             libqore_dir, libqore_dir, qore_bin, mode, script));
         assertEq(Expected, output, mode + ": the output of the AST interpreter");
+    }
+
+    aotTest() {
+        TmpDir tmp("qore-nested-handler-lowering-time-");
+        string exe = tmp.path + DirSep + "nested-handler-lowering-time";
+        string out = backquote(sprintf("QORE_LIBDIR=%s %s -O0 -o %s %s 2>&1", libqore_dir, qcc_bin, exe, script));
+        assertTrue(is_file(exe), "compiled the executable: " + out);
+        string output = ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s",
+            libqore_dir, libqore_dir, exe));
+        assertEq(Expected, output, "qcc -O0: the output of the AST interpreter");
     }
 }

@@ -1,0 +1,103 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - fork() while another thread runs a method of a Program, and the Program's deletion in the child
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class ForkDeleteProgramInMethodTest
+
+#! A child process deletes a Program while a thread of the parent was in a method of one of its classes (#6443)
+/** The thread does not exist in the child, but the frame of its call does: deleting the Program finalizes the thread
+    data of every thread that used it, and the frame's self, a borrowed reference to the object, was removed as an
+    owned value: a debug build aborted on QoreLValue::removeValue()'s assertion !static_assignment, and a release build
+    dereferenced the object once too often.  The child deletes the Program and reports it through a pipe; a child that
+    aborts reports nothing.
+*/
+class ForkDeleteProgramInMethodTest inherits QUnit::Test {
+    public {
+        const Timeout = 60s;
+
+        const Code = "class Blocker {
+    public {
+        int value = 1;
+    }
+    # waits in the constructor if a queue is given
+    constructor(*Queue ready, *Queue release) {
+        if (ready) {
+            ready.push(True);
+            release.get();
+        }
+    }
+    # waits in a method
+    int wait(Queue ready, Queue release) {
+        ready.push(True);
+        release.get();
+        return value;
+    }
+}
+Blocker sub make(*Queue ready, *Queue release) {
+    return new Blocker(ready, release);
+}
+int sub call_wait(Blocker b, Queue ready, Queue release) {
+    return b.wait(ready, release);
+}
+";
+    }
+
+    constructor() : QUnit::Test("ForkDeleteProgramInMethodTest", "1.0") {
+        addTestCase("a thread in a constructor of the Program's class", sub () { forkWhileIn("constructor"); });
+        addTestCase("a thread in a method of the Program's class", sub () { forkWhileIn("method"); });
+        set_return_value(main());
+    }
+
+    private forkWhileIn(string site) {
+        if (!Option::HAVE_FORK) {
+            testSkip("fork() is not available");
+        }
+        hash<PipeInfo> result = File::getPipe();
+        Program pgm(PO_NEW_STYLE);
+        pgm.parse(Code, "fork-delete-program");
+        Queue ready();
+        Queue release();
+        Counter running(1);
+        # a thread waits in a constructor or a method of a class of the Program
+        if (site == "constructor") {
+            background sub () {
+                on_exit running.dec();
+                pgm.callFunction("make", ready, release);
+            }();
+        } else {
+            object b = pgm.callFunction("make");
+            background sub () {
+                on_exit running.dec();
+                pgm.callFunction("call_wait", b, ready, release);
+            }();
+        }
+        assertTrue(ready.get(Timeout));
+        int pid = fork();
+        if (!pid) {
+            string r;
+            try {
+                delete pgm;
+                r = "deleted";
+            } catch (hash<ExceptionInfo> ex) {
+                r = ex.err;
+            }
+            result.write.write(r);
+            Qore::exit(0);
+        }
+        assertGt(0, pid);
+        result.write.close();
+        release.push(True);
+        assertEq(0, running.waitForZero(Timeout));
+        string child_result;
+        while (*binary data = result.read.readBinary(4096)) {
+            child_result += data.toString();
+        }
+        assertEq("deleted", child_result, site);
+    }
+}

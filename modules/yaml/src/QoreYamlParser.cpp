@@ -25,6 +25,11 @@
 const char* QY_PARSE_ERR = "YAML-PARSER-ERROR";
 
 QoreValue QoreYamlParser::parse() {
+    // the text could not be converted to UTF-8; the exception is raised
+    if (!valid) {
+        return QoreValue();
+    }
+
     ValueHolder rv(xsink);
 
     if (getCheckEvent(YAML_STREAM_START_EVENT))

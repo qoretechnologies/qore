@@ -6,7 +6,6 @@
 %no-child-restrictions
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%prepend-module-path "${SCRIPT_DIR}/../../../../build/modules/reflection"
 %prepend-module-path "${SCRIPT_DIR}/reflection-operation-access"
 %requires QUnit
 %requires reflection

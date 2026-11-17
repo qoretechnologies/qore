@@ -34,6 +34,36 @@
 
 #include <qore/intern/QoreIR.h>
 
+//! true if an instruction with the opcode builds a container (see QoreIRRegionRecord)
+DLLLOCAL bool qore_ir_takes_region_exception_target(QoreIROpcode opcode);
+
+//! the instructions appended in the body of a functional loop (a map, select or fold expression)
+/** The body keeps the values of an element until the next element replaces them: the instruction whose result
+    replaces one releases it, and a destructor can raise an exception there.  When the body is lowered, the lowering
+    gives the container instructions whose elements can hold an object the handler that was innermost when they were
+    appended, and a release check (QoreIRReleaseCheck) after them, and the loop's back-edge a release check when a value of
+    the body can hold an object; the IR interpreter checks the sink there, and native code checks it after the release
+    with the handler (qore#6072).  The instructions of values that cannot hold an object get nothing, so such loops
+    are as before.
+*/
+struct QoreIRRegionRecord {
+    //! the lowering's stack of handlers
+    const std::vector<QoreIRBasicBlock*>* exception_stack = nullptr;
+    //! a container instruction with the handler that was innermost when it was appended
+    struct Container {
+        QoreIRInstruction* inst;
+        //! the block that the instruction is in
+        QoreIRBasicBlock* block;
+        QoreIRBasicBlock* handler;
+    };
+    std::vector<Container> containers;
+    //! a Phi with the handler that was innermost when it was appended: the IR interpreter releases the Phi's previous
+    //! value when it gives the Phi its new one, at the start of the block
+    std::vector<Container> phis;
+    //! the other instructions with a result
+    std::vector<QoreIRInstruction*> values;
+};
+
 class QoreIRBuilder {
 public:
     explicit QoreIRBuilder(QoreIRFunction* func = nullptr);
@@ -51,7 +81,26 @@ public:
     T* append(Args&&... args) {
         T* inst = block->template appendInstruction<T>(std::forward<Args>(args)...);
         inst->temp_scope_id = exception_temp_scope_id;
+        if (region_record) {
+            recordRegionInstruction(inst);
+        }
         return inst;
+    }
+
+    //! sets the record of the body of a functional loop that the instructions appended from now on go to
+    /** @param record the record, or nullptr to end the region (see QoreIRRegionRecord)
+
+        @return the previous record, to restore when the body is lowered
+    */
+    QoreIRRegionRecord* setRegionRecord(QoreIRRegionRecord* record) {
+        QoreIRRegionRecord* old = region_record;
+        region_record = record;
+        return old;
+    }
+
+    //! returns the record of the body of the functional loop that is being lowered, if any
+    QoreIRRegionRecord* getRegionRecord() const {
+        return region_record;
     }
 
     QoreIRFunction* getFunction() const;
@@ -411,6 +460,9 @@ public:
     QoreIRInstruction* createDebugBlockUnwind(uint16_t depth, const QoreProgramLocation* loc);
     //! Emit a pending-exception check after cleanup code that can run destructors.
     QoreIRInstruction* createCheckException(const QoreProgramLocation* loc = nullptr);
+    //! creates a check of a release in a functional loop's body (a pending CheckException, see QoreIRReleaseCheck)
+    //! with the given handler (qore#6072)
+    QoreIRInstruction* createCheckReleaseException(QoreIRBasicBlock* handler, const QoreProgramLocation* loc = nullptr);
     //! Emit the check of the value of a return statement against the declared return type (CheckReturnValue)
     /** @param value the value returned
         @param return_type the declared return type
@@ -421,6 +473,10 @@ public:
     QoreIRInstruction* createIteratorRelease(QoreIRValue iterator, const QoreProgramLocation* loc = nullptr);
     //! Releases a temporary that the function owns on the path of a return (QoreIROpcode::ReleaseOwnedTemp)
     QoreIRInstruction* createReleaseOwnedTemp(QoreIRValue value, const QoreProgramLocation* loc = nullptr);
+
+    //! Hands the value of a return statement in a handler run out of line to its function (QoreIROpcode::HandlerReturn,
+    //! #6074); an invalid \a value is a return without a value
+    QoreIRInstruction* createHandlerReturn(QoreIRValue value, const QoreProgramLocation* loc = nullptr);
 
     //! Releases \a input, the input of a fused pipeline's map stage, once the stage has given \a kept, unless it is
     //! \a kept itself at run time (a value that an optimization or the expression made the input): a ReleaseOwnedTemp
@@ -547,8 +603,14 @@ private:
     // QoreIRInstruction::temp_scope_id.
     uint32_t next_temp_scope_id = 1;
     std::vector<uint32_t> temp_scope_id_stack;
+    //! the record of the body of a functional loop that is being lowered, if any (see setRegionRecord())
+    QoreIRRegionRecord* region_record = nullptr;
+
+    //! records an instruction appended in the body of a functional loop (see QoreIRRegionRecord)
+    void recordRegionInstruction(QoreIRInstruction* inst);
     uint32_t exception_temp_scope_id = 0;
     std::vector<uint32_t> exception_temp_scope_id_stack;
 };
+
 
 #endif

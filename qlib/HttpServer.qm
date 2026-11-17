@@ -7608,7 +7608,8 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         if (hdr."content-type") {
             hdr."_qore_orig_content_type" = hdr."content-type";
         }
-        # only overwrite content-type if body-content-type is set (HTTP/2 may not set it)
+        # the content type without its charset parameter, as reported for every HTTP version (qore#6318); it is not set
+        # when nothing but a charset parameter is given
         if (header_info."body-content-type".val()) {
             hdr."content-type" = header_info."body-content-type";
             if (hdr."content-type".typeCode() == NT_LIST) {

@@ -1746,6 +1746,15 @@ QoreIRInstruction* QoreIRBuilder::createDebugBlockUnwind(uint16_t depth, const Q
     return inst;
 }
 
+QoreIRInstruction* QoreIRBuilder::createCheckReleaseException(QoreIRBasicBlock* handler,
+        const QoreProgramLocation* loc) {
+    auto inst = append<QoreIRInstruction>(QoreIROpcode::CheckException);
+    inst->loc = loc;
+    inst->exception_target = handler;
+    inst->release_check = QoreIRReleaseCheck::Pending;
+    return inst;
+}
+
 QoreIRInstruction* QoreIRBuilder::createCheckException(const QoreProgramLocation* loc) {
     auto inst = append<QoreIRInstruction>(QoreIROpcode::CheckException);
     inst->loc = loc;
@@ -1772,6 +1781,15 @@ QoreIRInstruction* QoreIRBuilder::createIteratorRelease(QoreIRValue iterator, co
 QoreIRInstruction* QoreIRBuilder::createReleaseOwnedTemp(QoreIRValue value, const QoreProgramLocation* loc) {
     auto inst = append<QoreIRInstruction>(QoreIROpcode::ReleaseOwnedTemp);
     inst->operands.push_back(value);
+    inst->loc = loc;
+    return inst;
+}
+
+QoreIRInstruction* QoreIRBuilder::createHandlerReturn(QoreIRValue value, const QoreProgramLocation* loc) {
+    auto inst = append<QoreIRInstruction>(QoreIROpcode::HandlerReturn);
+    if (value.isValid()) {
+        inst->operands.push_back(value);
+    }
     inst->loc = loc;
     return inst;
 }
@@ -2162,4 +2180,39 @@ QoreIRSwitchCaseMatchInstruction* QoreIRBuilder::createSwitchCaseMatch(const Cas
     inst->loc = loc;
     inst->result = func->createValue();
     return inst;
+}
+
+// documented in QoreIRBuilder.h
+bool qore_ir_takes_region_exception_target(QoreIROpcode opcode) {
+    switch (opcode) {
+        case QoreIROpcode::MakeList:
+        case QoreIROpcode::MakeHash:
+        case QoreIROpcode::MakeHashConstKeys:
+        case QoreIROpcode::CreateEmptyList:
+        case QoreIROpcode::CreateSizedList:
+        case QoreIROpcode::NewHashDecl:
+        case QoreIROpcode::NewHashDeclFromHash:
+        case QoreIROpcode::NewComplexHash:
+        case QoreIROpcode::NewComplexList:
+            return true;
+        default:
+            return false;
+    }
+}
+
+// documented in QoreIRBuilder.h
+void QoreIRBuilder::recordRegionInstruction(QoreIRInstruction* inst) {
+    if (qore_ir_takes_region_exception_target(inst->opcode)) {
+        if (!inst->exception_target) {
+            region_record->containers.push_back({inst, block, region_record->exception_stack->empty() ? nullptr
+                : region_record->exception_stack->back()});
+        }
+        return;
+    }
+    if (inst->opcode == QoreIROpcode::Phi && !region_record->exception_stack->empty()) {
+        region_record->phis.push_back({inst, block, region_record->exception_stack->back()});
+    }
+    if (getOpcodeProducesResult(static_cast<int>(inst->opcode))) {
+        region_record->values.push_back(inst);
+    }
 }

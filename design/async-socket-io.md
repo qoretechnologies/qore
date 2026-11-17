@@ -1913,15 +1913,17 @@ Layers, in firing order:
    `HTTP1-CONNECTION-CLOSED` so the conn-mgr retries on a fresh connection
    without waiting for the I/O thread to observe the same event.
 
-5. **Application-level `request_timeout` + retry** (curl `Curl_retry_request`
+5. **Application-level `io_timeout` + retry** (curl `Curl_retry_request`
    analog).  For the genuine half-open case (server's TCP stack alive,
-   application silent — not caught by any of the layers above), the request
-   eventually exceeds `opts.request_timeout` (default 60s).
-   `HTTPCLIENT-TIMEOUT` is treated as a retryable connection error by
-   `HttpClientConnectionManager.qc:isConnectionErrorStatic`, so the conn-mgr
-   transparently replays on a fresh connection.  Slower than an in-band
-   stale-detect timer would be, but correct: it can't mistake a slow
-   legitimate response for a dead connection.
+   application silent — not caught by any of the layers above), a request on
+   a reused connection that receives no data for `opts.io_timeout` fails with
+   `HTTPCLIENT-TIMEOUT`, and the conn-mgr replays it once on a fresh
+   connection within the request's remaining time.  The request's timeout
+   (`request_timeout` or the caller's) is a hard deadline for the whole
+   request (#6429): nothing is replayed once it has run out, so without
+   `io_timeout` the half-open case ends the request with `HTTPCLIENT-TIMEOUT`.
+   It can't mistake a slow legitimate response that keeps sending data for a
+   dead connection.
 
    **Why no in-band timer.**  A fixed no-response timer in `handleRecvHeader`
    would be an application-layer latency check masquerading as a connection

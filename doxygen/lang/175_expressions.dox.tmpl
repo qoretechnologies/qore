@@ -30,9 +30,40 @@
     @anchor parse_nesting_limit
     @par Nesting Limit
     The parser supports up to 1000 nested syntax elements, counting each operator in an expression, and raises a
-    \c PARSE-EXCEPTION for code that is nested more deeply, or more deeply than the stack of the parsing thread allows;
-    for example, an expression that adds more than about 1000 terms with \c + is rejected.  Lists, hashes, argument
-    lists, statement lists and adjacent string literals are not nested by their length, so they are not limited.
+    \c PARSE-EXCEPTION for code that is nested more deeply; for example, an expression that adds more than about 1000
+    terms with \c + is rejected.  Lists, hashes, argument lists, statement lists and adjacent string literals are not
+    nested by their length, so they are not limited.
+
+    Code that is nested more deeply than the stack of the parsing thread allows, including modules that load each
+    other or a long chain of classes or hashdecls that inherit each other, raises a \c PARSE-STACK-LIMIT-EXCEEDED parse
+    exception.  This error depends on the thread that parses the code and not on the code, so a module that cannot be
+    parsed for this reason is not handled as a module that is not available: the error is the parse error of the code
+    that loads it, also with @ref try-module "%try-module", and the error of
+    @ref Qore::load_module() "load_module()".
+
+    A module load at run time (@ref Qore::load_module() "load_module()" or
+    @ref Qore::Program::loadModule() "Program::loadModule()", for example) raises the same error when the stack of
+    the thread is nearly used up (when less than the parse stack reserve of 64KB remains above the thread's stack
+    limit), also for a module that is already loaded in the process: making a loaded module available in another
+    @ref Qore::Program "Program" still runs code that uses the stack, as it merges the module's namespaces into the
+    Program, can run the module's initialization, and loads its optional child modules
+    (@ref try-child-module "%try-child-module") that were not loaded yet.  A request that needs nothing to be loaded
+    succeeds with any stack: one for a module that the Program already has, or for the \c qore feature (a version
+    check).
+
+    The code that runs while a module is loaded, such as the initializers of its constants, can also exceed the stack
+    of the thread at run time (\c STACK-LIMIT-EXCEEDED).  This error is handled as the parse error above only in a
+    thread whose total stack size is smaller than the default thread stack size (see
+    get_default_thread_stack_size()).  In the primary thread, and in a thread whose total stack size is at least the
+    default size, it is handled as any other error of a module that cannot be loaded, on the assumption that a
+    stack that large is enough for a correct module, so that the module has a bug, such as a recursion without end:
+    @ref try-module "%try-module" parses its fallback code, and an optional child module
+    (@ref try-child-module "%try-child-module") fails with a \c MODULE-CHILD-FAILED warning.
+
+    The rule compares the total size of the thread's stack with the default size, not the stack that remains when the
+    module is loaded, so a correct module can still be handled as one that cannot be loaded: in a thread with the
+    default stack size whose caller has already used most of it, after set_default_thread_stack_size() reduced the
+    default size, or in a primary thread whose stack is small (\c ulimit \c -s).
 
     <hr>
     @section static_method_calls Static Method Calls
@@ -118,15 +149,27 @@
 
     @par Description
     <tt>\\</tt> \a function_name <tt>()</tt>\n
-    This makes a call reference to a function. Call references to functions are resolved at parse time; if the function does not exist a parse exception will be thrown.\n\n
+    This makes a call reference to a function. The function that the reference names is resolved at parse time; if the function does not exist a parse exception will be thrown.  The reference is to the function, not to one of its variants: if the function is @ref overloading "overloaded", the variant is selected each time the reference is called, with the arguments of that call, from all of the function's variants, wherever they are declared (also after the reference or in another source file of the %Program); if no variant matches the arguments, a \c RUNTIME-OVERLOAD-ERROR exception is thrown.\n\n
     <tt>\\</tt> \a class <tt>::</tt> \a static_method <tt>()</tt>\n
-    This makes a call reference to a static method. Call references to static methods are resolved at parse time; if the static method does not exist a parse exception will be thrown.\n\n
+    This makes a call reference to a static method. The static method that the reference names is resolved at parse time; if the static method does not exist a parse exception will be thrown.  As with a reference to a function, the variant of an overloaded static method is selected each time the reference is called, with the arguments of that call.\n\n
     <tt>\\</tt> \a object <tt>.</tt> \a method <tt>()</tt>\n
-    - \a object: can be any valid %Qore expression that evaluates to an object
-    - \a method: must be an unquoted string (see example below) and must represent a valid method name of the object's class.
+    - \a object: can be any valid %Qore expression; a value that is not an object gives a reference to a
+      @ref call_reference_pseudo_method "pseudo-method"
+    - \a method: must be an unquoted string (see example below) and must represent a valid method name of the object's class
+      or a pseudo-method of the value.
     .
-    This makes a call reference to an object method call, binding the object and the method in the call reference. If the object expression has a class type, the method must exist and be accessible in that class (a parse exception is thrown otherwise); the method is resolved each time the reference is created, with the class of the object that the expression gives (a subclass can override the method), so a reference expression evaluated for objects of different classes refers to the method of each object's class.  If the object expression does not evaluate to an object at run-time, or its class has no such method (a @ref methodGate_methods "methodGate()" method is not used for a reference), an \c OBJECT-METHOD-REFERENCE-ERROR exception will be thrown; if the method is not accessible where the reference is made, an \c ILLEGAL-CALL-REFERENCE exception will be thrown.\n\n
+    This makes a call reference to an object method call, binding the object and the method in the call reference. If the object expression has a class type, the method must exist and be accessible in that class, or be a pseudo-method of objects or a member of the class (a parse exception is thrown otherwise); the method is resolved each time the reference is created, with the class of the object that the expression gives (a subclass can override the method), so a reference expression evaluated for objects of different classes refers to the method of each object's class; the variant of an overloaded method is selected each time the reference is called, with the arguments of that call.  If the object's class has no such method or member and objects have no such pseudo-method (a @ref methodGate_methods "methodGate()" method is not used for a reference), an \c OBJECT-METHOD-REFERENCE-ERROR exception will be thrown; if the method is not accessible where the reference is made, an \c ILLEGAL-CALL-REFERENCE exception will be thrown.\n\n
     When called, a call reference to an object method will be executed in the context of the object originally referenced. Object method call references do not prolong the lifetime of an object; if the object is deleted (for example, by going out of scope), then if called the call reference will cause an \c OBJECT-ALREADY-DELETED exception to be thrown.\n\n
+    @anchor call_reference_pseudo_method
+    A reference made with a value that is not an object calls what a call of the method with the value calls: a
+    @ref closure "closure" or call reference in a hash under the name of the method, or the pseudo-method of the
+    value's type (<tt>\\l.size()</tt> for a list \c l refers to @ref <list>::size() "<list>::size()").  The
+    reference holds the value it was made with: a call does not see a later change of the variable.  If the type of
+    the expression cannot have the method, a parse exception is thrown; if the value has none at run time, a
+    \c PSEUDO-METHOD-DOES-NOT-EXIST exception, as for a call.  A reference to a method that the class of an object
+    does not have, such as the pseudo-method <tt>\\o.className()</tt> or a member holding code, looks the method up
+    by name when it is called, as a call does, in the class context of the code that made the reference.  A call
+    through the reference takes the arguments of a call of the method, also by name.\n\n
     @anchor call_reference_deleted_object
     The \c OBJECT-ALREADY-DELETED exception of a call through a reference to a deleted object names the class and the
     method that the call runs (<tt>cannot call U::m() on an object that has already been deleted</tt>): the class
@@ -148,6 +191,15 @@
     @code{.py} code c = \printf(); @endcode
     @code{.py} code c = \MyClass::method(); @endcode
     @code{.py} code c = \obj.method(); @endcode
+    @code{.py}
+sub f(int x) { printf("int: %d\n", x); }
+sub f(float x) { printf("float: %f\n", x); }
+
+code c = \f();
+# the variant is selected with the arguments of each call
+c(1);   # calls f(int)
+c(2.5); # calls f(float)
+    @endcode
 
     @note
     - The backslash at the beginning and the empty parentheses at the end; these are required when specifying a call reference.
@@ -171,8 +223,11 @@
     The default values of a closure's parameters are evaluated when the closure is called, also after the code that
     created it has returned: the local variables of the outer code block that they refer to are bound to the closure
     as those of its code are, and in a closure created in an object method they are in the context of the closure's
-    object, as its code is (they can refer to \c self and to the object's members and methods, and they do not prolong
-    the scope of the object either).\n\n
+    object, as its code is (they can refer to \c self and to the object's members and methods, also to change them,
+    as in <tt>auto sub (auto x = (self.a = 20)) { return x; }</tt>, and they do not prolong the scope of the object
+    either).  \c self is the closure's own there, as in its code: a default value can also take a reference to it or to
+    a member through it (ex: <tt>\\self.a</tt>), and a write to \c self itself through such a reference leaves the
+    closure's object unchanged.\n\n
     Note that parameter and return types are required when the @ref Qore::PO_REQUIRE_TYPES or @ref Qore::PO_REQUIRE_PROTOTYPES parse options are set.
 
     @par Example
@@ -224,21 +279,31 @@ list l = select list, !($1 % 2);
     each element.  An operator over a single value (a value that is not a list or an iterator) gives it the index
     \c 0, as for a list of one element.
 
-    <tt>$#</tt> belongs to the operator or statement whose per-element code encloses it in the same function: in a
-    function, method, closure or call reference called from that code, and anywhere else (the expression of the
-    @ref foldl "foldl" and @ref foldr "foldr" operators, which do not set it, also when they are used in the
-    per-element code of another operator or of a foreach statement, or top-level code outside any of these
-    constructs), <tt>$#</tt> is unset and gives @ref nothing, and using it where a value of another type is required
-    (<tt>int i = $#;</tt>, <tt>"s" + $#</tt>) is a parse error.  An operator in the called code gives its own elements
-    their index, and the caller's <tt>$#</tt> is the same when the call returns.
+    <tt>$#</tt> belongs to the operator or statement whose per-element code encloses it in the same function, also
+    in a statement (such as a while loop) nested in that code.  An operator in a function, method or closure called
+    from that code gives its own elements their index, and the caller's <tt>$#</tt> is the same when the call
+    returns.
+
+    <tt>$#</tt> anywhere else is a parse error (\c IMPLICIT-INDEX-NOT-ALLOWED) in every execution mode: in the body
+    of a while, for or do-while loop or of a context statement that is not itself in such per-element code; in the
+    body of a function, method or closure, also one called from or defined in per-element code; in the expression of
+    the @ref foldl "foldl" and @ref foldr "foldr" operators, which do not set it, also in per-element code; in the
+    iterated expression of an operator or foreach statement that is not itself in per-element code; in a default
+    argument value or a member, constant or global variable initializer; and in top-level code outside these
+    constructs, also after a foreach statement has ended.
 
     @par Example
     @code{.py}
 # create a list of indexes with negative values
 list l = map $#, list, ($1 < 0);
 
-auto sub get_index() { return $#; }
-# a function called from a map body does not see the map's index: gives (NOTHING, NOTHING)
-list l2 = map get_index(), (1, 2);
+# an operator in a function called from a map body gives its own elements their index: gives ((0, 1), (0, 1))
+auto sub get_indexes() { return map $#, (7, 8); }
+list l2 = map get_indexes(), (1, 2);
+
+# a parse error (IMPLICIT-INDEX-NOT-ALLOWED): a while loop does not set the implicit index
+while (stmt.next()) {
+    printf("%d\n", $#);
+}
     @endcode
 */

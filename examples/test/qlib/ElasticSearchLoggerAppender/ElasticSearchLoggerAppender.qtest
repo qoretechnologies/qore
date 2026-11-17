@@ -10,6 +10,7 @@
 %requires Util
 %requires FsUtil
 %requires QUnit
+%requires ../../TestInterpreter.qm
 %requires Logger
 %requires RestClientIo
 %requires ElasticSearchLoggerAppender
@@ -764,7 +765,7 @@ public class ElasticSearchLoggerAppenderTest inherits QUnit::Test {
 
     #! Returns the qore binary to use for subprocess tests
     private string getQoreBinary() {
-        return ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        return TestInterpreter::qore_interpreter();
     }
 
     #! Quotes a string for safe use in a POSIX shell command

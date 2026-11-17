@@ -1,0 +1,27 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in children that set their own execution modes, qcc executables and modules
+# test-platform: macos - the AOT code generation and linking of closures in outlined function-body helpers
+# Copyright 2026 Qore Technologies, s.r.o.
+#
+# Part 2 of the cases of AOTOutlinedClosure.qc, which describes them:
+# the minimal function of the issue and the closure forms in outlined regions
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+%requires ../TestInterpreter.qm
+
+%include AOTOutlinedClosure.qc
+
+%exec-class AOTOutlinedClosurePart2
+
+#! runs part 2 of 3 of the cases of AOTOutlinedClosureBase
+class AOTOutlinedClosurePart2 inherits AOTOutlinedClosureBase {
+    constructor() : AOTOutlinedClosureBase("AOTOutlinedClosurePart2", 2) {
+    }
+}

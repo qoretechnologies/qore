@@ -39,6 +39,7 @@ class IRSlotWalkOperatorCoverageTest inherits QUnit::Test {
             "QoreDotEvalOperatorNode": "dynamic_cast<const QoreDotEvalOperatorNode*>",
             "QoreExtractOperatorNode": "dynamic_cast<const QoreExtractOperatorNode*>",
             "QoreSpliceOperatorNode": "dynamic_cast<const QoreSpliceOperatorNode*>",
+            "QoreSwitchValueOperatorNode": "dynamic_cast<const QoreSwitchValueOperatorNode*>",
         };
 
         #! the abstract operator classes, which no expression is an object of

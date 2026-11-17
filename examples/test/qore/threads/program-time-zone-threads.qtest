@@ -1,0 +1,97 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-platform: macos - the time zone of a Program set and read in several threads at once
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class ProgramTimeZoneThreadsTest
+
+#! Regression test for issue #6346: the time zone of a Program set in one thread while other threads read it
+/** TimeZone::setRegion() and the other TimeZone::set*() methods wrote the Program's time zone without the lock that
+    readers take, and now() and the other functions that use the Program's zone read it without any: a data race,
+    which ThreadSanitizer reported.  The zone is now read and written atomically.  The readers here must see one of the
+    zones that the writer sets, and the Program has the last one when the threads are done; the CI jobs that run the
+    tests under ThreadSanitizer check that there is no race.
+*/
+class ProgramTimeZoneThreadsTest inherits QUnit::Test {
+    private {
+        const Zones = ("Europe/Prague", "Asia/Tokyo");
+        const Changes = 2000;
+        const Readers = 4;
+    }
+
+    constructor() : QUnit::Test("time zone of a Program set and read in threads", "1.0", \ARGV) {
+        addTestCase("set and read in threads", \testThreads());
+        set_return_value(main());
+    }
+
+    testThreads() {
+        TimeZone orig = TimeZone::get();
+        on_exit TimeZone::set(orig);
+        TimeZone::setRegion(Zones[0]);
+
+        Counter started(Readers + 1);
+        Counter go(1);
+        Counter done(Readers + 1);
+        # set by the writer when it has made all of its changes
+        bool writer_done = False;
+        # the regions that the readers saw that the writer never set, and how many reads they made
+        hash<string, bool> unexpected = {};
+        int reads;
+        Mutex m();
+
+        background sub () {
+            on_exit done.dec();
+            started.dec();
+            go.waitForZero();
+            for (int i = 0; i < Changes; ++i) {
+                TimeZone::setRegion(Zones[(i + 1) % 2]);
+            }
+            writer_done = True;
+        }();
+
+        for (int r = 0; r < Readers; ++r) {
+            background sub () {
+                on_exit done.dec();
+                started.dec();
+                go.waitForZero();
+                int n = 0;
+                hash<string, bool> seen;
+                # at least one read after the writer is done
+                while (True) {
+                    bool last = writer_done;
+                    string region = TimeZone::get().region();
+                    if (!inlist(region, Zones)) {
+                        seen{region} = True;
+                    }
+                    # a date made in the Program's zone
+                    date d = now();
+                    if (!inlist(d.info().zone.region(), Zones)) {
+                        seen{d.info().zone.region()} = True;
+                    }
+                    ++n;
+                    if (last) {
+                        break;
+                    }
+                }
+                m.lock();
+                on_exit m.unlock();
+                unexpected += seen;
+                reads += n;
+            }();
+        }
+
+        started.waitForZero();
+        go.dec();
+        done.waitForZero();
+
+        assertEq({}, unexpected, "the readers only see the zones that the writer sets");
+        assertTrue(reads >= Readers, "every reader made at least one read");
+        # Changes is even, so the last zone set is the first one
+        assertEq(Zones[Changes % 2], TimeZone::get().region(), "the Program has the last zone set");
+    }
+}

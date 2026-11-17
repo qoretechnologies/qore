@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -55,11 +55,13 @@ QoreValue QoreTransliterationOperatorNode::evalImpl(bool& needs_deref, Exception
         return QoreValue();
     }
 
-    // assign new value to lvalue (no exception possible here)
-    v.assign(nv);
-    assert(!*xsink);
+    // assign new value to lvalue; the lvalue's type can refuse the plain string (ex: an enum type, qore#6196), and
+    // assign() owns the value in either case
+    if (v.assign(nv, "<=~ tr/// operator>")) {
+        return QoreValue();
+    }
 
-    // reference for return value if necessary
+    // reference for return value if necessary; the lvalue holds the value while it is locked
     return ref_rv ? nv->refSelf() : QoreValue();
 }
 

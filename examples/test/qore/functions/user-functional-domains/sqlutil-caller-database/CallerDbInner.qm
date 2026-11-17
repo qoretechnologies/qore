@@ -1,0 +1,23 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# a module of sqlutil-caller-database.qtest whose code opens a table from a connection string that its caller gives:
+# the variant of AbstractTable::getTable() that it calls is in the DATABASE domain, which the module's own Program may
+# use, so only the check of the calling code in SqlUtil refuses a restricted caller (qore#6257)
+%modern
+%requires SqlUtil
+
+module CallerDbInner {
+    version = "1.0";
+    desc = "test module that opens a table for its caller";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+public namespace CallerDbInner {
+    #! opens the table \c t of the database that the connection string names
+    public sub open_table(string conn) {
+        SqlUtil::AbstractTable::getTable(conn, "t");
+    }
+}

@@ -1002,7 +1002,10 @@ public:
     */
     DLLEXPORT int issueModuleCmd(const char* module, const char* cmd, ExceptionSink* xsink);
 
-    DLLLOCAL QoreProgram(QoreProgram* pgm, const QoreParseOptions& po, bool ec = false, const char* ecn = nullptr);
+    //! Creates a child Program; \a parent_po are the parent's options as the caller read them for its checks, which the
+    //! child inherits (issue #6176); if nullptr, the constructor reads them
+    DLLLOCAL QoreProgram(QoreProgram* pgm, const QoreParseOptions& po, bool ec = false, const char* ecn = nullptr,
+            const QoreParseOptions* parent_po = nullptr);
 
     DLLLOCAL LocalVar *createLocalVar(const char* name, const QoreTypeInfo *typeInfo);
 
@@ -1471,6 +1474,40 @@ public:
 private:
     class ProgramThreadCountContextHelper* priv;
 };
+
+//! the Qore library provides qore_program_thread_entry_pending()
+#define _QORE_HAS_PROGRAM_THREAD_ENTRY_PENDING 1
+
+//! returns true if a call into the given Program must enter it although it is the thread's current Program
+/** A module that calls code of a Program from C++ enters the Program with QoreExternalProgramContextHelper.  When the
+    Program is the thread's current one, the entry can be skipped, but only if the thread has also entered the
+    Program: the current Program is also set without an entry while a Program is parsed, or while its metadata is
+    looked up, and by a module's own QoreProgramContextHelper, and a call made then must enter it, so that the
+    Program's thread entry handler runs (see Qore::Program::setThreadEntryHandler()) and the thread's local data in
+    the Program is set up.  A thread that is not a Qore thread must be registered before it calls into a Program
+    (getProgram(), used in the example, requires it); without Qore thread data it has entered no Program.
+
+    @param pgm the Program to call into
+
+    @return true if \a pgm has thread entry handlers and is not the Program that the thread has entered; false if
+    \a pgm is null
+
+    @par Example
+    @code{.cpp}
+// skip the entry only for a call within the Program that the thread has entered
+QoreProgram* pgm = obj->getProgram();
+std::unique_ptr<QoreExternalProgramContextHelper> pch;
+if (pgm != getProgram() || qore_program_thread_entry_pending(pgm)) {
+    pch.reset(new QoreExternalProgramContextHelper(xsink, pgm));
+    if (*xsink) {
+        return QoreValue();
+    }
+}
+    @endcode
+
+    @since %Qore 3.0
+*/
+DLLEXPORT bool qore_program_thread_entry_pending(const QoreProgram* pgm);
 
 //! allows the program call context to be set by external modules
 /** @since %Qore 0.9.4

@@ -9,6 +9,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
 %requires QUnit
+%requires ../../../TestInterpreter.qm
 %requires FsUtil
 %requires ../../../ExecModeHarness.qm
 
@@ -21,7 +22,9 @@
     on a string enum value, and the IR interpreter, the JIT and programs compiled with qcc appended to the member's
     string, which then grew with every append.  The checks are in enum-lvalue-modification-worker.qr, which is run in
     each execution mode, on the IR tier and as a program compiled with qcc at -O0 and -O3; every run must give the
-    results below, which are the results of the same operations on lvalues holding the base values themselves.
+    results below, which are the results of the same operations on lvalues holding the base values themselves.  A
+    list or hash literal of enum values alone has an enum element type, which refuses the plain strings that trim and
+    chomp would leave: on such a container they raise RUNTIME-TYPE-ERROR and leave it unchanged (qore#6195).
 */
 class EnumLvalueModificationTest inherits QUnit::Test {
     public {
@@ -65,6 +68,20 @@ class EnumLvalueModificationTest inherits QUnit::Test {
                 " value\", b: 1}",
             "container-chomp": "[\"a line of text\", \"a long string value that is not short\", 1] {a: \"a line of"
                 " text\", b: 1}",
+            "container-short": "[\"ab\", \"ab\"] {a: \" ab \", b: \"ab\"} {a: \"ab\", b: \"ab\"}",
+            "container-literal-enum":
+                "trim list: RUNTIME-TYPE-ERROR: <trim operator> expects type 'enum<ES>', but got type 'string'"
+                " instead | "
+                "[\" ab \", \"  padded value  \"] enum<ES> enum<ES> | "
+                "chomp list: RUNTIME-TYPE-ERROR: <chomp operator> expects type 'enum<ES>', but got type 'string'"
+                " instead | "
+                "[\"ab\\n\", \"a line of text\\n\"] enum<ES> enum<ES> | "
+                "trim hash: RUNTIME-TYPE-ERROR: <trim operator> expects type 'enum<ES>', but got type 'string'"
+                " instead | "
+                "{a: \" ab \", b: \"  padded value  \"} enum<ES> enum<ES> | "
+                "chomp hash: RUNTIME-TYPE-ERROR: <chomp operator> expects type 'enum<ES>', but got type 'string'"
+                " instead | "
+                "{a: \"ab\\n\", b: \"a line of text\\n\"} enum<ES> enum<ES>",
             "object-members": "\"a long string value that is not shortx\" \"a long string value that is not"
                 " shorty\" 12345678901234567891.25 8",
             "object-method": "a LONG string value that is not short-m",
@@ -78,7 +95,7 @@ class EnumLvalueModificationTest inherits QUnit::Test {
             "global": "\"a long string value that is not shortx\" 12345678901234567891.25",
             "loop": "0",
             "members": "[\"42\", \"a long string value that is not short\", \"  padded value  \", \"a line of"
-                " text\\n\", 1.5, 12345678901234567890.25, 0.5, 2.5, 1, 7]",
+                " text\\n\", \" ab \", \"ab\\n\", 1.5, 12345678901234567890.25, 0.5, 2.5, 1, 7]",
         };
     }
 
@@ -89,7 +106,7 @@ class EnumLvalueModificationTest inherits QUnit::Test {
     }
 
     constructor() : QUnit::Test("EnumLvalueModificationTest", "1.0", \ARGV) {
-        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        qore_bin = TestInterpreter::qore_interpreter();
         libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
         qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
             ?? (is_file(libqore_dir + DirSep + "qcc") ? libqore_dir + DirSep + "qcc"

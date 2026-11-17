@@ -7,6 +7,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
+%requires ../TestInterpreter.qm
 %requires FsUtil
 %requires ../ExecModeHarness.qm
 
@@ -21,7 +22,7 @@
     error-return block from 751 places: 113k PHI operands became 235k machine
     COPYs and took over ten seconds to code-generate, and at 400 locals the
     compile did not finish in two minutes.  Cleanup is now routed through
-    qore_rt_cleanup_run_allocas() once that product exceeds
+    qore_rt_cleanup_run_frame() once that product exceeds
     QORE_JIT_CLEANUP_PHI_BUDGET.  These tests pin the behaviour that must not
     change when it does: identical results and identical destruction order and
     count on both the normal and the exception exit path.
@@ -43,7 +44,7 @@ class JITLargeBodyCleanupTest inherits QUnit::Test {
     }
 
     constructor() : QUnit::Test("JITLargeBodyCleanupTest", "1.0", \ARGV) {
-        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        qore_bin = TestInterpreter::qore_interpreter();
         addTestCase("large body selects array cleanup", \testArrayCleanupSelected());
         addTestCase("large body normal exit", \testLargeBodyNormalExit());
         addTestCase("large body exception exit", \testLargeBodyExceptionExit());

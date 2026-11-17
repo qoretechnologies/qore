@@ -4,7 +4,7 @@
 # The cases of the CMakeBuildHelpers-<n>.qtest tests: each runs one part of them, so that each takes a
 # short time, and together they run every case (see addPartCase()); the helpers are those of
 # CMakeBuildHelpersTestBase.qm, which the generic qcc object helper scenarios
-# (CMakeBuildHelpers-generic-*.qtest) and the incremental preload cases (CMakeBuildHelpers-preload.qtest) share
+# (CMakeBuildHelpers-generic-*.qtest) and the incremental preload cases (CMakeBuildHelpersPreload.qc) share
 
 class CMakeBuildHelpersBase inherits CMakeBuildHelpersTestBase::CMakeBuildTest {
     private {

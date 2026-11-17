@@ -9,6 +9,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
+%requires ../../../examples/test/TestInterpreter.qm
 %requires FsUtil
 
 %exec-class ParquetMemoryPoolTest
@@ -39,7 +40,7 @@ class ParquetMemoryPoolTest inherits QUnit::Test {
     }
 
     constructor() : QUnit::Test("Parquet memory pool", "1.0", \ARGV) {
-        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        qore_bin = TestInterpreter::qore_interpreter();
         string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
         env = sprintf("env -u DEBUGINFOD_URLS LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s", libqore_dir, libqore_dir);
         script = get_script_dir() + "/data/parquet-memory-pool.q";
@@ -69,8 +70,11 @@ class ParquetMemoryPoolTest inherits QUnit::Test {
         }
         TmpDir tmp("parquet-memory-pool");
         int rc;
-        string out = backquote(sprintf("%s QORE_PCRE2_NO_JIT=1 %s --leak-check=no --error-exitcode=99 %s -b %s %s 2>&1",
-            env, valgrind, qore_bin, script, tmp.path), \rc);
+        # valgrind cannot run AVX-512 instructions, which Arrow selects at run time on a CPU that has them (its
+        # bit-unpacking routines, for example); ARROW_USER_SIMD_LEVEL limits that choice to AVX2, which valgrind runs
+        # (it only lowers the level that Arrow detects, so a CPU without AVX2 is unaffected), issue #6375
+        string out = backquote(sprintf("%s QORE_PCRE2_NO_JIT=1 ARROW_USER_SIMD_LEVEL=AVX2 %s --leak-check=no "
+            "--error-exitcode=99 %s -b %s %s 2>&1", env, valgrind, qore_bin, script, tmp.path), \rc);
         assertEq(0, rc, "valgrind reports no error: " + out);
         assertRegex("ERROR SUMMARY: 0 errors", out, "valgrind reports no error");
         assertTrue(out.find(Expected) >= 0, "the child script reads back what it writes: " + out);

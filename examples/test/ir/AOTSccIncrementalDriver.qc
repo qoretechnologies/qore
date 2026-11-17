@@ -42,7 +42,7 @@ class AOTSccIncrementalDriverBase inherits QUnit::Test {
 
     constructor(string name, int part) : QUnit::Test(name, "1.0", \ARGV) {
         self.part = part;
-        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        qore_bin = TestInterpreter::qore_interpreter();
         tools_dir = normalize_dir(get_script_dir() + "/../../../tools");
         source_order_tool = tools_dir + DirSep + "qore-qo-source-order";
         incremental_tool = tools_dir + DirSep + "qore-qo-incremental";
@@ -63,55 +63,55 @@ class AOTSccIncrementalDriverBase inherits QUnit::Test {
             \testFrozenGraphRemovesTheTransition());
         addPartCase(1, "the coordinator plans, compiles and verifies against one graph",
             \testCoordinatorConvergesInOneInvocation());
-        addPartCase(1, "a scheduled recipe uses the coordinator's currency rule",
+        addPartCase(2, "a scheduled recipe uses the coordinator's currency rule",
             \testScheduledRecipeSharesTheCoordinatorsRule());
-        addPartCase(1, "a scheduled recipe starts the shared parse it cannot replace",
+        addPartCase(2, "a scheduled recipe starts the shared parse it cannot replace",
             \testScheduledRecipeStartsTheSharedParseItCannotReplace());
-        addPartCase(1, "a scheduled recipe parses only its own component",
+        addPartCase(2, "a scheduled recipe parses only its own component",
             \testScheduledRecipeParsesOnlyItsOwnComponent());
-        addPartCase(1, "a partial parse leaves for the next pass what a preloaded object stands between",
+        addPartCase(2, "a partial parse leaves for the next pass what a preloaded object stands between",
             \testSubsetParseIsConvex());
-        addPartCase(1, "a preload failure on the default path falls back to the group's parse",
+        addPartCase(2, "a preload failure on the default path falls back to the group's parse",
             \testPreloadFailureFallsBackToGroupParse());
-        addPartCase(2, "a group configured without a shared parse still builds",
+        addPartCase(3, "a group configured without a shared parse still builds",
             \testScheduledRecipeBuildsAGroupWithoutASharedParse());
-        addPartCase(2, "the bootstrap hands the stale set to the coordinator",
+        addPartCase(3, "the bootstrap hands the stale set to the coordinator",
             \testBootstrapHandsTheStaleSetToTheCoordinator());
-        addPartCase(2, "a preset contention signal cannot bypass the batch lock",
+        addPartCase(3, "a preset contention signal cannot bypass the batch lock",
             \testPresetContentionSignalCannotBypassBatchLock());
-        addPartCase(2, "a stale component whose compile moves no contract is compiled without parsing the group",
+        addPartCase(3, "a stale component whose compile moves no contract is compiled without parsing the group",
             \testPlanCompilesFirstWhenNoContractMoves());
-        addPartCase(2, "a stale component whose compile moves a widely followed contract parses the group after it",
+        addPartCase(3, "a stale component whose compile moves a widely followed contract parses the group after it",
             \testPlanParsesTheGroupWhenTheContractMoves());
-        addPartCase(2, "a cascading invalidation is walked to convergence, not escalated",
+        addPartCase(3, "a cascading invalidation is walked to convergence, not escalated",
             \testCascadingInvalidationIsWalkedToConvergence());
-        addPartCase(2, "a pass that changes nothing escalates instead of looping",
+        addPartCase(3, "a pass that changes nothing escalates instead of looping",
             \testAPassThatChangesNothingEscalates());
-        addPartCase(2, "a compile that records a new edge to a current provider converges",
+        addPartCase(4, "a compile that records a new edge to a current provider converges",
             \testACompileThatDiscoversAnEdgeConverges());
-        addPartCase(2, "a compile that closes a cycle is still published and then rebuilt",
+        addPartCase(4, "a compile that closes a cycle is still published and then rebuilt",
             \testACompileThatClosesACycleIsRebuiltTogether());
-        addPartCase(2, "the coordinator records what the group reads from outside it",
+        addPartCase(5, "the coordinator records what the group reads from outside it",
             \testCoordinatorRecordsExternalInputs());
-        addPartCase(2, "the escalation floor follows what serves the band below it",
+        addPartCase(5, "the escalation floor follows what serves the band below it",
             \testEscalationFloorFollowsThePartialParse());
-        addPartCase(3, "concurrent recipes publish one coherent generation",
+        addPartCase(6, "concurrent recipes publish one coherent generation",
             \testConcurrentRecipesPublishOneGeneration());
-        addPartCase(3, "a lock left by a dead builder does not wedge the build",
+        addPartCase(6, "a lock left by a dead builder does not wedge the build",
             \testAbandonedLockDoesNotWedgeTheBuild());
-        addPartCase(3, "a recipe that must have the group's parse is not handed the stale set",
+        addPartCase(6, "a recipe that must have the group's parse is not handed the stale set",
             \testTheGroupParseIsNotAnsweredWithAHandOff());
-        addPartCase(3, "an escalation behind a contended group lock still parses the group",
+        addPartCase(6, "an escalation behind a contended group lock still parses the group",
             \testEscalationBehindAContendedLockParsesTheGroup());
-        addPartCase(3, "a plan that cannot converge names the components it left stale",
+        addPartCase(7, "a plan that cannot converge names the components it left stale",
             \testAnUnconvergedPlanNamesTheStaleComponents());
-        addPartCase(3, "adopting a current tree never reads as a partly stale one",
+        addPartCase(7, "adopting a current tree never reads as a partly stale one",
             \testAdoptingACurrentTreeIsNeverTorn());
-        addPartCase(3, "standalone compiles are ordered after every stale component they preload",
+        addPartCase(8, "standalone compiles are ordered after every stale component they preload",
             \testOrderSetFollowsThePreload());
-        addPartCase(3, "a stale provider reached only over a content edge is compiled first",
+        addPartCase(7, "a stale provider reached only over a content edge is compiled first",
             \testCoordinatorCompilesAPreloadedStaleProviderFirst());
-        addPartCase(3, "a compile that read a stale peer in a content cycle falls back to the group's parse",
+        addPartCase(9, "a compile that read a stale peer in a content cycle falls back to the group's parse",
             \testContentCycleFailureFallsBackToGroupParse());
 
         set_return_value(main());

@@ -119,6 +119,7 @@ public class HttpClientConnection inherits HttpClientConnectionBase {
             (see @ref HttpClientConnectionManager::pinConnection()).  Used to keep a
             connection-scoped persistent transaction (HTTP/1.1) on exactly one socket. */
         bool leased = False;
+
     }
 
     #! Returns the protocol identifier: "h1", "h2", or "h3"
@@ -272,7 +273,7 @@ public class HttpClientConnection inherits HttpClientConnectionBase {
         @par Thread Safety
         The check and reservation happen under \c lock in one critical section,
         eliminating the TOCTOU gap that exists with separate
-        \c canAcceptStream() + manual reservation.
+        \c canAcceptStream() + manual reservation..
     */
     bool tryReserveStream() {
         AutoLock al(lock);
@@ -282,7 +283,10 @@ public class HttpClientConnection inherits HttpClientConnectionBase {
             return False;
         }
         # the reservation is counted in the C++ connection, where the idle timeout of its operation sees it (#6184)
-        return tryReservePendingStream(getPollOperation().getActiveStreamCount(), max_concurrent_streams);
+        # the active streams of the operation are read under the reservation lock of the C++ connection, so that a
+        # request that is being submitted, whose reservation is released after its active stream is counted, cannot
+        # leave its stream to another reservation
+        return tryReservePendingStream(getPollOperation(), max_concurrent_streams);
     }
 
     #! Releases a pending stream reservation
@@ -291,6 +295,24 @@ public class HttpClientConnection inherits HttpClientConnectionBase {
     */
     releaseStreamReservation() {
         HttpClientConnectionBase::releaseStreamReservation();
+    }
+
+    #! Releases the stream reservation of a request whose time ran out before the connection was ready
+    /** Several requests can reserve streams of a connection that is still connecting, each with its own deadline
+        (see @ref tryReserveStream()), and asynchronous waiters can wait for it with a notifier.  A request whose
+        deadline passes gives up only its own reservation, and the connection is not closed: the deadline belongs to
+        the request, not to the connection, which keeps connecting, bounded by its own connect timeout, for the other
+        waiters and, once ready, for later requests; the connection manager's idle eviction does not close a
+        connection with a reservation (#6184, #6429, #6430).
+
+        @param reserved @ref True if the request holds a reservation of the connection, which is released
+
+        @since HttpClientIo 1.0
+    */
+    releaseExpiredReservation(bool reserved) {
+        if (reserved) {
+            HttpClientConnectionBase::releaseStreamReservation();
+        }
     }
 
     #! Wakes the async I/O controller to flush pending protocol writes
@@ -587,8 +609,14 @@ public class HttpClientConnection inherits HttpClientConnectionBase {
             if (http_is_terminal_connection_error(err)) {
                 throw err.err, err.desc, err;
             }
-            throw "HTTPCLIENT-CONNECT-ERROR",
-                sprintf("connection closed: %s: %s", err.err ?? "UNKNOWN", err.desc ?? "unknown"),
+            # a connection closed locally, by its owner, can wake a waiting request before the error of the abort is
+            # recorded (#6430)
+            if (!err.err) {
+                throw "HTTPCLIENT-CONNECT-ERROR", sprintf("connection %d to %s:%d was closed without an error %s",
+                    connection_id, url_info.host ?? "<unknown>", url_info.port ?? 0,
+                    ready ? "after it became ready" : "before the request could use it"), err;
+            }
+            throw "HTTPCLIENT-CONNECT-ERROR", sprintf("connection closed: %s: %s", err.err, err.desc ?? "unknown"),
                 err;
         }
 
@@ -616,6 +644,9 @@ public class HttpClientConnection inherits HttpClientConnectionBase {
     close(*timeout close_timeout) {
         log(LoggerLevel::DEBUG, "closing connection");
         closeImpl(close_timeout);
+        # the connection and its poll operation reference each other: the cycle is broken once the connection is
+        # closed, or neither is ever released (#6286)
+        getPollOperation().clearConnection();
     }
 
     #! Marks (or unmarks) the connection as exclusively leased for a persistent session

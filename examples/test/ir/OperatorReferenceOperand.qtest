@@ -7,6 +7,7 @@
 %no-child-restrictions
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
+%requires ../TestInterpreter.qm
 %requires FsUtil
 %requires ../ExecModeHarness.qm
 
@@ -26,8 +27,8 @@
     accesses and the iterations to such a reference, also with a missing hash key or an empty list or hash as the
     other operand (<tt>h.r - h.missing</tt>, <tt>() + h.r</tt>), and the compound assignment operators with such a
     reference as their right operand to locals of every kind, a hash element, a global, members and a closure-bound
-    local (<tt>a %= h.r</tt> gives \c 0, as <tt>a %= 0</tt> does), twice, in every execution mode, on the IR tier of
-    tiered execution and as a qcc executable (see ExecModeOutputTest).
+    local (<tt>a %= h.r</tt> raises \c DIVISION-BY-ZERO, as <tt>a %= 0</tt> does), twice, in every execution mode, on
+    the IR tier of tiered execution and as a qcc executable (see ExecModeOutputTest).
 */
 class OperatorReferenceOperandTest inherits ExecModeOutputTest {
     public {
@@ -88,21 +89,21 @@ int gi = 5;
 auto sub getr(hash h) { return h.r; }
 class C {
     public { int a = 5; auto b = 5; }
-    m(hash h) { a %= h.r; show("self.a %= r", a); b %= h.r; show("self.b %= r", b); }
+    m(hash h) { try { a %= h.r; } catch (hash<ExceptionInfo> ex) { printf("%s\n", ex.err); } show("self.a %= r", a); try { b %= h.r; } catch (hash<ExceptionInfo> ex) { printf("%s\n", ex.err); } show("self.b %= r", b); }
 }
 # compound assignments with a reference that arrives as a value as their right operand
 sub compound(hash h, list l) {
-    int a = 5; a %= h.r; show("a %= r", a);
-    int b = 5; b %= l[0]; show("b %= l[0]", b);
-    int c = 5; c %= getr(h); show("c %= getr()", c);
-    hash<auto> g = {"a": 5}; g.a %= h.r; show("g.a %= r", g.a);
-    gi = 5; gi %= h.r; show("gi %= r", gi);
+    int a = 5; try { a %= h.r; } catch (hash<ExceptionInfo> ex) { printf("%s\n", ex.err); } show("a %= r", a);
+    int b = 5; try { b %= l[0]; } catch (hash<ExceptionInfo> ex) { printf("%s\n", ex.err); } show("b %= l[0]", b);
+    int c = 5; try { c %= getr(h); } catch (hash<ExceptionInfo> ex) { printf("%s\n", ex.err); } show("c %= getr()", c);
+    hash<auto> g = {"a": 5}; try { g.a %= h.r; } catch (hash<ExceptionInfo> ex) { printf("%s\n", ex.err); } show("g.a %= r", g.a);
+    gi = 5; try { gi %= h.r; } catch (hash<ExceptionInfo> ex) { printf("%s\n", ex.err); } show("gi %= r", gi);
     new C().m(h);
-    auto d = 5; d %= h.r; show("auto d %= r", d);
-    int e = 5; code cl = sub () { e %= h.r; }; cl(); show("closure e %= r", e);
-    softint f = 5; f %= h.r; show("softint f %= r", f);
-    int k = 5; show("value k %= r", k %= h.r);
-    int m = 5; m %= h.r + 0; show("m %= r + 0", m);
+    auto d = 5; try { d %= h.r; } catch (hash<ExceptionInfo> ex) { printf("%s\n", ex.err); } show("auto d %= r", d);
+    int e = 5; code cl = sub () { e %= h.r; }; try { cl(); } catch (hash<ExceptionInfo> ex) { printf("%s\n", ex.err); } show("closure e %= r", e);
+    softint f = 5; try { f %= h.r; } catch (hash<ExceptionInfo> ex) { printf("%s\n", ex.err); } show("softint f %= r", f);
+    int k = 5; try { show("value k %= r", k %= h.r); } catch (hash<ExceptionInfo> ex) { printf("%s\n", ex.err); }
+    int m = 5; try { m %= h.r + 0; } catch (hash<ExceptionInfo> ex) { printf("%s\n", ex.err); } show("m %= r + 0", m);
     int n = 7; n &= l[0]; show("n &= l[0]", n);
     int o = 7; o |= h.r; show("o |= r", o);
     int p = 7; p ^= h.r; show("p ^= r", p);
@@ -231,18 +232,29 @@ fe({"r": \lx});
             "r + missing: null",
             "r * missing: null",
             "r == missing: False",
-            "a %= r: 0",
-            "b %= l[0]: 0",
-            "c %= getr(): 0",
-            "g.a %= r: 0",
-            "gi %= r: 0",
-            "self.a %= r: 0",
-            "self.b %= r: 0",
-            "auto d %= r: 0",
-            "closure e %= r: 0",
-            "softint f %= r: 0",
-            "value k %= r: 0",
-            "m %= r + 0: 0",
+            "DIVISION-BY-ZERO",
+            "a %= r: 5",
+            "DIVISION-BY-ZERO",
+            "b %= l[0]: 5",
+            "DIVISION-BY-ZERO",
+            "c %= getr(): 5",
+            "DIVISION-BY-ZERO",
+            "g.a %= r: 5",
+            "DIVISION-BY-ZERO",
+            "gi %= r: 5",
+            "DIVISION-BY-ZERO",
+            "self.a %= r: 5",
+            "DIVISION-BY-ZERO",
+            "self.b %= r: 5",
+            "DIVISION-BY-ZERO",
+            "auto d %= r: 5",
+            "DIVISION-BY-ZERO",
+            "closure e %= r: 5",
+            "DIVISION-BY-ZERO",
+            "softint f %= r: 5",
+            "DIVISION-BY-ZERO",
+            "DIVISION-BY-ZERO",
+            "m %= r + 0: 5",
             "n &= l[0]: 0",
             "o |= r: 7",
             "p ^= r: 7",
@@ -253,18 +265,29 @@ fe({"r": \lx});
             "u *= r: 0",
             "v -= r: 5",
             "x: 3",
-            "a %= r: 0",
-            "b %= l[0]: 0",
-            "c %= getr(): 0",
-            "g.a %= r: 0",
-            "gi %= r: 0",
-            "self.a %= r: 0",
-            "self.b %= r: 0",
-            "auto d %= r: 0",
-            "closure e %= r: 0",
-            "softint f %= r: 0",
-            "value k %= r: 0",
-            "m %= r + 0: 0",
+            "DIVISION-BY-ZERO",
+            "a %= r: 5",
+            "DIVISION-BY-ZERO",
+            "b %= l[0]: 5",
+            "DIVISION-BY-ZERO",
+            "c %= getr(): 5",
+            "DIVISION-BY-ZERO",
+            "g.a %= r: 5",
+            "DIVISION-BY-ZERO",
+            "gi %= r: 5",
+            "DIVISION-BY-ZERO",
+            "self.a %= r: 5",
+            "DIVISION-BY-ZERO",
+            "self.b %= r: 5",
+            "DIVISION-BY-ZERO",
+            "auto d %= r: 5",
+            "DIVISION-BY-ZERO",
+            "closure e %= r: 5",
+            "DIVISION-BY-ZERO",
+            "softint f %= r: 5",
+            "DIVISION-BY-ZERO",
+            "DIVISION-BY-ZERO",
+            "m %= r + 0: 5",
             "n &= l[0]: 0",
             "o |= r: 7",
             "p ^= r: 7",

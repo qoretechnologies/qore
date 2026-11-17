@@ -87,5 +87,47 @@ public class FixedLengthBase {
         return rv;
         */
     }
+
+    #! Returns True if the string value of an \c "int", \c "float" or \c "number" field is a number of its type
+    /** @param type the field type: \c "int", \c "float" or \c "number"
+        @param value the string value of the field
+        @param fmt the number format of the field, if any: the thousands separator, optionally followed by the decimal
+        separator and the number of decimals (ex: \c ".," or \c ".,2")
+
+        @return True if the value is a number of the field's type in the given format, or has only spaces (an empty
+        field, read as zero)
+
+        @since FixedLengthUtil 1.7
+    */
+    private static bool isNumericValue(string type, string value, *string fmt) {
+        if (value =~ /^\s*$/) {
+            return True;
+        }
+        switch (type) {
+            case "int":
+                # with a number format, only the thousands separator is removed: a value with the decimal separator is
+                # not an integer (parse_int() would ignore the decimals)
+                return fmt ? is_int(replace(value, fmt[0], ""), True) : is_int(value);
+            case "float":
+                return is_float(fmt ? FixedLengthBase::removeNumberSeparators(value, fmt) : value);
+            case "number":
+                return is_number(fmt ? FixedLengthBase::removeNumberSeparators(value, fmt) : value);
+        }
+        return True;
+    }
+
+    #! Returns the value without the separators of the given number format, so that its digits can be checked
+    /** @param val the value
+        @param fmt a number format: the thousands separator, optionally followed by the decimal separator and the
+        number of decimals (ex: \c ".," or \c ".,2"); the format can have only the thousands separator
+
+        @since FixedLengthUtil 1.7
+    */
+    private static string removeNumberSeparators(string val, string fmt) {
+        for (int i = 0; i < 2 && i < fmt.length(); ++i) {
+            val = replace(val, fmt[i], "");
+        }
+        return val;
+    }
 }
 }

@@ -14,6 +14,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
+%requires ../TestInterpreter.qm
 %requires Util
 
 %exec-class AOTFunctionOutliningTest
@@ -29,7 +30,7 @@ class AOTFunctionOutliningTest inherits QUnit::Test {
     }
 
     constructor() : QUnit::Test("AOTFunctionOutliningTest", "1.0", \ARGV) {
-        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        qore_bin = TestInterpreter::qore_interpreter();
         libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
 
         addTestCase("outlining fires and preserves behavior", \testSequentialGroups());

@@ -472,7 +472,14 @@ struct qore_number_private : public qore_number_private_intern {
     DLLLOCAL qore_number_private* doBinary(q_mpfr_binary_func_t func, const qore_number_private& r, ExceptionSink* xsink = 0) const {
         mpfr_prec_t prec;
         if (func == mpfr_pow) {
-            prec = mpfr_get_prec(num) * QORE_MIN(QORE_MAX_PREC, r.getAsBigInt());
+            // the precision grows with the magnitude of the integer part of the exponent; it is at least the base's,
+            // as for an exponent between -1 and 1, NaN or a negative exponent, which gave a precision that MPFR
+            // rejects by aborting the process
+            int64 e = r.getAsBigInt();
+            mpfr_prec_t m = e < -QORE_MAX_PREC || e > QORE_MAX_PREC
+                ? QORE_MAX_PREC
+                : (e < 0 ? static_cast<mpfr_prec_t>(-e) : static_cast<mpfr_prec_t>(e));
+            prec = mpfr_get_prec(num) * QORE_MAX(static_cast<mpfr_prec_t>(1), m);
         } else if (func == mpfr_mul || func == mpfr_div) {
             prec = mpfr_get_prec(num) + mpfr_get_prec(r.num);
         } else {
@@ -498,14 +505,16 @@ struct qore_number_private : public qore_number_private_intern {
         return doBinary(mpfr_mul, r);
     }
 
+    //! a division by zero (also of zero, infinity or NaN, and by -0) raises DIVISION-BY-ZERO (qore#1034)
+    /** The divisor is checked before the division, which then cannot set the MPFR divide-by-zero flag; the MPFR
+        flags, which are global to the thread and which other operations may have left set, are not read
+    */
     DLLLOCAL qore_number_private* doDivideBy(const qore_number_private& r, ExceptionSink* xsink) const {
-#ifndef HAVE_MPFR_DIVBY0
         if (r.zero()) {
             do_divide_by_zero(xsink);
-            return 0;
+            return nullptr;
         }
-#endif
-        return doBinary(mpfr_div, r, xsink);
+        return doBinary(mpfr_div, r);
     }
 
     DLLLOCAL qore_number_private* doUnary(q_mpfr_unary_func_t func, ExceptionSink* xsink = 0) const {
@@ -539,7 +548,9 @@ struct qore_number_private : public qore_number_private_intern {
     }
 
     // for round functions: round(), ceil(), floor()
-    DLLLOCAL qore_number_private* doRoundNR(q_mpfr_unary_nr_func_t func, int prec = 0, ExceptionSink* xsink = NULL) const {
+    //! the precision is an int64: it was cut to an int (qore#6212); a power of 10 above 10^308 is 10^308, as for a float
+    DLLLOCAL qore_number_private* doRoundNR(q_mpfr_unary_nr_func_t func, int64 prec = 0, ExceptionSink* xsink = NULL)
+            const {
         std::unique_ptr<qore_number_private> p0(new qore_number_private(*this));
 
         if (prec == 0) {
@@ -553,13 +564,17 @@ struct qore_number_private : public qore_number_private_intern {
 
         qore_number_private* p2;
 
+        // the magnitude of the precision, also of the smallest int, limited to 308: pow() gives infinity above it, which
+        // gave a NaN result
+        uint64_t k = prec < 0 ? 0 - static_cast<uint64_t>(prec) : static_cast<uint64_t>(prec);
+        double scale = pow(10.0, static_cast<double>(k < 308 ? k : 308));
         if (prec > 0) {
-            std::unique_ptr<qore_number_private> c(new qore_number_private(pow(10, prec)));
+            std::unique_ptr<qore_number_private> c(new qore_number_private(scale));
             std::unique_ptr<qore_number_private> p1(p0 -> doMultiply(*c));
             func(p1 -> num, p1 -> num);
             p2 = p1 -> doDivideBy(*c, xsink);
         } else {
-            std::unique_ptr<qore_number_private> c(new qore_number_private(pow(10, -prec)));
+            std::unique_ptr<qore_number_private> c(new qore_number_private(scale));
             std::unique_ptr<qore_number_private> p1(p0 -> doDivideBy(*c, xsink));
             func(p1 -> num, p1 -> num);
             p2 = p1 -> doMultiply(*c);
@@ -707,7 +722,8 @@ public:
         return p ? new QoreNumberNode(p) : 0;
     }
 
-    DLLLOCAL static QoreNumberNode* doRoundNR(const QoreNumberNode& n, q_mpfr_unary_nr_func_t func, int prec = 0, ExceptionSink* xsink = 0) {
+    DLLLOCAL static QoreNumberNode* doRoundNR(const QoreNumberNode& n, q_mpfr_unary_nr_func_t func, int64 prec = 0,
+            ExceptionSink* xsink = 0) {
         qore_number_private* p = n.priv->doRoundNR(func, prec, xsink);
         return p ? new QoreNumberNode(p) : 0;
     }

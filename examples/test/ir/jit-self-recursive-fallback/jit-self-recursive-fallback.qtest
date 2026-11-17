@@ -1,0 +1,58 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - JIT code generation of native self-recursive calls and their fallback
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../TestInterpreter.qm
+%requires ../../ExecModeHarness.qm
+
+%exec-class JitSelfRecursiveFallbackTest
+
+#! the fallback of a native self-recursive call of a function whose native code was removed
+/** A recompilation removes the native code of a function while it recompiles it; a native frame of the function
+    that is already running then makes its recursive calls through the fallback of the native self-recursive call,
+    which ran the function's body without binding its parameters: they had no value, and every argument was in the
+    implicit argument list.  The fallback now makes the call as an AST call makes it.  The worker
+    removes the native code during the recursion with a debug hook (dbg_jit_drop_native_code()), so that the
+    fallback is taken in a single thread, and every execution mode must give the output of the AST interpreter
+    (qore#6317).
+*/
+class JitSelfRecursiveFallbackTest inherits QUnit::Test {
+    public {
+        #! the output of the worker
+        const Expected = "n=6 acc=0 tag=\"t\"\n"
+            "n=5 acc=6 tag=\"t6\"\n"
+            "n=4 acc=11 tag=\"t65\"\n"
+            "n=3 acc=15 tag=\"t654\"\n"
+            "n=2 acc=18 tag=\"t6543\"\n"
+            "n=1 acc=20 tag=\"t65432\"\n"
+            "n=0 acc=21 tag=\"t654321\"\n"
+            "result: 21\n";
+    }
+
+    constructor() : QUnit::Test("JIT self-recursive call fallback", "1.0") {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            addTestCase(sprintf("a recursive call after the native code is removed (%s)", mode), \testFallback(),
+                (mode,));
+        }
+        set_return_value(main());
+    }
+
+    testFallback(string mode) {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("dbg_jit_drop_native_code() requires a debug build");
+        }
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string worker = get_script_dir() + "/self-recursive-fallback.q";
+        string out = ExecModeHarness::run(sprintf("%s %s --enable-debug --exec-mode=%s %s",
+            ExecModeHarness::TraceEnv, qore_bin, mode, worker), ExecModeHarness::NativeCheck::JitAndTiered);
+        # the function gets native code when it has IR, so with every execution mode but the AST interpreter
+        bool native = mode != "ast";
+        assertEq(Expected + sprintf("recompiled: %y dropped: %y\n", native, native), out, mode);
+    }
+}

@@ -65,6 +65,10 @@ protected:
     bool has_explicit_type_args = false;
     //! true if the call can bind named arguments at run time (set by the call node before parseArgsVariant())
     bool allow_runtime_arg_names = false;
+    //! true for a call of a method that the class does not have, of the name of a member that can hold code: a
+    //! named call keeps its names, which bind its arguments at run time to the parameters of the member's code
+    //! (AbstractMethodCallNode::execNamed(); qore#6361)
+    bool runtime_named_member_call = false;
     //! true for a call of a method resolved on the class of the object (a call through an object or an unqualified
     //! call of a normal method in the class): a named call is resolved at run time on the class of the object, as the
     //! positional call that it spells out (qore#5990)
@@ -149,6 +153,12 @@ public:
     //! of the call, or the variant that the names of a named call resolved at run time select (qore#5990)
     DLLLOCAL const AbstractQoreFunctionVariant* getParseCheckVariant() const {
         return variant ? variant : named_bound_variant;
+    }
+
+    //! marks a call of a method that the class does not have, of the name of a member that can hold code; set before
+    //! parseArgsVariant(): a named call binds its arguments at run time to the parameters of the member's code
+    DLLLOCAL void setRuntimeNamedMemberCall() {
+        runtime_named_member_call = true;
     }
 
     //! marks a call of a method dispatched on the class of the object; set before parseArgsVariant()
@@ -658,6 +668,19 @@ Base* qore_make_function_call(LexicalSemanticPolicy policy, Args&&... args) {
 */
 DLLLOCAL void qore_raise_deleted_method_call(ExceptionSink* xsink, const QoreObject* o, const char* name,
         const QoreClass* qc, const QoreMethod* method, const AbstractQoreFunctionVariant* variant);
+
+//! Raises the exception of a call of the method @a m on the object @a self that the call's arguments deleted, as the
+//! AST interpreter raises it when it enters the method's code (issue #5824)
+/** The variant is resolved with the arguments @a args (a list of the caller's, whose values the resolution can take
+    over, as the call's would) as the call resolves it (NormalMethodFunction::evalMethodTmpArgs()), unless @a variant
+    is given; the error of the resolution is raised if it fails, otherwise the error of the method's code, which names
+    the class of the variant.  The compiled modes evaluate a call's arguments before the call: their check of the
+    call's target after the arguments raises it instead of the call.
+*/
+DLLLOCAL void qore_raise_deleted_method_call_after_args(QoreObject* self, const QoreMethod& m,
+        const AbstractQoreFunctionVariant* variant, QoreListNode* args, const qore_class_private* cctx,
+        const QoreTypeParamInstantiation* explicit_type_param_instantiation, const name_vec_t* arg_names,
+        ExceptionSink* xsink);
 
 //! Returns the node as a FunctionCallNode if it is one, otherwise nullptr
 /** The same result as dynamic_cast<const FunctionCallNode*>(), from the node type: a FunctionCallNode has
@@ -1173,6 +1196,20 @@ public:
         return rv;
     }
 };
+
+//! Returns the node as a MethodCallNode if it is one, otherwise nullptr
+/** The same result as dynamic_cast<const MethodCallNode*>(), from the node type: only MethodCallNode's constructors
+    give NT_METHOD_CALL, and the lexical variants made by qore_make_function_call() keep the type of their base class.
+    A dynamic_cast searches the class hierarchy with string comparisons of the type names, which is too slow for the
+    per-call paths.
+*/
+DLLLOCAL inline const MethodCallNode* qore_get_method_call_node(const AbstractQoreNode* n) {
+    const MethodCallNode* rv = (n && n->getType() == NT_METHOD_CALL)
+        ? static_cast<const MethodCallNode*>(n)
+        : nullptr;
+    assert(rv == dynamic_cast<const MethodCallNode*>(n));
+    return rv;
+}
 
 //! Returns the node as a SelfFunctionCallNode if it is one, otherwise nullptr
 /** The same result as dynamic_cast<const SelfFunctionCallNode*>(), from the node type: only SelfFunctionCallNode's
