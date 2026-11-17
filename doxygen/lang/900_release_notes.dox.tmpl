@@ -2123,6 +2123,8 @@
       try statement in every execution mode, as in the AST interpreter (issues #6084 and #6244)
     - in native code (JIT and qcc), the value of push and unshift on a member or an element is the list, as in the
       interpreters, instead of \c NOTHING (issue #6244)
+    - performance: a run-time check of an object against a parameterized class type visits each ancestor once, so
+      its cost grows linearly with the depth of a diamond class hierarchy instead of exponentially (issue #6449)
     - an absolute date literal without its day (<tt>2015-11-</tt>) is no longer read as a date with a day made of
       the text after it, which also ignored a UTC offset there (<tt>2015-11-+10</tt> is now the integer \c 1994), and
       a leap second in a date literal (<tt>2016-12-31T23:59:60Z</tt>) is a parse error that says so, also where
