@@ -237,18 +237,14 @@ public:
         }
     }
 
-    //! Returns true if the error state is set
-    DLLLOCAL bool hasError() const {
-        return error_info != nullptr;
-    }
+    //! Returns true if an error was recorded; can be called from any thread (reads under @ref error_lock)
+    DLLLOCAL bool hasError() const;
 
-    //! Returns ref'd error info hash or nullptr
-    DLLLOCAL QoreHashNode* getErrorInfo() const {
-        if (error_info) {
-            error_info->ref();
-        }
-        return error_info;
-    }
+    //! Returns the recorded error with a new reference, or nullptr if none was recorded; can be called from any thread
+    /** Read under @ref error_lock, which the writer holds while it stores the complete error hash, so the hash is
+        returned complete and safely published to the calling thread
+    */
+    DLLLOCAL QoreHashNode* getErrorInfo() const;
 
     //! Queues a text frame for sending (thread-safe)
     /** @param text the UTF-8 text to send
@@ -493,7 +489,12 @@ private:
     int64 close_deadline_us = 0;
     size_t max_frame_size = WS_DEFAULT_MAX_FRAME_SIZE;
 
-    //! Error information (ref'd or nullptr)
+    //! Protects @ref error_info, which the thread driving the operation records and any thread reads
+    /** A leaf lock: no other lock is taken and no Qore code runs while it is held
+    */
+    mutable QoreThreadLock error_lock;
+
+    //! Error information (ref'd or nullptr); protected by @ref error_lock
     QoreHashNode* error_info = nullptr;
 
     //! Frame callback — invoked from onPollComplete() after frames are pushed to recv_queue

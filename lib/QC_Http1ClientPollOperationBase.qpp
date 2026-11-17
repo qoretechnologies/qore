@@ -3196,11 +3196,8 @@ void Http1ClientPollOperationPriv::drainConnectionPriv(ExceptionSink* xsink) {
 }
 
 QoreHashNode* Http1ClientPollOperationPriv::getErrorInfo() const {
-#ifdef DEBUG
-    // a test releases the thread that records the error from here, before the lock is taken
-    qore_dbg_http_hold(QoreDbgHttpHoldPoint::ErrorRead);
-#endif
-    AutoLocker al(stream_lock);
+    // a read that finds the lock taken releases a thread that a test holds while it records the error
+    QoreErrorReadLocker al(stream_lock);
     if (error_info) {
         error_info->ref();
     }

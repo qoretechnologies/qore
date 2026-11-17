@@ -33,11 +33,30 @@
 
 #define QORE_LIB_DEBUG_H
 
+#include "qore/QoreThreadLock.h"
+
 #include <atomic>
 #include <string>
 #include <vector>
 
 DLLLOCAL void init_debug_functions(QoreNamespace& qns);
+
+//! Holds the lock that protects the error recorded by a poll operation, for a read of the error
+/** In debug builds, a read that finds the lock taken calls the "error-read" hold point
+    (QoreDbgHttpHoldPoint::ErrorRead) before it waits for the lock: a test that holds the thread recording the error in
+    its critical section ("error-record") is then released only by a read that waits for it (issue #6428)
+*/
+class QoreErrorReadLocker {
+public:
+    DLLLOCAL QoreErrorReadLocker(QoreThreadLock& lck);
+
+    DLLLOCAL ~QoreErrorReadLocker() {
+        lck.unlock();
+    }
+
+private:
+    QoreThreadLock& lck;
+};
 
 class AbstractSmartLock;
 
@@ -271,11 +290,11 @@ enum class QoreDbgHttpHoldPoint : unsigned char {
     //! HttpClientConnectionBase::tryReservePendingStream() was called to reserve a stream of a Qore-level connection,
     //! before it takes the reservation lock
     ReservePending,
-    //! an HTTP/1 or HTTP/3 client poll operation records its first error: the thread holds the operation's stream
-    //! lock and has not stored the error yet
+    //! an HTTP/1 or HTTP/3 client, HTTP/3 server, WebSocket server or client, or HTTP client ping poll operation
+    //! records its first error: the thread holds the lock that protects the error and has not stored the error yet
     ErrorRecord,
-    //! an HTTP/1 or HTTP/3 client poll operation's error is about to be read (getErrorInfo()), before the operation's
-    //! stream lock is taken
+    //! a read of the error of one of the poll operations of @ref ErrorRecord (getErrorInfo()) found the lock that
+    //! protects it taken, and is about to wait for it (see QoreErrorReadLocker)
     ErrorRead,
     //! the number of hold points
     Count,
@@ -377,5 +396,16 @@ DLLLOCAL void qore_dbg_cares_lookup_env_read();
 typedef void (*qore_dbg_queue_push_locked_hook_t)(const QoreObject* self);
 DLLLOCAL extern std::atomic<qore_dbg_queue_push_locked_hook_t> qore_dbg_queue_push_locked_hook;
 #endif
+
+inline QoreErrorReadLocker::QoreErrorReadLocker(QoreThreadLock& lck) : lck(lck) {
+#ifdef DEBUG
+    if (lck.trylock()) {
+        qore_dbg_http_hold(QoreDbgHttpHoldPoint::ErrorRead);
+        lck.lock();
+    }
+#else
+    lck.lock();
+#endif
+}
 
 #endif

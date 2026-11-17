@@ -24114,10 +24114,11 @@ static QoreValue f_dbg_hold_child_program_create_clear(const QoreListNode* param
     handed over, and the connection manager is about to replace it in its pool with the connection that took it over;
     \c "acquired": the connection manager found a connection in its pool for a request and released the pool lock;
     \c "reserve-pending": a stream of a Qore-level HTTP client connection is to be reserved, before the reservation
-    lock is taken; \c "error-record": an HTTP/1 or HTTP/3 client poll operation records its first error, holding its
-    stream lock, before the error is stored; \c "error-read": the error of an HTTP/1 or HTTP/3 client poll operation is
-    about to be read, before its stream lock is taken (armed with the release Counter of \c "error-record" as its
-    \a reached Counter and a release Counter of 0, the read releases the thread that records the error)
+    lock is taken; \c "error-record": an HTTP/1 or HTTP/3 client, HTTP/3 server, WebSocket server or client, or HTTP
+    client ping poll operation records its first error, holding the lock that protects it, before the error is stored;
+    \c "error-read": a read of the error of one of these poll operations found that lock taken, and is about to wait
+    for it (armed with the release Counter of \c "error-record" as its \a reached Counter and a release Counter of 0,
+    the read releases the thread that records the error once it is certain to wait for it)
     @param reached decremented when a thread reaches the point
     @param release the thread waits until it reaches zero
 

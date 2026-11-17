@@ -28,7 +28,8 @@ class OkHandler inherits AbstractHttpRequestHandler {
     submitting thread for an HTTP/3 submission refused by the QUIC layer) created the hash, stored it and then filled
     its keys under that lock: a thread that read the error then got no error or a hash without all of its keys.  The
     recording thread is held in its critical section with the "error-record" hold point of debug builds; the read
-    releases it when it reaches the lock ("error-read"), and must wait for the error to be recorded completely.
+    releases it when it finds the lock taken ("error-read"), and must wait for the error to be recorded completely; a
+    read without the lock reads the error while the recording thread is still held.
 */
 class HttpClientErrorInfoRaceTest inherits QUnit::Test {
     private {
@@ -140,11 +141,15 @@ class HttpClientErrorInfoRaceTest inherits QUnit::Test {
         if (reached.waitForZero(HoldWait)) {
             throw "TEST-ERROR", "no thread recorded an error";
         }
-        # the read releases the recording thread when it is about to take the operation's lock
-        Counter read_release(0);
-        call_function("dbg_http_hold_at", "error-read", release, read_release);
+        # a read that finds the operation's lock taken releases the recording thread, as it then waits for it
+        call_function("dbg_http_hold_at", "error-read", release, new Counter(0));
         *hash<auto> info = op.getError();
-        assertEq(0, release.getCount(), "the read released the thread that records the error");
+        int held = release.getCount();
+        # a read that did not wait for the lock leaves the recording thread held
+        if (held) {
+            release.dec();
+        }
+        assertEq(0, held, "the read waited for the thread that records the error");
         assertEq(Type::Hash, info.type(), "the error is read once it is recorded");
         assertEq(Type::String, info.desc.type(), "the error description is set");
         if (err) {

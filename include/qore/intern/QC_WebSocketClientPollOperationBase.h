@@ -37,6 +37,7 @@
 #include "qore/SocketPollOperation.h"
 #include "qore/QoreSocketObject.h"
 #include "qore/QoreQueue.h"
+#include "qore/QoreThreadLock.h"
 #include "qore/WebSocketFrameCodec.h"
 
 #include <atomic>
@@ -160,18 +161,14 @@ public:
         }
     }
 
-    //! Returns true if the error state is set
-    DLLLOCAL bool hasError() const {
-        return error_info != nullptr;
-    }
+    //! Returns true if an error was recorded; can be called from any thread (reads under @ref error_lock)
+    DLLLOCAL bool hasError() const;
 
-    //! Returns ref'd error info hash or nullptr
-    DLLLOCAL QoreHashNode* getErrorInfo() const {
-        if (error_info) {
-            error_info->ref();
-        }
-        return error_info;
-    }
+    //! Returns the recorded error with a new reference, or nullptr if none was recorded; can be called from any thread
+    /** Read under @ref error_lock, which the writer holds while it stores the complete error hash, so the hash is
+        returned complete and safely published to the calling thread
+    */
+    DLLLOCAL QoreHashNode* getErrorInfo() const;
 
     //! Sets whether extensions are active
     /** When extensions are active, RSV bit validation is skipped in C++
@@ -459,7 +456,12 @@ private:
     //! Reason tag for client-initiated close (e.g. "idle-timeout"), surfaced to observers
     std::string close_cause;
 
-    //! Error information (ref'd or nullptr)
+    //! Protects @ref error_info, which the thread driving the operation records and any thread reads
+    /** A leaf lock: no other lock is taken and no Qore code runs while it is held
+    */
+    mutable QoreThreadLock error_lock;
+
+    //! Error information (ref'd or nullptr); protected by @ref error_lock
     QoreHashNode* error_info = nullptr;
 
     //! Pending send data — pre-encoded frame bytes ready to send
