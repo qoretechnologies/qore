@@ -292,8 +292,9 @@ static int my_set_option(Datasource* ds, const char* opt, const QoreValue val, E
     barrier such as \c SandboxManager::callWithSystemPolicy() or a capability) allows uncontrolled APIs, so every
     entry that restricts the connection has a policy manager, and a restricted connection is checked against the
     policy managers of the entries that restrict it.  An empty record (\c size() == 0) is never a permission:
-    \c QoreDatasourceConnectChoosers::allowsUncontrolledApis() reports it as restricted.  Call them as \c Datasource::getConnectOptions() is called: from the open function, or while
-    the thread holds the connection (also for the driver's own reconnect):
+    \c QoreDatasourceConnectChoosers::allowsUncontrolledApis() reports it as restricted.  Call them as
+    \c Datasource::getConnectOptions() is called: from the open function, or while the thread holds the connection
+    (also for the driver's own reconnect):
 
     @code{.cpp}
 static int my_check_connect(Datasource* ds, ExceptionSink* xsink) {
@@ -308,6 +309,11 @@ static int my_check_connect(Datasource* ds, ExceptionSink* xsink) {
         if (!strcasecmp(hi.getKey(), "url") && ds->addOptionChooser(hi.getKey(), c, xsink) < 0) {
             return -1;
         }
+    }
+    // an empty record is never a permission
+    if (!c.size()) {
+        xsink->raiseException("MY-CONNECT-ERROR", "the code that chose the connection is not known");
+        return -1;
     }
     for (size_t i = 0; i < c.size(); ++i) {
         if (c.allowsUncontrolledApis(i)) {

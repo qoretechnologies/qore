@@ -154,7 +154,8 @@ string sub own_barrier(code c) {
     }
 
     private {
-        #! the Programs of the test: trusted, sandboxed, a trusted sandbox, and PO_NO_UNCONTROLLED_APIS without a sandbox
+        #! the Programs of the test: trusted, sandboxed, a trusted sandbox, and PO_NO_UNCONTROLLED_APIS without a
+        #! sandbox
         hash<string, Program> pgms;
     }
 
@@ -286,7 +287,9 @@ string sub own_barrier(code c) {
 
         # C2: a trusted pool grows for sandboxed code: the connection carries the record of the pool, not of the
         # growing code
-        *hash<auto> obs = observeGrowth(p, auto sub () { return pgms.sandboxed.callFunction("ds_select", p, "choosers"); });
+        *hash<auto> obs = observeGrowth(p, auto sub () {
+            return pgms.sandboxed.callFunction("ds_select", p, "choosers");
+        });
         assertChoosers(True, obs, "C2", 1);
         assertEntry("trusted", obs.entries[0], "C2");
 
@@ -435,7 +438,9 @@ string sub own_barrier(code c) {
         # B2: a system-policy capability creates a pool that sandboxed code grows later
         code cap = SandboxManager::createSystemPolicyCall(make_pool);
         p = pgms.sandboxed.callFunction("through", cap);
-        *hash<auto> obs = observeGrowth(p, auto sub () { return pgms.sandboxed.callFunction("ds_select", p, "choosers"); });
+        *hash<auto> obs = observeGrowth(p, auto sub () {
+            return pgms.sandboxed.callFunction("ds_select", p, "choosers");
+        });
         assertChoosers(True, obs, "B2: grown by sandboxed code", 1);
 
         # B3: sandboxed code cannot establish a barrier of its own, and a pool that it creates is restricted
@@ -643,8 +648,9 @@ string sub own_barrier(code c) {
             testSkip("the test uses fork()");
         }
         # F1: sandboxed code sets the database name of an open trusted datasource; in a child process created with
-        # fork(), getOption() gives the inherited connection up and opens a new one with the values in use, which are
-        # copied from the pending values with their setters: the new connection is restricted
+        # fork(), the first use of the inherited datasource gives the inherited connection up and opens a new one with
+        # the values in use, which are copied from the pending values with their setters: the new connection is
+        # restricted
         Datasource ds("dsoptprobe:u/p@x");
         ds.open();
         on_exit ds.close();
