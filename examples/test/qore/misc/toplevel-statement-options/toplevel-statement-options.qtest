@@ -17,8 +17,9 @@
 #! Each top-level statement runs with its own parse options in every execution mode (qore#6293)
 /** The statements of top-level code can have different parse options (files with different options parsed into one
     Program, or a parse directive between statements); the AST interpreter runs each with its own options, and so must
-    the lowered code and the code compiled ahead of time.  The worker prints the options that each statement runs
-    with; it runs in each execution mode, on the IR tier and as a program compiled with qcc -O0 and -O3, and every run
+    the lowered code and the code compiled ahead of time.  An on_exit handler of the top-level code runs with the
+    options of the statement that declares it, also when it runs after statements with other options.  The worker
+    prints the options that each statement and handler runs with; it runs in each execution mode, on the IR tier and as a program compiled with qcc -O0 and -O3, and every run
     must give the result of the AST interpreter.
 */
 class TopLevelStatementOptionsTest inherits QUnit::Test {
@@ -43,9 +44,32 @@ class TopLevelStatementOptionsTest inherits QUnit::Test {
             "return:\n"
             "first=False False\n"
             "after=False\n"
+            "on_exit-before-directive:\n"
+            "first=False False\n"
+            "second=True False\n"
+            "handler=False False\n"
+            "after=False\n"
+            "on_exit-after-directive:\n"
+            "first=False False\n"
+            "second=True True\n"
+            "handler=True False\n"
+            "after=False\n"
+            "on_exit-first-file:\n"
+            "first=False False\n"
+            "second=True False\n"
+            "handler=False False\n"
+            "after=False\n"
+            "on_exit-exception:\n"
+            "first=False False\n"
+            "second=True False\n"
+            "handler=False False\n"
+            "on_exit-exception: STOP: \n"
+            "after=False\n"
             "own-first=False False\n"
             "own-second=True False\n"
-            "own-third=True True\n";
+            "own-third=True True\n"
+            "own-handler2=True True\n"
+            "own-handler1=False False\n";
     }
 
     private {

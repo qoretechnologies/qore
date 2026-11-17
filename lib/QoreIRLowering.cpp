@@ -3578,7 +3578,11 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
                 // the statement is being lowered, one level deeper than its own depth
                 static_cast<uint16_t>(debug_nest_depth ? debug_nest_depth - 1 : 0),
                 debug_catch_child_depth,
-                virtual_implicit
+                virtual_implicit,
+                // in top-level code whose statements have different options, the handler runs with the options of
+                // the statement that declares it, as in the AST interpreter, also when it runs after statements with
+                // other options (qore#6293)
+                top_level_code_parse_options ? stmt : nullptr
             });
         }
 
@@ -4994,6 +4998,9 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
     // does (AbstractStatement::exec()): the options are set at the start of the code and where they change (qore#6293)
     const bool set_code_parse_options = root_top_level && root_statement_block
         && qore_ir_statement_parse_options_differ(block->getStatements());
+    if (set_code_parse_options) {
+        top_level_code_parse_options = true;
+    }
     const AbstractStatement* code_po_statement = nullptr;
 
     bool terminated = false;
@@ -5810,6 +5817,13 @@ int QoreIRLowering::compileBlockHandlerIRs(const std::vector<InlineHandler>& han
         // the handler runs in the frame of the function: its calls through self are made on the same object
         // (issue #5823)
         handler_lowering.self_local = self_local;
+        // the handlers nested in the handler run with the options of the statements that declare them, as the
+        // handler does (qore#6293)
+        handler_lowering.top_level_code_parse_options = top_level_code_parse_options;
+        if (handler.code_po_statement) {
+            handler_builder.createSetCodeParseOptions(handler.code_po_statement->pwo.parse_options,
+                handler.code_po_statement->loc);
+        }
         // the handlers nested in the handler share the functions compiled for the function
         handler_lowering.handler_ir_cache = handler_ir_cache;
         // what the function is compiled with, for the cache
@@ -5966,6 +5980,13 @@ int QoreIRLowering::compileAllHandlerIRs(std::string& error) {
         // the handler runs in the frame of the function: its calls through self are made on the same object
         // (issue #5823)
         handler_lowering.self_local = self_local;
+        // the handlers nested in the handler run with the options of the statements that declare them, as the
+        // handler does (qore#6293)
+        handler_lowering.top_level_code_parse_options = top_level_code_parse_options;
+        if (handler.code_po_statement) {
+            handler_builder.createSetCodeParseOptions(handler.code_po_statement->pwo.parse_options,
+                handler.code_po_statement->loc);
+        }
 
         // Lower the handler body into the handler IR function.  Any failure
         // is now reported as an outer-function lowering failure — the
@@ -6200,11 +6221,21 @@ bool QoreIRLowering::lowerHandlerAtExit(const InlineHandler& handler, size_t kee
         if (handler_exception_target) {
             exception_stack.push_back(handler_exception_target);
         }
+        // the handler runs with the options of the statement that declares it (qore#6293)
+        if (handler.code_po_statement) {
+            builder.createSetCodeParseOptions(handler.code_po_statement->pwo.parse_options,
+                handler.code_po_statement->loc);
+        }
         inline_handler_block = handler.code;
         ++inline_handler_body_depth;
         ok = lowerStatementBlock(handler.code, error);
         --inline_handler_body_depth;
     } else {
+        // the handler runs with the options of the statement that declares it (qore#6293)
+        if (handler.code_po_statement) {
+            builder.createSetCodeParseOptions(handler.code_po_statement->pwo.parse_options,
+                handler.code_po_statement->loc);
+        }
         inline_handler_block = handler.code;
         ++inline_handler_body_depth;
         ok = lowerStatementBlock(handler.code, error);

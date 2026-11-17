@@ -157,6 +157,9 @@ public:
         //! the virtual implicit arguments and element of the block that declares the handler, which it runs in at
         //! every exit, also one in a loop nested in the block that has its own (qore#6383)
         VirtualImplicitContext virtual_implicit;
+        //! the statement that declares the handler, whose parse options its code runs with, in top-level code whose
+        //! statements have different options; nullptr otherwise (see QoreIRLowering::top_level_code_parse_options)
+        const AbstractStatement* code_po_statement = nullptr;
     };
 
     explicit QoreIRLowering(QoreIRBuilder& builder, QoreParseContext* parse_context = nullptr,
@@ -956,6 +959,10 @@ private:
         a handler compiled to an IR function of its own is the root block of that function, which has none (#5870)
     */
     bool handler_body = false;
+    //! True if the code lowered is top-level code whose statements have different parse options, which sets the
+    //! options of each statement (QoreIROpcode::SetCodeParseOptions): its handlers run with the options of the
+    //! statements that declare them (InlineHandler::code_po_statement, qore#6293)
+    bool top_level_code_parse_options = false;
     //! true while the block cleanups of a return statement in a try statement of a handler body (handler_body) are
     //! lowered: the value of the return (handover_try_value) is handed to the function that the handler runs for when
     //! the walk leaves the outermost try statement of the handler, as the AST interpreter's try statement gives the
