@@ -1995,6 +1995,16 @@ private:
     // active; no-op for functions without catch blocks.
     void emitCatchUnwind(llvm::Module& module);
 
+    //! Keeps the slots of the frame that only catch blocks and exception paths use in memory
+    /** The catch depth of the frame (catch_depth_saved) and the caches of the catch variables are set in catch blocks
+        and read there and on the exception exits of the frame, which release the catch variables: promoted to SSA
+        values, each would be a web of PHI nodes across the whole function, merging at the shared exception exit with
+        one incoming value for each exception edge of the function, whose coalescing in register allocation takes time
+        in the product of the number of catch blocks and the size of the function (qore#6392).  Their loads and stores
+        are made volatile, which keeps them out of SSA; they run only on those paths.
+    */
+    DLLLOCAL void keepCatchFrameSlotsInMemory(const QoreIRFunction& func);
+
     // Update specialized runtime catch-scope state around CatchException,
     // CatchCleanup, and Rethrow lowering.
     void emitCatchScopeEnter(llvm::Module& module);

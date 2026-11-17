@@ -7252,6 +7252,53 @@ void QoreIRToLLVM::finalizeFunctionCommonCleanup(llvm::Module& module) {
     }
 }
 
+void QoreIRToLLVM::keepCatchFrameSlotsInMemory(const QoreIRFunction& func) {
+    std::vector<llvm::AllocaInst*> slots;
+    if (auto* depth = llvm::dyn_cast_or_null<llvm::AllocaInst>(catch_depth_saved)) {
+        slots.push_back(depth);
+    }
+    // the catch variables: the locals that the result of a CatchException is stored in
+    std::unordered_set<uint32_t> caught;
+    for (const auto& block : func.blocks) {
+        for (const auto& inst : block->instructions) {
+            if (inst && inst->opcode == QoreIROpcode::CatchException && inst->result.isValid()) {
+                caught.insert(inst->result.id);
+            }
+        }
+    }
+    if (!caught.empty()) {
+        for (const auto& block : func.blocks) {
+            for (const auto& inst : block->instructions) {
+                if (!inst || inst->opcode != QoreIROpcode::StoreLocal || inst->operands.empty()
+                        || !caught.count(inst->operands[0].id)) {
+                    continue;
+                }
+                const auto* store = static_cast<const QoreIRLocalInstruction*>(inst.get());
+                auto i = local_allocas.find(reinterpret_cast<const void*>(store->local));
+                if (i == local_allocas.end()) {
+                    continue;
+                }
+                if (auto* slot = llvm::dyn_cast_or_null<llvm::AllocaInst>(i->second.storage())) {
+                    if (std::find(slots.begin(), slots.end(), slot) == slots.end()) {
+                        slots.push_back(slot);
+                    }
+                }
+            }
+        }
+    }
+    for (llvm::AllocaInst* slot : slots) {
+        for (llvm::User* user : slot->users()) {
+            if (auto* load = llvm::dyn_cast<llvm::LoadInst>(user)) {
+                load->setVolatile(true);
+            } else if (auto* store = llvm::dyn_cast<llvm::StoreInst>(user)) {
+                if (store->getPointerOperand() == slot) {
+                    store->setVolatile(true);
+                }
+            }
+        }
+    }
+}
+
 void QoreIRToLLVM::emitCatchUnwind(llvm::Module& module) {
     if (!catch_depth_saved) {
         return;
@@ -17840,6 +17887,9 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     // reload chains, the table-driven handler code) are emitted: the slots of the tables move to the cleanup frame,
     // and the tables are made (qore#6299); a cancelled or failed finalization refuses the function, as its code would
     // read tables that were not made
+    // the slots of the frame that only catch blocks and exception paths use stay in memory (qore#6392); their loads
+    // and stores are marked while they are allocas, before the slots of the cleanup frame replace them
+    keepCatchFrameSlotsInMemory(func);
     if (!finalizeCleanupFrame(llvm_func, fn_name, error)) {
         return false;
     }
