@@ -235,6 +235,7 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_value_is_reference", reinterpret_cast<void*>(&qore_rt_value_is_reference) },
     { "qore_rt_strip_any_param", reinterpret_cast<void*>(&qore_rt_strip_any_param) },
     { "qore_rt_read_reference_local", reinterpret_cast<void*>(&qore_rt_read_reference_local) },
+    { "qore_rt_read_element_local_held", reinterpret_cast<void*>(&qore_rt_read_element_local_held) },
     { "qore_rt_reference_slot_write", reinterpret_cast<void*>(&qore_rt_reference_slot_write) },
     { "qore_rt_element_local_replace", reinterpret_cast<void*>(&qore_rt_element_local_replace) },
     { "qore_rt_element_local_replace_real", reinterpret_cast<void*>(&qore_rt_element_local_replace_real) },
@@ -2893,6 +2894,32 @@ extern "C" DLLEXPORT uint64_t qore_rt_read_element_local(uint64_t val, Exception
         return toBits(qore_rt_get_weak_reference_target(v));
     }
     return type == NT_REFERENCE ? qore_rt_deref_if_reference(val, xsink) : val;
+}
+
+//! As qore_rt_read_element_local(), for an untyped variable: the value read through a reference is held by the read
+/** The value that a reference held by the variable reads as is owned by the read: it is stored in \a current, whose
+    value moves to \a previous, and the value that \a previous held is released, as for a read through a reference by
+    a local with a reference flag (QoreIRToLLVM::emitReferenceLocalRead()).  Native code releases the slots at the
+    end of the statement and at the exit of the function, or gives \a current to a call that takes the value as an
+    argument (issue #6441: the value was never released).  A weak reference reads as its target, borrowed, and any
+    other value is returned as it is.
+*/
+extern "C" DLLEXPORT uint64_t qore_rt_read_element_local_held(uint64_t val, uint64_t* current, uint64_t* previous,
+        ExceptionSink* xsink) {
+    QoreValue v = fromBits(val);
+    if (!v.hasNode()) {
+        return val;
+    }
+    qore_type_t type = v.getInternalNode()->getType();
+    if (type != NT_REFERENCE) {
+        return qore_rt_is_weak_reference_type(type) ? toBits(qore_rt_get_weak_reference_target(v)) : val;
+    }
+    uint64_t rv = qore_rt_deref_if_reference(val, xsink);
+    uint64_t old_previous = *previous;
+    *previous = *current;
+    *current = rv;
+    qore_rt_decref(old_previous, xsink);
+    return rv;
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_deref_if_reference(uint64_t val, ExceptionSink* xsink) {

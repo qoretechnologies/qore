@@ -7820,8 +7820,11 @@ llvm::Value* QoreIRToLLVM::getElementLocalReadFlag(const void* key, llvm::Functi
 
 // documented in QoreIRToLLVM.h
 llvm::Value* QoreIRToLLVM::loadLocalCacheValue(const void* key, const LocalCacheSlot& slot, llvm::Module& module,
-        llvm::IRBuilder<>* load_builder, const char* name) {
+        llvm::IRBuilder<>* load_builder, const char* name, llvm::AllocaInst** reference_read_slot) {
     llvm::IRBuilder<>& b = load_builder ? *load_builder : *builder;
+    if (reference_read_slot) {
+        *reference_read_slot = nullptr;
+    }
     // raw local cache: the accessor itself
     llvm::Value* stored = b.CreateLoad(i64_type, slot.storage(), name);
     if (!ir_only_element_locals.count(key)) {
@@ -7851,7 +7854,31 @@ llvm::Value* QoreIRToLLVM::loadLocalCacheValue(const void* key, const LocalCache
     // a weak reference or a reference is the exception: the read falls through for any other value
     b.CreateCondBr(needs_read, node_bb, done_bb, llvm::MDBuilder(ctx).createBranchWeights(1, 1000));
     b.SetInsertPoint(node_bb);
-    llvm::Value* read = b.CreateCall(read_fn, {stored, xsink_arg});
+    llvm::Value* read;
+    if (qore_ir_local_may_hold_reference(static_cast<const LocalVar*>(key))) {
+        // an untyped variable can hold a reference, given by an element, which reads as the referenced lvalue: the
+        // value read is owned, and held in the slots of the read site as emitReferenceLocalRead() holds it, released
+        // at the following reads, at the end of the statement and at the exit of the function, or given to a call
+        // that takes it as an argument (reference_read_slots); a typed variable is never assigned a reference
+        // (issue #6441: the value was never released)
+        llvm::BasicBlock* entry = &llvm_func->getEntryBlock();
+        llvm::IRBuilder<> alloca_builder(entry, entry->begin());
+        llvm::AllocaInst* current = alloca_builder.CreateAlloca(i64_type, nullptr, "element_reference_read");
+        alloca_builder.CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), current);
+        llvm::AllocaInst* previous = alloca_builder.CreateAlloca(i64_type, nullptr,
+            "element_reference_read_previous");
+        alloca_builder.CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), previous);
+        registerInvokeCleanupAlloca(current);
+        registerInvokeCleanupAlloca(previous);
+        if (reference_read_slot) {
+            *reference_read_slot = current;
+        }
+        auto held_fn = module.getOrInsertFunction("qore_rt_read_element_local_held",
+            llvm::FunctionType::get(i64_type, {i64_type, ptr_type, ptr_type, ptr_type}, false));
+        read = b.CreateCall(held_fn, {stored, current, previous, xsink_arg});
+    } else {
+        read = b.CreateCall(read_fn, {stored, xsink_arg});
+    }
     b.CreateBr(done_bb);
     b.SetInsertPoint(done_bb);
     llvm::PHINode* rv = b.CreatePHI(i64_type, 2, name);
@@ -19209,7 +19236,11 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             } else {
                 // the variable of a foreach loop reads a weak reference as its target, and dereferences a
                 // reference as the helper below does
-                llvm::Value* loaded = loadLocalCacheValue(key, it->second, module);
+                llvm::AllocaInst* element_read_slot;
+                llvm::Value* loaded = loadLocalCacheValue(key, it->second, module, nullptr, "", &element_read_slot);
+                if (element_read_slot) {
+                    reference_read_slots[inst->result.id] = element_read_slot;
+                }
                 if (!is_native_int) {
                     // a local of no reference type that holds a reference (auto r = \x;, a reference element
                     // of a container, a reference argument) caches the reference itself (see

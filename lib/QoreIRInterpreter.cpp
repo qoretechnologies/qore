@@ -2747,6 +2747,16 @@ static void markIRValueUse(std::vector<uint8_t>& uses, QoreIRValue value) {
 // argument releases
 // when it returns if the read gave the frame a reference of its own; an implicit argument ($1) is not one: a later $1
 // reads its element slot again
+//! Returns true if \a local is the untyped variable of a foreach loop, which can hold a reference given by an element
+/** Such a variable reads as the referenced lvalue: it does not hold the value read, which the read owns, so a call
+    that writes the referenced lvalue and its parameter must be given it, to destroy it at the parameter's write as
+    the AST interpreter does (c.m(r) in foreach auto r in ((\o,)); issue #6441)
+*/
+static bool qore_ir_element_local_may_read_reference(const QoreIRFunction& func, const LocalVar* local) {
+    return func.element_store_locals.count(reinterpret_cast<const void*>(local))
+        && qore_ir_local_may_hold_reference(local);
+}
+
 static bool qore_ir_reads_variable_for_call_arg(QoreIROpcode op) {
     switch (op) {
         case QoreIROpcode::LoadLocal:
@@ -3080,6 +3090,9 @@ static bool buildValueUseCounts(const QoreIRFunction& func,
                 || !func.ir_only_locals.count(reinterpret_cast<const void*>(load->local))) {
             return true;
         }
+        if (qore_ir_element_local_may_read_reference(func, load->local)) {
+            return true;
+        }
         const auto& insts = call_block[id]->instructions;
         const uint32_t scope = insts[call_pos[id]]->temp_scope_id;
         if (!scope) {
@@ -3364,7 +3377,8 @@ static bool buildInterpreterAnalysis(const QoreIRFunction& func, ExceptionSink* 
                 return false;
             }
             const auto* load = static_cast<const QoreIRLocalInstruction*>(def);
-            if (!load->local || load->is_ref || load->is_closure || load->local->closureUse()) {
+            if (!load->local || load->is_ref || load->is_closure || load->local->closureUse()
+                    || qore_ir_element_local_may_read_reference(func, load->local)) {
                 return false;
             }
             const auto& insts = call_block->instructions;

@@ -225,5 +225,15 @@ The AST interpreter gives a parameter these arguments with no other reference, s
   does not cache the IR of a closure, so a call that gives a closure an argument does not call its native code
   directly (`qore_ir_native_closure_call_eligible()`).
 
+The untyped variable of a foreach loop is assigned each element as it is, so it can hold a reference given by an
+element, and it reads as the referenced lvalue too (issue #6441).  Native code keeps such an IR-only variable as an
+element local (`QoreIRToLLVM::loadLocalCacheValue()`), whose read through the reference owned its value and never
+released it, so the object was leaked: the read now holds the value in the slots of its read site
+(`qore_rt_read_element_local_held()`), released and given to calls as the slots of `emitReferenceLocalRead()` are.  The
+IR interpreter gives such a read to every call (`qore_ir_element_local_may_read_reference()` in
+`buildValueUseCounts()` and in the test of `QORE_IR_GIVES_CALL_TEMPS`): the variable does not hold the value read, so
+a method that writes the referenced variable and its parameter destroys the object at the write, as in the AST
+interpreter.  A typed variable is never assigned a reference.
+
 The value of a cast is not one of them: the AST interpreter holds a temporary operand of a cast until the statement
 ends (issue #5712), and so do the other modes.

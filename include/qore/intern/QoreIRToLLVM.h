@@ -412,9 +412,14 @@ private:
         variable is set (see element_local_read_flags), or for a node held by an untyped variable; with
         \a load_builder, which inserts outside the current block (as in the entry block), it is called for any value,
         since no block can be split there.
+
+        The value that a reference held by an untyped variable reads as is owned by the read, which holds it in a
+        slot of the read site (qore_rt_read_element_local_held()), released as the slots of emitReferenceLocalRead()
+        are; \a reference_read_slot, if not null, is set to that slot (for reference_read_slots), or to nullptr.
     */
     DLLLOCAL llvm::Value* loadLocalCacheValue(const void* key, const LocalCacheSlot& slot, llvm::Module& module,
-            llvm::IRBuilder<>* load_builder = nullptr, const char* name = "");
+            llvm::IRBuilder<>* load_builder = nullptr, const char* name = "",
+            llvm::AllocaInst** reference_read_slot = nullptr);
 
     //! Emits the call that raises the error of a return statement that returns no value
     /** The error is the one the AST interpreter raises for such a return statement ("<return statement> expects
