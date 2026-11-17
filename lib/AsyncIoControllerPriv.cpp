@@ -469,7 +469,10 @@ void AsyncIoControllerPriv::wakeOpIoThread(SocketPollOperationBase* op) {
     AsyncIoDeferredRelease refs;
     refs.sock_obj = sock_obj;
     ctrl->releaseOffIoThread(refs, &wake_xsink);
-    // not the last reference on an I/O thread, which holds one of its own
+    // the controller's reference is the last one only if the controller was released meanwhile (its object, and the
+    // reference that each of its I/O threads holds): not on its own I/O thread then, and elsewhere its release is
+    // that of any holder of a reference, as for a worker that releases the controller reference of a step item
+    // (releaseWorkItem())
     ctrl->deref(&wake_xsink);
 }
 
@@ -498,8 +501,16 @@ bool AsyncIoControllerPriv::attachOp(SocketPollOperationBase* op, QoreObject* so
     if (__atomic_load_n(&op->io_controller, __ATOMIC_RELAXED) == qore_spop_deleted) {
         return true;
     }
-    attach_id = qore_spop_attach_seq.fetch_add(1, std::memory_order_relaxed) + 1;
-    stripe.attachments[op] = attach_id;
+    uint64_t id = qore_spop_attach_seq.fetch_add(1, std::memory_order_relaxed) + 1;
+    try {
+        stripe.attachments[op] = id;
+    } catch (std::bad_alloc&) {
+        // no exception can leave an I/O thread here: the operation stays unattached (no wake, and a deletion is
+        // seen only by a step), and it runs and is canceled as before
+        return false;
+    }
+    // set only once recorded, so that the entry's ID always matches the record
+    attach_id = id;
     __atomic_store_n(&op->io_controller, this, __ATOMIC_RELEASE);
     op->io_sock_obj = sock_obj;
     return false;
@@ -1819,8 +1830,8 @@ void QoreCallDispatcher::enqueue(AsyncWorkItem&& item) {
         // a release item of a Program whose teardown is in progress is parked: releasing it can run the cleanup of a
         // C++ poll operation, which must not run in the calling thread (an I/O thread, a thread in a method of an HTTP
         // connection, a scan of the garbage collector), nor on a worker that can run after the Program's threads were
-        // waited for; the thread that cancels the Program's work releases it, in the Program, before its threads are
-        // waited for (clearProgramShuttingDown())
+        // waited for; the thread that cancels the Program's work releases it in the Program (with its parse options,
+        // counted in its threads), before its threads are waited for (clearProgramShuttingDown())
         if (!stopping && item.type == DT_RELEASE && item.pgm && shutting_down_programs.count(item.pgm)) {
             parked_program_releases[item.pgm].push_back(std::move(item));
             return;
@@ -2116,6 +2127,7 @@ QoreHashNode* AsyncIoControllerPriv::dbgParkProgramReleaseTest(QoreObject* obj, 
     }
     ctrl->ensureCallDispatcher();
     QoreCallDispatcher* cd = ctrl->call_dispatcher.load(std::memory_order_acquire);
+    // the mark also drains and discards the items of the Program that are queued: the test uses a Program of its own
     cd->markProgramShuttingDown(pgm, xsink);
     std::unique_ptr<AsyncIoDeferredRelease> refs(new AsyncIoDeferredRelease);
     obj->ref();
@@ -2144,7 +2156,19 @@ void QoreCallDispatcher::clearProgramShuttingDown(QoreProgram* pgm, ExceptionSin
             parked.swap(i->second);
             parked_program_releases.erase(i);
         }
+        // each release runs in the Program, as a worker runs a release item (see workerLoop()): with its parse
+        // options, and counted in its threads; the Program can still be entered, as its threads have not been waited
+        // for yet
+        QoreThreadRuntimeParseOptions item_po;
+        item_po.po = pgm->getParseOptions();
+        QoreThreadRuntimeParseOptionsHelper item_po_helper(&item_po);
         for (auto& item : parked) {
+            // the helper reports exceptions in its destructor to the sink, which must outlive it
+            ExceptionSink pgm_guard_xsink;
+            ProgramThreadCountContextHelper pgm_guard;
+            pgm_guard.set(&pgm_guard_xsink, pgm, true);
+            // a failure to enter leaves the release outside the Program, as on a worker
+            pgm_guard_xsink.clear();
             releaseWorkItem(item, xsink);
         }
     }

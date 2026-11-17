@@ -530,7 +530,8 @@ public:
 
     //! Remove a program from the shutting-down set
     /** Releases the release items of the Program that were parked while it was marked (see enqueue()) first, in the
-        calling thread (the one that cancels the Program's work, before the Program's threads are waited for)
+        calling thread (the one that cancels the Program's work, before the Program's threads are waited for), each
+        in the Program (its parse options, and counted in its threads), as a worker releases a release item
     */
     DLLLOCAL void clearProgramShuttingDown(QoreProgram* pgm, ExceptionSink* xsink);
 
