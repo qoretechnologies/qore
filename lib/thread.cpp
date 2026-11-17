@@ -690,6 +690,10 @@ public:
         QoreSandboxManager* loader_manager;
         //! the ID of the Program of that code, or QORE_NO_PROGRAM_ID (see qore_caller_owner_program_id())
         qore_program_id_t loader_pgm_id;
+        //! true for the barrier of a trusted build (SandboxManager::createTrustedBuildCall()): the Program current
+        //! after it is the Program that created the capability, whose sandbox governs the build, also when it was
+        //! already current when the barrier was set (its code called the capability), so it is never hidden
+        bool build = false;
     };
     std::vector<ModuleInitBarrier> module_init_barriers;
 
@@ -5480,7 +5484,7 @@ static bool visit_thread_sandbox_stack(ThreadData* td, qore_program_id_t* pgm_id
     if (!chain_clear) {
         // 1) the current program context; under a module initialization barrier, not the Program that loads the
         // module while no Program has been entered since
-        if (!mib || td->current_pgm_ctx != mib->ctx || td->current_pgm != mib->pgm) {
+        if (!mib || mib->build || td->current_pgm_ctx != mib->ctx || td->current_pgm != mib->pgm) {
             if (try_pgm(td->current_pgm, rv)) {
                 return rv;
             }
@@ -5796,7 +5800,7 @@ bool qore_caller_is_sandboxed() {
     // the code of a sandboxed Program that has no manager of its own (one that sandboxed code created) is sandboxed
     // also where no sandbox governs it, and so is the code that it calls: the Programs on the thread's call stack
     // are walked as in find_thread_sandbox_stack_ref_intern()
-    if (!mib || td->current_pgm_ctx != mib->ctx || td->current_pgm != mib->pgm) {
+    if (!mib || mib->build || td->current_pgm_ctx != mib->ctx || td->current_pgm != mib->pgm) {
         if (qore_program_is_sandboxed(td->current_pgm)) {
             return true;
         }
@@ -5871,6 +5875,60 @@ QoreSandboxManager* qore_module_init_lift_manager_ref() {
     }
     mib.loader_manager->ref();
     return mib.loader_manager;
+}
+
+QoreTrustedBuildChargeHelper::QoreTrustedBuildChargeHelper(QoreProgram* creator) {
+    ThreadData* td = thread_data.get();
+    if (!td) {
+        return;
+    }
+    try {
+        saved = td->sandbox_budgets.suspendCharge();
+    } catch (std::bad_alloc&) {
+        return;
+    }
+    started = true;
+    tid = td->tid;
+    if (!creator) {
+        return;
+    }
+    // the creator's sandboxes, entered as ProgramThreadCountContextHelper enters them: a budget of the creator's
+    // call below the floor (its own code called the capability) is charged again, else a budget is started; a budget
+    // that cannot be recorded fails the build at its next cancellation point (see QoreSandboxBudgetStack::lose())
+    QoreSandboxManager* own_ptr;
+    QoreSandboxManager* creator_ptr;
+    qore_program_private::get(*creator)->getSandboxManagerRefs(own_ptr, creator_ptr);
+    ReferenceHolder<QoreSandboxManager> own(own_ptr, nullptr);
+    ReferenceHolder<QoreSandboxManager> creator_sm(creator_ptr, nullptr);
+    if (own) {
+        td->sandbox_budgets.enter(tid, *own, this);
+    }
+    if (creator_sm) {
+        td->sandbox_budgets.enter(tid, *creator_sm, this);
+    }
+}
+
+QoreTrustedBuildChargeHelper::~QoreTrustedBuildChargeHelper() {
+    if (started) {
+        ThreadData* td = thread_data.get();
+        // the frames entered for the creator are above the floor and on the top of the stack again
+        td->sandbox_budgets.leave(tid, this);
+        td->sandbox_budgets.resumeCharge(saved);
+    }
+}
+
+QoreModuleInitSandboxBarrierHelper::QoreModuleInitSandboxBarrierHelper(const QoreTrustedBuildTag&) {
+    ThreadData* td = thread_data.get();
+    if (!td) {
+        return;
+    }
+    // a trusted loader: nothing below the barrier is the loader's, as for library code that trusted code loads
+    try {
+        td->module_init_barriers.push_back({td->current_pgm_ctx, td->current_pgm, td->sandbox_provenance,
+            td->sandbox_context, td->inherited_sandbox_context, false, false, nullptr, QORE_NO_PROGRAM_ID, true});
+        pushed = true;
+    } catch (std::bad_alloc&) {
+    }
 }
 
 QoreModuleInitSandboxBarrierHelper::QoreModuleInitSandboxBarrierHelper(bool active) {
@@ -6132,8 +6190,15 @@ void QoreSandboxProvenanceHelper::apply(QoreSandboxContext* captured) {
     }
     context = captured;
     previous = td->sandbox_provenance;
+    // the same context as the innermost frame is not applied again, unless that frame is hidden: by a trusted policy
+    // boundary, or by a module initialization barrier (or a trusted build's construction barrier) set after it, below
+    // which the walk does not look (see visit_thread_provenance()), so that the provenance of an object or callback
+    // used under the barrier still governs it
+    const ThreadData::ModuleInitBarrier* mib = (td->module_init_barriers.empty()
+        || td->module_init_barriers.back().lift) ? nullptr : &td->module_init_barriers.back();
     if (previous && previous->getContext() == captured
-            && !(td->trusted_policy_depth && previous == td->trusted_policy_boundary)) {
+            && !(td->trusted_policy_depth && previous == td->trusted_policy_boundary)
+            && !(mib && previous == mib->provenance)) {
         context = nullptr;
         captured->deref();
         return;

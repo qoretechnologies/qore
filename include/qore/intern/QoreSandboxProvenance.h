@@ -29,6 +29,11 @@ DLLLOCAL void qore_release_call_reference_provenance(const ResolvedCallReference
 DLLLOCAL QoreSandboxContext* qore_get_call_reference_provenance(const ResolvedCallReferenceNode* ref);
 DLLLOCAL ResolvedCallReferenceNode* qore_bind_sandbox_call(const ResolvedCallReferenceNode* callback, bool trusted,
     ExceptionSink* xsink);
+//! Creates a capability that runs a fixed callback as a trusted build (see SandboxManager::createTrustedBuildCall())
+/** Raises SANDBOX-CAPABILITY-ERROR and returns nullptr if the creation is refused
+*/
+DLLLOCAL ResolvedCallReferenceNode* qore_create_trusted_build_call(const ResolvedCallReferenceNode* callback,
+    ExceptionSink* xsink);
 //! Creates a capability that starts a fixed callback in a new thread that no sandbox governs
 /** See SandboxManager::createSystemThreadCall(); raises SANDBOX-CAPABILITY-ERROR and returns nullptr if the creation is
     refused

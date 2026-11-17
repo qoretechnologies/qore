@@ -594,6 +594,8 @@ void QoreSandboxBudgetStack::enter(int tid, QoreSandboxManager* sm, const void* 
     if (lost_owner) {
         return;
     }
+    // the frames pushed from here on are this entry's (see enterBelowBuild())
+    const size_t entry_start = frames.size();
     if (const std::vector<QoreSandboxManager*>* members = QoreSandboxComposition::members(sm)) {
         for (QoreSandboxManager* member : *members) {
             // the constituents are plain managers, so their getters report their own limits
@@ -606,6 +608,8 @@ void QoreSandboxBudgetStack::enter(int tid, QoreSandboxManager* sm, const void* 
                 if (lost_owner) {
                     return;
                 }
+            } else if (memory > 0) {
+                enterBelowBuild(tid, member, owner, entry_start);
             }
         }
         return;
@@ -616,11 +620,83 @@ void QoreSandboxBudgetStack::enter(int tid, QoreSandboxManager* sm, const void* 
     int64 memory = sm->getMemoryLimit();
     if ((limit > 0 || cpu > 0 || stack > 0 || memory > 0) && !hasBudgetFor(sm)) {
         startBudget(tid, sm, limit, cpu, stack, memory, owner);
+    } else if (memory > 0) {
+        enterBelowBuild(tid, sm, owner, entry_start);
     }
 }
 
+QoreSandboxCharge* QoreSandboxBudgetStack::suspendCharge() {
+    charge_floors.push_back(frames.size());
+    return qore_sb_set_charge(nullptr);
+}
+
+void QoreSandboxBudgetStack::resumeCharge(QoreSandboxCharge* saved) {
+    assert(!charge_floors.empty());
+    charge_floors.pop_back();
+    qore_sb_set_charge(saved);
+}
+
+void QoreSandboxBudgetStack::enterBelowBuild(int tid, QoreSandboxManager* sm, const void* owner,
+        size_t entry_start) {
+    // only inside a trusted build, for a sandbox whose budget is below it and that has no frame in the build yet
+    if (charge_floors.empty()) {
+        return;
+    }
+    size_t floor = charge_floors.back();
+    QoreSandboxCallBudget* below = nullptr;
+    for (size_t i = 0; i < frames.size(); ++i) {
+        if (frames[i].budget->manager == sm) {
+            if (i >= floor) {
+                return;
+            }
+            below = frames[i].budget;
+        }
+    }
+    if (!below || !below->charge) {
+        return;
+    }
+    // a charge that this entry made current already (a budget of another constituent of a composite manager) is
+    // kept: the memory is charged to its accounts as well; a charge made current before this entry (that of the
+    // Program that created the capability, entered by the build) is not: the caller's code is charged to the caller
+    // only, as when the caller calls it directly
+    QoreSandboxCharge* current = nullptr;
+    for (size_t i = entry_start; i < frames.size(); ++i) {
+        if (frames[i].charge_set) {
+            current = qore_sb_mem.charge;
+            break;
+        }
+    }
+    QoreSandboxCharge* combined = nullptr;
+    try {
+        if (current && current != below->charge) {
+            std::vector<QoreSandboxMemoryAccount*> accounts(below->charge->accounts);
+            for (QoreSandboxMemoryAccount* account : current->accounts) {
+                if (std::find(accounts.begin(), accounts.end(), account) == accounts.end()) {
+                    accounts.push_back(account);
+                }
+            }
+            combined = new QoreSandboxCharge(std::move(accounts));
+            for (QoreSandboxMemoryAccount* account : combined->accounts) {
+                account->ref();
+            }
+        }
+        frames.push_back({below, owner, true, 0, 0, nullptr, false, combined});
+    } catch (std::bad_alloc&) {
+        if (combined) {
+            combined->deref();
+        }
+        // the caller's code is refused at its next cancellation point rather than run uncharged
+        lose(tid, owner, below);
+        return;
+    }
+    below->ref();
+    Frame& frame = frames.back();
+    frame.saved_charge = qore_sb_set_charge(combined ? combined : below->charge);
+    frame.charge_set = true;
+}
+
 void QoreSandboxBudgetStack::pushFrame(QoreSandboxCallBudget* budget, const void* owner) {
-    frames.push_back({budget, owner, 0, 0, nullptr, false});
+    frames.push_back({budget, owner, false, 0, 0, nullptr, false});
     Frame& frame = frames.back();
     if (budget->stack_bytes > 0) {
         frame.applied_stack_limit = qore_sandbox_tighten_stack(budget->stack_bytes, frame.saved_stack_limit);
@@ -637,6 +713,9 @@ QoreSandboxCallBudget* QoreSandboxBudgetStack::popFrame() {
     Frame& frame = frames.back();
     if (frame.charge_set) {
         qore_sb_set_charge(frame.saved_charge);
+    }
+    if (frame.owned_charge) {
+        frame.owned_charge->deref();
     }
     if (frame.applied_stack_limit) {
         qore_sandbox_restore_stack(frame.saved_stack_limit);
@@ -775,8 +854,9 @@ void QoreSandboxBudgetStack::leaveIntern(int tid, const void* owner) {
         limited = true;
     }
     while (!frames.empty() && frames.back().owner == owner) {
+        const bool charge_only = frames.back().charge_only;
         QoreSandboxCallBudget* budget = popFrame();
-        if (budget->isTimed()) {
+        if (!charge_only && budget->isTimed()) {
             sandbox_watchdog.detach(budget, tid);
         }
         if (budget->isExpired()) {
@@ -799,10 +879,12 @@ void QoreSandboxBudgetStack::capture(QoreSandboxBudgetList& out) const {
         lost->ref();
         return;
     }
-    out.reserve(out.size() + frames.size());
-    for (const Frame& frame : frames) {
-        frame.budget->ref();
-        out.push_back(frame.budget);
+    // inside a trusted build, only the budgets entered in it (the frames of the caller's code that it calls included)
+    size_t start = charge_floors.empty() ? 0 : charge_floors.back();
+    out.reserve(out.size() + frames.size() - start);
+    for (size_t i = start; i < frames.size(); ++i) {
+        frames[i].budget->ref();
+        out.push_back(frames[i].budget);
     }
 }
 

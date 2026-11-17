@@ -23866,6 +23866,57 @@ static QoreValue f_dbg_system_threads_starting(const QoreListNode* params, Runti
 #endif
 
 #ifdef DEBUG
+//! Tries to create a trusted build capability in a Program that is sandboxed by its flag only, and returns it
+/** The Program is a child of the current one that had a sandbox manager, which was removed with the C++ API
+    (QoreProgram::setSandboxManager(nullptr)): no sandbox governs its code, but the code is sandboxed, so the creation
+    must be refused (qore_create_trusted_build_call()).  DEBUG builds only.
+
+    @param call the callback of the capability
+
+    @throw SANDBOX-CAPABILITY-ERROR the creation is refused
+*/
+static QoreValue f_dbg_trusted_build_from_flag_only_program(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    const ResolvedCallReferenceNode* call = get_param_value(params, 0).get<const ResolvedCallReferenceNode>();
+    QoreProgram* pgm = new QoreProgram(rc.getProgram(), PO_NO_CHILD_PO_RESTRICTIONS);
+    ON_BLOCK_EXIT([pgm, xsink] () {
+        pgm->waitForTerminationAndDeref(xsink);
+    });
+    {
+        QoreSandboxManager* sm = new QoreSandboxManager;
+        pgm->setSandboxManager(sm);
+        sm->deref(nullptr);
+    }
+    pgm->setSandboxManager(nullptr);
+    assert(qore_program_is_sandboxed(pgm));
+    ProgramThreadCountContextHelper tch(xsink, pgm, true);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return qore_create_trusted_build_call(call, xsink);
+}
+
+//! Makes a Program sandboxed by its flag only: a manager is set and removed with the C++ API (DEBUG builds only)
+/** A Program with code cannot get there from Qore; used to test a Program that is sandboxed with no manager to
+    govern it
+*/
+static QoreValue f_dbg_make_program_flag_only(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    const QoreObject* obj = get_param_value(params, 0).get<const QoreObject>();
+    ReferenceHolder<QoreProgram> pgm(static_cast<QoreProgram*>(obj->getReferencedPrivateData(CID_PROGRAM,
+        xsink)), xsink);
+    if (!pgm) {
+        return QoreValue();
+    }
+    {
+        QoreSandboxManager* sm = new QoreSandboxManager;
+        (*pgm)->setSandboxManager(sm);
+        sm->deref(nullptr);
+    }
+    (*pgm)->setSandboxManager(nullptr);
+    assert(qore_program_is_sandboxed(*pgm));
+    return QoreValue();
+}
+
 //! Returns the CPU time in nanoseconds used by the current call into a sandbox with a CPU time limit, or -1
 static QoreValue f_dbg_sandbox_cpu_used(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     return qore_sandbox_dbg_cpu_used();
@@ -23936,6 +23987,10 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_fail_next_program_entry", f_dbg_fail_next_program_entry,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "site");
+    qns.addBuiltinVariant("dbg_trusted_build_from_flag_only_program", f_dbg_trusted_build_from_flag_only_program,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, codeTypeInfo, 1, codeTypeInfo, QORE_PARAM_NO_ARG, "call");
+    qns.addBuiltinVariant("dbg_make_program_flag_only", f_dbg_make_program_flag_only, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, nothingTypeInfo, 1, QC_PROGRAM->getTypeInfo(), QORE_PARAM_NO_ARG, "pgm");
     qns.addBuiltinVariant("dbg_sandbox_fail_next_budgets", f_dbg_sandbox_fail_next_budgets,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "count");
