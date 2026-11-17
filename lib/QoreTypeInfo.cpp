@@ -3976,6 +3976,10 @@ void QoreUnionTypeInfo::initExactMembers(const type_vec_t& value_types) {
         }
         exact_members.push_back(vt);
         union_exact_mask |= (1ull << t);
+        if (vt == bigIntTypeInfo || vt == floatTypeInfo || vt == numberTypeInfo || vt == stringTypeInfo
+                || vt == boolTypeInfo || vt == binaryTypeInfo || vt == dateTypeInfo) {
+            union_scalar_mask |= (1ull << t);
+        }
     }
 }
 

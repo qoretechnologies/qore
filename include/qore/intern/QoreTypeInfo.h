@@ -156,7 +156,15 @@ public:
         a union whose members have no exact type for the value's base type \a t (n.getType()) pays only a mask test.
     */
     DLLLOCAL bool unionAcceptsExactly(const QoreValue& n, qore_type_t t) const {
-        return (union_exact_mask & (static_cast<uint64_t>(t) < 64 ? (1ull << t) : 0)) && unionAcceptsExactlyImpl(n);
+        uint64_t bit = static_cast<uint64_t>(t) < 64 ? (1ull << t) : 0;
+        if (!(union_exact_mask & bit)) {
+            return false;
+        }
+        // a member of a plain scalar type keeps a value of that type (an enum value has the base type of its enum)
+        if ((union_scalar_mask & bit) && !n.isEnum()) {
+            return true;
+        }
+        return unionAcceptsExactlyImpl(n);
     }
 
     //! returns true if \a ti is a union with an enum type that accepts the enum value \a n (qore#6277, qore#6407)
@@ -1296,6 +1304,8 @@ protected:
     uint64_t identity_serial = 0;
     //! for a union type, the base value types (bit n for type n < 64) that one of its members has exactly (qore#6407)
     uint64_t union_exact_mask = 0;
+    //! for a union type, the base value types (as above) that a member of the plain scalar type has (ex: int)
+    uint64_t union_scalar_mask = 0;
 
     DLLLOCAL bool unionAcceptsExactlyImpl(const QoreValue& n) const;
 
