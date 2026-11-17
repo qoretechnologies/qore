@@ -3399,6 +3399,9 @@ static bool buildInterpreterAnalysis(const QoreIRFunction& func, ExceptionSink* 
     // when the call is made, and so for the whole call, as no callee can write it, can be taken over observably by a
     // parameter that the callee writes: QORE_IR_GIVES_CALL_TEMPS (issue #5958)
     {
+        // the position of the last write of each local before the instruction being looked at in its block, kept by
+        // the scan of the block below, so that the reads given to a call are checked in one pass (qore#6515)
+        std::unordered_map<const LocalVar*, size_t> last_write;
         // true if the argument \a id of the call at \a call_pos of \a call_block is a read of a plain local that the
         // local still holds when the call is made: nothing writes the local from the read to the call in its block
         auto is_held_local_read = [&](uint32_t id, const QoreIRBasicBlock* call_block, size_t call_pos) -> bool {
@@ -3411,18 +3414,25 @@ static bool buildInterpreterAnalysis(const QoreIRFunction& func, ExceptionSink* 
             if (!load->local || load->is_ref || load->is_closure || load->local->closureUse()) {
                 return false;
             }
-            const auto& insts = call_block->instructions;
-            for (size_t j = value_defs.pos[id] + 1; j < call_pos; ++j) {
-                if (qore_ir_get_written_local(insts[j].get()) == load->local) {
-                    return false;
-                }
-            }
-            return true;
+            auto w = last_write.find(load->local);
+            return w == last_write.end() || w->second < value_defs.pos[id];
         };
         for (const auto& block : func.blocks) {
             const auto& insts = block->instructions;
+            last_write.clear();
             for (size_t pos = 0; pos < insts.size(); ++pos) {
                 QoreIRInstruction* call_inst = insts[pos].get();
+                // the call's own write of a local comes after its arguments are given
+                struct WriteRecorder {
+                    std::unordered_map<const LocalVar*, size_t>& last_write;
+                    const QoreIRInstruction* inst;
+                    size_t pos;
+                    ~WriteRecorder() {
+                        if (const LocalVar* written = qore_ir_get_written_local(inst)) {
+                            last_write[written] = pos;
+                        }
+                    }
+                } write_recorder{last_write, call_inst, pos};
                 int arg_start = qore_ir_call_arg_start(call_inst);
                 if (arg_start < 0) {
                     continue;
@@ -3521,47 +3531,63 @@ static bool buildInterpreterAnalysis(const QoreIRFunction& func, ExceptionSink* 
         if (!candidates.empty()) {
             qore_ir_find_local_reads_overwritten_before_use(func, overwritten);
         }
+        // Each candidate is borrowed if the first instruction after it that uses it as the base of a method call
+        // (borrowed if it is a base) or as the operand of an operator that keeps no reference to it (borrowed) comes
+        // before a write of its local, or is the write itself.  The events of a block are found in one forward scan
+        // of the block, the first use of each value and the writes of each local in order, so a statement that reads
+        // a local many times costs no more than the statement itself (qore#6515); the answers are those of a scan
+        // forward from each candidate.
+        struct FirstUse {
+            size_t pos;
+            bool borrowed;
+        };
+        const QoreIRBasicBlock* scanned_block = nullptr;
+        std::unordered_map<uint32_t, FirstUse> first_use;
+        std::unordered_map<const LocalVar*, std::vector<size_t>> write_positions;
         for (const auto& [block, i] : candidates) {
             const auto& insts = block->instructions;
+            if (block != scanned_block) {
+                scanned_block = block;
+                first_use.clear();
+                write_positions.clear();
+                for (size_t j = 0; j < insts.size(); ++j) {
+                    const QoreIRInstruction* next = insts[j].get();
+                    bool dot_eval = next->opcode == QoreIROpcode::DotEvalMethodDirect
+                        || (next->opcode == QoreIROpcode::Invoke && isDotEvalInvokeOpcode(
+                            static_cast<const QoreIRInvokeInstruction*>(next)->invoke_opcode));
+                    if (dot_eval && !next->operands.empty()) {
+                        uint32_t id = next->operands[0].id;
+                        first_use.try_emplace(id, FirstUse{j, id < bases.size() && bases[id]});
+                    }
+                    if (qore_ir_operator_keeps_no_operand(next->opcode)) {
+                        for (const QoreIRValue& op : next->operands) {
+                            first_use.try_emplace(op.id, FirstUse{j, true});
+                        }
+                    }
+                    if (const LocalVar* written = qore_ir_get_written_local(next)) {
+                        write_positions[written].push_back(j);
+                    }
+                }
+            }
             const QoreIRInstruction* load = insts[i].get();
             const uint32_t rid = load->result.id;
             if (overwritten.count(rid)) {
                 continue;
             }
+            auto use = first_use.find(rid);
+            if (use == first_use.end() || use->second.pos <= i || !use->second.borrowed) {
+                continue;
+            }
             const LocalVar* lv = static_cast<const QoreIRLocalInstruction*>(load)->local;
-            for (size_t j = i + 1; j < insts.size(); ++j) {
-                const QoreIRInstruction* next = insts[j].get();
-                bool dot_eval = next->opcode == QoreIROpcode::DotEvalMethodDirect
-                    || (next->opcode == QoreIROpcode::Invoke && isDotEvalInvokeOpcode(
-                        static_cast<const QoreIRInvokeInstruction*>(next)->invoke_opcode));
-                if (dot_eval && !next->operands.empty() && next->operands[0].id == rid) {
-                    if (bases[rid]) {
-                        borrowed_bases[rid] = 1;
-                    }
-                    break;
-                }
-                // the operand of an operator whose value holds no reference to it is borrowed, as the AST
-                // interpreter and native code borrow a value read from a local: an assignment to the local later in
-                // the statement releases the value, which no part of the statement uses any more
-                if (qore_ir_operator_keeps_no_operand(next->opcode)) {
-                    bool uses = false;
-                    for (const QoreIRValue& op : next->operands) {
-                        if (op.id == rid) {
-                            uses = true;
-                            break;
-                        }
-                    }
-                    if (uses) {
-                        borrowed_bases[rid] = 1;
-                        break;
-                    }
-                }
-                // a write to the local can release the value borrowed (one between the load and the call puts the
-                // load in overwritten)
-                if (qore_ir_get_written_local(next) == lv) {
-                    break;
+            // the first write of the local after the read; a use at the write's own instruction comes first
+            auto w = write_positions.find(lv);
+            if (w != write_positions.end()) {
+                auto next_write = std::upper_bound(w->second.begin(), w->second.end(), i);
+                if (next_write != w->second.end() && *next_write < use->second.pos) {
+                    continue;
                 }
             }
+            borrowed_bases[rid] = 1;
         }
         func.interpreter_borrowed_bases = std::move(borrowed_bases);
     }
