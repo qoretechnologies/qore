@@ -166,6 +166,12 @@ module SqlUtil {
       the table's description, on databases whose driver supports them
       (@ref SqlUtil::AbstractTable::supportsTableComments() "AbstractTable::supportsTableComments()")
       (<a href="https://github.com/qoretechnologies/qore/issues/1483">issue 1483</a>)
+    - added view alignment: the \c "views" and \c "view_map" keys of a @ref schema_desc_hash "schema description",
+      whose views @ref SqlUtil::AbstractDatabase::getAlignSql() "AbstractDatabase::getAlignSql()" creates, creates
+      again when their query differs as the database keeps it, renames, drops and comments, and
+      @ref SqlUtil::AbstractDatabase::getDropSchemaSql() "getDropSchemaSql()" drops (see @ref schema_views), and
+      @ref SqlUtil::AbstractView::comment "AbstractView::comment"
+      (<a href="https://github.com/qoretechnologies/qore/issues/1427">issue 1427</a>)
     - code restricted from the \c DATABASE domain (@ref Qore::PO_NO_DATABASE "PO_NO_DATABASE") cannot open a
       database connection from a connection string, a datasource configuration or a serialized configuration
       (@ref SqlUtil::AbstractTable::getTable() "AbstractTable::getTable()",
@@ -2058,10 +2064,53 @@ db.getAlignSql(schema_template, callback_opts, table_cache);
     - \c sequences: a hash of sequence description hashes keyed by sequence name; each entry describes a sequence
     - \c functions: a hash of function description hashes keyed by function name; each entry describes a function
     - \c procedures: a hash of procedure description hashes keyed by procedure name; each entry describes a procedure
+    - \c views: a hash of view descriptions keyed by view name (see @ref schema_views); since SqlUtil 3.11.0
+    - \c view_map: a hash for automatically renaming views; if the source name (key) exists and the target name
+      (value) does not exist, then the source view is renamed; since SqlUtil 3.11.0
     - \c driver: this key can optionally contain a hash keyed by driver name which contains a hash of values that will be added to the schema description hash before processing; this way a schema description hash can contain all the information required for the schema including driver-specific options; any driver-specific options will overwrite values in the top level of the hash if there are duplicate hash keys
 
     Each database driver may provide additional objects (such as types or materialized views, packages, etc); see
     driver-specific documentation for more information.
+
+    @subsection schema_views Views in Schema Descriptions
+
+    A view of the \c views key of a @ref schema_desc_hash "schema description hash" is described by the source of its
+    query or by a hash (see @ref SqlUtil::AbstractDatabase::ViewDescriptionOptions "ViewDescriptionOptions"):
+    @code{.py}
+hash<auto> schema = {
+    "tables": {...},
+    "views": {
+        "active_customers": "select id, name from customers where active = 1",
+        "big_orders": {
+            "src": "select id, customer_id from orders where amount > 1000",
+            "comment": "orders of more than 1000",
+        },
+        # dropped if it exists
+        "old_view": {"drop": True},
+    },
+};
+    @endcode
+
+    @ref SqlUtil::AbstractDatabase::getAlignSql() "AbstractDatabase::getAlignSql()" aligns the views after the
+    tables, functions and procedures:
+    - a view that does not exist is created
+    - a view whose query differs is dropped and created again; the queries are compared as the database keeps them:
+      PostgreSQL and MySQL/MariaDB keep the query of a view in a form of their own (with qualified names and casts),
+      which they are asked for the described query as well (PostgreSQL with a temporary view in a savepoint that is
+      rolled back, MySQL/MariaDB with a view of its own on another connection, which is dropped); the other databases
+      keep the query as it is given, which is compared with its whitespace collapsed
+    - a view described with \c drop is dropped if it exists
+    - the comment of a view is created, changed or removed on databases whose driver supports view comments
+      (PostgreSQL and Oracle; see @ref SqlUtil::AbstractDatabase::supportsViewComments() "supportsViewComments()"),
+      and ignored on others
+
+    Aligning a schema again gives no SQL for views that are as described.
+    @ref SqlUtil::AbstractDatabase::getDropSchemaSql() "AbstractDatabase::getDropSchemaSql()" drops the views of the
+    description that exist, before the other objects.
+
+    @note a view that another view or object depends on cannot be dropped to be created again on every database
+    (PostgreSQL refuses it); describe such views so that their queries do not change, or drop the dependent objects
+    first
 
     The following is an example of a schema description hash:
     @code{.py}
@@ -10542,6 +10591,13 @@ string sql = constraint.getDeferrabilitySql();
 
             #! Flag showing if is the view updatable with DML commands.
             bool updatable;
+
+            #! the comment of the view, on databases whose driver supports view comments
+            /** @see @ref SqlUtil::AbstractDatabase::supportsViewComments() "AbstractDatabase::supportsViewComments()"
+
+                @since %SqlUtil 3.11.0
+            */
+            *string comment;
         }
 
         #! creates the object from the arguments

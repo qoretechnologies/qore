@@ -1815,6 +1815,13 @@ public class MssqlDatabase inherits SqlUtil::AbstractDatabase {
         return new MssqlView(name, row.definition, schema);
     }
 
+    #! Returns a view object for a view of a schema description
+    private AbstractView makeViewImpl(string name, string src) {
+        string schema;
+        parse_schema_name(name, \schema, \name, default_schema);
+        return new MssqlView(name, src, schema);
+    }
+
     private MssqlFunction makeFunctionImpl(string name, string src, *hash opts) {
         throw "UNIMPLEMENTED", "unimplemented";
     }

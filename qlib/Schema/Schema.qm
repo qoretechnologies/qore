@@ -945,6 +945,9 @@ module Schema {
       connection to Oracle), else the default
     - a table of a data schema can have a \c comment, the comment of the table
       (<a href="https://github.com/qoretechnologies/qore/issues/1483">issue 1483</a>)
+    - added @ref Schema::AbstractSchema::getViews() "AbstractSchema::getViews()": the views that a schema's
+      getViewsImpl() gives, such as one that SchemaReverse generates, are aligned with the schema (see
+      @ref schema_views) (<a href="https://github.com/qoretechnologies/qore/issues/1427">issue 1427</a>)
 
     @section schema_v1_8_0 Schema Module v1.8.0
     - added shared \c columns and \c indexes definitions at the top level of a data schema: a

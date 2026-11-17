@@ -520,6 +520,11 @@
     they ignored them (<a href="https://github.com/qoretechnologies/qore/issues/757">issue 757</a>); see
     @ref sqlutilv3_11_0.
 
+    @par Schemas Align Their Views
+    The views that a @ref Schema::AbstractSchema "schema" gives with \c getViewsImpl(), as the schema classes that
+    SchemaReverse generates do, are aligned with the schema (see @ref schema_views); they were ignored
+    (<a href="https://github.com/qoretechnologies/qore/issues/1427">issue 1427</a>).
+
     @par Schema and Table Drops Commit Each Statement
     @ref Schema::AbstractSchema::drop() "AbstractSchema::drop()" and
     @ref SqlUtil::AbstractTable::dropCommit() "AbstractTable::dropCommit()" commit each statement, and on PostgreSQL
@@ -1048,6 +1053,11 @@
     created and aligned with the table on PostgreSQL, Oracle, MySQL/MariaDB and SQL Server, and which
     @ref SqlUtil::AbstractTable::getComment() "AbstractTable::getComment()" and SchemaReverse give
     (<a href="https://github.com/qoretechnologies/qore/issues/1483">issue 1483</a>).
+
+    @par View Alignment in SqlUtil Schemas
+    The \c "views" of a @ref schema_desc_hash "schema description" are aligned: created, created again when their
+    query differs as the database keeps it, renamed, dropped and commented; see @ref schema_views
+    (<a href="https://github.com/qoretechnologies/qore/issues/1427">issue 1427</a>).
 
     @par Opt-In Structured Datasource Mutation Observer
     @ref Qore::SQL::Datasource "Datasource" and @ref Qore::SQL::DatasourcePool "DatasourcePool" objects accept a
