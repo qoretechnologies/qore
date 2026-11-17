@@ -1764,7 +1764,8 @@ hash<HttpContentTypeInfo> get_http_content_type_info(string content_type, string
 /** An HTTP server reports it in the header information of a request (the \c "accept-charset" key of the info hash
     of @ref Qore::Socket::readHTTPHeader() "Socket::readHTTPHeader()", and of \c cx."header-info" in an
     @ref HttpServer::HttpServer "HttpServer" request handler, which uses it as \c cx."response-encoding") for every
-    HTTP version.  The value is parsed as RFC 9110 section 12.5.2 defines it: a comma-separated list of charset names
+    HTTP version, with the values of repeated \c Accept-Charset field lines combined into one list (RFC 9110 section
+    5.3).  The value is parsed as RFC 9110 section 12.5.2 defines it: a comma-separated list of charset names
     (tokens, case-insensitive) or \c "*", each with an optional weight (<tt>;q=</tt><em>qvalue</em>, section 12.4.2; 1
     without one), with optional whitespace around the elements and before and after each \c ";"; other parameters,
     with a token or quoted-string value, are ignored, and an element with an invalid weight or another syntax error

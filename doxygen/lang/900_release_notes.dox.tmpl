@@ -887,9 +887,9 @@
 
     @par HTTP Servers Choose the Response Encoding from Accept-Charset by Its Weights
     An HTTP server takes the response encoding of a request (\c cx."response-encoding") from \c Accept-Charset as
-    RFC 9110 defines it, with weights and optional whitespace (see
-    @ref Qore::get_http_accept_charset() "get_http_accept_charset()"); 2.2.1 took the first charset unless the value
-    or an element directly after a comma began with UTF-8 or \c "*", whatever the weights (issue #6343).
+    RFC 9110 defines it, with weights, optional whitespace and repeated lines as one list (see
+    @ref Qore::get_http_accept_charset() "get_http_accept_charset()"); 2.2.1 used the last line and took its first
+    charset unless UTF-8 or \c "*" began the value or an element directly after a comma (issues #6343, #6445).
 
     @par Untrusted Character Set Names Select Only Known Encodings
     A character set name in an HTTP header or body or in a MIME message is used only if it selects an encoding that

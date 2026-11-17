@@ -4412,7 +4412,7 @@ public:
             info.setKeyValue("accept-encoding", l.release(), 0);
     }
 
-    DLLLOCAL bool do_accept_charset(char* t, QoreHashNode& info) {
+    DLLLOCAL bool do_accept_charset(const char* t, QoreHashNode& info) {
         // the rule that the HTTP/2 and HTTP/3 servers apply too (qore_get_http_accept_charset(), qore#6333)
         std::string ac = qore_get_http_accept_charset(t);
         if (ac.empty()) {
@@ -4430,6 +4430,9 @@ public:
         const char* senc = nullptr;
         // accept-charset
         bool acceptcharset = false;
+        // the values of the Accept-Charset field lines, combined into one list (RFC 9110 section 5.3; qore#6445)
+        std::string accept_charset_list;
+        bool have_accept_charset = false;
 
         QoreHashNode* raw_hdr = nullptr;
         if (info) {
@@ -4496,7 +4499,12 @@ public:
                     *chunked = true;
                 } else if (info) {
                     if (!strcmp(buf, "accept-charset")) {
-                        acceptcharset = do_accept_charset(t, *info);
+                        // the rule is applied to the combined list when all lines have been read
+                        if (have_accept_charset) {
+                            accept_charset_list += ", ";
+                        }
+                        accept_charset_list += t;
+                        have_accept_charset = true;
                     } else if ((flags & CHF_REQUEST) && !strcmp(buf, "accept-encoding")) {
                         do_accept_encoding(t, *info);
                     }
@@ -4542,6 +4550,9 @@ public:
         if ((flags & CHF_PROCESS)) {
             if (!senc) {
                 enc = QEM.findCreate(assume_http_encoding.c_str());
+            }
+            if (info && have_accept_charset) {
+                acceptcharset = do_accept_charset(accept_charset_list.c_str(), *info);
             }
             // according to RFC-2616 section 14.2, "If no Accept-Charset header is present, the default is that any
             // character set is acceptable" so we will use utf-8

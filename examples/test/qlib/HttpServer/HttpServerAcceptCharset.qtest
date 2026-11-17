@@ -127,6 +127,9 @@ class HttpServerAcceptCharsetTest inherits QUnit::Test {
             ("utf-8;q=0", "utf8"),
             ("x-no-such-charset, ISO-8859-2;Q=0.5", "ISO-8859-2"),
             (NOTHING, "utf8"),
+            # a repeated header: the lines are one list (RFC 9110 section 5.3; qore#6445); the last line alone
+            # gives utf8
+            (("iso-8859-2;q=0.5", "utf-8;q=0.1"), "iso-8859-2"),
         );
     }
 
@@ -166,6 +169,23 @@ class HttpServerAcceptCharsetTest inherits QUnit::Test {
         hash<auto> info;
         conn.readHTTPHeader(5s, \info);
         assertEq("iso-8859-2", info."accept-charset", "Socket::readHTTPHeader()");
+        # repeated lines are one list: a later line that selects nothing does not reset the result, and a later line
+        # does not replace an earlier one with a higher weight (qore#6445)
+        list<list<auto>> repeated = (
+            (("iso-8859-2", "x-no-such-charset"), "iso-8859-2"),
+            (("utf-8", "iso-8859-2"), "utf8"),
+            (("iso-8859-2", "windows-1250;q=0.5"), "iso-8859-2"),
+            (("utf-8;q=0", "iso-8859-2;q=0.3", "windows-1250;q=0.2"), "iso-8859-2"),
+        );
+        foreach list<auto> c in (repeated) {
+            client.send("GET / HTTP/1.1\r\nHost: x\r\n" + (foldl $1 + $2, (map "Accept-Charset: " + $1 + "\r\n",
+                c[0])) + "\r\n");
+            remove info;
+            hash<auto> hdr = conn.readHTTPHeader(5s, \info);
+            assertEq(c[1], info."accept-charset", sprintf("Socket::readHTTPHeader(): lines %y", c[0]));
+            # the header itself keeps the values of the lines
+            assertEq(c[0], hdr."accept-charset", sprintf("Socket::readHTTPHeader(): header of lines %y", c[0]));
+        }
     }
 
     http2Test() {
