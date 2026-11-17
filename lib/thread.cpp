@@ -5951,12 +5951,6 @@ bool qore_caller_is_sandboxed() {
     }
 }
 
-//! returns true if the parse options of \a pgm, a Program that is not a module's, restrict \a dom
-static bool qore_program_restricts(const QoreProgram* pgm, const QoreParseOptions& dom) {
-    assert(pgm && !qore_program_is_module_inline(pgm));
-    return qore_program_private::getParseOptions(*pgm).hasAny(dom);
-}
-
 bool qore_program_is_library_module(const QoreProgram* pgm) {
     return pgm && qore_program_private::get(*const_cast<QoreProgram*>(pgm))->library_module;
 }
