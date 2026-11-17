@@ -526,6 +526,15 @@ public class HttpAsyncSocketIoController {
         if (!draining) {
             return False;
         }
+        # a drain that waits in the thread of an HTTP/1.1 request that the controller dispatched (the stop of a server
+        # that the request stops or releases) does not wait for that request, which ends only when this wait has
+        # returned: its dispatch ends here (qore#6508)
+        if (*Counter own = Priv::running_dispatch) {
+            if (own === dispatch_count) {
+                Priv::running_dispatch = NOTHING;
+                own.dec();
+            }
+        }
         if (timeout_ms <= 0) {
             dispatch_count.waitForZero();
             drain_conns.waitForZero();
@@ -818,11 +827,36 @@ public class HttpAsyncSocketIoController {
 
         # Wait for in-flight handler tasks to complete; the stopping flag prevents
         # them from submitting new operations to the controller
-        try {
-            handler_pool.stopWait();
+        if (Priv::running_handler_pool === handler_pool) {
+            # this thread runs a task of the handler pool (a request stopped its server, or released the last
+            # reference to it): the pool's stop waits for all of its workers, this one included, whose task ends only
+            # when this stop has returned, so the pool is stopped in a thread of its own, which waits for them
+            # (qore#6508)
+            ThreadPool pool = handler_pool;
+            *LoggerInterface stop_logger = logger;
+            try {
+                background sub () {
+                    try {
+                        pool.stopWait();
+                    } catch (hash<ExceptionInfo> ex) {
+                        if (stop_logger) {
+                            stop_logger.error("Async HTTP shutdown stopping handler pool failed: %s: %s", ex.err,
+                                ex.desc);
+                        }
+                    }
+                }();
+            } catch (hash<ExceptionInfo> ex) {
+                # no thread can be started (a thread limit): the pool is stopped when it is destroyed
+                logShutdownException("stopping handler pool", ex);
+            }
             pool_stopped = True;  # Mark for recreation in start()
-        } catch (hash<ExceptionInfo> ex) {
-            logShutdownException("stopping handler pool", ex);
+        } else {
+            try {
+                handler_pool.stopWait();
+                pool_stopped = True;  # Mark for recreation in start()
+            } catch (hash<ExceptionInfo> ex) {
+                logShutdownException("stopping handler pool", ex);
+            }
         }
         # NOTE: We don't recreate the pool here anymore. The pool will be recreated
         # in start() if the controller is restarted. Recreating here would leave
@@ -1061,7 +1095,15 @@ public class HttpAsyncSocketIoController {
         }
 
         auto save = target.saveDispatchContext();
-        on_exit target.restoreDispatchContext(save);
+        # the pool that runs this task, which a stop of the controller in this task does not wait for (see
+        # stopIntern())
+        Priv::running_handler_pool = handler_pool;
+        on_exit {
+            # a dispatch that the task did not end (an exception that it did not expect) is not this thread's any more
+            Priv::running_dispatch = NOTHING;
+            Priv::running_handler_pool = NOTHING;
+            target.restoreDispatchContext(save);
+        }
         body();
     }
 
@@ -4101,6 +4143,8 @@ public class HttpAsyncSocketIoController {
         # block while waiting for controller-backed socket I/O, so it must run
         # on a handler thread, not the call_dispatcher worker.
         code<nothing()> request_handler = sub () {
+            # the dispatch that this thread runs, which a drain that this thread waits for ends (see waitDrain())
+            Priv::running_dispatch = dispatch_counter;
             try {
                 hash<HttpRequestResultInfo> result = dispatch_target.onHttpRequest(conn_info);
                 if (result.persistent_request_end) {
@@ -4109,11 +4153,14 @@ public class HttpAsyncSocketIoController {
                 handleRequestResult(dispatch_sock, dispatch_cinfo, dispatch_cx, result,
                     dispatch_target);
             } catch (hash<ExceptionInfo> ex) {
-                # the dispatch ends here: the connection is closed below
-                if (draining) {
-                    endDispatch(dispatch_uh, dispatch_counter);
-                } else {
-                    dispatch_counter.dec();
+                # the dispatch ends here, unless a drain in this thread ended it: the connection is closed below
+                if (Priv::running_dispatch) {
+                    Priv::running_dispatch = NOTHING;
+                    if (draining) {
+                        endDispatch(dispatch_uh, dispatch_counter);
+                    } else {
+                        dispatch_counter.dec();
+                    }
                 }
                 log(LoggerLevel::ERROR, "Error handling keep-alive request for %y: %s: %s",
                     dispatch_uh, ex.err, ex.desc);
@@ -4125,10 +4172,14 @@ public class HttpAsyncSocketIoController {
                 }
                 return;
             }
-            if (draining) {
-                endDispatch(dispatch_uh, dispatch_counter);
-            } else {
-                dispatch_counter.dec();
+            # the dispatch ends here, unless a drain in this thread ended it
+            if (Priv::running_dispatch) {
+                Priv::running_dispatch = NOTHING;
+                if (draining) {
+                    endDispatch(dispatch_uh, dispatch_counter);
+                } else {
+                    dispatch_counter.dec();
+                }
             }
         };
 
@@ -4268,6 +4319,8 @@ public class HttpAsyncSocketIoController {
 
         # Dispatch to handler pool (same as handleHeaderComplete)
         code<nothing()> request_handler = sub () {
+            # the dispatch that this thread runs, which a drain that this thread waits for ends (see waitDrain())
+            Priv::running_dispatch = dispatch_counter;
             try {
                 hash<HttpRequestResultInfo> result = dispatch_target.onHttpRequest(conn_info);
                 if (result.persistent_request_end) {
@@ -4276,11 +4329,14 @@ public class HttpAsyncSocketIoController {
                 handleRequestResult(dispatch_sock, dispatch_cinfo, dispatch_cx, result,
                     dispatch_target);
             } catch (hash<ExceptionInfo> ex) {
-                # the dispatch ends here: the connection is closed below
-                if (draining) {
-                    endDispatch(dispatch_uh, dispatch_counter);
-                } else {
-                    dispatch_counter.dec();
+                # the dispatch ends here, unless a drain in this thread ended it: the connection is closed below
+                if (Priv::running_dispatch) {
+                    Priv::running_dispatch = NOTHING;
+                    if (draining) {
+                        endDispatch(dispatch_uh, dispatch_counter);
+                    } else {
+                        dispatch_counter.dec();
+                    }
                 }
                 log(LoggerLevel::ERROR, "Error handling request after body read for %y: %s: %s",
                     dispatch_uh, ex.err, ex.desc);
@@ -4289,10 +4345,14 @@ public class HttpAsyncSocketIoController {
                 try { dispatch_sock.close(); } catch () {}
                 return;
             }
-            if (draining) {
-                endDispatch(dispatch_uh, dispatch_counter);
-            } else {
-                dispatch_counter.dec();
+            # the dispatch ends here, unless a drain in this thread ended it
+            if (Priv::running_dispatch) {
+                Priv::running_dispatch = NOTHING;
+                if (draining) {
+                    endDispatch(dispatch_uh, dispatch_counter);
+                } else {
+                    dispatch_counter.dec();
+                }
             }
         };
 
@@ -5941,6 +6001,18 @@ public class HttpAsyncSocketIoController {
 
 #! @cond nodoc
 namespace Priv {
+#! The handler pool whose task the current thread runs (see HttpAsyncSocketIoController::runHandlerPoolTask())
+/** A stop of the controller in that task does not wait for the pool, which would wait for this worker (qore#6508)
+*/
+thread_local *ThreadPool running_handler_pool;
+
+#! The counter of the HTTP/1.1 dispatch that the current thread runs in the handler pool
+/** Set by the dispatch's task and cleared when it ends the dispatch; a drain that the dispatch's thread waits for
+    (the stop of a server that a request stops or releases) ends the dispatch's count first, as the dispatch ends only
+    when the drain has returned (see HttpAsyncSocketIoController::waitDrain(), qore#6508)
+*/
+thread_local *Counter running_dispatch;
+
 #! Returns the character sets and the media type of a request for its header information
 /** HTTP/1.x requests get them from Socket::readHTTPHeader() (\c "charset", \c "body-content-type" and
     \c "accept-charset"); the HTTP/2 and HTTP/3 requests, whose headers the controller decodes itself, get the same

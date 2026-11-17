@@ -6781,7 +6781,8 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
 
     # Returns True if informational messages of this listener will be logged
     private bool isLogInfoEnabled() {
-        return logger ? logger.isEnabledFor(LoggerLevel::INFO) : serv.isLogInfoEnabled();
+        # nothing is logged through a server that has been destroyed (qore#6508)
+        return logger ? logger.isEnabledFor(LoggerLevel::INFO) : (serv ? serv.isLogInfoEnabled() : False);
     }
 
     doLogRecvBody(*data body, hash<auto> cx, hash<auto> hdr, hash<auto> info) {
@@ -7095,6 +7096,15 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
     }
 
     stop(*bool silent) {
+        # A stop that runs in a thread that runs a request of this listener does not wait for that request, which
+        # ends only when the stop has returned to it: the request released the last reference to the server, whose
+        # destructor stops it (the program released the server while the request ran), or it stopped the server.
+        # This applies as well to a stop that is in progress in another thread (stopNoWait(), qore#6508), which waits
+        # for the request while this thread waits for that stop (the server's stop waits for its listeners' stops)
+        if (*Priv::RequestHelper own_request = Priv::current_request) {
+            own_request.releaseForStop(cThreads);
+        }
+
         {
             m.lock();
             on_exit m.unlock();
@@ -7108,13 +7118,6 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
             }
 
             exit = True;
-        }
-
-        # A stop that runs in a thread that runs a request of this listener does not wait for that request, which
-        # ends only when the stop has returned to it: the request released the last reference to the server, whose
-        # destructor stops it (the program released the server while the request ran)
-        if (*Priv::RequestHelper own_request = Priv::current_request) {
-            own_request.releaseForStop(cThreads);
         }
 
         # wait for all connection threads to terminate
@@ -7681,6 +7684,20 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
 
         # Call handleRequest with async capture
         handleRequest(request_helper, self, s, \cx, hdr, hdr.method == "HEAD", phi, info, \async_response);
+
+        # the server was destroyed in this request (the program released it while the request ran, and the request
+        # released the last reference to it): its stop closed the connections, so the request has no response to give
+        # and no session to continue; a dedicated connection belongs to its handler (qore#6508).  The per-request
+        # cleanup below (multiplexed body streams, persistent session state) is not needed: the stop has closed the
+        # connections and stops the handler pool, whose thread this is
+        if (!serv) {
+            return request_helper.isDedicated()
+                ? <HttpServerAsyncIo::HttpRequestResultInfo>{
+                    "dedicated": True,
+                    "persistent_request_end": request_helper.persistent_end,
+                }
+                : <HttpServerAsyncIo::HttpRequestResultInfo>{"close": True};
+        }
 
         # Manage persistent handler state after request processing
         if (is_multiplexed && phi.handler && phi.handler.isPersistent()

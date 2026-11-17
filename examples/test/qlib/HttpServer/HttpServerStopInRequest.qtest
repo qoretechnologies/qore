@@ -22,18 +22,29 @@
     FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
     DEALINGS IN THE SOFTWARE.
 
-    Test for a stop of an HttpServer that runs in the thread of one of its requests: the program releases the server
-    while a request runs; the request then releases the last reference to the server (the call of the handler holds
-    the server), whose destructor stops it in the request's thread.  The stop waits for the requests of the
-    listeners, and the request that runs it ends only when the stop has returned to it, so the stop must not wait for
-    that request: it waited forever, and the process never ended (seen in WebSocketProgramEnd.qtest, where the request
-    that opened a WebSocket connection still ran when the program released the server).
+
+    Tests for a stop of an HttpServer that runs in the thread of one of its requests.  The program releases the server
+    while a request runs, and the request then releases the last reference to the server (the call of the handler
+    holds the server), whose destructor stops it in the request's thread; or a handler stops its server.  The request
+    ends only when the stop has returned to it, so the stop must not wait for it:
+    - the listener's stop waited for the request forever, and the process never ended (qore#6507; seen in
+      WebSocketProgramEnd.qtest, where the request that opened a WebSocket connection still ran when the program
+      released the server)
+    - the drain of the async I/O controller waited for the request until its drain timeout (qore#6508)
+    - a stop of the listener that was in progress in another thread waited for the request, and the server's stop
+      for that stop, forever (qore#6508)
+    - the stop of the handler pool from one of its workers failed and logged an error (qore#6508)
+    - a handler that stopped its server: the server's async I/O controller could be destroyed in a callback of the
+      async I/O controller, whose flush of the callbacks waited for that callback forever (qore#6508; see also
+      qore/classes/AsyncIoController/asyncio_flush_in_callback.qtest)
 */
 
 %modern
+%allow-weak-references
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
+%requires Logger
 %requires HttpServerUtil
 %requires HttpServer
 %requires HttpClientIo
@@ -43,18 +54,72 @@
 #! Upper bound for any wait that a regression turns into a hang
 const HangTimeout = 30s;
 
-#! A server that reports its destruction
+#! Captures the log messages of the servers
+class LogCapture inherits LoggerAppenderWithLayout {
+    public {
+        #! the messages logged
+        list<string> messages();
+        #! protects messages
+        Mutex lck();
+    }
+
+    constructor() : LoggerAppenderWithLayout("capture", new LoggerLayoutPattern("%p: %m")) {
+        open();
+    }
+
+    processEventImpl(int type, auto params) {
+        if (type == EVENT_LOG) {
+            AutoLock al(lck);
+            messages += params;
+        }
+    }
+
+    #! Returns the messages that match the given regular expression
+    list<string> grep(string rx) {
+        AutoLock al(lck);
+        return select messages, $1.regex(rx);
+    }
+}
+
+#! A listener that reports the start of its stop
+class ReportingListener inherits HttpListener {
+    private {
+        Queue stopping;
+    }
+
+    constructor(HttpServer server, code<nothing(...)> handle_request, int id, Sequence ss, Queue stopping,
+            *hash<HttpListenerOptionInfo> opts) : HttpListener(server, handle_request, id, ss, opts) {
+        self.stopping = stopping;
+    }
+
+    stop(*bool silent) {
+        stopping.push(gettid());
+        HttpListener::stop(silent);
+    }
+}
+
+#! A server that reports its destruction, and whose listeners report the start of their stops
 class ReportingServer inherits HttpServer {
     private {
         Queue destroyed;
+        Queue listener_stopping();
     }
 
-    constructor(Queue destroyed) : HttpServer(<HttpServerOptionInfo>{}) {
+    constructor(Queue destroyed, hash<HttpServerOptionInfo> opts = <HttpServerOptionInfo>{}) : HttpServer(opts) {
         self.destroyed = destroyed;
     }
 
     destructor() {
         destroyed.push(gettid());
+    }
+
+    #! Returns the queue that receives the TID of each thread that starts a stop of a listener
+    Queue getListenerStopping() {
+        return listener_stopping;
+    }
+
+    private HttpListener getListener(HttpServer server, int id, hash<HttpListenerOptionInfo> info) {
+        return new ReportingListener(server, \handleRequest(), id, seqSessions, listener_stopping, info);
     }
 }
 
@@ -75,28 +140,142 @@ class HoldingHandler inherits AbstractHttpRequestHandler {
     }
 }
 
+#! A handler that stops its server in its request
+class StoppingHandler inherits AbstractHttpRequestHandler {
+    public {
+        #! receives the TID of the request's thread when the stop has returned
+        Queue stopped();
+    }
+
+    private {
+        #! a weak reference: the server references this handler
+        *HttpServer server;
+    }
+
+    setServer(HttpServer server) {
+        self.server := server;
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        *HttpServer s = server;
+        s.stop();
+        stopped.push(gettid());
+        return makeResponse(200, "stopped", {"Content-Type": "text/plain"});
+    }
+}
+
+#! The result of a request that released the last reference to its server
+hashdecl ReleaseInRequestInfo {
+    #! the TID of the request's thread
+    int request_tid;
+    #! the TID of the thread that destroyed the server
+    int destroyed_tid;
+    #! the TID of the thread in which the listener's stop ended (the stop callback ran)
+    int listener_stopped_tid;
+    #! the TID of the thread that started a stop of the listener first
+    int listener_stopping_tid;
+}
+
 class HttpServerStopInRequestTest inherits QUnit::Test {
     constructor() : Test("HttpServerStopInRequestTest", "1.0") {
         addTestCase("a request that releases the last reference to its server destroys it",
             \releaseInRequestTest());
+        addTestCase("the drain of a server destroyed in its request does not wait for the request",
+            \drainInRequestTest());
+        addTestCase("a server destroyed in its request does not log an error stopping its handler pool",
+            \handlerPoolInRequestTest());
+        addTestCase("a server destroyed in its request while a stop of its listener is in progress",
+            \listenerStopInProgressTest());
+        addTestCase("a handler that stops its server", \stopInRequestTest());
         set_return_value(main());
     }
 
     releaseInRequestTest() {
+        hash<ReleaseInRequestInfo> info = releaseInRequest();
+        assertEq(info.request_tid, info.destroyed_tid, "the request's thread destroys the server");
+        # the destructor of the subclass runs first: the stop that the destructor of HttpServer runs ends only if it
+        # does not wait for the request that runs it
+        assertEq(info.request_tid, info.listener_stopped_tid,
+            "the server's stop in the request's thread does not wait for that request");
+    }
+
+    drainInRequestTest() {
+        LogCapture capture();
+        # a drain that waited for the request would end only after the waits of the test
+        hash<ReleaseInRequestInfo> info = releaseInRequest(<HttpServerOptionInfo>{
+            "drain_timeout": HangTimeout * 2,
+            "logger": getLogger(capture),
+        });
+        assertEq(info.request_tid, info.listener_stopped_tid, "the server's stop ends in the request's thread");
+        assertEq((), capture.grep("drain timeout"), "the drain ends without waiting for the request");
+    }
+
+    handlerPoolInRequestTest() {
+        LogCapture capture();
+        hash<ReleaseInRequestInfo> info = releaseInRequest(<HttpServerOptionInfo>{
+            "logger": getLogger(capture),
+        });
+        assertEq(info.request_tid, info.listener_stopped_tid, "the server's stop ends in the request's thread");
+        assertEq((), capture.grep("handler pool|THREADPOOL"), "the handler pool is stopped without an error");
+        assertEq((), capture.grep("^ERROR"), "the stop logs no error");
+    }
+
+    listenerStopInProgressTest() {
+        hash<ReleaseInRequestInfo> info = releaseInRequest(NOTHING, True);
+        assertEq(info.request_tid, info.destroyed_tid, "the request's thread destroys the server");
+        # the stop in progress ends the listener's stop, and runs its callback, once the request no longer counts
+        assertEq(info.listener_stopping_tid, info.listener_stopped_tid,
+            "the stop of the listener in progress in another thread does not wait for the request, which waits for "
+            "it");
+    }
+
+    stopInRequestTest() {
+        StoppingHandler handler();
+        HttpServer server(<HttpServerOptionInfo>{});
+        handler.setServer(server);
+        server.setHandler("handler", "", NOTHING, handler);
+        server.setDefaultHandler("handler", handler);
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
+        server.waitForAsyncIo();
+
+        Counter client_done(1);
+        HttpClientIo::HttpClientConnectionManager mgr = getManager();
+        background sub () {
+            on_exit client_done.dec();
+            try {
+                mgr.request("http://localhost:" + port, "GET", "/stop");
+            } catch (hash<ExceptionInfo> ex) {
+                # the server is stopped while it answers the request; the result does not matter here
+            }
+        }();
+
+        assertGt(0, handler.stopped.get(HangTimeout), "the stop in the request returns");
+        assertEq(0, server.getRunningListenerCount(), "the stop in the request stopped the listener");
+        assertEq(0, client_done.waitForZero(HangTimeout), "the client's request ends");
+    }
+
+    #! The program releases the server while a request runs; the request then releases the last reference
+    /** @param opts the options of the server
+        @param stop_listener_first if @ref True, a stop of the listener is started in another thread first, which
+        waits for the request
+    */
+    private hash<ReleaseInRequestInfo> releaseInRequest(*hash<HttpServerOptionInfo> opts,
+            *bool stop_listener_first) {
         Queue destroyed();
         # receives the TID of the thread that stopped the listener when its stop has ended
         Queue listener_stopped();
         HoldingHandler handler();
-        *ReportingServer server = new ReportingServer(destroyed);
+        *ReportingServer server = new ReportingServer(destroyed, opts ?? <HttpServerOptionInfo>{});
+        Queue listener_stopping = server.getListenerStopping();
         server.setHandler("handler", "", NOTHING, handler);
         server.setDefaultHandler("handler", handler);
-        int port = server.addListener(<HttpListenerOptionInfo>{
+        hash<auto> linfo = server.addListener(<HttpListenerOptionInfo>{
             "node": "localhost",
             "service": 0,
             "stopc": sub (string name) {
                 listener_stopped.push(gettid());
             },
-        }).port;
+        });
         server.waitForAsyncIo();
         on_exit if (handler.release.getCount()) {
             handler.release.dec();
@@ -107,24 +286,44 @@ class HttpServerStopInRequestTest inherits QUnit::Test {
         background sub () {
             on_exit client_done.dec();
             try {
-                mgr.request("http://localhost:" + port, "GET", "/hold");
+                mgr.request("http://localhost:" + linfo.port, "GET", "/hold");
             } catch (hash<ExceptionInfo> ex) {
                 # the server is stopped while it answers the request; the result does not matter here
             }
         }();
 
         int request_tid = handler.entered.get(HangTimeout);
+        *int listener_stopping_tid;
+        if (stop_listener_first) {
+            # the stop of the listener in another thread waits for the request; it is reported just before it starts,
+            # and it marks the listener as stopping long before the request, released below, reaches the stop of the
+            # server's destructor
+            server.stopListenerIDNoWait(linfo.id);
+            listener_stopping_tid = listener_stopping.get(HangTimeout);
+            assertNeq(request_tid, listener_stopping_tid, "the listener's stop starts in another thread");
+        }
         # the request holds the server while its handler runs: this is not the last reference
         server = NOTHING;
         assertEq(0, destroyed.size(), "the server is not destroyed while its request runs");
 
         handler.release.dec();
-        assertEq(request_tid, destroyed.get(HangTimeout), "the request's thread destroys the server");
-        # the destructor of the subclass runs first: the stop that the destructor of HttpServer runs ends only if it
-        # does not wait for the request that runs it
-        assertEq(request_tid, listener_stopped.get(HangTimeout),
-            "the server's stop in the request's thread does not wait for that request");
+        hash<ReleaseInRequestInfo> rv = <ReleaseInRequestInfo>{
+            "request_tid": request_tid,
+            "destroyed_tid": destroyed.get(HangTimeout),
+            "listener_stopped_tid": listener_stopped.get(HangTimeout),
+            "listener_stopping_tid": listener_stopping_tid ?? listener_stopping.get(HangTimeout),
+        };
         assertEq(0, client_done.waitForZero(HangTimeout), "the client's request ends");
+        return rv;
+    }
+
+    private Logger getLogger(LogCapture capture) {
+        Logger logger("stop-in-request", LoggerLevel::getLevelInfo());
+        logger.addAppender(capture);
+        if (m_options.verbose > 2) {
+            logger.addAppender(new StdoutAppender());
+        }
+        return logger;
     }
 
     private HttpClientIo::HttpClientConnectionManager getManager() {
