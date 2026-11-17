@@ -24957,7 +24957,7 @@ static QoreValue f_dbg_run_h3_connection_teardown_read_test(const QoreListNode* 
     addr.sin_family = AF_INET;
     addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
     socklen_t addr_len = sizeof(addr);
-    if (bind(ufd, reinterpret_cast<sockaddr*>(&addr), sizeof(addr))
+    if (::bind(ufd, reinterpret_cast<sockaddr*>(&addr), sizeof(addr))
         || getsockname(ufd, reinterpret_cast<sockaddr*>(&addr), &addr_len)) {
         ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
         rv->setKeyValue("skip", new QoreStringNodeMaker("cannot bind a UDP socket: %s", strerror(errno)), xsink);
