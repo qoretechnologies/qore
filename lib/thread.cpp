@@ -1769,19 +1769,21 @@ bool ThreadProgramData::saveProgram(bool runtime, bool* first_entry) {
                 throw std::bad_alloc();
             }
 #endif
-            // fork() waits for the change (see qore_program_private_base::recordLock())
+            // fork() waits for the change (see qore_program_private_base::recordLock()); the record and the references
+            // that go with it are one change, so that a child process created with fork() releases what it finds
             std::lock_guard<std::mutex> rl(qore_program_private_base::recordLock(this));
             QORE_DBG_RECORD_CHANGE(QPRS_THREAD_PROGRAMS, qore_program_private::get(*pgm));
             pgm_set.insert(pgm);
+            // the reference belongs to the Program's entry for the thread (see delProgram())
+            ref();
+            pgm->depRef();
         } catch (...) {
             qore_program_private::removeThreadVarData(pgm, this);
             td->tlpd = old_tlpd;
             throw;
         }
+        QORE_DBG_RECORD_CHANGE(QPRS_THREAD_PROGRAMS_DONE, qore_program_private::get(*pgm));
         printd(5, "ThreadProgramData::saveProgram() this: %p pgm: %p\n", this, pgm);
-        // the reference belongs to the Program's entry for the thread (see delProgram())
-        ref();
-        pgm->depRef();
         if (first_entry) {
             *first_entry = true;
         }

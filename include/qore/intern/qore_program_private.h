@@ -474,13 +474,22 @@ enum QoreProgramRecordSite {
     QPRS_DEBUG_PROGRAMS = 4,
     //! a breakpoint assigned to a Program
     QPRS_BREAKPOINTS = 5,
+    //! after a thread's first entry into a Program has been recorded, with its references (no lock held)
+    QPRS_THREAD_PROGRAMS_DONE = 6,
+    //! when a Program being cleared starts clearing the data of its threads (no lock held)
+    QPRS_THREAD_DATA_CLEAR_START = 7,
+    //! after a Program being cleared has cleared the data of a thread in it (no lock held)
+    QPRS_THREAD_DATA_CLEARED = 8,
 };
 
 #ifdef DEBUG
 //! calls the test hook of a change of a record of a Program; see qore_program_private_base::dbgRecordChange()
-#define QORE_DBG_RECORD_CHANGE(site, pp) qore_program_private_base::dbgRecordChange(site, pp)
+#define QORE_DBG_RECORD_CHANGE(site, pp) qore_program_private_base::dbgRecordChange(site, pp, -1)
+//! as QORE_DBG_RECORD_CHANGE() for a change that concerns a given thread
+#define QORE_DBG_RECORD_CHANGE_TID(site, pp, tid) qore_program_private_base::dbgRecordChange(site, pp, tid)
 #else
 #define QORE_DBG_RECORD_CHANGE(site, pp)
+#define QORE_DBG_RECORD_CHANGE_TID(site, pp, tid)
 #endif
 
 class qore_program_private_base {
@@ -881,8 +890,11 @@ public:
     // Programs that the thread has data in and its thread-local data in each family, under its pslock), the records
     // of a Program that change at run time and at module load (the feature lists under featureLock; the strings,
     // locations and local variables of runtime_metadata_lock; the list of the user variants; the IR and plugin
-    // fallback records; the external data and the saved objects, the statement IDs and the debug blocks under
-    // plock), its breakpoints (under lck_breakpoint), and the Programs of a debug program (qore_debug_program_private).
+    // fallback records; the external data, the saved objects, the defines, the expressions parsed at run time, the
+    // statement IDs and the debug blocks under plock), its breakpoints (under lck_breakpoint), and the Programs of a
+    // debug program (qore_debug_program_private).  A record and the references that go with it are changed together,
+    // and a record leaves its container before the reference that it holds is released, so that a child never finds
+    // a record without its reference, or with one that was released.
     //
     // Each stripe lock is a LEAF lock: it is taken with the owner's own lock held, and nothing else is acquired
     // while it is held (including another stripe's lock); it is held only around the change itself, never across a
@@ -914,17 +926,16 @@ public:
     typedef void (*dbg_thread_container_hook_t)(const qore_program_private_base* pp);
     DLLLOCAL static std::atomic<dbg_thread_container_hook_t> dbg_thread_container_hook;
 
-    //! a test hook called inside a change of a record of a Program (see QoreProgramRecordSite), with the lock that
-    //! the change is made under held
-    /** See dbg_hold_program_record_change() in ql_debug.cpp
+    //! a test hook called inside or after a change of a record of a Program (see QoreProgramRecordSite)
+    /** See dbg_hold_program_record_change() in ql_debug.cpp; \a tid is the thread that the change concerns, or -1
     */
-    typedef void (*dbg_record_hook_t)(int site, const qore_program_private_base* pp);
+    typedef void (*dbg_record_hook_t)(int site, const qore_program_private_base* pp, int tid);
     DLLLOCAL static std::atomic<dbg_record_hook_t> dbg_record_hook;
 
     //! calls the record change test hook, if one is set
-    DLLLOCAL static void dbgRecordChange(int site, const qore_program_private_base* pp) {
+    DLLLOCAL static void dbgRecordChange(int site, const qore_program_private_base* pp, int tid) {
         if (dbg_record_hook_t hook = dbg_record_hook.load(std::memory_order_acquire)) {
-            hook(site, pp);
+            hook(site, pp, tid);
         }
     }
 #endif
@@ -1849,12 +1860,20 @@ public:
         if (!counter) {
             return;
         }
+#ifndef NDEBUG
+        bool found = false;
+#endif
         for (QoreForkCountedHold** p = &top; *p; p = &(*p)->next) {
             if (*p == this) {
                 *p = next;
+#ifndef NDEBUG
+                found = true;
+#endif
                 break;
             }
         }
+        // a hold is released by the thread that made it
+        assert(found);
         counter = nullptr;
         next = nullptr;
     }
@@ -2140,9 +2159,34 @@ public:
     }
 
     DLLLOCAL void clearProgramThreadData(ExceptionSink* xsink) {
-        for (auto& i : pgm_data_map) {
+        // tclear is set: no other thread changes pgm_data_map; the clearing thread can add its own entry while
+        // destructors run (issue #4299), which the final clear removes as before
+        std::vector<pgm_data_map_t::value_type> entries;
+        {
+            AutoLocker al(tlock);
+            entries.assign(pgm_data_map.begin(), pgm_data_map.end());
+        }
+        QORE_DBG_RECORD_CHANGE(QPRS_THREAD_DATA_CLEAR_START, this);
+        ThreadProgramData* own = get_thread_program_data_if_any();
+        for (auto& i : entries) {
             i.second->del(xsink);
+            // the entry of another thread leaves the map before the Program's reference to the thread's data is
+            // released, which can free the data: a child process created with fork() reaches the Program data of
+            // the threads in the map (see fixupAfterFork()); the clearing thread's own data stays valid
+            if (i.first != own) {
+                AutoLocker al(tlock);
+                pgm_data_map_t::iterator mi = pgm_data_map.find(i.first);
+                if (mi != pgm_data_map.end() && mi->second == i.second) {
+                    std::lock_guard<std::mutex> rl(threadContainerLock());
+                    pgm_data_map.erase(mi);
+                }
+            }
+#ifdef DEBUG
+            // read before the data can be freed
+            int tid = i.first->gettid();
+#endif
             i.first->delProgram(pgm);
+            QORE_DBG_RECORD_CHANGE_TID(QPRS_THREAD_DATA_CLEARED, this, tid);
         }
     }
 
@@ -3545,7 +3589,12 @@ public:
                 pp.warnSink = nullptr;
                 // an expression parsed before the exception is not returned
                 if (pp.new_expression) {
-                    pp.exp_set.erase(pp.new_expression);
+                    {
+                        // expressions are parsed and deleted at run time: fork() waits for the change (see
+                        // recordLock())
+                        std::lock_guard<std::mutex> rl(pp.threadContainerLock());
+                        pp.exp_set.erase(pp.new_expression);
+                    }
                     delete pp.new_expression;
                     pp.new_expression = nullptr;
                 }
@@ -3688,7 +3737,10 @@ public:
         q_exp_t rv = new_expression;
         if (new_expression) {
             if (*xsink) {
-                exp_set.erase(new_expression);
+                {
+                    std::lock_guard<std::mutex> rl(threadContainerLock());
+                    exp_set.erase(new_expression);
+                }
                 delete new_expression;
                 rv = nullptr;
             }
@@ -4347,10 +4399,13 @@ public:
             } else {
                 i->second.discard(xsink);
             }
+            // defines change at run time (Program::define()): fork() waits for the change (see recordLock())
+            std::lock_guard<std::mutex> rl(threadContainerLock());
             i->second = v;
             return true;
         }
 
+        std::lock_guard<std::mutex> rl(threadContainerLock());
         dmap[name] = v;
         return false;
     }
@@ -4515,6 +4570,8 @@ public:
             } else {
                 i->second.discard(xsink);
             }
+            // see setDefine()
+            std::lock_guard<std::mutex> rl(threadContainerLock());
             dmap.erase(i);
             source_defines.erase(name);
             return true;
@@ -4573,6 +4630,8 @@ public:
 
         recordSourceParseDefine(loc, str, val);
         setDefine(str, val, parseSink);
+        // see setDefine()
+        std::lock_guard<std::mutex> rl(threadContainerLock());
         if (source) {
             source_defines.insert(str);
         } else {
@@ -4592,6 +4651,8 @@ public:
         ValueHolder old(xsink);
         AutoLocker al(plock);
         setDefine(str, val, xsink, &old);
+        // see setDefine()
+        std::lock_guard<std::mutex> rl(threadContainerLock());
         if (untrusted) {
             source_defines.insert(str);
         } else {
@@ -4854,7 +4915,11 @@ public:
         AutoLocker al(plock);
         q_exp_set_t::iterator i = exp_set.find(exp);
         if (i != exp_set.end()) {
-            exp_set.erase(exp);
+            {
+                // fork() waits for the change (see recordLock())
+                std::lock_guard<std::mutex> rl(threadContainerLock());
+                exp_set.erase(i);
+            }
             delete exp;
         }
     }
@@ -5064,11 +5129,9 @@ public:
         AutoLocker al(plock);
         if (saved_objects.find(obj) == saved_objects.end()) {
             int64 now = q_epoch();
-            {
-                // fork() waits for the change (see recordLock())
-                std::lock_guard<std::mutex> rl(threadContainerLock());
-                saved_objects.insert(saved_obj_map_t::value_type(obj, now));
-            }
+            // fork() waits for the change (see recordLock()); the record and its reference are one change
+            std::lock_guard<std::mutex> rl(threadContainerLock());
+            saved_objects.insert(saved_obj_map_t::value_type(obj, now));
             obj->ref();
         }
     }
@@ -5144,6 +5207,15 @@ public:
     }
 
     DLLLOCAL LocalVar* createLocalVar(const char* name, const QoreTypeInfo* typeInfo);
+
+    //! creates a local variable with runtime_metadata_lock and the stripe lock (threadContainerLock()) held
+    /** For a caller that creates several variables in one hold of the locks; nothing here takes another lock
+    */
+    DLLLOCAL LocalVar* createLocalVarLocked(const char* name, const QoreTypeInfo* typeInfo) {
+        LocalVar* lv = local_var_list.emplace(name, typeInfo);
+        lv->setOwner(this);
+        return lv;
+    }
 
     DLLLOCAL const AbstractQoreFunctionVariant* runtimeFindCall(const char* name, const QoreListNode* params, ExceptionSink* xsink);
 
@@ -5992,25 +6064,31 @@ public:
             std::lock_guard<std::mutex> rl(threadContainerLock());
             QORE_DBG_RECORD_CHANGE(QPRS_BREAKPOINTS, this);
             breakpointList.push_back(bkpt);
+            // the record and its reference are one change for fork()
+            bkpt->pgm = this;
+            bkpt->ref();
         }
-        bkpt->pgm = this;
-        bkpt->ref();
     }
 
     DLLLOCAL void deleteAllBreakpoints() {
         QoreAutoRWWriteLocker al(&lck_breakpoint);
-        for (QoreBreakpointList_t::iterator it = breakpointList.begin(); it != breakpointList.end(); ++it) {
+        while (true) {
+            QoreBreakpoint* b;
             {
-                // fork() waits for the change (see recordLock()); not held while the breakpoint is released, which
-                // takes the lock of all breakpoints
+                // each breakpoint leaves the list before its reference is released, which can free it; fork() waits
+                // for the change (see recordLock()), and the stripe lock is not held while the breakpoint is
+                // released, which takes the lock of all breakpoints
                 std::lock_guard<std::mutex> rl(threadContainerLock());
-                (*it)->unassignAllStatements();
+                if (breakpointList.empty()) {
+                    break;
+                }
+                b = breakpointList.front();
+                breakpointList.pop_front();
+                b->unassignAllStatements();
             }
-            (*it)->pgm = nullptr;
-            (*it)->deref();
+            b->pgm = nullptr;
+            b->deref();
         }
-        std::lock_guard<std::mutex> rl(threadContainerLock());
-        breakpointList.clear();
     }
 
     DLLLOCAL void getBreakpoints(QoreBreakpointList_t &bkptList) {
@@ -6634,29 +6712,39 @@ public:
     }
 
     DLLLOCAL void removeProgram(QoreProgram* pgm) {
-        QoreAutoRWWriteLocker al(&tlock);
-        qore_program_map_t::iterator i = qore_program_map.find(pgm);
-        printd(5, "qore_debug_program_private::removeProgram(), this: %p, pgm: %p, found: %d\n", this, pgm,
-            (int)(i != qore_program_map.end()));
-        if (i == qore_program_map.end())
-            return;
-        pgm->priv->detachDebug(this, [this, i] () {
-            qore_program_map.erase(i);
-        });
+        {
+            QoreAutoRWWriteLocker al(&tlock);
+            qore_program_map_t::iterator i = qore_program_map.find(pgm);
+            printd(5, "qore_debug_program_private::removeProgram(), this: %p, pgm: %p, found: %d\n", this, pgm,
+                (int)(i != qore_program_map.end()));
+            if (i == qore_program_map.end())
+                return;
+            pgm->priv->detachDebug(this, [this, i] () {
+                qore_program_map.erase(i);
+            });
+        }
+        // released without the lock: the Program's teardown can run user code
         pgm->deref();
         // onDetach will not be executed as program is removed
     }
 
     DLLLOCAL void removeAllPrograms() {
-        QoreAutoRWWriteLocker al(&tlock);
-        printd(5, "qore_debug_program_private::removeAllPrograms(), this: %p\n", this);
-        qore_program_map_t::iterator i;
-        while ((i = qore_program_map.begin()) != qore_program_map.end()) {
-            qore_program_private* qpp = i->second;
-            QoreProgram* p = i->first;
-            qpp->detachDebug(this, [this, i] () {
-                qore_program_map.erase(i);
-            });
+        std::vector<QoreProgram*> removed;
+        {
+            QoreAutoRWWriteLocker al(&tlock);
+            printd(5, "qore_debug_program_private::removeAllPrograms(), this: %p\n", this);
+            removed.reserve(qore_program_map.size());
+            qore_program_map_t::iterator i;
+            while ((i = qore_program_map.begin()) != qore_program_map.end()) {
+                qore_program_private* qpp = i->second;
+                removed.push_back(i->first);
+                qpp->detachDebug(this, [this, i] () {
+                    qore_program_map.erase(i);
+                });
+            }
+        }
+        // released without the lock: a Program's teardown can run user code
+        for (QoreProgram* p : removed) {
             p->deref();
         }
     }

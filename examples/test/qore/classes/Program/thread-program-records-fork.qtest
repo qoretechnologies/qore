@@ -28,6 +28,10 @@ class ThreadProgramRecordsForkTest inherits QUnit::Test {
         const SiteThreadPrograms = 0;
         #! the change of a thread's records when it saves its first thread-local data in a family (QPRS_THREAD_DATA)
         const SiteThreadData = 1;
+        #! after a thread's first entry into a Program has been recorded (QPRS_THREAD_PROGRAMS_DONE)
+        const SiteThreadProgramsDone = 6;
+        #! after a Program being cleared has cleared the data of a thread in it (QPRS_THREAD_DATA_CLEARED)
+        const SiteThreadDataCleared = 8;
 
         #! the code of the Programs that the test enters
         const ProgramCode = "
@@ -68,6 +72,9 @@ int sub run_threads(int n) {
     constructor() : Test("ThreadProgramRecordsForkTest", "1.0") {
         addTestCase("fork() waits for a change of a thread's Programs", \programsTest());
         addTestCase("fork() waits for a change of a thread's thread-local data", \threadDataTest());
+        addTestCase("a thread's entry into a Program is recorded with its references", \entryReferencesTest());
+        addTestCase("a Program being cleared removes the data of a thread before releasing it",
+            \clearedThreadDataTest());
         set_return_value(main());
     }
 
@@ -173,6 +180,104 @@ int sub run_threads(int n) {
 
         assertTrue(p.callFunction("get", "parent"));
         assertEq(6, p.callFunction("run_threads", 2));
+    }
+
+    #! the child finds a thread's first entry into a Program with the references that go with it
+    /** The thread is parked right after its entry has been recorded; fork() does not wait for it.  The child deletes
+        the Program, which releases the references of the entry: a record without them would release references
+        that were never taken
+    */
+    entryReferencesTest() {
+        checkAvailable();
+        Program p(PO_NEW_STYLE);
+        p.parse(ProgramCode, "entry-references");
+
+        call_function("dbg_hold_program_record_change", SiteThreadProgramsDone, p);
+        on_exit call_function("dbg_hold_program_record_change_clear");
+
+        Counter done(1);
+        int entry_result;
+        background sub () {
+            on_exit done.dec();
+            entry_result = p.callFunction("add", 20, 22);
+        }();
+
+        hash<auto> r = call_function("dbg_fork_while_program_record_held", NOTHING, int sub () {
+            if (p.callFunction("add", 2, 3) != 5) {
+                return 1;
+            }
+            # releases the references of every thread's entry
+            delete p;
+            # a new Program can be created and deleted
+            Program p2(PO_NEW_STYLE);
+            p2.parse(ProgramCode, "entry-references-child");
+            if (p2.callFunction("add", 1, 1) != 2) {
+                return 2;
+            }
+            delete p2;
+            return 0;
+        });
+        call_function("dbg_hold_program_record_change_clear");
+        done.waitForZero();
+
+        assertEq(0, r.status, "the child deleted the Program");
+        assertEq(42, entry_result);
+        assertEq(5, p.callFunction("add", 2, 3));
+    }
+
+    #! the child of a process whose Program is being cleared does not reach the freed data of a thread
+    /** A thread enters the Program, which another thread then deletes; the deletion is parked after it has cleared
+        the data of the first thread, which then ends and frees its data.  The child finds the Program in the middle of
+        being cleared, and must not reach the freed data (valgrind reports an access to it)
+    */
+    clearedThreadDataTest() {
+        checkAvailable();
+        Program p(PO_NEW_STYLE);
+        p.parse(ProgramCode, "cleared-thread-data");
+
+        Counter entered(1);
+        Counter go(1);
+        Counter ended(1);
+        int tid;
+        background sub () {
+            on_exit ended.dec();
+            tid = gettid();
+            p.callFunction("add", 1, 2);
+            entered.dec();
+            go.waitForZero();
+        }();
+        entered.waitForZero();
+
+        call_function("dbg_hold_program_record_change", SiteThreadDataCleared, p, tid);
+        on_exit call_function("dbg_hold_program_record_change_clear");
+
+        Counter deleted(1);
+        background sub () {
+            on_exit deleted.dec();
+            delete p;
+        }();
+        assertTrue(call_function("dbg_wait_program_record_held"), "the deletion cleared the data of the thread");
+
+        # the thread ends and frees its data, whose reference from the Program was released
+        int count = call_function("dbg_get_thread_program_data_count");
+        go.dec();
+        ended.waitForZero();
+        assertTrue(call_function("dbg_wait_thread_program_data_count", count - 1, 120000),
+            "the data of the thread was freed");
+
+        hash<auto> r = call_function("dbg_fork_while_program_record_held", NOTHING, int sub () {
+            Program p2(PO_NEW_STYLE);
+            p2.parse(ProgramCode, "cleared-thread-data-child");
+            if (p2.callFunction("run_threads", 2) != 6) {
+                return 1;
+            }
+            delete p2;
+            return 0;
+        });
+        call_function("dbg_hold_program_record_change_clear");
+        deleted.waitForZero();
+
+        assertEq(0, r.status, "the child created and deleted a Program");
     }
 
     private checkAvailable() {

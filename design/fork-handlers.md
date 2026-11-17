@@ -113,7 +113,9 @@ releases the locks that the forking thread acquired before `fork()`, and initial
   in the child wherever the child can still reach it (a Program, the Program data of a thread, a debug program), and
   a counter of holds that something waits on to reach zero keeps only the forking thread's holds
   (`QoreForkCountedHold`).  Data whose changes are single stores, or ordered so that any prefix of them is
-  consistent, needs no stripe (the lock state of a Program's parse options, its sandbox manager).
+  consistent, needs no stripe (the lock state of a Program's parse options, its sandbox manager).  A lock that the
+  child initializes again must not be held across user code (which can call `fork()`): a debug program releases
+  the Programs that it removes after its lock.
 - A recursive lock must not be created during static initialization: the recursive mutex attributes are only
   initialized by `qore_init()`, and a `QoreRecursiveThreadLock` created before is not recursive. Locks that a handler
   needs before their first use are created in `qore_init()` (`qore_aot_runtime_init_once()`).
@@ -271,9 +273,14 @@ Besides the locks:
   a Program's threads (the thread counts, the threads admitted during a commit, the deferred releases, the threads'
   data in the Program and the thread-local data registry of a family); the records of a thread's Program data (its
   Programs and its thread-local data in each family); the records of a Program that change at run time and at module
-  load (its feature lists; its interned strings and locations and its local variables, which lazily loaded AOT code
-  adds; the list of its user variants; its IR and plugin fallback records; its external data and saved objects; the
-  statement IDs and the debug blocks that the debugger adds); its breakpoints and their statements and thread IDs.
+  load (its feature lists; its defines and the expressions parsed at run time; its interned strings and locations
+  and its local variables, which lazily loaded AOT code adds; the list of its user variants; its IR and plugin
+  fallback records; its external data and saved objects; the statement IDs and the debug blocks that the debugger
+  adds); its breakpoints and their statements and thread IDs.  A record and the references that go with it are one
+  change (a thread's entry into a Program and its references to the Program and to the thread's data, a breakpoint
+  and the Program's reference to it, a saved object and its reference), and a record leaves its container before
+  the reference that it holds is released (the data of a thread in a Program being cleared, the breakpoints of a
+  Program), so that the child never finds a record without its reference or with a reference that was released.
 - **Debug programs**: each debug program's lock is initialized again, its count of calls in progress keeps only the
   forking thread's, and its Programs are consistent (they and each Program's debug program are changed together
   under its stripe lock).
@@ -306,10 +313,11 @@ Besides the locks:
 ## What is not covered
 
 - Per-object locks that a thread of the parent held at the moment of the fork: object r-sections, variable locks,
-  socket, queue and mutex objects, namespaces.  The data of a Program that changes only while it is parsed or
-  torn down (its namespaces and code, the statement index of the debugger) is not consistent in a child created
-  while another thread parsed or tore down that Program. A child that uses such an object waits forever, as before. The locks
-  of the DBI objects are the exception (see "What the child repairs").
+  socket, queue and mutex objects, namespaces.  A child that uses an object whose lock was held then waits forever,
+  as before.  The locks of the DBI objects are the exception (see "What the child repairs").
+- The data of a Program that changes only while it is parsed or torn down (its namespaces and code, the statement
+  index of the debugger): it is not consistent in a child created while another thread parsed or tore down that
+  Program.
 - Locks of third-party libraries (OpenSSL, LLVM, PCRE2, c-ares) and of the C++ runtime (the guard of a function-local
   static that another thread was initializing, for the statics that do not read the environment, and the per-object
   once flags of IR lowering).

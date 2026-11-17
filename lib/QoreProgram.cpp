@@ -604,8 +604,7 @@ void qore_program_private::fixupAfterFork(int tid, ThreadProgramData* tpd) {
     plock.reinitAfterFork(&ma_recursive);
     pcond.reinitAfterFork();
     // a thread of the parent that created or destroyed a variant of the Program's code can have held it; the list
-    // that it protects is changed only at parse time and when code is freed, as the other data of the Program that
-    // its locks protect, which fork() handles alike (see design/fork-handlers.md)
+    // that it protects is consistent, as it is changed under the stripe lock as well (see recordLock())
     new (&user_variant_lock) std::mutex();
     // the thread counts keep only the forking thread; the containers of the Program's threads are consistent here, as
     // fork() waited for every change of them in progress (see qore_program_private_base::thread_container_shards),
@@ -3705,14 +3704,9 @@ LocalVar* qore_program_private::createLocalVar(const char* name, const QoreTypeI
     // that stays valid for the Program's lifetime.  Avoids the per-
     // LocalVar `new`+list-node allocation of the prior safe_dslist
     // implementation — hot path in AOT deserialization.
-    LocalVar* lv;
-    {
-        // fork() waits for the change (see recordLock())
-        std::lock_guard<std::mutex> rl(threadContainerLock());
-        lv = local_var_list.emplace(name, typeInfo);
-    }
-    lv->setOwner(this);
-    return lv;
+    // fork() waits for the change (see recordLock())
+    std::lock_guard<std::mutex> rl(threadContainerLock());
+    return createLocalVarLocked(name, typeInfo);
 }
 
 void qore_program_private::addStatementToIndexIntern(name_section_sline_statement_map_t* statementIndex, const char* key, AbstractStatement *statement, int offs, const char* section, int sectionOffs) {
