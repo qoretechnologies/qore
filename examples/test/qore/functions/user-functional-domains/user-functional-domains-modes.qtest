@@ -52,6 +52,7 @@ class UserFunctionalDomainsModesTest inherits QUnit::Test {
 own_dyn: INVALID-FUNCTION-ACCESS: method '::DomMod::Api::m()'; functional domain: PROCESS_CONTROL
 closure: INVALID-FUNCTION-ACCESS: function 'tagged()'; functional domain: PROCESS_CONTROL
 init: registered
+init_thread: 1
 dyn: INVALID-FUNCTION-ACCESS: method '::DomMod::Api::m()'; functional domain: PROCESS_CONTROL
 dyn_plain: 4
 cf: INVALID-FUNCTION-ACCESS: function 'tagged()'; functional domain: PROCESS_CONTROL
@@ -83,6 +84,7 @@ yield_ref: yielded
 own_dyn: 3,3,3
 closure: 1
 init: registered
+init_thread: 1
 ref_module: 1
 ref_module_method: 3
 ref_module_args: 2
@@ -154,7 +156,8 @@ module DomMod {
     # the init closure, written before the domains key, uses the declared domain, with user code and with a builtin:
     # a closure of the header is checked with the options in effect where it was written (qore#5803 batch I: source
     # modules)
-    init = sub () { DomMod::Api::register(\"registered\"); *object logger = get_async_io_logger(); };
+    init = sub () { DomMod::Api::register(\"registered\"); *object logger = get_async_io_logger();
+        DomMod::start_init_thread(); };
     domains = \"PROCESS\";
 }
 
@@ -198,6 +201,29 @@ public class Api {
 public class Guarded {
     constructor() [dom=PROCESS_CONTROL] {
     }
+}
+
+# the result of a call of the module's tagged code on a thread that the module's initialization starts
+class InitThread {
+    public {
+        static Queue q();
+    }
+}
+
+# a thread that the initialization of the module starts is not started by the code that loads the module, whatever
+# that code's restrictions (qore#6337)
+sub start_init_thread() {
+    background sub () {
+        try {
+            InitThread::q.push(sprintf(\"%d\", tagged()));
+        } catch (hash<ExceptionInfo> ex) {
+            InitThread::q.push(ex.err);
+        }
+    }();
+}
+
+public string sub init_thread_result() {
+    return InitThread::q.get();
 }
 
 public auto sub get_api() {
@@ -372,6 +398,7 @@ auto sub own() { return call_own(); }
 auto sub own_dyn() { return call_own_dyn(); }
 auto sub closure() { code c = get_closure(); return c(); }
 auto sub init() { return DomMod::Api::registered(); }
+auto sub init_thread() { return init_thread_result(); }
 auto sub dyn() { auto a = get_api(); return a.m(); }
 auto sub dyn_plain() { auto a = get_api(); return a.plain(); }
 auto sub cf() { return call_function(\"DomMod::tagged\"); }

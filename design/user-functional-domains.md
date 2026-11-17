@@ -120,9 +120,15 @@ rest (class domain, builtins) is checked as before.
   - a thread that module code starts has only the module's Program on its stack: `QoreThreadRuntimeParseOptions`
     captures the calling code's restricting options (`caller_domain_restrictions`, also when the module has no
     override in effect: `currentRestrictsNothing()` is false then), and `QoreThreadRuntimeParseOptionsHelper`
-    installs them as `QoreRuntimePoState::thread_caller_restrictions`, which the walk uses when it finds no Program
-    that is not a module's; it survives `setCleared()`, as it describes the thread.  `qore_caller_restricts_domain()`
-    uses the same fallback, so the SqlUtil checks of #6257 hold on such threads too
+    installs them as `ThreadData::thread_caller_restrictions` (not in `QoreRuntimePoState`, which every user call
+    saves and restores) and restores the previous value, which the walk uses when it finds no Program that is not a
+    module's.  `qore_caller_restricts_domain()` uses the same fallback, so the SqlUtil checks of #6257 hold on such
+    threads too.  The capture stops at the module initialization barrier as the check does: a thread that the
+    initialization of library module code starts is not started for the code that loads it (review finding: with the
+    capture past the barrier, such a worker refused every caller if a restricted Program loaded the module first,
+    and served restricted callers if an unrestricted one did); test case `init_thread`.  Work handed to an existing
+    module thread (through a queue) is outside the call chain: it runs with the restrictions of the code that the
+    thread was started for
   - a call reference that module code creates and the caller calls is refused the same way: the calling code is on
     the stack; `user-functional-domains-modes.qtest` cases `own`, `own_dyn`, `closure`, `ref_module*`, `own_cf`,
     `own_iter`, `own_ref_obj`, `own_thread` and `own_thread_ref` are refused for a restricted Program, with and

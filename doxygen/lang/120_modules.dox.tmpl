@@ -1613,8 +1613,11 @@ xcrun notarytool submit MyModule.zip --keychain-profile my-notary-profile --wait
       against the code that calls the module when they are entered: code restricted from the domain cannot reach them
       through other code of the module either (a function or method of the module that does not declare the domain, a
       call that the module resolves at run time, a call reference that the module creates, or a thread that the module
-      starts, whose calling code is the code that called the module when the thread was started); the \c init closure
-      of the module is not a call by the code that loads it.  Since %Qore 3.0
+      starts, whose calling code is the code that called the module when the thread was started).  The \c init closure
+      of a module whose declaration applies (a module found in the process-wide module path, see above), and the
+      threads that it starts, are not called by the code that loads the module; work that module code hands to a
+      thread that it started earlier (through a queue, for example) runs with the restrictions of the code that the
+      thread was started for, not with those of the code that hands it over.  Since %Qore 3.0
     - \c init: (optional) if present, must be a closure that will be executed when the module is loaded; this can be
       used to initialize the module, for example
     - \c del: (optional) if present, must be a closure that will be executed when the module is unloaded; this can be

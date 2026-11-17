@@ -658,6 +658,13 @@ public:
     //! the run-time parse options of the thread and the override that they were computed with; a struct declared in
     //! qore_thread_intern.h, so that RuntimeParseOptionsOverrideHelper restores it inline (qore#6446)
     QoreRuntimePoState runtime_po_state = QoreRuntimePoState();
+    //! the functional-domain restrictions of the code that started the thread, when module code started it
+    /** The calling code of module code that runs on the thread when no Program that is not a module's is on the
+        thread's stack (see qore_get_caller_domain_restrictions()); set while the thread runs the code that it was
+        started for by QoreThreadRuntimeParseOptionsHelper (qore#6337).  Kept outside runtime_po_state, which every
+        user call saves and restores
+    */
+    QoreParseOptions thread_caller_restrictions;
     //! the Program that the next user call is made on behalf of, or nullptr; see QoreCallbackCallerHelper
     const QoreProgram* callback_caller_pgm = nullptr;
     //! the Program running on the thread when callback_caller_pgm was set
@@ -5947,7 +5954,7 @@ static QoreParseOptions qore_get_caller_domain_restrictions(ThreadData* td,
     }
     // no code of a Program that is not a module's is on the stack: the code that started the thread, if module code
     // started it (qore#6337), or the embedding application calls the module code
-    return mib ? QoreParseOptions() : td->runtime_po_state.thread_caller_restrictions;
+    return mib ? QoreParseOptions() : td->thread_caller_restrictions;
 }
 
 bool qore_caller_restricts_domain(int64 domain) {
@@ -5966,16 +5973,22 @@ bool qore_caller_restricts_domain(int64 domain) {
     return qore_get_caller_domain_restrictions(td).hasAny(dom);
 }
 
+//! returns the module initialization barrier that the calling code of module code is not looked up past, or nullptr
+/** The initialization of library module code that another Program loads is not a call by that Program (see
+    QoreModuleInitSandboxBarrierHelper); under a lift it is
+*/
+static const ThreadData::ModuleInitBarrier* qore_get_caller_module_init_barrier(ThreadData* td) {
+    return (td->module_init_barriers.empty() || td->module_init_barriers.back().lift)
+        ? nullptr : &td->module_init_barriers.back();
+}
+
 int64 qore_caller_denied_user_domains(int64 domain) {
     const QoreParseOptions dom = QoreParseOptions(domain) & qore_restricting_domain_options();
     ThreadData* td = thread_data.get();
     if (!dom || !td) {
         return QDOM_DEFAULT;
     }
-    // the initialization of library module code that another Program loads is not a call by that Program (see
-    // QoreModuleInitSandboxBarrierHelper); under a lift it is
-    const ThreadData::ModuleInitBarrier* mib = (td->module_init_barriers.empty()
-        || td->module_init_barriers.back().lift) ? nullptr : &td->module_init_barriers.back();
+    const ThreadData::ModuleInitBarrier* mib = qore_get_caller_module_init_barrier(td);
     QoreParseOptions denied = mib ? QoreParseOptions() : (td->runtime_po_state.caller_restrictions & dom);
     denied |= qore_get_caller_domain_restrictions(td, mib) & dom;
     return denied.getLo();
@@ -7067,11 +7080,8 @@ void RuntimeParseOptionsOverrideHelper::setCleared() {
     old = *state;
     // an empty override leaves the runtime parse options as they are (see apply_runtime_po_override())
     QoreParseOptions po = state->po;
-    // the restrictions of the code that started the thread are those of the thread, not of a call
-    QoreParseOptions thread_caller_restrictions = state->thread_caller_restrictions;
     *state = QoreRuntimePoState();
     state->po = po;
-    state->thread_caller_restrictions = thread_caller_restrictions;
 }
 
 void QoreThreadRuntimeParseOptions::refPrograms() {
@@ -7111,8 +7121,9 @@ bool QoreThreadRuntimeParseOptions::currentRestrictsNothing() {
         && !td->runtime_po_state.app_pgm_id
         && !td->runtime_po_state.sandboxed
         && !td->runtime_po_state.override_pgm
-        // module code called by restricted code passes the restrictions on to the threads that it starts (qore#6337)
-        && !qore_get_caller_domain_restrictions(td);
+        // module code called by restricted code passes the restrictions on to the threads that it starts (qore#6337),
+        // but not the initialization of library module code
+        && !qore_get_caller_domain_restrictions(td, qore_get_caller_module_init_barrier(td));
 }
 
 QoreThreadRuntimeParseOptions QoreThreadRuntimeParseOptions::capture() {
@@ -7127,7 +7138,8 @@ QoreThreadRuntimeParseOptions QoreThreadRuntimeParseOptions::capture() {
     rv.override.app_pgm_id = td->runtime_po_state.app_pgm_id;
     rv.override.sandboxed = td->runtime_po_state.sandboxed;
     rv.override.override_pgm = td->runtime_po_state.override_pgm;
-    rv.caller_domain_restrictions = qore_get_caller_domain_restrictions(td);
+    // a thread that the initialization of library module code starts is not started by the code that loads it
+    rv.caller_domain_restrictions = qore_get_caller_domain_restrictions(td, qore_get_caller_module_init_barrier(td));
     rv.refPrograms();
     return rv;
 }
@@ -7142,8 +7154,13 @@ QoreThreadRuntimeParseOptionsHelper::QoreThreadRuntimeParseOptionsHelper(const Q
     override_helper->set(td, o->override);
     // the options were computed with the override in the starting thread
     td->runtime_po_state.po = o->po;
-    // the restrictions of the code that started the thread (qore#6337); restored with the override
-    td->runtime_po_state.thread_caller_restrictions = o->caller_domain_restrictions;
+    // the restrictions of the code that started the thread (qore#6337)
+    old_caller_restrictions = td->thread_caller_restrictions;
+    td->thread_caller_restrictions = o->caller_domain_restrictions;
+}
+
+void QoreThreadRuntimeParseOptionsHelper::restoreCallerRestrictions() {
+    thread_data.get()->thread_caller_restrictions = old_caller_restrictions;
 }
 
 bool runtime_module_call_override_in_effect(const QoreProgram* module_pgm) {

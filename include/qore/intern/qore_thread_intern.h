@@ -1194,12 +1194,6 @@ struct QoreRuntimePoState {
     bool sandboxed;
     //! the module Program whose code the override was set for; see QoreCallParseOptionsOverride::override_pgm
     const QoreProgram* override_pgm;
-    //! the functional-domain restrictions of the code that started the thread, when module code started it
-    /** The calling code of module code that runs on the thread when no Program that is not a module's is on the
-        thread's stack (see qore_caller_restricts_domain()); set for the life of the thread by
-        QoreThreadRuntimeParseOptionsHelper (qore#6337)
-    */
-    QoreParseOptions thread_caller_restrictions;
 };
 
 class RuntimeParseOptionsOverrideHelper {
@@ -1275,7 +1269,7 @@ struct QoreThreadRuntimeParseOptions {
         while the options can be installed, which would make an unrelated Program match them
     */
     QoreCallParseOptionsOverride override;
-    //! the functional-domain restrictions of the calling code (see QoreRuntimePoState::thread_caller_restrictions)
+    //! the functional-domain restrictions of the calling code (see ThreadData::thread_caller_restrictions)
     QoreParseOptions caller_domain_restrictions;
 
     DLLLOCAL QoreThreadRuntimeParseOptions() = default;
@@ -1339,11 +1333,16 @@ public:
     DLLLOCAL QoreThreadRuntimeParseOptionsHelper(const QoreThreadRuntimeParseOptions* o);
 
     //! restores the options in effect before, if they have not been restored yet
-    DLLLOCAL ~QoreThreadRuntimeParseOptionsHelper() = default;
+    DLLLOCAL ~QoreThreadRuntimeParseOptionsHelper() {
+        reset();
+    }
 
     //! restores the options in effect before the helper was created; called before the thread's data is deleted
     DLLLOCAL void reset() {
-        override_helper.reset();
+        if (override_helper) {
+            override_helper.reset();
+            restoreCallerRestrictions();
+        }
     }
 
     DLLLOCAL QoreThreadRuntimeParseOptionsHelper(const QoreThreadRuntimeParseOptionsHelper&) = delete;
@@ -1353,6 +1352,11 @@ private:
     //! sets the override and the options, and restores those in effect before (RuntimeParseOptionsOverrideHelper
     //! restores the run-time parse options too)
     std::optional<RuntimeParseOptionsOverrideHelper> override_helper;
+    //! the restrictions of the code that started the thread in effect before (ThreadData::thread_caller_restrictions)
+    QoreParseOptions old_caller_restrictions;
+
+    //! restores old_caller_restrictions
+    DLLLOCAL void restoreCallerRestrictions();
 };
 
 DLLLOCAL RootQoreNamespace* getRootNS();
