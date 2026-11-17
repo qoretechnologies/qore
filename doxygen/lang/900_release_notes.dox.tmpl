@@ -2040,6 +2040,8 @@
     - when more than one class of a hierarchy declares a member with an initialization expression, the value that a
       later one replaces is released, so that an object that a base class stored there is destroyed (see
       @ref member_initialization; issue #6411)
+    - argument and parameter values are released in the same order in every execution mode; compiled code released
+      some of them only at the end of the statement (issue #6262)
     - a module blacklisted with @ref Qore::qore_add_module_to_blacklist() "qore_add_module_to_blacklist()" is also
       refused when it is a @ref separated_modules "separated module", however it is loaded (issue #6450)
     - a sleep with @ref Qore::usleep() "usleep()" or @ref Qore::sleep() "sleep()" that a signal interrupted while
