@@ -223,8 +223,11 @@ c(2.5); # calls f(float)
     The default values of a closure's parameters are evaluated when the closure is called, also after the code that
     created it has returned: the local variables of the outer code block that they refer to are bound to the closure
     as those of its code are, and in a closure created in an object method they are in the context of the closure's
-    object, as its code is (they can refer to \c self and to the object's members and methods, and they do not prolong
-    the scope of the object either).\n\n
+    object, as its code is (they can refer to \c self and to the object's members and methods, also to change them,
+    as in <tt>auto sub (auto x = (self.a = 20)) { return x; }</tt>, and they do not prolong the scope of the object
+    either).  \c self is the closure's own there, as in its code: a default value can also take a reference to it or to
+    a member through it (ex: <tt>\\self.a</tt>), and a write to \c self itself through such a reference leaves the
+    closure's object unchanged.\n\n
     Note that parameter and return types are required when the @ref Qore::PO_REQUIRE_TYPES or @ref Qore::PO_REQUIRE_PROTOTYPES parse options are set.
 
     @par Example
