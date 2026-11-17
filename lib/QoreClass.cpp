@@ -9814,8 +9814,11 @@ QoreMemberInfo::QoreMemberInfo(const QoreMemberInfo& old, const qore_class_priva
         //printd(5, "QoreMemberInfo::QoreMemberInfo() added class %p '%s' to inheritance list\n", cls,
         //    cls->name.c_str());
     } else {
-        // when importing internal members, add context access entries for the child classes
-        if (!member_info_list) {
+        // when importing internal members, add context access entries for the child classes; a member declared in the
+        // class it is imported from has entries already when it hides a private:internal member of a base class with
+        // the same name, but none for its own class, which is added here too, or the member of that class would be
+        // neither initialized nor accessed in its own storage in an object of a subclass (issue #6402)
+        if (!member_info_list || old.local()) {
             //printd(5, "QoreMemberInfo::QoreMemberInfo() adding context access for class %p '%s'\n",
             //    old.getLastClass(), old.getLastClass()->name.c_str());
             // add context to last class
