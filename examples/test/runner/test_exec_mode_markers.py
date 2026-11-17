@@ -282,6 +282,8 @@ class ExecModeMarkerTest(unittest.TestCase):
         # - test-interpreter-options (#6250): its checks run in child interpreters started with options of their own
         # - frame-check-stack (#6124, #6414): its checks run a fixture that sets its own execution mode, in child
         #   processes and in qcc executables
+        # - number-round-exact (#6278): its probes run in child processes that set their own --exec-mode and in qcc
+        #   executables
         self.assertEqual(sorted(["examples/test/ir/AOTConstantImportStale.qtest",
                                  "examples/test/ir/JITFinalizeCancellation.qtest",
                                  "examples/test/ir/AOTInitParseOptions.qtest",
@@ -307,6 +309,7 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/qore/threads/unhandled-exception-report.qtest",
                                  "examples/test/qore/threads/frame-check-stack.qtest",
                                  "examples/test/qore/functions/float-conversion-edges.qtest",
+                                 "examples/test/qore/functions/number-round-exact.qtest",
                                  "examples/test/qore/classes/AsyncIoController/asyncio_callback_exception_stderr.qtest",
                                  "examples/test/ir/AOTModuleForeignThread.qtest",
                                  "examples/test/qore/misc/foreach-enum-element-release.qtest",
