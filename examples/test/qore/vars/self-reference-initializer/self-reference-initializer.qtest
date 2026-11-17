@@ -1,0 +1,299 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: parent - the parse checks use Programs of the test's own process
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+%requires ../../../TestInterpreter.qm
+
+%exec-class SelfReferenceInitializerTest
+
+#! Tests that a use of a variable in its own initialization expression is a parse error (qore#526)
+/** A declared variable is in scope in its initialization expression, where it has no value yet: a use of it there
+    (ex: <tt>int a = a + 1</tt>, <tt>list<auto> l = (l,)</tt>, also in a nested expression, with \c exists or in a
+    reference) read it with no value; it is a parse error in every execution mode, in qcc and with every set of
+    parse options, for local variables, implied constructor arguments, foreach statements that declare their
+    variable, class members and static class variables.  A use in a closure created in the expression is allowed
+    (the closure reads the variable when it is called), the right-hand side of a list declaration, which is parsed
+    before its variables are declared, uses a variable of the same name declared outside of it, and a global
+    variable keeps its value when its declaration runs again (also in the top-level code of a Program run again),
+    so its declaration is not checked.
+*/
+class SelfReferenceInitializerTest inherits QUnit::Test {
+    public {
+        #! refused declarations: the statements of a function, the expected error description, and top-level
+        #! declarations
+        const Refused = (
+            ("int b = 1; int a = a + b;", "local variable 'a' is used in its own initialization expression"),
+            ("list<auto> a = (a,);", "local variable 'a' is used in its own initialization expression"),
+            ("auto a = exists a;", "local variable 'a' is used in its own initialization expression"),
+            ("reference r = \\r;", "local variable 'r' is used in its own initialization expression"),
+            ("hash<auto> h = {\"a\": h.a};", "local variable 'h' is used in its own initialization expression"),
+            ("auto s = s.size();", "local variable 's' is used in its own initialization expression"),
+            ("auto a = cast<int>(a);", "local variable 'a' is used in its own initialization expression"),
+            ("int b; int a = (b = a + 1);", "local variable 'a' is used in its own initialization expression"),
+            # any use, also an assignment
+            ("int a = (a = 5) + 1;", "local variable 'a' is used in its own initialization expression"),
+            ("int a = (int sub () { return 1; })() + a;", "local variable 'a' is used in its own initialization "
+                "expression"),
+            # the variable of the outer block is not the one used: the variable declared here is in scope
+            ("int y = 5; { int y = y + 1; }", "local variable 'y' is used in its own initialization expression"),
+            ("for (int i = i + 1; i < 3; ++i) {}", "local variable 'i' is used in its own initialization expression"),
+            ("foreach auto i in ((i, 2)) {}", "local variable 'i' is used in its own initialization expression"),
+            ("K k(k);", "local variable 'k' is used in its own initialization expression",
+                "class K { constructor(auto x) {} } "),
+            ("", "member 'a' is used in its own initialization expression",
+                "class M { public { int a = a + 1; } } "),
+            ("", "member 'a' is used in its own initialization expression",
+                "class M { public { int a = self.a + 1; } } "),
+            ("", "class static variable 's' is used in its own initialization expression",
+                "class S { public { static int s = s + 1; } } "),
+            ("", "class static variable 's' is used in its own initialization expression",
+                "class S { public { static int s = S::s + 1; } } "),
+            # the identity assignment keeps its message
+            ("any a = a;", "illegal assignment of variable \"a\" to itself"),
+        );
+
+        #! valid code: statements of a function or top-level declarations
+        const Valid = (
+            "code c = int sub (int n) { return n <= 1 ? 1 : n * c(n - 1); };",
+            "code c = auto sub () { code d = auto sub () { return c; }; return d(); };",
+            "code c = auto sub () { return exists c; };",
+            "int y = 5; { (int x, int y) = (y, 1); }",
+            "int a = 1; a = a + 1;",
+            "int i = 0; for (i = i + 1; i < 3; ++i) {}",
+            "int i = 1; foreach i in ((i, 2)) {}",
+            "int a = 1; int b = a + 1;",
+            "int a = 1; { int b = a + 1; }",
+        );
+
+        #! valid top-level declarations
+        const ValidTopLevel = (
+            "class C { public { int a = 1; int b = a + 1; static int s = 1; static int t = s + 1; } }",
+            # a static variable whose initializer is parsed on demand from another one's
+            "class S { public { static int a = b + 1; static int b = 1; } }",
+            "our int g1 = 1; our int g2 = g1 + 1;",
+            # the body of a function that the initializer calls is not the initializer
+            "our auto g = get_g(); auto sub get_g() { return g ?? 7; }",
+            "const X = 1; our int g = X + 1;",
+            # a global keeps its value when its declaration runs again, also in top-level code (Program::run() again)
+            "our int g = g + 1;",
+            "our list<auto> gl = (gl,);",
+            "int sub counter() { our int n = n + 1; return n; }",
+            "int sub tl() { thread_local int t = t + 1; return t; }",
+            "for (int i = 0; i < 3; ++i) { our int h = h + 1; }",
+            # a hashdecl member initializer parsed on demand from a global's initializer runs when the hash is created
+            "hashdecl HG { int x = hg.x ?? 3; } our *hash<HG> hg = <HG>{};",
+        );
+
+        #! the output expected from the worker
+        const Expected = (
+            "closure recursion: 120",
+            "nested closure: True",
+            "closure exists: True",
+            "list declaration outer: [5, 1]",
+            "assignment of declared variable: 2",
+            "member: 2",
+            "static: 2",
+            "foreach declared before: [1, 2]",
+            "global through function: 7",
+            "global declared in a function: [5, 6]",
+        );
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+        string worker;
+    }
+
+    constructor() : QUnit::Test("SelfReferenceInitializer", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = TestInterpreter::qcc_compiler() ?? "qcc";
+        worker = get_script_dir() + DirSep + "self-reference-initializer-worker.q";
+
+        addTestCase("refused at parse time", \testRefused());
+        addTestCase("valid at parse time", \testValid());
+        addTestCase("refused in every execution mode and qcc", \testMainProgram());
+        addTestCase("valid cases in each execution mode", \testExecModes());
+        addTestCase("valid cases in a compiled executable", \testCompiled());
+
+        set_return_value(main());
+    }
+
+    #! each refused declaration is a parse error, with and without %require-types
+    testRefused() {
+        foreach list<auto> c in (Refused) {
+            foreach int po in ((PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS), PO_NEW_STYLE) {
+                string code = (c[2] ?? "") + (c[0] ? sprintf("sub f() { %s }", c[0]) : "");
+                *hash<ExceptionInfo> ex = parse(code, po);
+                assertEq("PARSE-EXCEPTION", ex.err, code);
+                assertTrue((ex.desc ?? "").find(c[1]) >= 0, code + ": " + (ex.desc ?? ""));
+            }
+        }
+    }
+
+    #! the valid code parses
+    testValid() {
+        foreach string code in (Valid) {
+            code = sprintf("sub f() { %s }", code);
+            *hash<ExceptionInfo> ex = parse(code);
+            assertEq(NOTHING, ex ? ex.err + ": " + ex.desc : NOTHING, code);
+        }
+        foreach string code in (ValidTopLevel) {
+            *hash<ExceptionInfo> ex = parse(code);
+            assertEq(NOTHING, ex ? ex.err + ": " + ex.desc : NOTHING, code);
+        }
+        # an old-style member that redeclares a member of its parent class with an initializer reads the parent's value
+        string code = "class A { public { $.a = 1; } } class B inherits A { public { $.a = $.a + 1; } }";
+        *hash<ExceptionInfo> ex = parse(code, 0);
+        assertEq(NOTHING, ex ? ex.err + ": " + ex.desc : NOTHING, code);
+        # the member reads the value of an initializer of any ancestor, at any level and in any parent list, as it
+        # does on 2.2: code, the value of the member of class C
+        foreach list<auto> c in ((
+                ("class A { public { $.a = 1; } } class B inherits A { public { $.a; } } "
+                    "class C inherits B { public { $.a = $.a + 1; } }", 2),
+                ("class A { public { $.a; } } class B { public { $.a = 1; } } "
+                    "class C inherits A, B { public { $.a = $.a + 1; } }", 2),
+                ("class A { public { $.a; } } class B { public { $.a = 1; } } "
+                    "class C inherits B, A { public { $.a = $.a + 1; } }", 2),
+                # the class's own parents are visible to it whatever their inheritance access
+                ("class A { public { $.a = 1; } } class C inherits private:internal A { public { $.a = $.a + 10; } }",
+                    11),
+                ("class A { public { $.a = 1; } } class B inherits A {} "
+                    "class C inherits private:internal B { public { $.a = $.a + 10; } }", 11),
+                ("class A { public { $.a = 1; } } class C inherits private:internal A { public { $.a = $.a + 5; } }",
+                    6),
+                # known limitation: an ancestor reached through private:internal inheritance on one path and through
+                # another path is not initialized for the class, which reads no value (10), but this is not refused,
+                # in either order of the parent classes
+                ("class A { public { $.a = 1; } } class B inherits private:internal A {} class X inherits A {} "
+                    "class C inherits B, X { public { $.a = $.a + 10; } }", 10),
+                ("class A { public { $.a = 1; } } class B inherits private:internal A {} class X inherits A {} "
+                    "class C inherits X, B { public { $.a = $.a + 10; } }", 10),
+                ("class A { public { $.a = 1; } } class B inherits A { public { $.a = $.a + 1; } } "
+                    "class C inherits B { public { $.a = $.a + 1; } }", 3),
+            )) {
+            ex = parse(c[0], 0);
+            assertEq(NOTHING, ex ? ex.err + ": " + ex.desc : NOTHING, c[0]);
+            Program p(0);
+            p.parse(c[0] + " sub get() { return (new C()).a; }", "ancestor");
+            assertEq(c[1], p.callFunction("get"), c[0]);
+        }
+        # without an initializer in an ancestor, or with one only for a private:internal member or in an ancestor
+        # inherited with private:internal access (not available to the redeclared member), the member has no value
+        foreach string bad in ("class PA { public { $.x; } } class PB inherits PA { public { $.x = $.x + 1; } }",
+                "class PA { public { $.x; } } class PB inherits PA { public { $.x; } } "
+                    "class PC inherits PB { public { $.x = $.x + 1; } }",
+                "class PA { private:internal { $.x = 1; } } class PB inherits PA { public { $.x = $.x + 1; } }",
+                "class PA { private:internal { $.x = 1; } } class PB inherits PA { private:internal { $.x; } } "
+                    "class PC inherits PB { public { $.x = $.x + 10; } }",
+                "class PA { public { $.x = 1; } } class PB inherits private:internal PA {} "
+                    "class PC inherits PB { public { $.x = $.x + 10; } }",
+                # a private:internal grandparent member: its initializer writes its own storage (qore#6393), so the
+                # descendant's member has no value (checked below)
+                "class PA { private:internal { $.x = 1; } } class PB inherits PA { public { $.x; } } "
+                    "class PC inherits PB { public { $.x = $.x + 10; } }") {
+            ex = parse(bad, 0);
+            assertEq("PARSE-EXCEPTION", ex.err, bad);
+            assertTrue((ex.desc ?? "").find("member 'x' is used in its own initialization expression") >= 0,
+                bad + ": " + (ex.desc ?? ""));
+        }
+
+        # the value that the refused private:internal grandparent case above would read: none, as the grandparent's
+        # initializer writes its own member (qore#6393)
+        {
+            Program p(0);
+            p.parse("class PA { private:internal { $.x = 1; } auto getPA() { return $.x; } } "
+                "class PB inherits PA { public { $.x; } } "
+                "class PC inherits PB { public { $.x; } auto getPC() { return $.x; } } "
+                "sub get() { my $c = new PC(); return ($c.getPC(), $c.getPA()); }", "private-internal-grandparent");
+            assertEq((NOTHING, 1), p.callFunction("get"));
+        }
+
+        # a top-level global keeps its value when the Program runs again
+        Program p(PO_NEW_STYLE);
+        p.parse("our *int x = exists x ? x + 1 : 1; our list<auto> l = (x,); auto sub get() { return (x, l); }",
+            "rerun");
+        p.run();
+        assertEq((1, (1,)), p.callFunction("get"));
+        p.run();
+        assertEq((2, (2,)), p.callFunction("get"));
+    }
+
+    #! refused declarations are parse errors of the main program in every execution mode and in qcc, with %modern
+    #! and in old-style programs
+    testMainProgram() {
+        TmpDir tmp("qore-self-reference-initializer-");
+        list<auto> files = ();
+        foreach list<auto> c in (Refused) {
+            push files, (sprintf("case%d", $#), "%modern\n" + (c[2] ?? "") + c[0] + "\nprintf(\"ran\\n\");\n",
+                c[1]);
+        }
+        # old-style programs: the error does not depend on %modern
+        push files, ("old-style-my", "my $a = $a + 1;\nprintf(\"ran\\n\");\n",
+            "local variable 'a' is used in its own initialization expression");
+        push files, ("old-style-member", "class PA { public { $.x; } }\n"
+            "class PB inherits PA { public { $.x = $.x + 1; } }\nprintf(\"ran\\n\");\n",
+            "member 'x' is used in its own initialization expression");
+        foreach list<auto> c in (files) {
+            string file = tmp.path + DirSep + c[0] + ".q";
+            File f();
+            f.open2(file, O_CREAT | O_WRONLY | O_TRUNC);
+            f.write(c[1]);
+            f.close();
+            foreach string mode in (ExecModeHarness::ExecModes) {
+                string out = ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s "
+                    "--exec-mode=%s %s", libqore_dir, libqore_dir, qore_bin, mode, file),
+                    ExecModeHarness::NativeCheck::None);
+                assertTrue(out =~ /PARSE-EXCEPTION/, mode + ": " + c[0] + ": " + out);
+                assertTrue(out.find(c[2]) >= 0, mode + ": " + c[0] + ": " + out);
+                assertFalse(out =~ /^ran$/m, mode + ": " + c[0] + ": " + out);
+            }
+            string exe = tmp.path + DirSep + c[0];
+            string out = backquote(sprintf("QORE_LIBDIR=%s %s -o %s %s 2>&1", libqore_dir, qcc_bin, exe, file));
+            assertFalse(is_file(exe), "qcc: " + c[0] + ": " + out);
+            assertTrue(out =~ /PARSE-EXCEPTION/, "qcc: " + c[0] + ": " + out);
+            assertTrue(out.find(c[2]) >= 0, "qcc: " + c[0] + ": " + out);
+        }
+    }
+
+    testExecModes() {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            checkOutput(mode, ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s "
+                "--exec-mode=%s %s", libqore_dir, libqore_dir, qore_bin, mode, worker)));
+        }
+    }
+
+    testCompiled() {
+        TmpDir tmp("qore-self-reference-initializer-exe-");
+        string exe = tmp.path + DirSep + "selfref";
+        string out = backquote(sprintf("QORE_LIBDIR=%s %s -o %s %s 2>&1", libqore_dir, qcc_bin, exe, worker));
+        assertTrue(is_file(exe), "compiled the executable: " + out);
+        checkOutput("executable", ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s",
+            libqore_dir, libqore_dir, exe)));
+    }
+
+    #! returns the parse error of the code given
+    private *hash<ExceptionInfo> parse(string code, int po = PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS) {
+        Program p(po);
+        try {
+            p.parse(code, "self-reference-initializer");
+        } catch (hash<ExceptionInfo> ex) {
+            return ex;
+        }
+    }
+
+    private checkOutput(string label, string out) {
+        list<string> lines = (select out.split("\n"), $1);
+        assertEq(Expected, lines, label + ": " + out);
+    }
+}

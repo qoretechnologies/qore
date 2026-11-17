@@ -2325,6 +2325,57 @@ int CodeEvaluationHelper::setTypeParamInstantiation(const AbstractQoreFunctionVa
     return 0;
 }
 
+//! Binds the self variable of a closure for the evaluation of its default values (qore#6417, qore#5949)
+/** The default values of a closure created in a method are parsed with the closure's own self variable, as its code
+    is, and the closure binds it to its object when its code runs (LocalVar::instantiateSelf()), after its default
+    values have been evaluated.  A read of self falls back to the current object (LocalVar::tryEval()), but an
+    assignment through self and a reference to self or to a member through it need the variable, so it is bound here
+    as the closure's code binds it: to a value of its own that holds the object, so that a write to self itself
+    through a reference leaves the closure's object unchanged, as in the closure's code.
+*/
+class ClosureSelfDefaultHelper {
+public:
+    //! Binds the variable
+    /** A valid object is referenced while the variable is bound, as the closure's code references it (its
+        CodeContextHelper): the closure only holds it weakly.  A self that is a closure variable holds a reference of
+        its own, which is released without an exception sink when it is unbound and so must not be the last one; a
+        self that is a plain local variable holds no reference.
+    */
+    DLLLOCAL ClosureSelfDefaultHelper(const LocalVar* selfid, QoreObject* obj, ExceptionSink* xsink)
+            : selfid(selfid), obj(obj->isValid() ? obj : nullptr), xsink(xsink) {
+        // bound first, so that the reference is not taken if binding fails
+        selfid->instantiateSelf(obj);
+        if (this->obj) {
+            this->obj->ref();
+        }
+    }
+
+    DLLLOCAL ~ClosureSelfDefaultHelper() {
+        selfid->uninstantiateSelf();
+        if (obj) {
+            obj->deref(xsink);
+        }
+    }
+
+    //! Returns the self variable of the closure's default values, if any
+    DLLLOCAL static const LocalVar* getSelfId(const QoreClosureBase& closure) {
+        const QoreClosureParseNode* pn = closure.getClosureParseNode();
+        if (!pn) {
+            return nullptr;
+        }
+        const UserClosureFunction* uf = pn->getFunction();
+        if (!uf || !uf->numVariants()) {
+            return nullptr;
+        }
+        return uf->first()->getSelfId();
+    }
+
+private:
+    const LocalVar* selfid;
+    QoreObject* obj;
+    ExceptionSink* xsink;
+};
+
 //! Evaluates a default value of a closure's parameter with the variables that the closure captured and its object
 /** They can be gone from the stack of the code that created the closure when it is called (issue #5923); the call's
     Program is the closure's here, whose closure variables they are.  The self of a closure created in a method is its
@@ -2342,8 +2393,15 @@ static __attribute__((noinline, cold)) QoreValue qore_eval_closure_default_arg(c
     // the closure's object and class context, as for the closure's code: a closure created by the default value takes
     // the object of the closure and not that of the caller (issue #5931)
     std::optional<ObjectSubstitutionHelper> closure_self;
+    // the self variable of the closure, which its default values use as its code does: an assignment through it
+    // (qore#5949) and a reference to it or to a member through it (qore#6417) need the variable itself, which the
+    // closure's code binds only when it runs, after its default values
+    std::optional<ClosureSelfDefaultHelper> closure_self_var;
     if (QoreObject* obj = closure.getObject()) {
         closure_self.emplace(obj, closure.getClassCtx());
+        if (const LocalVar* selfid = ClosureSelfDefaultHelper::getSelfId(closure)) {
+            closure_self_var.emplace(selfid, obj, xsink);
+        }
     }
     QoreScopedEvalHolder dv(exp, true, xsink);
     if (*xsink) {

@@ -545,6 +545,8 @@ class HttpClientIoTest inherits QUnit::Test {
         addTestCase("unresponsive first address falls back", \testHappyEyeballsBlackhole());
         addTestCase("connect_timeout bounds the connect phase",
             \testConnectTimeoutBoundsConnectPhase());
+        addTestCase("a connect phase that runs out of the request's time is a timeout",
+            \testConnectPhaseOutOfRequestTime());
 
         set_return_value(main());
     }
@@ -1599,16 +1601,26 @@ class HttpClientIoTest inherits QUnit::Test {
         }
 
         HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(mSslUrl);
-        bool timed_out = False;
+        # the connection is established first, so that the request's timeout covers only the wait for the response
+        # (#6427); waitForReady() raises the error of a connection that fails
+        assertTrue(stream.getConnection().waitForReady(30s), "controller mode: connection ready before the request");
+
+        *hash<ExceptionInfo> err;
         try {
             # /slow/5000 waits 5 seconds, we timeout after 500ms
             stream.request("GET", "/slow/5000", NOTHING, NOTHING, 500ms);
         } catch (hash<ExceptionInfo> ex) {
-            if (ex.err == "HTTPCLIENT-TIMEOUT") {
-                timed_out = True;
-            }
+            err = ex;
         }
-        assertTrue(timed_out, "controller mode: request should timeout");
+        if (!err) {
+            fail("controller mode: the request did not time out");
+        } else {
+            # the exception raised is reported as it is
+            string got = sprintf("%s: %s", err.err, err.desc);
+            assertEq("HTTPCLIENT-TIMEOUT", err.err, "controller mode: request should time out; got " + got);
+            assertEq("request timed out after 500 ms", err.desc,
+                "controller mode: the response wait times out; got " + got);
+        }
     }
 
     # ---- Auto Protocol Selection Tests ----
@@ -4032,6 +4044,86 @@ class HttpClientIoTest inherits QUnit::Test {
             assertRegex(proto == "h1" ? "HTTP1-CONNECT-TIMEOUT" : "HTTP2-CONNECT-TIMEOUT", ex.desc,
                 proto + ": error names the connect timeout");
         }
+    }
+
+    #! A request whose time runs out in the connect phase raises HTTPCLIENT-TIMEOUT for every protocol (#6427)
+    /** The server's TCP port is listening but never accepts, so the TLS handshake of HTTP/1.1 and HTTP/2 never
+        starts, and a UDP socket on the same port absorbs the datagrams of HTTP/3, so its QUIC handshake never ends.
+        The connect timeout is far beyond the request's time, so the request's wait for the connection expires first.
+        Closing the connection then aborts its connect operation, and the error that the abort records (HTTP/2:
+        \c HTTP2-ABORT) was reported as \c HTTPCLIENT-CONNECT-ERROR, which the connection manager also retried.
+    */
+    testConnectPhaseOutOfRequestTime() {
+        # another process may already use the port number for UDP, in which case another port is chosen
+        const int MaxPortAttempts = 20;
+        Socket tcp_hold;
+        Socket udp_hold;
+        int port;
+        for (int attempt = 1; ; ++attempt) {
+            tcp_hold = new Socket();
+            tcp_hold.bind("127.0.0.1:0");
+            tcp_hold.listen();
+            port = tcp_hold.getSocketInfo().port;
+            udp_hold = new Socket();
+            try {
+                udp_hold.bindINET("127.0.0.1", string(port), False, AF_INET, SOCK_DGRAM);
+                break;
+            } catch (hash<ExceptionInfo> ex) {
+                tcp_hold.close();
+                if (ex.err != "SOCKET-BIND-ERROR" || attempt == MaxPortAttempts) {
+                    rethrow;
+                }
+            }
+        }
+        on_exit {
+            udp_hold.close();
+            tcp_hold.close();
+        }
+        string url = "https://127.0.0.1:" + port;
+
+        list<string> protos = ("h1", "h2");
+        if (mQuicUrl) {
+            protos += "h3";
+        }
+        foreach string proto in (protos) {
+            HttpClientIo::HttpClientConnectionManager mgr(
+                    <HttpClientIo::HttpClientConnectionManagerOptions>{
+                "accept_all_certs": True,
+                "protocol": proto,
+                "connect_timeout": 60s,
+                "logger": mLogger,
+            });
+            on_exit mgr.closeAll();
+
+            # a stream handle's request
+            HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(url);
+            *hash<ExceptionInfo> err;
+            try {
+                stream.request("GET", "/simple", NOTHING, NOTHING, 500ms);
+            } catch (hash<ExceptionInfo> ex) {
+                err = ex;
+            }
+            assertConnectWaitTimeout(proto + ": stream request", err);
+
+            # the connection manager's request, which also creates a new connection
+            remove err;
+            try {
+                mgr.request(url, "GET", "/simple", NOTHING, NOTHING, 500ms);
+            } catch (hash<ExceptionInfo> ex) {
+                err = ex;
+            }
+            assertConnectWaitTimeout(proto + ": manager request", err);
+        }
+    }
+
+    private assertConnectWaitTimeout(string label, *hash<ExceptionInfo> err) {
+        if (!err) {
+            fail(label + ": the request did not fail");
+            return;
+        }
+        string got = sprintf("%s: %s", err.err, err.desc);
+        assertEq("HTTPCLIENT-TIMEOUT", err.err, label + ": got " + got);
+        assertEq("connection establishment timed out", err.desc, label + ": got " + got);
     }
 
     #! Tests the "notification on close" pattern: submit async notifications while

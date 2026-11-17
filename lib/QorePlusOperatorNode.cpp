@@ -98,10 +98,9 @@ static const QoreTypeInfo* qore_plus_list_add_type(const QoreTypeInfo* element_t
         return autoListTypeInfo;
     }
     // the common type that the runtime finds for the runtime type of the new value depends on the element type of the
-    // list: an int, float, number or string value of an operand can be an enum value (ex: an int member initialized
-    // with an enum value keeps the enum), which matchCommonType() folds to the scalar base type for an element type of
-    // that type, but not for an element type of an enum or an or-nothing type (*int gives list<auto> for an enum
-    // value); bool and binary values are never enums
+    // list: for a scalar element type, it is the element type for a value of that type, and auto for a value of
+    // another type, such as an enum value, which has no common type with its base type (qore#6274); for an element
+    // type of an enum or an or-nothing type, it depends on the values; bool and binary values are never enums
     bool exact_element = false;
     for (const QoreTypeInfo* exact : {bigIntTypeInfo, floatTypeInfo, numberTypeInfo, stringTypeInfo, boolTypeInfo,
             binaryTypeInfo, boolOrNothingTypeInfo, binaryOrNothingTypeInfo}) {

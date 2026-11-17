@@ -16,7 +16,7 @@
 
 %exec-class CompoundAssignmentAstParityPart7
 
-#! runs part 7 of 28 of the cases of CompoundAssignmentAstParityBase: -=: the tiered mode
+#! runs part 7 of 70 of CompoundAssignmentAstParityBase: +=: the tiered mode, slice 3 of 3 of the functions
 class CompoundAssignmentAstParityPart7 inherits CompoundAssignmentAstParityBase {
     constructor() : CompoundAssignmentAstParityBase("CompoundAssignmentAstParityPart7", 7) {
     }

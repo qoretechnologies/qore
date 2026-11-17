@@ -46,13 +46,17 @@ class QppLogOutputTest(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix="qore-qpp-log-debug-") as directory:
             root = Path(directory)
             source = root / "Function.qpp"
+            # a function with a doc comment is declared in a group (qore#219)
             source.write_text("/** @file Function.qpp defines one function */\n"
+                              "/** @defgroup qpp_log_test_group Log test */\n"
+                              "///@{\n"
                               "//! Returns one\n"
                               "/** @return one\n"
                               "*/\n"
                               "int qpp_log_test() [flags=CONSTANT] {\n"
                               "    return 1;\n"
-                              "}\n")
+                              "}\n"
+                              "///@}\n")
             result = self.run_qpp("--verbose=4", f"--output={root}/Function.cpp",
                                   f"--dox-output={root}/Function.dox.h", str(source))
             self.assertNotIn("qpp:", result.stderr)

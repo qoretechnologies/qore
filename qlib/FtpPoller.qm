@@ -151,6 +151,21 @@ poller.waitStop();
     transferred files and the @ref FtpPoller::FtpPoller::postSingleFileEvent() "FtpPoller::postSingleFileEvent()" by
     deleting / moving / renaming the files so that they would not be acquired on the next poll.
 
+    @section ftppollererrors FtpPoller Errors and Retries
+
+    An @ref FtpPoller::FtpPoller "FtpPoller" handles errors while polling as follows:
+    - an FTP error while files are listed or transferred is logged, and the poll is retried after the
+      \c "error_delay" option's delay
+    - an error raised while a polled file is handled, by
+      @ref FtpPoller::FtpPoller::singleFileEvent() "FtpPoller::singleFileEvent()" or by an observer of an
+      @ref FtpPoller::FtpPollerDataProvider "FtpPollerDataProvider" that refuses or fails to handle the file event, is
+      logged, the remote file is kept, and the poll is retried after the \c "error_delay" option's delay, so the
+      file is handled again; the files of the poll after it are handled only in a later poll, so a file that is
+      refused every time is retried on every poll and blocks the files after it in the order of the poll
+    - an error after a file was handled, in
+      @ref FtpPoller::FtpPoller::postSingleFileEvent() "FtpPoller::postSingleFileEvent()" or while the remote file is
+      deleted or moved, stops polling, as continuing could handle the file more than once
+
     @section ftpollersandbox FtpPoller Module in Sandboxed Programs
 
     The @ref FtpPoller::FtpPoller "FtpPoller" class includes support for running in sandboxed Program objects with the
@@ -165,6 +180,10 @@ poller.waitStop();
     @section ftppollerrelnotes FtpPoller Module Release Notes
 
     @section ftppollerv2_2 Version 2.2
+    - an error raised while a polled file is handled (ex: an observer that refuses the file event) is logged, the
+      remote file is kept, and the poll is retried after the \c "error_delay" option's delay; previously polling
+      stopped (see
+      @ref ftppollererrors; <a href="https://github.com/qoretechnologies/qore/issues/6400">issue 6400</a>)
     - an empty \c "regex_mask" option matches every file; it caused the constructor to throw an
       \c INVALID-MEMBER exception
       (<a href="https://github.com/qoretechnologies/qore/issues/3377">issue 3377</a>)
@@ -321,6 +340,9 @@ public class FtpPoller {
         #! internal "get files" flag
         bool get_files;
 
+        #! internal flag: True while singleFileEvent() handles a file (see @ref ftppollererrors)
+        bool in_event;
+
         #! internal fatal error flag
         bool fatal = False;
 
@@ -386,7 +408,8 @@ public class FtpPoller {
           files to a temporary filename during transfer
         - \c delete_remote_file: if @ref True then the remote file is deleted on the FTP server after processing.
           Cannot be set if \c move_remote_file is also set
-        - \c error_delay: the delay in seconds before the poll is retried after an FTP error (default: 60
+        - \c error_delay: the delay in seconds before the poll is retried after an FTP error or an error handling a
+          polled file (see @ref ftppollererrors; default: 60
           seconds; must be > 0 if given)
         - \c local_dir: a local directory to use to transfer remote files so large file data does not appear in events
         - \c log_debug: a @ref closure "closure" or @ref call_reference "call reference" for logging verbose
@@ -495,7 +518,8 @@ public class FtpPoller {
           files to a temporary filename during transfer
         - \c delete_remote_file: if @ref True then the remote file is deleted on the FTP server after processing.
           Cannot be set if \c move_remote_file is also set
-        - \c error_delay: the delay in seconds before the poll is retried after an FTP error (default: 60
+        - \c error_delay: the delay in seconds before the poll is retried after an FTP error or an error handling a
+          polled file (see @ref ftppollererrors; default: 60
           seconds; must be > 0 if given)
         - \c host: (required) the hostname or address to connect to
         - \c local_dir: a local directory to use to transfer remote files so large file data does not appear in events
@@ -955,11 +979,15 @@ public class FtpPoller {
     }
 
     #! runs a single poll (useful for checking for errors inline before starting a background thread)
+    /** An error raised by an event handler is raised to the caller; only the polling thread logs it and continues
+        polling (see @ref ftppollererrors)
+    */
     bool runOnce() {
         ++pollcnt;
         bool ret = False;
         foreach string subdir in (path) {
             get_files = True;
+            in_event = False;
             if (path.size() > 1) {
                 ftp.cwd(rootFtpPath);
                 ftp.cwd(subdir);
@@ -986,10 +1014,14 @@ public class FtpPoller {
                         } else {
                             event = getRemoteFileData(event);
                         }
-                        # make sure any errors after this point cause the polling operation to stop
                         get_files = False;
 
+                        # an error raised by the event handler (ex: an observer that refuses the event) leaves the
+                        # remote file in place, and the poll is retried after the error delay (issue #6400)
+                        in_event = True;
                         singleFileEvent(event);
+                        # make sure any errors after this point cause the polling operation to stop
+                        in_event = False;
 
                         # set the "fatal" flag if an exception is thrown in postSingleFileEvent()
                         on_error fatal = True;
@@ -1131,6 +1163,9 @@ public class FtpPoller {
 
         while (runflag) {
             try {
+                # an error before the files are polled (ex: setting up a new FTP connection) is an FTP error
+                get_files = True;
+                in_event = False;
                 if (new_ftp.val()) {
                     setup(remove new_ftp);
                 }
@@ -1140,6 +1175,12 @@ public class FtpPoller {
                 if (get_files) {
                     logError("FTP error in %y: %s: %s; waiting %ds for next try", path, ex.err, ex.desc,
                         error_delay);
+                    ftpSleep(error_delay);
+                } else if (in_event) {
+                    # the event handler refused or failed to handle the file, which is left in place
+                    in_event = False;
+                    logError("event handler error in %y: %s: %s; the remote file is kept; waiting %ds for next try",
+                        path, ex.err, ex.desc, error_delay);
                     ftpSleep(error_delay);
                 } else {
                     # error thrown in "post transfer" code
@@ -1160,7 +1201,8 @@ public class FtpPoller {
     }
 
     #! called for each matching file individually whenever matching files are polled
-    /** If any error occurs here, the error is logged and the polling operation is retried
+    /** If any error occurs here, the error is logged, the remote file is kept, and the poll is retried after the
+        \c "error_delay" option's delay (see @ref ftppollererrors)
 
         @param event a hash of file data
     */
@@ -1272,8 +1314,8 @@ public class FtpPollerDataProviderBase inherits DataProvider::AbstractDataProvid
                 "display_name": "Error Retry Delay",
                 "short_desc": "The delay in seconds before retrying after an FTP error",
                 "type": AbstractDataProviderTypeMap."int",
-                "desc": "The number of seconds to wait before polling again after an FTP error; the error is logged "
-                    "at error level, and then polling continues after this delay.\n\n"
+                "desc": "The number of seconds to wait before polling again after an FTP error and after a refused "
+                    "file; the error is logged at error level, and then polling continues after this delay.\n\n"
                     "Transient problems such as a network interruption or a server restart are common with FTP; a "
                     "low value recovers from such problems quickly, while a high value reduces the load on a server "
                     "that is failing persistently.\n\n"

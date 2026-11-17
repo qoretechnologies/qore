@@ -16,7 +16,7 @@
 
 %exec-class CompoundAssignmentAstParityPart14
 
-#! runs part 14 of 28 of the cases of CompoundAssignmentAstParityBase: /=: the jit mode
+#! runs part 14 of 70 of CompoundAssignmentAstParityBase: -=: the jit mode, slice 3 of 3 of the functions
 class CompoundAssignmentAstParityPart14 inherits CompoundAssignmentAstParityBase {
     constructor() : CompoundAssignmentAstParityBase("CompoundAssignmentAstParityPart14", 14) {
     }

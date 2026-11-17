@@ -1876,6 +1876,7 @@ set(LIBQORE_CPP_SRC
     lib/QoreIRAnalysis.cpp
     lib/QoreIRLowering.cpp
     lib/QoreIRToLLVM.cpp
+    lib/QoreIRFrameCheck.cpp
     lib/QoreIRVerifier.cpp
     lib/QoreIRTakeOver.cpp
     lib/QoreAOT.cpp
@@ -2521,6 +2522,7 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreParseContext.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreIRLowering.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreIRToLLVM.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreIRFrameCheck.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreIRVerifier.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreAOT.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreAOTBatchMemory.cpp\"
@@ -3218,6 +3220,9 @@ set(_qcc_format_sources
     ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreIRExprRegistry.h
     ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreIRLowering.h
     ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreIRToLLVM.h
+    ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreIRFrameCheck.h
+    # the NaN-boxing constants that the code generators emit
+    ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreValueEncoding.h
     ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreIRVerifier.h
     ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreOpcodeRegistry.h
     # the layout of the data that generated code reads by index (QoreNativeEntrySlots) and the runtime helpers it calls
@@ -3246,6 +3251,7 @@ set(_qcc_format_sources
     ${CMAKE_SOURCE_DIR}/lib/QoreIRExprRegistry.cpp
     ${CMAKE_SOURCE_DIR}/lib/QoreIRLowering.cpp
     ${CMAKE_SOURCE_DIR}/lib/QoreIRToLLVM.cpp
+    ${CMAKE_SOURCE_DIR}/lib/QoreIRFrameCheck.cpp
     ${CMAKE_SOURCE_DIR}/lib/QoreIRVerifier.cpp
     # the analysis of the parameters that take their arguments over, compiled from QoreIRVerifier.cpp
     ${CMAKE_SOURCE_DIR}/lib/QoreIRTakeOver.cpp
