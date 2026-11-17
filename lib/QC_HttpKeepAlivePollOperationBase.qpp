@@ -37,6 +37,7 @@
 #include "qore/intern/QC_Socket.h"
 #include "qore/intern/qore_socket_private.h"
 #include "qore/intern/PollStateCloseHook.h"
+#include "qore/intern/QoreSocketObjectPrivate.h"
 
 /** @cond INTERNAL */
 
@@ -223,7 +224,7 @@ QoreHashNode* HttpKeepAlivePollOperationPriv::continueIdlePoll(ExceptionSink* xs
     // Check for data, EOF, or fatal errors via the central async-safe idle
     // probe. This handles TLS connections with SSL_peek(), so TLS
     // post-handshake records do not look like application data forever.
-    int idle_rc = sock_obj->checkIdleDataForAsyncPoll(xsink, true);
+    int idle_rc = qore_socket_object_private(sock_obj).checkIdleDataForAsyncPoll(xsink, true);
     if (*xsink || idle_rc < 0) {
         transitionState(State::IDLE, State::CLOSED, "idle-error");
         sock_obj->closeIo(xsink);
@@ -235,7 +236,7 @@ QoreHashNode* HttpKeepAlivePollOperationPriv::continueIdlePoll(ExceptionSink* xs
 
     // a draining server closes a connection that has no request (a request that arrived is read above and answered
     // with Connection: close) (qore#5899)
-    if (sock_obj->isHttpDraining()) {
+    if (qore_socket_object_private(sock_obj).isHttpDraining()) {
         transitionState(State::IDLE, State::CLOSED, "idle-drained");
         return nullptr;
     }

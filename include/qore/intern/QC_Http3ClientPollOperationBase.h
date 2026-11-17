@@ -37,6 +37,7 @@
 #include "qore/intern/QC_SocketPollOperation.h"
 #include "qore/intern/AsyncCompletionAction.h"
 #include "qore/intern/QC_AbstractHttpPollConnection.h"
+#include "qore/intern/QoreSocketObjectPrivate.h"
 
 #include <algorithm>
 #include <atomic>
@@ -344,7 +345,7 @@ public:
     */
     DLLLOCAL void setMaxResponseBodySize(int64_t max_size) {
         if (sock_obj) {
-            sock_obj->setMaxResponseBodySize(max_size);
+            qore_socket_object_private(sock_obj).setMaxResponseBodySize(max_size);
         }
     }
 
@@ -352,7 +353,7 @@ public:
     /** Can be called from any thread
     */
     DLLLOCAL int64_t getDataIdleUs() const {
-        return sock_obj ? sock_obj->getDataIdleUs() : -1;
+        return sock_obj ? qore_socket_object_private(sock_obj).getDataIdleUs() : -1;
     }
 
     DLLLOCAL int64_t getSessionId() const {
@@ -365,7 +366,7 @@ public:
     DLLLOCAL void releaseStream(int64_t stream_id) {
         int64_t sid = session_id.load(std::memory_order_acquire);
         if (sock_obj && sid) {
-            sock_obj->releaseQuicStream(sid, stream_id);
+            qore_socket_object_private(sock_obj).releaseQuicStream(sid, stream_id);
         }
     }
 

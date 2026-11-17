@@ -46,6 +46,7 @@
 #include "qore/intern/PollStateCloseHook.h"
 #include "qore/intern/QuicPollTimeout.h"
 #include "qore/intern/ql_debug.h"
+#include "qore/intern/QoreSocketObjectPrivate.h"
 
 // Forward declarations for QPP type references
 extern QoreClass* QC_ABSTRACTHTTPPOLLCONNECTION;
@@ -936,7 +937,7 @@ void Http3ClientPollOperationPriv::fireReadyCallback(ExceptionSink* xsink) {
     }
     // where the connection leads, which a pool checks before it hands the connection to other code
     std::shared_ptr<const QoreConnectionDestinations> destinations
-        = sock_obj ? sock_obj->getConnectedDestinations() : nullptr;
+        = sock_obj ? qore_socket_object_private(sock_obj).getConnectedDestinations() : nullptr;
     AutoLocker al(stream_lock);
     if (connection_priv) {
         connection_priv->setDestinations(std::move(destinations));
@@ -1037,7 +1038,7 @@ int64_t Http3ClientPollOperationPriv::submitRequest(const char* method, const ch
 
     // a request that reports events needs the response header of its stream recorded when it arrives
     if (action->getEventSink()) {
-        sock_obj->setQuicRecordResponseHeaderEvents(true);
+        qore_socket_object_private(sock_obj).setQuicRecordResponseHeaderEvents(true);
     }
 
     // Phase 2: begin submit
@@ -1047,9 +1048,9 @@ int64_t Http3ClientPollOperationPriv::submitRequest(const char* method, const ch
     // path.  This keeps ngtcp2/nghttp3 session mutation on the async I/O thread.
     int64_t stream_id;
     if (streaming) {
-        stream_id = sock_obj->submitQuicRequestStreamingNoWake(method, path, headers, xsink);
+        stream_id = qore_socket_object_private(sock_obj).submitQuicRequestStreamingNoWake(method, path, headers, xsink);
     } else {
-        stream_id = sock_obj->submitQuicRequestNoWake(method, path, headers, body, body_len, xsink);
+        stream_id = qore_socket_object_private(sock_obj).submitQuicRequestNoWake(method, path, headers, body, body_len, xsink);
     }
     if (*xsink || stream_id < 0) {
         endSubmitFail();
@@ -1073,7 +1074,7 @@ int64_t Http3ClientPollOperationPriv::submitRequest(const char* method, const ch
 
     if (action->isStreaming()
             && sock_obj) {
-        sock_obj->setQuicClientStreamStreamingDirect(stream_id);
+        qore_socket_object_private(sock_obj).setQuicClientStreamStreamingDirect(stream_id);
     }
 
     endSubmitOk(stream_id);
@@ -1129,7 +1130,7 @@ QoreListNode* Http3ClientPollOperationPriv::registerStream(int64_t stream_id,
     // the stream credit of a streaming response is granted as the action's consumer takes the data (issue #5820);
     // installed before the action can receive anything
     if (action->isStreaming() && sock_obj) {
-        sock_obj->installQuicStreamConsumeHook(session_id.load(std::memory_order_acquire), stream_id, action);
+        qore_socket_object_private(sock_obj).installQuicStreamConsumeHook(session_id.load(std::memory_order_acquire), stream_id, action);
     }
 
     AutoLocker al(stream_lock);
@@ -1188,7 +1189,7 @@ int Http3ClientPollOperationPriv::setStreamStreaming(int64_t stream_id,
             (long long)stream_id);
         return -1;
     }
-    sock_obj->setQuicClientStreamStreamingDirect(stream_id);
+    qore_socket_object_private(sock_obj).setQuicClientStreamStreamingDirect(stream_id);
     return 0;
 }
 
@@ -1382,7 +1383,7 @@ void Http3ClientPollOperationPriv::installFrameState(int64_t stream_id, Queue* m
             }
             SimpleRefHolder<BinaryNode> holder(frame_bytes);
             ExceptionSink cxsink;
-            int rv = sock_ptr->sendQuicClientStreamControlFrameForAsyncPoll(stream_id,
+            int rv = qore_socket_object_private(sock_ptr).sendQuicClientStreamControlFrameForAsyncPoll(stream_id,
                 (*holder)->getPtr(), (*holder)->size(), &cxsink);
             if (cxsink || rv < 0) {
                 // Non-fatal: transport teardown handles the close path

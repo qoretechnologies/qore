@@ -40,6 +40,7 @@
 #include "qore/intern/QC_SSLPrivateKey.h"
 #include "qore/intern/qore_socket_private.h"
 #include "qore/intern/PollStateCloseHook.h"
+#include "qore/intern/QoreSocketObjectPrivate.h"
 
 /** @cond INTERNAL */
 
@@ -340,7 +341,7 @@ QoreHashNode* HttpAcceptPollOperationPriv::handleAcceptComplete(ExceptionSink* x
     socket_info = qore_http_accept_get_numeric_addr_info(client_sock, false);
 
     // Set TCP_NODELAY for immediate response sending
-    client_sock->setNoDelayForAsyncPoll(1, xsink);
+    qore_socket_object_private(client_sock).setNoDelayForAsyncPoll(1, xsink);
     if (*xsink) {
         accept_state = AcceptState::COMPLETE;
         return nullptr;
@@ -353,7 +354,7 @@ QoreHashNode* HttpAcceptPollOperationPriv::handleAcceptComplete(ExceptionSink* x
         // Check if SSL handshake was already performed during accept
         // (happens when the listener socket has SSL configured — startPollAccept()
         // automatically upgrades the accepted socket to SSL)
-        secure = client_sock->isSecureForAsyncPoll();
+        secure = qore_socket_object_private(client_sock).isSecureForAsyncPoll();
         if (secure) {
             if (checkAlpn(xsink)) {
                 return nullptr;
@@ -427,7 +428,7 @@ int HttpAcceptPollOperationPriv::startSslHandshake(ExceptionSink* xsink) {
     // Set ALPN protocols based on http_version mode
     ReferenceHolder<QoreListNode> alpn(buildAlpnList(), xsink);
     if (alpn) {
-        client_sock->setAlpnProtocolsForAsyncPoll(*alpn, xsink);
+        qore_socket_object_private(client_sock).setAlpnProtocolsForAsyncPoll(*alpn, xsink);
         if (*xsink) {
             accept_state = AcceptState::COMPLETE;
             return -1;
@@ -467,7 +468,7 @@ int HttpAcceptPollOperationPriv::startSslHandshake(ExceptionSink* xsink) {
 
 int HttpAcceptPollOperationPriv::checkAlpn(ExceptionSink* xsink) {
     // Get the negotiated ALPN protocol from the client socket
-    SimpleRefHolder<QoreStringNode> proto(client_sock->getAlpnProtocolForAsyncPoll());
+    SimpleRefHolder<QoreStringNode> proto(qore_socket_object_private(client_sock).getAlpnProtocolForAsyncPoll());
     if (proto && proto->size()) {
         negotiated_protocol = proto->c_str();
         is_http2 = (negotiated_protocol == "h2");
