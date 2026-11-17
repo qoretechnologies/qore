@@ -30,6 +30,7 @@
 
 #include <qore/Qore.h>
 #include "qore/intern/StatementBlock.h"
+#include "qore/intern/QoreStatementTemps.h"
 #include "qore/intern/qore_string_private.h"
 
 #include "qore/intern/qore_program_private.h"
@@ -123,6 +124,8 @@ int QoreFoldlOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse
             if (parse_init_value(left, parse_context) && !err) {
                 err = -1;
             }
+            // qore#6288: see elementScope()
+            qore_parse_decide_element_scopes(this, decideElementScopes);
             left_analysis = parse_context.analysis;
         }
         expTypeInfo = parse_context.typeInfo;
@@ -243,7 +246,13 @@ QoreValue QoreFoldlOperatorNode::doFold(bool fwd, bool& needs_deref, ExceptionSi
         args->push(result.release(), xsink);
         args->push(iv.takeReferencedValue(), xsink);
         ArgvContextHelper argv_helper(args, xsink);
-        result = left.eval(xsink);
+        if (elementScope(0)) {
+            // the temporaries of an element are released at its end, before the next element (qore#6288)
+            QoreStatementTempScope element_temps(xsink);
+            result = left.eval(xsink);
+        } else {
+            result = left.eval(xsink);
+        }
         if (*xsink) {
             return QoreValue();
         }
@@ -275,4 +284,13 @@ int QoreFoldrOperatorNode::getAsString(QoreString& str, int foff, ExceptionSink*
 
 QoreValue QoreFoldrOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
     return doFold(false, needs_deref, xsink);
+}
+
+void QoreFoldlOperatorNode::decideElementScopes(AbstractQoreNode* op) {
+    QoreFoldlOperatorNode* self = static_cast<QoreFoldlOperatorNode*>(op);
+    uint8_t v = 0;
+    if (qore_expr_may_create_observable_temp(self->left)) {
+        v |= 1u << 0;
+    }
+    self->element_scopes.set(v);
 }

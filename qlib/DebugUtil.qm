@@ -48,6 +48,8 @@ module DebugUtil {
     The %DebugUtil module provides common functionality for implementing debugger utilities
 
     @subsection du_v0_2 v0.2
+    - added @ref DebugUtil::DebugEventCmd "DebugEventCmd::Exit" for the end of a program run with its result
+      (<a href="https://github.com/qoretechnologies/qore/issues/3401">issue 3401</a>)
     - added string enums: @ref DebugUtil::DebugResponseType, @ref DebugUtil::DebugRunStateName, @ref DebugUtil::DebugFlowName,
       @ref DebugUtil::DebugPolicyName, @ref DebugUtil::DebugEventCmd for type-safe debug protocol constants
     - added @ref DebugUtil::ResponseSync class for thread-safe single-response synchronization, matching responses by
@@ -331,6 +333,9 @@ public namespace DebugUtil {
         Welcome = "welcome",
         #! Output of the program; see DebugOutputCapture
         Output = "output",
+        #! The code of a program run has ended, with the value that Program::run() returns (\c "result"); the thread
+        #! does not stop (since %Qore 3.0)
+        Exit = "exit",
     }
 
     #! base class for controlling debugging

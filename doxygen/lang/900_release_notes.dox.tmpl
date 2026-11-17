@@ -101,6 +101,12 @@
     @endparblock
 
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
+    @par A Keyword After a Dot and White Space Is a Member Name
+    A keyword after the @ref dot_operator ". operator" and white space is a member or method name, as it is without
+    the white space, so an operator keyword there is no longer an operator: <tt>h . keys h2</tt>, which was
+    <tt>h.(keys h2)</tt>, is now read as the member name \c keys, usually a parse error; write <tt>h.(keys h2)</tt>
+    (see @ref keywords; issue #525).
+
     @par Strong Encapsulation Refuses Out-of-Line Methods in Namespace Blocks
     @ref strong-encapsulation "%strong-encapsulation" (also set by @ref modern "%modern") refuses an out-of-line method
     definition in a namespace block, as it does at the top level (see
@@ -525,6 +531,11 @@
     they ignored them (<a href="https://github.com/qoretechnologies/qore/issues/757">issue 757</a>); see
     @ref sqlutilv3_11_0.
 
+    @par Schemas Align Their Views
+    The views that a @ref Schema::AbstractSchema "schema" gives with \c getViewsImpl(), as the schema classes that
+    SchemaReverse generates do, are aligned with the schema (see @ref schema_views); they were ignored
+    (<a href="https://github.com/qoretechnologies/qore/issues/1427">issue 1427</a>).
+
     @par Schema and Table Drops Commit Each Statement
     @ref Schema::AbstractSchema::drop() "AbstractSchema::drop()" and
     @ref SqlUtil::AbstractTable::dropCommit() "AbstractTable::dropCommit()" commit each statement, and on PostgreSQL
@@ -910,6 +921,17 @@
     @ref dc_v0_1_3 "DebugProgramControl" stops once per exception and a step after an exception stop goes to its
     handler (<a href="https://github.com/qoretechnologies/qore/issues/5906">issue 5906</a>).
 
+    @par Debuggers Can Decline a Thread
+    A debugger can set @ref Qore::DebugDontAttach "DebugDontAttach" as the run state of an event, as for a thread of
+    another program that calls into the debugged program: the thread is not offered to it again until
+    @ref Qore::DebugProgram::attachThread() "DebugProgram::attachThread()"
+    (<a href="https://github.com/qoretechnologies/qore/issues/3293">issue 3293</a>).
+
+    @par Debuggers Get the Result of a Program Run
+    The debugger receives the value that @ref Qore::Program::run() "Program::run()" returns when the code of a program
+    run ends, in @ref Qore::DebugProgram::onRunExit() "DebugProgram::onRunExit()", and can replace it
+    (<a href="https://github.com/qoretechnologies/qore/issues/3401">issue 3401</a>).
+
     @par Functional-Domain Declarations on Functions and Methods
     Functions and methods written in %Qore declare the @ref function_domains "functional domains" they provide with an
     attribute list (<tt>sub f() [dom=PROCESS_CONTROL]</tt>), which a restricted Program cannot reference or call, and a
@@ -1059,6 +1081,17 @@
     The %Qore SDK installs reference indexes of the language and bundled module documentation, so the documentation
     of an external module can link to %Qore types and to the modules named in \c QORE_DOXYGEN_MODULES; see
     "Module Documentation and Cross-Module Links" in the C++ API documentation.
+
+    @par Table Comments in SqlUtil Schemas
+    A @ref table_desc_hash "table description" of @ref sqlutilintro "SqlUtil" can have a \c "comment", which is
+    created and aligned with the table on PostgreSQL, Oracle, MySQL/MariaDB and SQL Server, and which
+    @ref SqlUtil::AbstractTable::getComment() "AbstractTable::getComment()" and SchemaReverse give
+    (<a href="https://github.com/qoretechnologies/qore/issues/1483">issue 1483</a>).
+
+    @par View Alignment in SqlUtil Schemas
+    The \c "views" of a @ref schema_desc_hash "schema description" are aligned: created, created again when their
+    query differs as the database keeps it, renamed, dropped and commented; see @ref schema_views
+    (<a href="https://github.com/qoretechnologies/qore/issues/1427">issue 1427</a>).
 
     @par Opt-In Structured Datasource Mutation Observer
     @ref Qore::SQL::Datasource "Datasource" and @ref Qore::SQL::DatasourcePool "DatasourcePool" objects accept a
@@ -2037,13 +2070,27 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - an absolute date literal without its day (<tt>2015-11-</tt>) is no longer read as a date with a day made of
+      the text after it, which also ignored a UTC offset there (<tt>2015-11-+10</tt> is now the integer \c 1994), and
+      a leap second in a date literal (<tt>2016-12-31T23:59:60Z</tt>) is a parse error that says so, also where
+      the \c :60 after a date and time used to be read as other tokens (see @ref absolute_dates "absolute dates"; issue #503)
+    - a keyword used as a member or method name after the @ref dot_operator ". operator" can have white space or a
+      line break between it and the dot (<tt>h. keys()</tt>), as any other name can, instead of being read as the
+      keyword's operator (see @ref keywords; issue #525)
     - when more than one class of a hierarchy declares a member with an initialization expression, the value that a
       later one replaces is released, so that an object that a base class stored there is destroyed (see
       @ref member_initialization; issue #6411)
     - argument and parameter values are released in the same order in every execution mode; compiled code released
       some of them only at the end of the statement (issue #6262)
+    - in the functional operators (@ref map "map", @ref select "select", @ref foldl "foldl", @ref foldr "foldr" and
+      the others), the temporary values created for an element are released at the end of that element in every
+      execution mode, so their destructors run once per element instead of after the whole operation (issue #6288)
     - a module blacklisted with @ref Qore::qore_add_module_to_blacklist() "qore_add_module_to_blacklist()" is also
       refused when it is a @ref separated_modules "separated module", however it is loaded (issue #6450)
+    - a line that starts with an unknown parse directive, such as <tt>%%require mymod</tt>, gives an error that names it
+      and suggests the closest parse directive, instead of "syntax error, unexpected identifier", and a directive name
+      with more after it (<tt>%%requires-x</tt>) is an unknown directive, not a directive with an argument (see
+      @ref unknown_parse_directives "unknown parse directives"; issue #56)
     - a sleep with @ref Qore::usleep() "usleep()" or @ref Qore::sleep() "sleep()" that a signal interrupted while
       it slept with \c nanosleep() (2) slept its whole time again instead of the time that was left (issue #6364)
     - an out-of-line method definition in a namespace block resolves its class path relative to that namespace

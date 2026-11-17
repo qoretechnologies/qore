@@ -1,0 +1,122 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%exec-class DateAbsoluteLiteralsTest
+
+#! absolute date literals (issue #503): the day is required, the seconds are optional after "T" only, and a leap
+#! second is a parse error
+class DateAbsoluteLiteralsTest inherits QUnit::Test {
+    public {
+        #! literals and the string that date() reads as the same date (date() does not use the scanner)
+        const Valid = {
+            "2015-11-01": "2015-11-01",
+            "2015-11-01Z": "2015-11-01Z",
+            "2015-11-01+10": "2015-11-01+10:00",
+            # the time after "-" needs its seconds, so this is a zone: midnight at -10:30
+            "2015-11-01-10:30": "2015-11-01T00:00:00-10:30",
+            "2015-11-01+05:30:15": "2015-11-01T00:00:00+05:30:15",
+            "2015-11-01T10:30": "2015-11-01T10:30:00",
+            "2015-11-01T10:30Z": "2015-11-01T10:30:00Z",
+            "2015-11-01T10:30-02:00": "2015-11-01T10:30:00-02:00",
+            "2015-11-01T10:30:45": "2015-11-01T10:30:45",
+            "2015-11-01T10:30:45.5Z": "2015-11-01T10:30:45.500000Z",
+            "2015-11-01-10:30:45": "2015-11-01T10:30:45",
+            "2015-11-01-10:30:45.123456+01:00": "2015-11-01T10:30:45.123456+01:00",
+            "2005-06-30T23:59:59Z": "2005-06-30T23:59:59Z",
+        };
+
+        #! text with a year and a month but no day is not a date literal: it is read as other tokens
+        const NotDates = {
+            "2015-11-+10": 1994,
+            "2015-12-1": 2002,
+            "2015-11-Z": 1999,
+            "2015-11-(1)": 2003,
+        };
+
+        #! text that is no date literal and no valid expression
+        const NotDatesInvalid = (
+            "2015-11-",
+            "2015-11--10",
+        );
+
+        #! literals with a leap second
+        const LeapSeconds = (
+            "2005-06-30T23:59:60",
+            "2005-06-30T23:59:60Z",
+            "2016-12-31T23:59:60.5+00:00",
+            "2005-06-30-23:59:60",
+        );
+    }
+
+    constructor() : QUnit::Test("absolute date literals", "1.0") {
+        addTestCase("valid literals", \validLiterals());
+        addTestCase("a literal needs its day", \dayRequired());
+        addTestCase("a leap second is a parse error", \leapSecond());
+        addTestCase("a time literal is not widened", \timeLiteral());
+        set_return_value(main());
+    }
+
+    private validLiterals() {
+        foreach hash<auto> i in (Valid.pairIterator()) {
+            auto v = evalExpr(i.key);
+            assertEq("date", v.type(), i.key);
+            # the same instant and the same UTC offset
+            assertEq(sprintf("%y", date(i.value)), sprintf("%y", v), i.key);
+        }
+    }
+
+    private dayRequired() {
+        foreach hash<auto> i in (NotDates.pairIterator()) {
+            assertEq(i.value, evalExpr(i.key), i.key);
+        }
+        foreach string expr in (NotDatesInvalid) {
+            *string err = parseError(expr);
+            assertNeq(NOTHING, err, expr);
+        }
+    }
+
+    private leapSecond() {
+        foreach string lit in (LeapSeconds) {
+            assertEq(sprintf("date literal '%s' provides an invalid second value: 60; expecting 0 - 59 inclusive (a "
+                "leap second cannot be represented)", lit), parseError(lit), lit);
+        }
+        # as date() does with a string
+        assertThrows("INVALID-DATE", "invalid second value: 60", date sub () { return date("2005-06-30T23:59:60Z"); });
+        # a date with a time followed by :60 is the leap second, also where :60 was read as other tokens before
+        foreach string expr in ("True ? 2015-11-01T23:59:60", "True ? 2015-11-01-10:30:60") {
+            assertRegex("^date literal '2015-11-01.*' provides an invalid second value: 60", parseError(expr), expr);
+        }
+        # with a space, :60 is still other tokens
+        assertEq(sprintf("%y", date("2015-11-01T23:59:00")), sprintf("%y", evalExpr("True ? 2015-11-01T23:59 :60")));
+    }
+
+    #! a time literal without a date keeps its seconds 00 - 59, so a ternary with a minute value after it is unchanged
+    private timeLiteral() {
+        assertEq(60, evalExpr("False?10:30:60"));
+        assertEq(sprintf("%y", date("1970-01-01T10:30:00")), sprintf("%y", evalExpr("True?10:30:60")));
+        assertEq(sprintf("%y", date("1970-01-01T23:59:59")), sprintf("%y", evalExpr("23:59:59")));
+    }
+
+    #! returns the value of the expression, parsed as the return value of a function in a new Program
+    private auto evalExpr(string expr) {
+        Program p(PO_MODERN | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.parse("const Z = 5;\nauto sub get() { return " + expr + "; }\n", "expr");
+        return p.callFunction("get");
+    }
+
+    #! returns the description of the parse error of the expression, or NOTHING if it parses
+    private *string parseError(string expr) {
+        Program p(PO_MODERN | PO_NO_CHILD_PO_RESTRICTIONS);
+        try {
+            p.parse("auto sub get() { return " + expr + "; }\n", "expr");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("PARSE-EXCEPTION", ex.err, expr);
+            return ex.desc;
+        }
+        return NOTHING;
+    }
+}

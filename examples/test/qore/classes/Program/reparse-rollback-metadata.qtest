@@ -1,0 +1,107 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires Util
+
+%exec-class ReparseRollbackMetadataTest
+
+#! The strings and locations that a failed reparse rolls back (issue #6354)
+/** With PO_ALLOW_REPARSE, a failed parse deletes only the strings and locations that it added: those that an
+    Expression created since the last commit refers to, and those of code deserialized from AOT data (interned with
+    dbg_program_intern_runtime_location() here, as the lazy deserialization does), stay valid.
+*/
+public class ReparseRollbackMetadataTest inherits QUnit::Test {
+    constructor() : QUnit::Test("ReparseRollbackMetadataTest", "1.0", \ARGV) {
+        addTestCase("expression after the commit", \expressionTest());
+        addTestCase("rollback of the parse's own data", \ownDataTest());
+        addTestCase("runtime data while parsing", \runtimeDataTest());
+        set_return_value(main());
+    }
+
+    private skipWithoutDebug() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the test needs a debug build of the library");
+        }
+    }
+
+    private static Program getProgram() {
+        Program p(PO_NEW_STYLE | PO_ALLOW_REPARSE | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.parse("int sub g() { return 2; }", "base");
+        return p;
+    }
+
+    #! an expression created after the last commit keeps its label and locations when a reparse fails
+    expressionTest() {
+        Program p = getProgram();
+        string label = "expression-label-" + get_random_string(20);
+        Expression e(p, "1 / (g() - 2)", label);
+        hash<auto> m0;
+        if (Option::HAVE_LIBRARY_DEBUGGING) {
+            m0 = call_function("dbg_program_metadata", p);
+        }
+        assertThrows("PARSE-EXCEPTION", \p.parse(), ("int sub h( {", "bad-" + get_random_string(20)));
+        if (m0) {
+            hash<auto> m1 = call_function("dbg_program_metadata", p);
+            assertEq(m0.strings, m1.strings);
+            assertEq(m0.locations, m1.locations);
+        }
+        # the expression's location, read when it raises an exception, is the one it was created with
+        try {
+            e.eval();
+            fail("the expression did not raise an exception");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("DIVISION-BY-ZERO", ex.err);
+            assertEq(label, ex.file);
+            assertEq(1, ex.line);
+        }
+        # the Program can be parsed again
+        p.parse("int sub h() { return 3; }", "h");
+        assertEq(3, p.callFunction("h"));
+    }
+
+    #! a failed reparse still deletes what it added
+    ownDataTest() {
+        skipWithoutDebug();
+        Program p = getProgram();
+        hash<auto> m0 = call_function("dbg_program_metadata", p);
+        p.parsePending("int sub h() { return 3; }\nint sub i() {\n    return 4;\n}\n", "pending-" + get_random_string(20));
+        hash<auto> m1 = call_function("dbg_program_metadata", p);
+        assertGt(m0.strings, m1.strings);
+        assertGt(m0.locations, m1.locations);
+        p.parseRollback();
+        hash<auto> m2 = call_function("dbg_program_metadata", p);
+        assertEq(m0.strings, m2.strings);
+        assertEq(m0.locations, m2.locations);
+        assertThrows("NO-FUNCTION", \p.callFunction(), "h");
+        assertEq(2, p.callFunction("g"));
+    }
+
+    #! strings and locations of code deserialized from AOT data while a parse is pending are not rolled back
+    runtimeDataTest() {
+        skipWithoutDebug();
+        Program p = getProgram();
+        p.parsePending("int sub h() { return 3; }", "pending");
+        hash<auto> m0 = call_function("dbg_program_metadata", p);
+        string file = "aot-file-" + get_random_string(20);
+        assertEq(file, call_function("dbg_program_intern_runtime_location", p, file, 5));
+        hash<auto> m1 = call_function("dbg_program_metadata", p);
+        # they are not in the parse's data
+        assertEq(m0.strings, m1.strings);
+        assertEq(m0.locations, m1.locations);
+        assertEq(m0.runtime_strings + 1, m1.runtime_strings);
+        assertEq(m0.runtime_locations + 1, m1.runtime_locations);
+        # the same location is not added twice
+        assertEq(file, call_function("dbg_program_intern_runtime_location", p, file, 5));
+        assertEq(m1, call_function("dbg_program_metadata", p));
+        p.parseRollback();
+        hash<auto> m2 = call_function("dbg_program_metadata", p);
+        assertEq(m1.runtime_strings, m2.runtime_strings);
+        assertEq(m1.runtime_locations, m2.runtime_locations);
+        assertEq(file, call_function("dbg_program_intern_runtime_location", p, file, 5));
+    }
+}

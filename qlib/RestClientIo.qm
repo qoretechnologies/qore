@@ -2197,12 +2197,12 @@ while (*hash<SseMessageInfo> evt = reader.readEvent(30s)) {
                 throw "RESTCLIENTIO-OPTION-ERROR", "timeout_ms must be greater than zero";
             }
             return restSseReaderIntern(method, path, hdr, body,
-                now_us() + milliseconds(timeout_ms), on_stream);
+                clock_get_monotonic_us() + timeout_ms * 1000, on_stream);
         }
 
         private HttpClientStreamingIo::SseStreamReader restSseReaderIntern(
                 string method, string path, *hash<auto> hdr, *data body,
-                *date deadline, *code<nothing(HttpClientIo::HttpClientStreamHandle)> on_stream,
+                *int deadline, *code<nothing(HttpClientIo::HttpClientStreamHandle)> on_stream,
                 *hash<RestClient::RestRequestContext> request_context) {
             ensureToken();
             # the caller's headers may be narrowed to one value type (e.g. hash<string, int> for {"X-Count": 1}),
@@ -2475,7 +2475,7 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
                 throw "RESTCLIENTIO-OPTION-ERROR", "timeout_ms must be positive";
             }
             return restSseReaderIntern(method, target.path, hdr, body,
-                exists timeout_ms ? now_us() + milliseconds(timeout_ms) : NOTHING, on_stream,
+                exists timeout_ms ? clock_get_monotonic_us() + timeout_ms * 1000 : NOTHING, on_stream,
                 resolveRequestTarget(target, method));
         }
 
@@ -4058,7 +4058,7 @@ rest.addSensitiveHeaders("Qorus-Token");
             the stream and retry before handing it to the SSE reader.
         */
         private hash<auto> readSseResponseStart(HttpClientIo::HttpClientStreamHandle stream,
-                string method, string path, *date deadline = NOTHING) {
+                string method, string path, *int deadline = NOTHING) {
             # a request timeout of 0 means no deadline
             int to = getTimeout();
             *timeout response_timeout = remainingSseTimeout(deadline, to > 0 ? milliseconds(to) : NOTHING);
@@ -4090,7 +4090,7 @@ rest.addSensitiveHeaders("Qorus-Token");
         private list<auto> validateSseResponseStart(HttpClientIo::HttpClientStreamHandle stream,
                 string method, string path, hash<auto> request_headers,
                 *data request_body, auto first_data, *hash<auto> response,
-                *timeout response_timeout, *date deadline = NOTHING,
+                *timeout response_timeout, *int deadline = NOTHING,
                 *hash<RestClient::RestRequestContext> request_context) {
             # the response headers of an error, and any credential of the request echoed in it, are redacted
             hash<string, bool> extra = getSensitiveHeaderSet();
@@ -4164,7 +4164,7 @@ rest.addSensitiveHeaders("Qorus-Token");
 
         #! Drains a non-SSE HTTP error body before throwing REST-RESPONSE-ERROR.
         private *data drainSseErrorBody(HttpClientIo::HttpClientStreamHandle stream,
-                auto first_data, *timeout read_timeout, *date deadline = NOTHING) {
+                auto first_data, *timeout read_timeout, *int deadline = NOTHING) {
             string error_body = "";
             bool got_body = False;
             bool done = False;
@@ -4218,13 +4218,19 @@ rest.addSensitiveHeaders("Qorus-Token");
         #! Resolves a call-local opening deadline without changing shared state
         #! Returns the time to wait for SSE data: the time left until the deadline, if any, else the fallback, where
         #! @ref nothing means no limit
-        private static *timeout remainingSseTimeout(*date deadline, *timeout fallback) {
+        /** @param deadline the deadline on the monotonic clock in microseconds
+            (@ref Qore::clock_get_monotonic_us() "clock_get_monotonic_us()"), so that a change of the system clock
+            does not end the wait early or late (#6455)
+            @param fallback the time to wait without a deadline
+        */
+        private static *timeout remainingSseTimeout(*int deadline, *timeout fallback) {
             if (!deadline) { return fallback; }
-            int remaining = (deadline - now_us()).durationMilliseconds();
-            if (remaining <= 0) {
+            int remaining_us = deadline - clock_get_monotonic_us();
+            if (remaining_us <= 0) {
                 throw "HTTPCLIENT-TIMEOUT", "SSE response deadline exhausted";
             }
-            return milliseconds(remaining);
+            # rounded up, so that the wait does not end before the deadline
+            return (remaining_us + 999) / 1000;
         }
 
         #! Appends one stream chunk to a bounded text error body buffer.
@@ -5737,8 +5743,9 @@ public class RestClientIoAsyncRequestOperation inherits Qore::AbstractPollOperat
         #! Follows redirects; created with the first request as it was sent
         *HttpRedirectFollower rf;
 
-        #! The time the current request attempt was sent, for the inactivity timeout
-        *date sent;
+        #! The time the current request attempt was sent, for the inactivity timeout, on the monotonic clock in
+        #! microseconds (#6455)
+        *int sent;
 
         #! Current operation state
         string state;
@@ -6153,7 +6160,7 @@ public class RestClientIoAsyncRequestOperation inherits Qore::AbstractPollOperat
             connector.submitted();
             pending_future = result.future;
             pending_stream = result.stream;
-            sent = now_us();
+            sent = clock_get_monotonic_us();
             return;
         }
         if (!prepared_attempt) {
@@ -6165,7 +6172,7 @@ public class RestClientIoAsyncRequestOperation inherits Qore::AbstractPollOperat
         delete prepared_attempt;
         pending_future = result.future;
         pending_stream = result.stream;
-        sent = now_us();
+        sent = clock_get_monotonic_us();
         request_body = result.request_body;
         request_error_passthru = result.error_passthru;
         request_allow_any_response = result.allow_any_response;
@@ -6180,7 +6187,7 @@ public class RestClientIoAsyncRequestOperation inherits Qore::AbstractPollOperat
     #! connection manager; the stream is canceled
     private checkInactivity() {
         timeout io_timeout = rcio.getConnectionManager().getIoTimeout();
-        if (io_timeout > 0 && pending_stream && sent && pending_stream.getInactiveTime(sent) >= io_timeout * 1000) {
+        if (io_timeout > 0 && pending_stream && sent && pending_stream.getInactiveTimeSince(sent) >= io_timeout * 1000) {
             cancelPendingStream();
             throw "HTTPCLIENT-TIMEOUT", sprintf("no data received for REST %s %s for %d ms (io_timeout)", method, path,
                 io_timeout);

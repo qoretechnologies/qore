@@ -591,6 +591,18 @@ public namespace Schema {
             return getMaterializedViewsImpl();
         }
 
+        #! returns view definitions
+        /** this function wraps getViewsImpl(); for forwards-compatibility, do not override this method in subclasses,
+            instead re-implement getViewsImpl()
+
+            @see @ref SqlUtil::AbstractDatabase::ViewDescriptionOptions "AbstractDatabase::ViewDescriptionOptions"
+
+            @since Schema 1.9.0
+        */
+        *hash<auto> getViews() {
+            return getViewsImpl();
+        }
+
         #! returns a hash of "strict reference data", describing the only data that can appear in the target table
         /** this function wraps getStrictReferenceDataHashImpl(); for forwards-compatibility, do not override this
             method in subclasses, instead re-implement getStrictReferenceDataHashImpl()
@@ -650,6 +662,7 @@ public namespace Schema {
                 "procedures": getProcedures(),
                 "packages": getPackages(),
                 "materialized_views": getMaterializedViews(),
+                "views": getViews(),
             };
         }
 
@@ -753,6 +766,15 @@ public namespace Schema {
         /** the default behavior of this method is to return @ref nothing, reimplement in subclasses to return custom configuration
         */
         private *hash<auto> getMaterializedViewsImpl() {
+        }
+
+        #! returns view definitions
+        /** the default behavior of this method is to return @ref nothing, reimplement in subclasses to return custom
+            configuration
+
+            @since Schema 1.9.0
+        */
+        private *hash<auto> getViewsImpl() {
         }
 
         #! returns a hash of "strict reference data", describing the only data that can appear in the target table
