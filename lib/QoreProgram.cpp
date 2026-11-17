@@ -856,7 +856,8 @@ void qore_program_private::fixupAfterFork(int tid, ThreadProgramData* tpd) {
     pwo.parse_options.reinitAfterFork();
     ir_fallback_lock.reinitAfterFork();
     plugin_fallback_lock.reinitAfterFork();
-    debug_program_counter.reinitAfterFork();
+    // the debugger calls in progress of the parent's other threads do not exist in the child (issue #6404)
+    debug_program_counter.reinitAfterFork(qore_thread_debug_counter_share(&debug_program_counter));
     lck_breakpoint.reinitAfterFork();
     // the thread data of the parent's other threads remains registered; its lock can be held by its thread
     for (ThreadProgramData* i : tld_registry) {
@@ -866,14 +867,35 @@ void qore_program_private::fixupAfterFork(int tid, ThreadProgramData* tpd) {
     }
 }
 
+thread_local std::vector<const QoreCounter*> qore_thread_debug_counters;
+
+int qore_thread_debug_counter_share(const QoreCounter* cnt) {
+    int share = 0;
+    for (const QoreCounter* c : qore_thread_debug_counters) {
+        if (c == cnt) {
+            ++share;
+        }
+    }
+    return share;
+}
+
 void qore_program_private::fixupAllAfterFork(int tid, ThreadProgramData* tpd) {
     // the graph of parse lock waits: only the forking thread exists in the child, and it was not waiting; a thread of
     // the parent could hold its lock
     parse_wait_lock.reinitAfterFork();
     std::fill(std::begin(parse_waits), std::end(parse_waits), nullptr);
+    // the debug programs attached to the Programs, each made consistent once (issue #6404)
+    std::set<qore_debug_program_private*> debug_programs;
     // all instances, also those whose last reference has been released and that are being destroyed
     for (QoreProgram* p : qore_program_set) {
-        qore_program_private::get(*p)->fixupAfterFork(tid, tpd);
+        qore_program_private* pp = qore_program_private::get(*p);
+        pp->fixupAfterFork(tid, tpd);
+        if (qore_debug_program_private* dp = pp->dpgm.load(std::memory_order_relaxed)) {
+            debug_programs.insert(dp);
+        }
+    }
+    for (qore_debug_program_private* dp : debug_programs) {
+        dp->fixupAfterFork();
     }
 }
 

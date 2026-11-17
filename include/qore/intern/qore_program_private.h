@@ -1795,6 +1795,16 @@ public:
 
 class qore_debug_program_private;
 
+//! The debugger call counters that the current thread has incremented and not decremented yet (issue #6404)
+/** A child process created with fork() keeps only the forking thread's share of each counter: the calls of the
+    parent's other threads do not exist in it (see qore_thread_debug_counter_share()).
+*/
+DLLLOCAL extern thread_local std::vector<const QoreCounter*> qore_thread_debug_counters;
+
+//! Returns the current thread's share of a debugger call counter (issue #6404)
+DLLLOCAL int qore_thread_debug_counter_share(const QoreCounter* cnt);
+
+//! Counts a debugger call in progress in a counter, as long as it is in scope
 class AutoQoreCounterDec {
 public:
     DLLLOCAL AutoQoreCounterDec(QoreCounter* n_cnt, bool incNow = true): cnt(n_cnt), incFlag(false) {
@@ -1805,12 +1815,20 @@ public:
 
     DLLLOCAL ~AutoQoreCounterDec() {
         if (incFlag) {
+            // the thread's share of the counter (issue #6404); the calls are nested, so it is normally the last one
+            for (auto i = qore_thread_debug_counters.rbegin(), e = qore_thread_debug_counters.rend(); i != e; ++i) {
+                if (*i == cnt) {
+                    qore_thread_debug_counters.erase(std::next(i).base());
+                    break;
+                }
+            }
             cnt->dec();
         }
     }
 
     DLLLOCAL void inc() {
         cnt->inc();
+        qore_thread_debug_counters.push_back(cnt);
         incFlag = true;
     }
 
@@ -6911,6 +6929,15 @@ public:
 
     DLLLOCAL int getInterruptedCount() {
         return debug_program_counter.getCount();
+    }
+
+    //! makes the debug program consistent in a child process created with fork() (issue #6404)
+    /** The lock can be held by a thread of the parent, and the calls in progress of the parent's other threads do not
+        exist in the child: only the forking thread's share of the count is kept
+    */
+    DLLLOCAL void fixupAfterFork() {
+        tlock.reinitAfterFork();
+        debug_program_counter.reinitAfterFork(qore_thread_debug_counter_share(&debug_program_counter));
     }
 
 private:
