@@ -2287,6 +2287,9 @@
       \c OBJECT-ALREADY-DELETED naming the method (<tt>cannot call C::m()</tt>) in every mode
       (<a href="https://github.com/qoretechnologies/qore/issues/5824">issue 5824</a>,
       <a href="https://github.com/qoretechnologies/qore/issues/6057">issue 6057</a>)
+    - a call of a pseudo-method or of a static method through an object whose arguments deleted the object called
+      the method; it now raises \c OBJECT-ALREADY-DELETED (see @ref method_call_deleted_object;
+      <a href="https://github.com/qoretechnologies/qore/issues/6056">issue 6056</a>)
     - a program compiled with qcc called a \c private:internal method of another parent class that implements an
       @ref abstract "abstract method" through \c self, where the interpreters raise \c METHOD-IS-PRIVATE
       (<a href="https://github.com/qoretechnologies/qore/issues/6158">issue 6158</a>)

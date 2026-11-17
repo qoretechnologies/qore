@@ -1,0 +1,51 @@
+member closure, untyped, deleted by an argument: OBJECT-ALREADY-DELETED: cannot call MemberClosure::f() on an object that has already been deleted
+member closure, typed, deleted by an argument: OBJECT-ALREADY-DELETED: cannot call MemberClosure::f() on an object that has already been deleted
+member closure, deleted by a closure argument: OBJECT-ALREADY-DELETED: cannot call MemberClosure::f() on an object that has already been deleted
+member closure, deleted before: OBJECT-ALREADY-DELETED: cannot call MemberClosure::f() on an object that has already been deleted
+member closure, not deleted: "closure 2"
+member closure, reference argument: 2
+member function reference, deleted by an argument: OBJECT-ALREADY-DELETED: cannot call MemberFunctionRef::g() on an object that has already been deleted
+member function reference, not deleted: "function 1"
+member closure, named argument, deleted by an argument: OBJECT-ALREADY-DELETED: cannot call MemberNamedClosure::f() on an object that has already been deleted
+member closure, named argument, not deleted: "named closure 1"
+methodGate, untyped, deleted by an argument: OBJECT-ALREADY-DELETED: cannot call GateClass::methodGate() on an object that has already been deleted
+methodGate, typed, deleted by an argument: OBJECT-ALREADY-DELETED: cannot call GateClass::methodGate() on an object that has already been deleted
+methodGate, subclass, deleted by an argument: METHOD-DOES-NOT-EXIST: no method GateChild::anything() has been defined and no pseudo-method <object>::anything() is available (class lang: Qore)
+methodGate, deleted by a closure argument: OBJECT-ALREADY-DELETED: cannot call GateClass::methodGate() on an object that has already been deleted
+methodGate, arguments that it does not accept, deleted by an argument: OBJECT-ALREADY-DELETED: cannot call StrictGate::methodGate() on an object that has already been deleted
+methodGate, member that is not code, deleted by an argument: OBJECT-ALREADY-DELETED: cannot call GateMember::methodGate() on an object that has already been deleted
+methodGate, deleted before: OBJECT-ALREADY-DELETED: cannot call GateClass::anything() on an object that has already been deleted
+methodGate, not deleted: "gate anything(2)"
+methodGate, auto member holding no code, deleted by an argument: OBJECT-ALREADY-DELETED: cannot call GateAutoMember::x() on an object that has already been deleted
+methodGate, auto member holding no code, typed, deleted by an argument: OBJECT-ALREADY-DELETED: cannot call GateAutoMember::x() on an object that has already been deleted
+methodGate, auto member holding no code, not deleted: "auto member gate x(1)"
+methodGate, code member with no value, deleted by an argument: OBJECT-ALREADY-DELETED: cannot call GateCodeMember::x() on an object that has already been deleted
+methodGate, code member with no value, not deleted: "code member gate x(1)"
+methodGate, softint member, deleted by an argument: OBJECT-ALREADY-DELETED: cannot call GateSoftIntMember::methodGate() on an object that has already been deleted
+methodGate, internal member from outside, deleted by an argument: OBJECT-ALREADY-DELETED: cannot call GateInternalMember::methodGate() on an object that has already been deleted
+methodGate, internal member from outside, not deleted: "internal member gate x(1)"
+methodGate, internal member in the class, deleted by an argument: OBJECT-ALREADY-DELETED: cannot call GateInternalMember::x() on an object that has already been deleted
+methodGate, internal member in the class, not deleted: "internal closure 1"
+methodGate, private member from outside, deleted by an argument: OBJECT-ALREADY-DELETED: cannot call GatePrivateMember::x() on an object that has already been deleted
+methodGate, private member from outside, not deleted: "private closure 1"
+pseudo-method, untyped, deleted by an argument: OBJECT-ALREADY-DELETED: cannot call Priv::hasCallableMethod() on an object that has already been deleted
+pseudo-method, typed, deleted by an argument: OBJECT-ALREADY-DELETED: cannot call Priv::hasCallableMethod() on an object that has already been deleted
+pseudo-method, deleted by a closure argument: OBJECT-ALREADY-DELETED: cannot call Priv::hasCallableMethod() on an object that has already been deleted
+pseudo-method, deleted before: OBJECT-ALREADY-DELETED: cannot call Priv::hasCallableMethod() on an object that has already been deleted
+pseudo-method, not deleted: True
+pseudo-method, named argument, deleted by an argument: OBJECT-ALREADY-DELETED: cannot call Priv::hasCallableMethod() on an object that has already been deleted
+static method, untyped, deleted by an argument: OBJECT-ALREADY-DELETED: cannot call St::s() on an object that has already been deleted
+static method, typed, deleted by an argument: OBJECT-ALREADY-DELETED: cannot call St::s() on an object that has already been deleted
+static method, subclass, deleted by an argument: OBJECT-ALREADY-DELETED: cannot call St::s() on an object that has already been deleted
+static method, deleted by a closure argument: OBJECT-ALREADY-DELETED: cannot call St::s() on an object that has already been deleted
+static method, overloaded, deleted by an argument: OBJECT-ALREADY-DELETED: cannot call St::s2() on an object that has already been deleted
+static method, no variant for the arguments, deleted by an argument: RUNTIME-OVERLOAD-ERROR: no variant matching '::St::s2(integer, integer)' can be found; the following variants were tested:
+   ::St::s2(int a)
+   ::St::s2(string a)
+static method, through self, deleted by an argument: OBJECT-ALREADY-DELETED: cannot call St::s() on an object that has already been deleted
+static method, call through self without an object, deleted by an argument: "static 1"
+static method, deleted before: OBJECT-ALREADY-DELETED: cannot call St::s() on an object that has already been deleted
+static method, not deleted: "static 2"
+static method, named argument resolved at run time, deleted by an argument: OBJECT-ALREADY-DELETED: cannot call StNamed::s2() on an object that has already been deleted
+static method, named argument resolved at run time, not deleted: "named int 1"
+static method, named call through self without an object, deleted by an argument: "named int 1"

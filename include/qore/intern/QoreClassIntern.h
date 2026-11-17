@@ -1019,24 +1019,31 @@ public:
     }
 
     // if the variant was identified at parse time, then variant will not be NULL, otherwise if NULL then it is identified at run time
+    /** @param check_self the object that the method is called through (o.s()), which is checked after the arguments:
+        arguments that deleted it raise the error of a method call on a deleted object (issue #6056); nullptr for a
+        call without an object (or through self in a method: s())
+    */
     DLLLOCAL QoreValue evalMethod(ExceptionSink* xsink, RuntimeConfig& rc,
             const AbstractQoreFunctionVariant* variant, const QoreListNode* args,
             const qore_class_private* cctx = nullptr, QoreProgram* pgm_ctx = nullptr,
             const QoreTypeInfo* receiver_type_info = nullptr,
-            const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr) const;
+            const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr,
+            QoreObject* check_self = nullptr) const;
 
     DLLLOCAL QoreValue evalMethod(LexicalSemanticPolicy policy, ExceptionSink* xsink, RuntimeConfig& rc,
             const AbstractQoreFunctionVariant* variant, const QoreListNode* args,
             const qore_class_private* cctx = nullptr, QoreProgram* pgm_ctx = nullptr,
             const QoreTypeInfo* receiver_type_info = nullptr,
-            const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr) const;
+            const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr,
+            QoreObject* check_self = nullptr) const;
 
     template <bool Lexical>
     DLLLOCAL QoreValue evalMethodImpl(LexicalSemanticPolicy policy, ExceptionSink* xsink, RuntimeConfig& rc,
             const AbstractQoreFunctionVariant* variant, const QoreListNode* args,
             const qore_class_private* cctx = nullptr, QoreProgram* pgm_ctx = nullptr,
             const QoreTypeInfo* receiver_type_info = nullptr,
-            const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr) const;
+            const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr,
+            QoreObject* check_self = nullptr) const;
 
     //! as evalMethod(), with a temporary argument list that the caller owns, whose values the parameters take over,
     //! as the AST interpreter's call moves its evaluated arguments into the parameters (issue #5882)
@@ -1068,16 +1075,19 @@ public:
 
     //! evaluates a named call whose variant is resolved at run time by parameter name; the arguments are in source
     //! order with the names in "arg_names" (see QoreFunction::runtimeFindVariant()) and are evaluated by the call
+    /** @param check_self the object that the method is called through, checked after the arguments (see
+        evalMethod())
+    */
     DLLLOCAL QoreValue evalMethodNamed(ExceptionSink* xsink, RuntimeConfig& rc, const QoreListNode* args,
             const qore_class_private* cctx, const QoreTypeInfo* receiver_type_info,
             const QoreTypeParamInstantiation* explicit_type_param_instantiation, const name_vec_t& arg_names,
-            LexicalSemanticPolicy policy = {}, QoreProgram* pgm_ctx = nullptr) const;
+            LexicalSemanticPolicy policy = {}, QoreProgram* pgm_ctx = nullptr, QoreObject* check_self = nullptr) const;
 
     //! evalMethodNamed() with temporary (evaluated) arguments, which the caller keeps
     DLLLOCAL QoreValue evalMethodTmpArgsNamed(ExceptionSink* xsink, RuntimeConfig& rc, QoreListNode* args,
             const qore_class_private* cctx, const QoreTypeInfo* receiver_type_info,
             const QoreTypeParamInstantiation* explicit_type_param_instantiation, const name_vec_t& arg_names,
-            LexicalSemanticPolicy policy = {}, QoreProgram* pgm_ctx = nullptr) const;
+            LexicalSemanticPolicy policy = {}, QoreProgram* pgm_ctx = nullptr, QoreObject* check_self = nullptr) const;
 };
 
 #define SMETHF(f) (reinterpret_cast<StaticMethodFunction*>(f))
@@ -4766,7 +4776,10 @@ public:
     DLLLOCAL QoreValue evalMethodGate(LexicalSemanticPolicy policy, QoreObject* self, const char* nme, const QoreListNode* args, ExceptionSink* xsink) const;
 
     template <bool Lexical>
-    DLLLOCAL QoreValue evalMethodGateImpl(LexicalSemanticPolicy policy, QoreObject* self, const char* nme, const QoreListNode* args, ExceptionSink* xsink) const;
+    //! @param given_args true if @a args is an evaluated list whose reference the call takes over (the caller gives
+    //! it), which then needs no copy
+    DLLLOCAL QoreValue evalMethodGateImpl(LexicalSemanticPolicy policy, QoreObject* self, const char* nme, const QoreListNode* args, ExceptionSink* xsink,
+            bool given_args = false) const;
 
     //! returns a reference to the call reference or closure that the member of the name holds, if any
     /** as a call of a method that the class does not have calls it (qore_class_private::evalMethod())
@@ -5679,6 +5692,11 @@ DLLLOCAL QoreProgram* qore_get_function_pgm_context(const QoreFunction* func,
 DLLLOCAL bool qore_class_eval_member_code_given_args(const qore_class_private& qcp, QoreObject* self,
         const char* nme, QoreListNode* args, const qore_class_private* class_ctx, ExceptionSink* xsink, QoreValue& rv);
 
+//! calls the call reference @a ref with the temporary argument list @a args that the caller owns, whose values the
+//! parameters of a closure or of a reference to user code take over (issue #5882); defined in QoreClassGivenArgs.cpp
+DLLLOCAL QoreValue qore_invoke_call_ref_given_args(const ResolvedCallReferenceNode* ref, QoreListNode* args,
+        ExceptionSink* xsink);
+
 class qore_class_private_holder {
     //! the class pointer (handle) to release, if the object was created with one
     /** the pointer is tracked separately from the private data, as it can be a wrapper for a class imported into
@@ -6077,6 +6095,27 @@ public:
         }
     }
 
+    //! calls the static method @a m through the object @a self (o.s()), as eval() does, checking the object after the
+    //! arguments: arguments that deleted it raise the error of a method call on a deleted object (issue #6056)
+    /** Not for a call through self without an object (s() in a method), which calls the static method whatever the
+        arguments did to the object; the variant is resolved with the arguments first, as for a method call
+        (qore_object_private::startCall())
+    */
+    template <bool Lexical>
+    DLLLOCAL static QoreValue evalStaticOnObject(LexicalSemanticPolicy policy, const QoreMethod& m,
+            ExceptionSink* xsink, RuntimeConfig& rc, QoreObject* self, const QoreListNode* args,
+            const qore_class_private* cctx, QoreProgram* pgm_ctx,
+            const QoreTypeParamInstantiation* explicit_type_param_instantiation) {
+        assert(m.priv->static_flag);
+        if constexpr (Lexical) {
+            return SMETHF(m.priv->func)->evalMethod(policy, xsink, rc, nullptr, args, cctx, pgm_ctx,
+                qore_get_object_receiver_type_info(self), explicit_type_param_instantiation, self);
+        } else {
+            return SMETHF(m.priv->func)->evalMethod(xsink, rc, nullptr, args, cctx, pgm_ctx,
+                qore_get_object_receiver_type_info(self), explicit_type_param_instantiation, self);
+        }
+    }
+
     template <bool Lexical, typename... Args>
     DLLLOCAL static QoreValue evalTmpArgsWithPolicy(LexicalSemanticPolicy policy, Args&&... args) {
         if constexpr (Lexical) {
@@ -6113,7 +6152,8 @@ public:
     DLLLOCAL static QoreValue evalNamed(const QoreMethod& m, ExceptionSink* xsink, RuntimeConfig& rc,
             QoreObject* self, const QoreListNode* args, bool tmp_args, const qore_class_private* cctx,
             const QoreTypeInfo* receiver_type_info, const QoreTypeParamInstantiation* explicit_type_param_instantiation,
-            const name_vec_t& arg_names, LexicalSemanticPolicy policy = {}, QoreProgram* pgm_ctx = nullptr) {
+            const name_vec_t& arg_names, LexicalSemanticPolicy policy = {}, QoreProgram* pgm_ctx = nullptr,
+            bool check_receiver = false) {
         const qore_method_private* p = m.priv;
         if (!p->static_flag) {
             assert(self);
@@ -6127,11 +6167,13 @@ public:
         if (!receiver_type_info && self) {
             receiver_type_info = qore_get_object_receiver_type_info(self);
         }
+        // a call through an object checks it after the arguments (issue #6056)
+        QoreObject* check_self = check_receiver ? self : nullptr;
         return tmp_args
             ? SMETHF(p->func)->evalMethodTmpArgsNamed(xsink, rc, const_cast<QoreListNode*>(args), cctx,
-                receiver_type_info, explicit_type_param_instantiation, arg_names, policy, pgm_ctx)
+                receiver_type_info, explicit_type_param_instantiation, arg_names, policy, pgm_ctx, check_self)
             : SMETHF(p->func)->evalMethodNamed(xsink, rc, args, cctx, receiver_type_info,
-                explicit_type_param_instantiation, arg_names, policy, pgm_ctx);
+                explicit_type_param_instantiation, arg_names, policy, pgm_ctx, check_self);
     }
 
     DLLLOCAL static qore_method_private* get(QoreMethod& m) {
