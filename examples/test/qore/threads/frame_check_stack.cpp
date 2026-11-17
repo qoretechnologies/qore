@@ -6,11 +6,13 @@
 // that a thread whose stack cannot take the frame gets STACK-LIMIT-EXCEEDED instead of a crash.
 //
 // usage: frame-check-stack <file> <ast|ir|jit|tiered> parse|call <stack KB>...
+//        frame-check-stack min-stack
 //   parse: parses the file in a thread with each stack size (a module that it loads is loaded there), then calls run()
 //          there; only one stack size, as a module is loaded once in a process
 //   call:  parses the file and calls run() in the main thread (so that the compiled code is generated there), then
 //          calls run() in a thread with each stack size
-// prints "<KB>: ok: <result>" or "<KB>: ex: <error>" for each stack size
+// prints "<KB>: ok: <result>" or "<KB>: ex: <error>" for each stack size; min-stack prints the smallest stack in KB
+// that a thread can be created with on this platform (the minimum thread stack rounded up to the page size)
 #include <qore/Qore.h>
 #include <cstdio>
 #include <cstdlib>
@@ -121,9 +123,29 @@ int run_thread(void* (*fn)(void*)) {
 }
 }
 
+//! returns the smallest stack in KB that a thread can be created with: PTHREAD_STACK_MIN (sysconf() where the
+//! platform gives it at run time, as glibc does) rounded up to the page size
+size_t min_stack_kb() {
+    size_t page = static_cast<size_t>(sysconf(_SC_PAGESIZE));
+    size_t min = PTHREAD_STACK_MIN;
+#ifdef _SC_THREAD_STACK_MIN
+    long sc = sysconf(_SC_THREAD_STACK_MIN);
+    if (sc > 0 && static_cast<size_t>(sc) > min) {
+        min = static_cast<size_t>(sc);
+    }
+#endif
+    min = (min + page - 1) / page * page;
+    return (min + 1023) / 1024;
+}
+
 int main(int argc, char** argv) {
+    if (argc == 2 && !std::strcmp(argv[1], "min-stack")) {
+        std::printf("%zu\n", min_stack_kb());
+        return 0;
+    }
     if (argc < 5) {
-        std::fputs("usage: frame-check-stack <file> <ast|ir|jit|tiered> parse|call <stack KB>...\n", stderr);
+        std::fputs("usage: frame-check-stack <file> <ast|ir|jit|tiered> parse|call <stack KB>...\n"
+            "       frame-check-stack min-stack\n", stderr);
         return 2;
     }
     {
