@@ -115,6 +115,8 @@ I45SPdad6fpziP1EtT5rfrC0ZH7cMU8edg==
         bool no_epsv;
         #! refuse REST, as servers that cannot restart transfers do
         bool no_rest;
+        #! refuse every login (530 to PASS)
+        bool reject_login;
 
         const PollInterval = 250ms;
     }
@@ -160,6 +162,11 @@ I45SPdad6fpziP1EtT5rfrC0ZH7cMU8edg==
     #! Refuse REST, so that a client restarting a transfer gets an error
     setNoRest(bool v = True) {
         no_rest = v;
+    }
+
+    #! Refuse every login, so that a client cannot connect until it is cleared
+    setRejectLogin(bool v = True) {
+        reject_login = v;
     }
 
     *string getLocalDir() {
@@ -303,6 +310,10 @@ I45SPdad6fpziP1EtT5rfrC0ZH7cMU8edg==
                 continue;
             }
             break;
+        }
+        if (reject_login) {
+            ftpSend(ns, 530, "Login incorrect.");
+            return;
         }
         ftpSend(ns, 230, "Login successful.");
 

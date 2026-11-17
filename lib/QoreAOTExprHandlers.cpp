@@ -5722,7 +5722,7 @@ static bool write_expr_expr_tree(AOTExprWriteCtx& ctx) {
 static QoreValue read_expr_expr_tree(AOTExprReadCtx& ctx) {
     // Read length-prefixed EXPR_TREE blob and deserialize
     uint32_t blob_size = QoreAOTBinaryReader::readU32(ctx.ptr);
-    if (blob_size == 0 || ctx.ptr + blob_size > ctx.end) {
+    if (blob_size == 0 || ctx.end < ctx.ptr || blob_size > static_cast<size_t>(ctx.end - ctx.ptr)) {
         ctx.error = "invalid EXPR_TREE blob size";
         return QoreValue();
     }

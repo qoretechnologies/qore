@@ -1791,6 +1791,14 @@ public:
     const uint8_t* getInputData() const { return input_data; }
     uint32_t getInputSize() const { return input_size; }
 
+    //! Returns the offset of a pointer into the (decompressed) metadata, or SIZE_MAX if it points elsewhere
+    /** For metadata written uncompressed, it is the offset in the encoded metadata (QORE_AOT_TRACE_IR_DESER prints it
+        for each IR instruction, which tests use to find the instructions in a module)
+    */
+    size_t getDataOffset(const uint8_t* p) const {
+        return (data && p >= data && p < data + total_size) ? static_cast<size_t>(p - data) : SIZE_MAX;
+    }
+
     //! Get the number of sections
     uint32_t getSectionCount() const { return static_cast<uint32_t>(sections.size()); }
 
@@ -3988,6 +3996,12 @@ public:
         session's bases are attached, completing the cross-session
         sml. */
     bool rebuildBaseClassSmlPhase(std::string& error);
+
+    //! marks the list of all ancestors of \a qc complete if it is (issue #6106)
+    /** @param resolved the classes of this binary whose base classes have been resolved; a base class that is not
+        there must be builtin or initialized; null if the base classes of every class have been resolved
+    */
+    void markSmlComplete(QoreClass* qc, const std::unordered_set<const QoreClass*>* resolved);
 
     //! Phase-split 2a-import — copy base-class members into derived
     //! classes.  Batch mode: must wait until every session has

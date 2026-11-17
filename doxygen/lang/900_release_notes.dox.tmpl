@@ -112,6 +112,11 @@
     definition in a namespace block, as it does at the top level (see
     @ref outofline_methods_in_namespaces "out-of-line methods in namespaces"; issue #6384).
 
+    @par An Undeclared Member With the Name of a Method Is a Parse Error
+    Accessing a member that is not declared and that has the name of a method of the object's class, such as
+    <tt>i.next</tt> for <tt>i.next()</tt>, is now a parse exception in every mode, also without type declarations
+    (see @ref member_method_names; issue #2967).
+
     @par Parse Directives Are Not Allowed in an Expression
     A parse directive in the source of an @ref Qore::Expression "Expression" is now a parse exception and is not
     applied; it changed the parse state of the Program that the expression was created in (see
@@ -887,9 +892,14 @@
 
     @par HTTP Servers Choose the Response Encoding from Accept-Charset by Its Weights
     An HTTP server takes the response encoding of a request (\c cx."response-encoding") from \c Accept-Charset as
-    RFC 9110 defines it, with weights and optional whitespace (see
-    @ref Qore::get_http_accept_charset() "get_http_accept_charset()"); 2.2.1 took the first charset unless the value
-    or an element directly after a comma began with UTF-8 or \c "*", whatever the weights (issue #6343).
+    RFC 9110 defines it, with weights, optional whitespace and repeated lines as one list (see
+    @ref Qore::get_http_accept_charset() "get_http_accept_charset()"); 2.2.1 used the last line and took its first
+    charset unless UTF-8 or \c "*" began the value or an element directly after a comma (issues #6343, #6445).
+
+    @par Untrusted Character Set Names Select Only Known Encodings
+    A character set name in an HTTP header or body or in a MIME message is used only if it selects an encoding that
+    %Qore knows or a standard character set (see @ref Qore::get_known_encoding() "get_known_encoding()"); any other
+    name is ignored, and the text is read as without one; 2.2.1 registered such names as encodings (issue #6460).
 
     @subsection qore_3_0_0_new_features New Features in Qore
     @par Strict Number Parsing
@@ -1035,6 +1045,9 @@
       the response encoding that an HTTP server reports for a request, the same for every HTTP version
       (<a href="https://github.com/qoretechnologies/qore/issues/6318">issue 6318</a>,
       <a href="https://github.com/qoretechnologies/qore/issues/6333">issue 6333</a>)
+    - new @ref Qore::get_known_encoding() "get_known_encoding()" returns the encoding that a character set name from
+      untrusted data selects, without registering other names
+      (<a href="https://github.com/qoretechnologies/qore/issues/6460">issue 6460</a>)
     - new @ref Qore::Socket::getQuicSSLCipherName() "Socket::getQuicSSLCipherName()" and
       @ref Qore::Socket::getQuicSSLCipherVersion() "Socket::getQuicSSLCipherVersion()" for HTTP/3 QUIC sessions
     - new @ref Qore::Socket::shutdownWrite() "Socket::shutdownWrite()" shuts down the sending side of a connection
@@ -1246,6 +1259,12 @@
     reads with the new \c Datasource::getOptionRestrictions() and \c Datasource::getOptionPolicyManagerRef(), so that
     whoever configures a datasource decides what its options may do; see @ref sandbox_datasource_options
     (<a href="https://github.com/qoretechnologies/qore/issues/5741">issue 5741</a>).
+
+    @par C++ API: DBI Drivers Judge a Connection by the Code That Chose It
+    A driver reads the code that created a datasource and set its connection values with the new
+    \c Datasource::getConnectChoosers() and judges a connection by it, not by the code that opens it (a behaviour
+    change for such drivers); see @ref sandbox_datasource_connect_choosers
+    (<a href="https://github.com/qoretechnologies/qore/issues/6142">issue 6142</a>).
 
     @par Asking Whether a Sandbox Restricts Anything
     @ref Qore::SandboxManager::restricts() "SandboxManager::restricts()", \c networkRestricts(), \c filesystemRestricts()
@@ -1501,6 +1520,12 @@
       - an error while a polled file is handled (ex: an observer that refuses the file event) keeps the remote file
         and retries the poll after the \c "error_delay" option's delay instead of stopping polling (see
         @ref ftppollererrors; <a href="https://github.com/qoretechnologies/qore/issues/6400">issue 6400</a>)
+      - a relative \c "path" is polled relative to the login directory; a relative path failed on every poll
+        (<a href="https://github.com/qoretechnologies/qore/issues/6457">issue 6457</a>)
+      - a failed setup of a new connection given with
+        @ref FtpPoller::FtpPoller::updateOptions() "FtpPoller::updateOptions()" is retried after the
+        \c "error_delay" option's delay without the state of the previous connection; it was never retried (see
+        @ref ftppollererrors; <a href="https://github.com/qoretechnologies/qore/issues/6456">issue 6456</a>)
       - see @ref ftppollerv2_2 for all changes
 
     - @ref gmaildataproviderintro "GmailDataProvider" module
@@ -2079,6 +2104,16 @@
     - a keyword used as a member or method name after the @ref dot_operator ". operator" can have white space or a
       line break between it and the dot (<tt>h. keys()</tt>), as any other name can, instead of being read as the
       keyword's operator (see @ref keywords; issue #525)
+    - the parse error of a statement that assigns a list without parentheses (<tt>l = 1, 2, 3;</tt>) says that only
+      the first element is assigned and that the list needs parentheses, instead of only "statement has no effect
+      (list)" (see @ref list_assignment_parentheses "lists"; issue #1946)
+    - \c chomp, \c trim and \c splice with white space before the opening parenthesis and an argument that cannot
+      be an lvalue (<tt>trim ("x ")</tt>) call the function, as without the white space, instead of raising
+      "expecting lvalue"; with an argument that can be an lvalue, they are the operator, which changes it, as before
+      (see @ref keyword_operator_or_function "the operator or the function"; issue #1867)
+    - parsing or loading a long chain of classes, each inheriting the previous one (see @ref inheritance), took time
+      that grew with the fourth power of its length, as each class walked the whole hierarchy again for each of its
+      ancestors; it now grows about with the square of the length (issue #6106)
     - when more than one class of a hierarchy declares a member with an initialization expression, the value that a
       later one replaces is released, so that an object that a base class stored there is destroyed (see
       @ref member_initialization; issue #6411)
@@ -2093,6 +2128,13 @@
       and suggests the closest parse directive, instead of "syntax error, unexpected identifier", and a directive name
       with more after it (<tt>%%requires-x</tt>) is an unknown directive, not a directive with an argument (see
       @ref unknown_parse_directives "unknown parse directives"; issue #56)
+    - @ref Qore::round() "round()", @ref Qore::ceil() "ceil()" and @ref Qore::floor() "floor()" of a number with a
+      precision give the exact multiple of the power of 10, correctly rounded to the number's precision, and infinity
+      for a result beyond the exponent range of a number; they used a floating-point power of 10, which is inexact
+      above 10^22 and was clamped to about 1e308 (issue #6278)
+    - character set names in HTTP headers and bodies and in MIME messages select only an encoding that %Qore knows or
+      a standard character set, so that untrusted data can no longer register encodings without limit; any other
+      name is ignored (see @ref Qore::get_known_encoding() "get_known_encoding()"; issue #6460)
     - a sleep with @ref Qore::usleep() "usleep()" or @ref Qore::sleep() "sleep()" that a signal interrupted while
       it slept with \c nanosleep() (2) slept its whole time again instead of the time that was left (issue #6364)
     - an out-of-line method definition in a namespace block resolves its class path relative to that namespace
@@ -2250,6 +2292,9 @@
       \c OBJECT-ALREADY-DELETED naming the method (<tt>cannot call C::m()</tt>) in every mode
       (<a href="https://github.com/qoretechnologies/qore/issues/5824">issue 5824</a>,
       <a href="https://github.com/qoretechnologies/qore/issues/6057">issue 6057</a>)
+    - a call of a pseudo-method or of a static method through an object whose arguments deleted the object called
+      the method; it now raises \c OBJECT-ALREADY-DELETED (see @ref method_call_deleted_object;
+      <a href="https://github.com/qoretechnologies/qore/issues/6056">issue 6056</a>)
     - a program compiled with qcc called a \c private:internal method of another parent class that implements an
       @ref abstract "abstract method" through \c self, where the interpreters raise \c METHOD-IS-PRIVATE
       (<a href="https://github.com/qoretechnologies/qore/issues/6158">issue 6158</a>)
@@ -3064,6 +3109,10 @@
       @ref Qore::SQL::DatasourcePool "DatasourcePool" losing driver option types and splitting option values; data
       serialized by %Qore 3.0 cannot be deserialized by earlier versions
     - fixed \c Datasource configuration and option methods releasing the transaction lock of an open transaction
+    - concurrent configuration and copy of a @ref Qore::SQL::Datasource "Datasource" no longer race: a copy, the
+      configuration hash and string, serialization and a reopen in a child process created with @ref Qore::fork()
+      "fork()" read the connection values while another thread could be changing them, which could read freed
+      memory (<a href="https://github.com/qoretechnologies/qore/issues/6142">issue 6142</a>)
     - fixed the \c rest command sending a URL fragment in the request path, exiting with status 0 after a failed
       request, and not resolving an endpoint path against the URL of a schema
     - fixed the C++ API \c QoreHashNode::getKeyValueExistence() leaving \c exists unset when it raises an exception,
@@ -3122,6 +3171,10 @@
       @ref Qore::get_local_vars() "get_local_vars()" and @ref Qore::set_local_var_value() "set_local_var_value()"
       from the calls it makes or from a debugger's callbacks in the same thread
       (<a href="https://github.com/qoretechnologies/qore/issues/5871">issue 5871</a>)
+    - a compound assignment or increment of an lvalue of a soft type that converts the value that the operator assigns
+      (ex: <tt>softstring s = "2"; s *= 2;</tt>, \c softbool with \c +=, \c softint with <tt>*= 1.5</tt>) is no
+      longer a \c PARSE-TYPE-ERROR, as an assignment of the same value is not; the lvalue holds the converted value
+      (issue #6304)
     - a call of a method that a class does not have, of the name of a member whose type can hold code (\c auto, no
       type, or a code type), is no longer checked at parse time against the pseudo-method of objects of the same name,
       which refused a call that the member's code accepts; the member's code is called at run time, and a named call

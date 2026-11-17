@@ -1,0 +1,131 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# the code of closures, an on_exit handler and a background expression, which an AOT module keeps as IR: it has the
+# instructions that take value ids in fields of their own (qore#6451); used by aot-ir-value-ids.qtest
+%modern
+%allow-debugger
+
+module AotIrIdsMod {
+    version = "1.0";
+    desc = "AOT IR value id test module";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+public namespace AotIrIdsMod {
+    #! returns the Program of the module, to attach a debugger to it, which makes its AOT code run its IR (debug IR)
+    public ProgramControl sub program() {
+        return ProgramControl::getProgram();
+    }
+
+    #! returns the results of closures that use every kind of instruction with value ids of its own
+    public hash<auto> sub run() {
+        hash<auto> r;
+
+        # IteratorCreate / IteratorNext / IteratorRelease, TypedForeachNext, Phi, BrIf, Return
+        code loops = list<auto> sub (list<int> l, hash<auto> h) {
+            int sum = 0;
+            foreach int v in (l) {
+                sum += v > 1 ? v * 2 : v;
+            }
+            list<string> names;
+            foreach string k in (keys h) {
+                names += k;
+            }
+            int n = 0;
+            foreach auto v in (l.iterator()) {
+                n += v;
+            }
+            int folded = foldr $1 + $2, l;
+            list<auto> mapped = map $1 * 3, l;
+            return (sum, names, n, folded, mapped);
+        };
+        r.loops = loops((1, 2, 3), {"a": 1, "b": 2});
+
+        # IteratorCreateSelectors / SelectorIteratorPending / SelectorIteratorFeed / IteratorNextSelectors
+        code selectors = list<int> sub (list<int> l, int i) {
+            list<int> rv;
+            foreach int v in (l[0, i..i + 1]) {
+                rv += v;
+            }
+            return rv;
+        };
+        r.selectors = selectors((10, 20, 30, 40), 2);
+
+        # ExceptionSuspend / ExceptionResume: a remove expression whose later selector raises an exception
+        code suspend = string sub (list<int> l) {
+            code fail = int sub () { throw "SELECTOR-ERROR"; };
+            try {
+                remove l[0, fail()];
+            } catch (hash<ExceptionInfo> ex) {
+                return sprintf("%s %y", ex.err, l);
+            }
+            return "no exception";
+        };
+        r.suspend = suspend((1, 2, 3));
+
+        # Context / ContextMaxPos / ContextSetPos / ContextDestroy
+        code ctx = list<auto> sub (hash<auto> q) {
+            list<auto> rv;
+            context (q) {
+                rv += %name + ":" + %id;
+            }
+            return rv;
+        };
+        r.context = ctx({"name": ("x", "y"), "id": (1, 2)});
+
+        # RefForeachInit / RefForeachSize / RefForeachGetEntry / RefForeachRecord / RefForeachFinalize
+        code ref_foreach = list<int> sub (list<int> l) {
+            foreach int v in (\l) {
+                v *= 10;
+            }
+            return l;
+        };
+        r.ref_foreach = ref_foreach((1, 2));
+
+        # SwitchInt / SwitchString
+        code sw = string sub (int i, string s) {
+            string rv;
+            switch (i) {
+                case 1: rv = "one"; break;
+                case 2: rv = "two"; break;
+                default: rv = "many";
+            }
+            switch (s) {
+                case "a": rv += "-a"; break;
+                case "b": rv += "-b"; break;
+                default: rv += "-z";
+            }
+            return rv;
+        };
+        r.switch = sw(2, "b");
+
+        # lvalue paths with a dynamic key, a list index and a slice
+        code paths = hash<auto> sub (string k, int i) {
+            hash<auto> h = {"a": {"b": (1, 2, 3)}, "c": 1, "d": 2};
+            h{k}.b[i] = 20;
+            h.a{k} = (5,);
+            remove h{"c", "d"};
+            return h;
+        };
+        r.paths = paths("a", 1);
+
+        # an on_exit handler that reads and writes the locals of its function, and a background expression
+        code handler = int sub (int i) {
+            int rv = i;
+            {
+                on_exit rv += 100;
+                rv *= 2;
+            }
+            Counter c(1);
+            int bg;
+            background sub () { bg = i + 1; c.dec(); }();
+            c.waitForZero();
+            return rv + bg;
+        };
+        r.handler = handler(3);
+        return r;
+    }
+}

@@ -5946,10 +5946,9 @@ namespace Priv {
     \c "accept-charset"); the HTTP/2 and HTTP/3 requests, whose headers the controller decodes itself, get the same
     values from the same rules (get_http_content_type_info(), get_http_accept_charset()), so that a handler sees the
     same \c hdr."content-type", \c cx."header-info" and \c cx."response-encoding" for every HTTP version (qore#6318,
-    qore#6333).  For a repeated header, HTTP/2 gives a list, of which the
-    last value is used, as for HTTP/1.x, which reads the header lines in turn; HTTP/3 joins the values with \c ", "
-    into one, which is used as it is, so the result for a repeated header can differ from that of HTTP/1.x (the
-    boundaries of the values are lost).
+    qore#6333).  The values of a repeated \c Accept-Charset header (a list from HTTP/2; HTTP/3 joins them itself) are
+    combined into one list, as for HTTP/1.x (RFC 9110 section 5.3; qore#6445); of a repeated \c Content-Type, the
+    last value is used for HTTP/2, while HTTP/3 gives the values joined into one, which is used as it is.
 
     @param hdr the request headers
 
@@ -5959,7 +5958,7 @@ namespace Priv {
 hash<auto> sub http_request_header_info(hash<auto> hdr) {
     auto ac = hdr."accept-charset";
     if (ac.typeCode() == NT_LIST) {
-        ac = ac.last();
+        ac = (select ac, $1.typeCode() == NT_STRING).join(", ");
     }
     hash<auto> rv = {"accept-charset": get_http_accept_charset(ac.typeCode() == NT_STRING ? ac : NOTHING)};
     auto ct = hdr."content-type";
