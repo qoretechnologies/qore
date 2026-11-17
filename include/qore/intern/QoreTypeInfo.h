@@ -153,10 +153,10 @@ public:
     //! returns true if this is a union with a member whose type is the value's own type
     /** A member that comes before it could accept the value by converting it; the union accepts it as it is, whatever
         the order of its members (qore#6407).  Called only before a conversion, so plain types pay nothing for it, and
-        a union whose members have no exact type for the value's base type pays only a mask test.
+        a union whose members have no exact type for the value's base type \a t (n.getType()) pays only a mask test.
     */
-    DLLLOCAL bool unionAcceptsExactly(const QoreValue& n) const {
-        return union_exact_mask && unionAcceptsExactlyImpl(n);
+    DLLLOCAL bool unionAcceptsExactly(const QoreValue& n, qore_type_t t) const {
+        return (union_exact_mask & (static_cast<uint64_t>(t) < 64 ? (1ull << t) : 0)) && unionAcceptsExactlyImpl(n);
     }
 
     //! returns true if \a ti is a union with an enum type that accepts the enum value \a n (qore#6277, qore#6407)

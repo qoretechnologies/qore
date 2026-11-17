@@ -3913,10 +3913,6 @@ const QoreComplexCodeTypeInfo* QoreTypeInfo::getComplexCodeType(const QoreTypeIn
 }
 
 bool QoreTypeInfo::unionAcceptsExactlyImpl(const QoreValue& n) const {
-    qore_type_t t = n.getType();
-    if (t < 0 || t >= 64 || !(union_exact_mask & (1ull << t))) {
-        return false;
-    }
     // only a union sets the mask
     return static_cast<const QoreUnionTypeInfo*>(this)->hasExactMember(n);
 }
@@ -5022,7 +5018,7 @@ bool QoreTypeSpec::acceptInputImpl(ExceptionSink* xsink, const QoreTypeInfo& typ
                     break;
                 }
                 // a union with a member of the hash's own type keeps it as it is (qore#6407)
-                if (typeInfo.unionAcceptsExactly(n)) {
+                if (typeInfo.unionAcceptsExactly(n, t)) {
                     return true;
                 }
                 QoreHashNode* h = n.get<QoreHashNode>();
@@ -5055,7 +5051,7 @@ bool QoreTypeSpec::acceptInputImpl(ExceptionSink* xsink, const QoreTypeInfo& typ
                     break;
                 }
                 // a union with a member of the list's own type keeps it as it is (qore#6407)
-                if (typeInfo.unionAcceptsExactly(n)) {
+                if (typeInfo.unionAcceptsExactly(n, t)) {
                     return true;
                 }
                 QoreListNode* l = n.get<QoreListNode>();
@@ -5091,7 +5087,7 @@ bool QoreTypeSpec::acceptInputImpl(ExceptionSink* xsink, const QoreTypeInfo& typ
                 }
                 // a union with a member of the value's own type keeps it as it is, which a soft list would wrap in a
                 // list (qore#6407)
-                if (typeInfo.unionAcceptsExactly(n)) {
+                if (typeInfo.unionAcceptsExactly(n, t)) {
                     return true;
                 }
                 // see if value matches
@@ -5265,7 +5261,7 @@ bool QoreTypeSpec::acceptInputImpl(ExceptionSink* xsink, const QoreTypeInfo& typ
         assert(!priv_error);
         if (accept.map) {
             // a union with a member of the value's own type keeps the value as it is (qore#6407)
-            if (typeInfo.unionAcceptsExactly(n)) {
+            if (typeInfo.unionAcceptsExactly(n, t)) {
                 return true;
             }
             policy.map(accept, n, xsink);
