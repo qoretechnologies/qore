@@ -1,0 +1,687 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# the "dsoptprobe" test module (datasource-option-setter/dsoptprobe-module.cpp) is built into the build tree by
+# examples/test/module-cpp-api/CMakeLists.txt and is not installed
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires dsoptprobe
+%requires QUnit
+
+%exec-class DatasourceConnectChooserTest
+
+#! Tests the record of the code that chose the connection of a datasource (qore#6142)
+/** A driver connects when a datasource is opened, which can happen on another thread and for other code than the code
+    that configured it.  A driver that must not connect to a destination that sandboxed code chose judges the
+    connection by the code that chose it (Datasource::getConnectChoosers(), Datasource::addOptionChooser()), never by
+    the code that runs when it connects: the creators of the datasource (for a copy, the copier and the creators of
+    the original; for a pool connection, the creators of the pool) and the setters of the connection values in use and
+    of the options that choose the destination.  A connection is restricted if any of them may not use uncontrolled
+    APIs, read from its sandbox policy at the time of the connect.
+
+    The "dsoptprobe" driver reports the record (see dsoptprobe-module.cpp): <tt>select("choosers")</tt> as read when
+    the connection was opened, <tt>select("reconnect")</tt> as a driver's own reconnect reads it, and the option
+    \c "dest" as the option that chooses the destination.  The row names are those of the test plan of qore#6142.
+
+    Built against a library without the record (\c _QORE_HAS_DATASOURCE_CONNECT_CHOOSERS), the driver reports
+    \c known: False, and every row fails.
+*/
+public class DatasourceConnectChooserTest inherits QUnit::Test {
+    public {
+        #! the code of the Programs of the test
+        const Source = "
+Datasource sub make_args() {
+    return new Datasource(\"dsoptprobe\", \"u\", \"p\", \"x\");
+}
+
+Datasource sub make_string() {
+    return new Datasource(\"dsoptprobe:u/p@x\");
+}
+
+Datasource sub make_hash() {
+    return new Datasource({\"type\": \"dsoptprobe\", \"user\": \"u\", \"pass\": \"p\", \"db\": \"x\"});
+}
+
+# a datasource with default parameters only: no parameter has a setter
+Datasource sub make_default() {
+    return new Datasource({\"type\": \"dsoptprobe\"});
+}
+
+DatasourcePool sub make_pool(int min = 1, int max = 2) {
+    return new DatasourcePool({\"type\": \"dsoptprobe\", \"db\": \"x\", \"options\": {\"min\": min, \"max\": max}});
+}
+
+nothing sub set_param(Datasource ds, string p, auto v) {
+    switch (p) {
+        case \"user\": ds.setUserName(v); break;
+        case \"pass\": ds.setPassword(v); break;
+        case \"db\": ds.setDBName(v); break;
+        case \"host\": ds.setHostName(v); break;
+        case \"port\": ds.setPort(v); break;
+        case \"encoding\": ds.setDBEncoding(v); break;
+        default: throw \"UNKNOWN-PARAM\", p;
+    }
+}
+
+nothing sub set_option(Datasource ds, string opt, string val) {
+    ds.setOption(opt, val);
+}
+
+Datasource sub copy_ds(Datasource ds) {
+    return ds.copy();
+}
+
+DatasourcePool sub copy_pool(DatasourcePool p) {
+    return p.copy();
+}
+
+auto sub open_choosers(Datasource ds) {
+    ds.open();
+    on_exit ds.close();
+    return ds.select(\"choosers\");
+}
+
+auto sub ds_select(AbstractDatasource ds, string sql) {
+    return ds.select(sql);
+}
+
+data sub serialize(Serializable o) {
+    return Serializable::serialize(o);
+}
+
+auto sub deserialize(data d) {
+    return Serializable::deserialize(d);
+}
+
+auto sub through(code c) {
+    return c();
+}
+
+# runs the code in a thread that this code starts: the thread inherits the sandbox of this code
+auto sub through_bg(code c) {
+    Queue q();
+    background (auto sub () {
+        try {
+            q.push(c());
+        } catch (hash<ExceptionInfo> ex) {
+            q.push(ex);
+        }
+    })();
+    return q.get();
+}
+
+# sets a connection value in a thread that this code starts (the thread inherits the sandbox of this code)
+nothing sub set_param_bg(Datasource ds, string p, auto v) {
+    auto rv = through_bg(auto sub () { set_param(ds, p, v); });
+    if (rv.typeCode() == NT_HASH && exists rv.err) {
+        throw rv.err, rv.desc, rv.arg;
+    }
+}
+
+# sets an option in a thread that this code starts
+nothing sub set_option_bg(Datasource ds, string opt, string val) {
+    auto rv = through_bg(auto sub () { set_option(ds, opt, val); });
+    if (rv.typeCode() == NT_HASH && exists rv.err) {
+        throw rv.err, rv.desc, rv.arg;
+    }
+}
+
+# creates a datasource in a child Program with no sandbox manager of its own
+Datasource sub child_make() {
+    Program child(PO_NEW_STYLE);
+    child.parse(\"Datasource sub make() { return new Datasource(\\\"dsoptprobe:u/p@x\\\"); }\", \"child\");
+    return child.callFunction(\"make\");
+}
+";
+
+        #! the code of the Programs that can parse a call of SandboxManager::callWithSystemPolicy()
+        const BarrierSource = "
+# returns the error of an attempt of this code to establish a barrier of its own around the code
+string sub own_barrier(code c) {
+    try {
+        SandboxManager::callWithSystemPolicy(c);
+        return \"ok\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+";
+    }
+
+    private {
+        #! the Programs of the test: trusted, sandboxed, a trusted sandbox, and PO_NO_UNCONTROLLED_APIS without a
+        #! sandbox
+        hash<string, Program> pgms;
+    }
+
+    constructor() : Test("Datasource connect choosers", "1.0") {
+        addTestCase("C: a trusted pool used, grown and reconnected by sandboxed code", \poolTest());
+        addTestCase("R: the creators of a datasource and of a pool", \creatorTest());
+        addTestCase("G: the setters of the connection values and of the destination option", \setterTest());
+        addTestCase("B: barriers, capabilities and trusted sandboxes", \barrierTest());
+        addTestCase("P: using is not choosing", \useTest());
+        addTestCase("S: deserialization", \serializationTest());
+        addTestCase("O: sandboxed code opens what it chose itself", \ownOpenTest());
+        addTestCase("Y: copies keep the creators of the original", \copyCreatorTest());
+        addTestCase("N: Programs without a sandbox manager", \noManagerTest());
+        addTestCase("T: the policy is read when the connection is made", \livePolicyTest());
+        addTestCase("D4: the last setter of a value decides; a creator is never replaced", \lastSetterTest());
+        addTestCase("L: trusted code called by sandboxed code", \callerTest());
+        addTestCase("F: the reopen of an inherited connection in a child process", \forkReopenTest());
+        addTestCase("BG: a value set in a thread that sandboxed code started", \backgroundSetterTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        # a sandbox that a host attaches to trusted code for its limits only: it allows uncontrolled APIs
+        SandboxManager trusted_sm();
+        trusted_sm.setNetworkDefaultPolicy(True);
+        trusted_sm.setFilesystemDefaultPolicy(True);
+        trusted_sm.setUncontrolledApiPolicy(True);
+
+        pgms = {
+            "trusted": getProgram(),
+            "sandboxed": getProgram(NOTHING, new SandboxManager()),
+            "trusted-sandbox": getProgram(NOTHING, trusted_sm),
+            "no-uncontrolled": getProgram(PO_NO_UNCONTROLLED_APIS),
+        };
+    }
+
+    #! returns a Program with the test code, the given extra parse options and sandbox
+    private static Program getProgram(*int po, *SandboxManager sm) {
+        Program p(PO_NEW_STYLE | (po ?? 0));
+        if (sm) {
+            p.setSandboxManager(sm);
+        }
+        # PO_NO_UNCONTROLLED_APIS refuses the call at parse time
+        p.parse(Source + ((po ?? 0) & PO_NO_UNCONTROLLED_APIS ? "" : BarrierSource), "datasource-connect-chooser");
+        return p;
+    }
+
+    #! returns the record of the code that chose a connection that this trusted code opens
+    private static *hash<auto> observe(Datasource ds) {
+        ds.open();
+        on_exit ds.close();
+        return ds.select("choosers");
+    }
+
+    #! returns the record of a connection that a pool creates when it grows, on a thread of this trusted code
+    /** The current thread holds a connection in a transaction, so that the other thread needs a new one
+    */
+    private static *hash<auto> observeGrowth(DatasourcePool p, *code sel) {
+        p.beginTransaction();
+        on_exit p.rollback();
+        Queue q();
+        background (auto sub () {
+            try {
+                q.push(sel ? sel() : p.select("choosers"));
+            } catch (hash<ExceptionInfo> ex) {
+                q.push(ex);
+            }
+        })();
+        return DatasourceConnectChooserTest::result(q.get());
+    }
+
+    #! raises an exception that another thread passed as its result
+    private static auto result(auto rv) {
+        if (rv.typeCode() == NT_HASH && exists rv.err && exists rv.desc) {
+            throw rv.err, rv.desc, rv.arg;
+        }
+        return rv;
+    }
+
+    #! asserts the record of the code that chose a connection
+    private assertChoosers(bool allows, *hash<auto> obs, string msg, *int n) {
+        assertEq(True, obs.known, msg + ": the record is known");
+        assertEq(allows, obs.allows_uncontrolled, msg + ": allows uncontrolled APIs");
+        # no policy changes while the record is read: the aggregate is the same
+        assertEq(allows, obs.aggregate, msg + ": the aggregate");
+        assertTrue(obs.n >= 1, msg + ": a datasource always has a creator");
+        assertEq(obs.n, obs.entries.size(), msg + ": one result per entry");
+        if (exists n) {
+            assertEq(n, obs.n, msg + ": the number of entries");
+        }
+    }
+
+    #! asserts that exactly one entry of the record restricts it, and that it is sandboxed code
+    private assertOneRestricting(*hash<auto> obs, string msg) {
+        list<hash<auto>> r = select obs.entries, !$1.allows_uncontrolled;
+        assertEq(1, r.size(), msg + ": one entry restricts");
+        if (r) {
+            assertEntry("sandboxed", r[0], msg + ": the restricting entry");
+        }
+    }
+
+    #! asserts an entry of the record
+    private assertEntry(string kind, *hash<auto> e, string msg) {
+        switch (kind) {
+            case "trusted":
+                assertEq(True, e.allows_uncontrolled, msg + ": allows");
+                assertEq(False, e.sandboxed, msg + ": sandboxed");
+                assertEq(False, e.policy, msg + ": policy");
+                break;
+            case "sandboxed":
+                assertEq(False, e.allows_uncontrolled, msg + ": allows");
+                assertEq(True, e.sandboxed, msg + ": sandboxed");
+                assertEq(True, e.policy, msg + ": policy");
+                break;
+            case "trusted-sandbox":
+                assertEq(True, e.allows_uncontrolled, msg + ": allows");
+                assertEq(False, e.sandboxed, msg + ": sandboxed");
+                assertEq(True, e.policy, msg + ": policy");
+                break;
+            default:
+                assertTrue(False, "unknown kind " + kind);
+        }
+    }
+
+    poolTest() {
+        # C1 (control): sandboxed code uses a free connection of a trusted pool
+        DatasourcePool p = pgms.trusted.callFunction("make_pool");
+        assertChoosers(True, pgms.sandboxed.callFunction("ds_select", p, "choosers"), "C1", 1);
+
+        # C2: a trusted pool grows for sandboxed code: the connection carries the record of the pool, not of the
+        # growing code
+        *hash<auto> obs = observeGrowth(p, auto sub () {
+            return pgms.sandboxed.callFunction("ds_select", p, "choosers");
+        });
+        assertChoosers(True, obs, "C2", 1);
+        assertEntry("trusted", obs.entries[0], "C2");
+
+        # C3: trusted code grows a trusted pool on a thread that sandboxed code started (it inherits the sandbox); the
+        # trusted code is created before the sandboxed code runs
+        p = pgms.trusted.callFunction("make_pool");
+        code grow = auto sub () { return p.select("choosers"); };
+        obs = observeGrowth(p, auto sub () { return DatasourceConnectChooserTest::result(
+            pgms.sandboxed.callFunction("through_bg", grow)); });
+        assertChoosers(True, obs, "C3", 1);
+
+        # C4: the driver reconnects a connection of a trusted pool for sandboxed code: it reads the same record
+        assertChoosers(True, pgms.sandboxed.callFunction("ds_select", p, "reconnect"), "C4", 1);
+
+        # C5: both connections of a trusted pool with min 2 are opened by its constructor
+        p = pgms.trusted.callFunction("make_pool", 2, 2);
+        assertChoosers(True, pgms.sandboxed.callFunction("ds_select", p, "choosers"), "C5: the first connection", 1);
+        obs = observeGrowth(p, auto sub () { return pgms.sandboxed.callFunction("ds_select", p, "choosers"); });
+        assertChoosers(True, obs, "C5: the second connection", 1);
+    }
+
+    creatorTest() {
+        # R1: sandboxed code opens a datasource that it created, with each constructor
+        foreach string maker in ("make_args", "make_string", "make_hash") {
+            Datasource ds = pgms.sandboxed.callFunction(maker);
+            *hash<auto> obs = pgms.sandboxed.callFunction("open_choosers", ds);
+            # the creator and the setters of the user name, password and database name
+            assertChoosers(False, obs, "R1: " + maker, 4);
+            assertEntry("sandboxed", obs.entries[0], "R1: " + maker + ": the creator");
+            # R2: trusted code opens it
+            assertChoosers(False, observe(ds), "R2: " + maker, 4);
+        }
+
+        # R3: sandboxed code copies a trusted datasource; opened by sandboxed code and by trusted code
+        Datasource trusted("dsoptprobe:u/p@x");
+        Datasource copy = pgms.sandboxed.callFunction("copy_ds", trusted);
+        *hash<auto> obs = pgms.sandboxed.callFunction("open_choosers", copy);
+        # the copier, the trusted creator, and the trusted setters of the copied values
+        assertChoosers(False, obs, "R3: opened by sandboxed code", 5);
+        assertEntry("sandboxed", obs.entries[0], "R3: the copier");
+        assertEntry("trusted", obs.entries[1], "R3: the creator of the original");
+        assertChoosers(False, observe(copy), "R3: opened by trusted code", 5);
+        # the original is not changed
+        assertChoosers(True, observe(trusted), "R3: the original", 4);
+
+        # R4: sandboxed code copies a trusted pool: its connections are restricted, also when trusted code grows it
+        DatasourcePool tp = pgms.trusted.callFunction("make_pool");
+        DatasourcePool pcopy = pgms.sandboxed.callFunction("copy_pool", tp);
+        obs = pcopy.select("choosers");
+        assertChoosers(False, obs, "R4: the copy's first connection", 2);
+        assertEntry("sandboxed", obs.entries[0], "R4: the copier");
+        assertEntry("trusted", obs.entries[1], "R4: the creator of the original");
+        assertChoosers(False, observeGrowth(pcopy), "R4: grown by trusted code", 2);
+        assertChoosers(True, tp.select("choosers"), "R4: the original", 1);
+
+        # R5: trusted code copies a datasource whose database name sandboxed code set (laundering)
+        Datasource ds("dsoptprobe:u/p@x");
+        pgms.sandboxed.callFunction("set_param", ds, "db", "y");
+        copy = ds.copy();
+        obs = observe(copy);
+        # the trusted copier is equivalent to the trusted creator: one entry for both
+        assertChoosers(False, obs, "R5", 4);
+        assertEq(1, (map $1, obs.entries, !$1.allows_uncontrolled).size(), "R5: the copied setter restricts");
+
+        # R6: trusted code copies a trusted datasource and pool
+        # this code is equivalent to the trusted creator of the datasource: the copy has the entries of the original
+        assertChoosers(True, observe(trusted.copy()), "R6: datasource", 4);
+        # the pool was created by the code of another Program (other parse options): the copier is another entry
+        assertChoosers(True, tp.copy().select("choosers"), "R6: pool", 2);
+    }
+
+    setterTest() {
+        # G1, G2: sandboxed code sets a connection value of a closed trusted datasource, and trusted code opens it
+        foreach hash<auto> h in ({"p": "db", "v": "y"}, {"p": "host", "v": "h"}, {"p": "user", "v": "u2"},
+                {"p": "pass", "v": "p2"}, {"p": "port", "v": 1234}) {
+            Datasource ds("dsoptprobe:u/p@x");
+            pgms.sandboxed.callFunction("set_param", ds, h.p, h.v);
+            *hash<auto> obs = observe(ds);
+            string msg = (h.p == "db" ? "G1" : "G2") + ": " + h.p;
+            assertChoosers(False, obs, msg);
+            assertOneRestricting(obs, msg);
+        }
+
+        # G3: sandboxed code sets the destination option of a closed trusted datasource
+        {
+            Datasource ds("dsoptprobe:u/p@x");
+            pgms.sandboxed.callFunction("set_option", ds, "dest", "elsewhere");
+            *hash<auto> obs = observe(ds);
+            assertEq(1, obs.dest, "G3: the setter of the option is an entry");
+            assertChoosers(False, obs, "G3", 5);
+            assertOneRestricting(obs, "G3");
+        }
+
+        # G4: the open trusted datasource gets a destination from sandboxed code; the driver's reconnect is restricted
+        {
+            Datasource ds("dsoptprobe:u/p@x");
+            ds.open();
+            on_exit ds.close();
+            assertChoosers(True, ds.select("choosers"), "G4: before", 4);
+            pgms.sandboxed.callFunction("set_option", ds, "dest", "elsewhere");
+            assertChoosers(False, ds.select("reconnect"), "G4: the reconnect", 5);
+        }
+
+        # G5: sandboxed code sets the database name of an open trusted datasource; trusted code reopens it
+        {
+            Datasource ds("dsoptprobe:u/p@x");
+            ds.open();
+            on_exit ds.close();
+            pgms.sandboxed.callFunction("set_param", ds, "db", "y");
+            # G6: the driver's own reconnect uses the values in use, which trusted code set
+            assertChoosers(True, ds.select("reconnect"), "G6: the values in use", 4);
+            ds.reset();
+            assertChoosers(False, ds.select("choosers"), "G5: after the reopen", 4);
+            ds.close();
+            ds.open();
+            assertChoosers(False, ds.select("choosers"), "G5: after close and open", 4);
+        }
+
+        # G7: the encoding does not choose the destination or the credentials
+        {
+            Datasource ds("dsoptprobe:u/p@x");
+            pgms.sandboxed.callFunction("set_param", ds, "encoding", "utf8");
+            assertChoosers(True, observe(ds), "G7", 4);
+        }
+    }
+
+    barrierTest() {
+        # B1: trusted code inside callWithSystemPolicy() creates a datasource and a pool for a sandboxed request; the
+        # code is created before the sandboxed code runs
+        code make_ds = auto sub () { return new Datasource("dsoptprobe:u/p@x"); };
+        code make_pool = auto sub () {
+            return new DatasourcePool({"type": "dsoptprobe", "db": "x", "options": {"min": 1, "max": 2}});
+        };
+        code barrier_ds = auto sub () { return SandboxManager::callWithSystemPolicy(make_ds); };
+        code barrier_pool = auto sub () { return SandboxManager::callWithSystemPolicy(make_pool); };
+        Datasource ds = pgms.sandboxed.callFunction("through", barrier_ds);
+        assertChoosers(True, pgms.sandboxed.callFunction("open_choosers", ds), "B1: opened by sandboxed code", 4);
+        assertChoosers(True, observe(ds), "B1: opened by trusted code", 4);
+        DatasourcePool p = pgms.sandboxed.callFunction("through", barrier_pool);
+        assertChoosers(True, pgms.sandboxed.callFunction("ds_select", p, "choosers"), "B1: pool", 1);
+
+        # B5: sandboxed code then sets the database name of the datasource
+        pgms.sandboxed.callFunction("set_param", ds, "db", "y");
+        assertChoosers(False, observe(ds), "B5", 4);
+
+        # B2: a system-policy capability creates a pool that sandboxed code grows later
+        code cap = SandboxManager::createSystemPolicyCall(make_pool);
+        p = pgms.sandboxed.callFunction("through", cap);
+        *hash<auto> obs = observeGrowth(p, auto sub () {
+            return pgms.sandboxed.callFunction("ds_select", p, "choosers");
+        });
+        assertChoosers(True, obs, "B2: grown by sandboxed code", 1);
+
+        # B3: sandboxed code cannot establish a barrier of its own, and a pool that it creates is restricted
+        assertEq("INVALID-FUNCTION-ACCESS", pgms.sandboxed.callFunction("own_barrier",
+            auto sub () { return pgms.sandboxed.callFunction("make_pool"); }), "B3: no barrier of its own");
+        p = pgms.sandboxed.callFunction("make_pool");
+        assertChoosers(False, p.select("choosers"), "B3: the pool", 1);
+
+        # B4: a trusted sandbox creates a pool and a datasource
+        p = pgms."trusted-sandbox".callFunction("make_pool");
+        obs = p.select("choosers");
+        assertChoosers(True, obs, "B4: pool", 1);
+        assertEntry("trusted-sandbox", obs.entries[0], "B4: pool");
+        obs = observe(pgms."trusted-sandbox".callFunction("make_args"));
+        assertChoosers(True, obs, "B4: datasource", 4);
+        assertEntry("trusted-sandbox", obs.entries[0], "B4: datasource");
+
+        # B6: a trusted creator, a trusted-sandbox setter of the database name and a sandboxed setter of the
+        # destination: three entries, of which only the sandboxed one restricts
+        ds = new Datasource({"type": "dsoptprobe"});
+        pgms."trusted-sandbox".callFunction("set_param", ds, "db", "y");
+        pgms.sandboxed.callFunction("set_option", ds, "dest", "elsewhere");
+        obs = observe(ds);
+        assertChoosers(False, obs, "B6", 3);
+        assertEntry("trusted", obs.entries[0], "B6: the creator");
+        assertEntry("trusted-sandbox", obs.entries[1], "B6: the setter of the database name");
+        assertEntry("sandboxed", obs.entries[2], "B6: the setter of the destination");
+    }
+
+    useTest() {
+        # P2 (the behaviour change of qore#6142): sandboxed code opens a trusted datasource that it did not change
+        Datasource ds("dsoptprobe:u/p@x");
+        assertChoosers(True, pgms.sandboxed.callFunction("open_choosers", ds), "P2", 4);
+        # P1: sandboxed code only uses it (an implicit open), and trusted code opens it later
+        assertChoosers(True, pgms.sandboxed.callFunction("ds_select", ds, "choosers"), "P1: used by sandboxed code", 4);
+        ds.close();
+        assertChoosers(True, observe(ds), "P1: opened by trusted code", 4);
+    }
+
+    serializationTest() {
+        # S1: sandboxed code deserializes a serialized trusted datasource and pool: it is their creator
+        Datasource ds("dsoptprobe:u/p@x");
+        Datasource d2 = pgms.sandboxed.callFunction("deserialize", Serializable::serialize(ds));
+        *hash<auto> obs = observe(d2);
+        assertChoosers(False, obs, "S1: datasource");
+        assertEntry("sandboxed", obs.entries[0], "S1: the creator");
+        DatasourcePool p = pgms.trusted.callFunction("make_pool");
+        DatasourcePool p2 = pgms.sandboxed.callFunction("deserialize", Serializable::serialize(p));
+        assertChoosers(False, p2.select("choosers"), "S1: pool", 1);
+
+        # S2: trusted code deserializes data that sandboxed code produced: the deserializer is the chooser, and it must
+        # validate data that it does not trust, as any trusted intermediary
+        data d = pgms.sandboxed.callFunction("serialize", pgms.sandboxed.callFunction("make_args"));
+        assertChoosers(True, observe(Serializable::deserialize(d)), "S2");
+    }
+
+    ownOpenTest() {
+        # O1: sandboxed code sets the database name of a trusted datasource and opens it itself
+        Datasource ds("dsoptprobe:u/p@x");
+        pgms.sandboxed.callFunction("set_param", ds, "db", "y");
+        assertChoosers(False, pgms.sandboxed.callFunction("open_choosers", ds), "O1", 4);
+
+        # O2: the same with the destination option
+        ds = new Datasource("dsoptprobe:u/p@x");
+        pgms.sandboxed.callFunction("set_option", ds, "dest", "elsewhere");
+        assertChoosers(False, pgms.sandboxed.callFunction("open_choosers", ds), "O2", 5);
+    }
+
+    copyCreatorTest() {
+        # Y1: trusted code copies a pool that sandboxed code created; copy() runs under the sandbox of the object that
+        # sandboxed code created (its provenance), so the copier is restricted as well, and the creator of the original
+        # is kept (the case of a copier that is not restricted is tested in C++, dbg_run_datasource_pending_tests())
+        DatasourcePool p = pgms.sandboxed.callFunction("make_pool");
+        DatasourcePool copy = p.copy();
+        *hash<auto> obs = copy.select("choosers");
+        assertChoosers(False, obs, "Y1", 2);
+        assertEntry("sandboxed", obs.entries[0], "Y1: the copier, under the object's sandbox");
+        assertEntry("sandboxed", obs.entries[1], "Y1: the creator of the original");
+
+        # Y2: trusted code copies a datasource that sandboxed code created with default parameters only
+        Datasource ds = pgms.sandboxed.callFunction("make_default");
+        obs = observe(ds.copy());
+        # the copier, under the object's sandbox, is equivalent to the sandboxed creator: one entry for both
+        assertChoosers(False, obs, "Y2", 1);
+        assertEntry("sandboxed", obs.entries[0], "Y2: the creator of the original");
+    }
+
+    noManagerTest() {
+        # N1: sandboxed code creates a child Program with no manager of its own, which creates a datasource: the
+        # creator is the creating sandboxed code
+        *hash<auto> obs = observe(pgms.sandboxed.callFunction("child_make"));
+        assertChoosers(False, obs, "N1");
+        assertEq(False, obs.entries[0].allows_uncontrolled, "N1: the creator restricts");
+
+        # N2: a PO_NO_UNCONTROLLED_APIS Program with no sandbox manager creates a datasource: allowed, as by the policy
+        # resolution (decision D5), with the option in its restrictions
+        obs = observe(pgms."no-uncontrolled".callFunction("make_args"));
+        assertChoosers(True, obs, "N2", 4);
+        assertEq(True, obs.entries[0].no_uncontrolled, "N2: the restrictions have the option");
+        assertEq(False, obs.entries[0].policy, "N2: no policy manager");
+    }
+
+    livePolicyTest() {
+        # T1: a trusted sandbox creates a pool; the host then refuses uncontrolled APIs; the pool grows
+        {
+            SandboxManager sm();
+            sm.setUncontrolledApiPolicy(True);
+            Program pgm = getProgram(NOTHING, sm);
+            DatasourcePool p = pgm.callFunction("make_pool");
+            assertChoosers(True, p.select("choosers"), "T1: before", 1);
+            sm.setUncontrolledApiPolicy(False);
+            assertChoosers(False, observeGrowth(p), "T1: grown after the change", 1);
+            assertChoosers(False, p.select("reconnect"), "T1: a reconnect after the change", 1);
+        }
+        # T2: the reverse order
+        {
+            SandboxManager sm();
+            Program pgm = getProgram(NOTHING, sm);
+            DatasourcePool p = pgm.callFunction("make_pool");
+            assertChoosers(False, p.select("choosers"), "T2: before", 1);
+            sm.setUncontrolledApiPolicy(True);
+            assertChoosers(True, observeGrowth(p), "T2: grown after the change", 1);
+            assertChoosers(True, p.select("reconnect"), "T2: a reconnect after the change", 1);
+        }
+    }
+
+    lastSetterTest() {
+        # D4a: the last setter of a value decides
+        Datasource ds("dsoptprobe:u/p@x");
+        pgms.sandboxed.callFunction("set_param", ds, "db", "y");
+        ds.setDBName("z");
+        assertChoosers(True, observe(ds), "D4a", 4);
+
+        # D4b: the same for the destination option, opened by trusted and by sandboxed code
+        ds = new Datasource("dsoptprobe:u/p@x");
+        pgms.sandboxed.callFunction("set_option", ds, "dest", "elsewhere");
+        ds.setOption("dest", "here");
+        assertChoosers(True, observe(ds), "D4b: opened by trusted code", 5);
+        assertChoosers(True, pgms.sandboxed.callFunction("open_choosers", ds), "D4b: opened by sandboxed code", 5);
+
+        # D4d: trusted code that sets every value does not replace a sandboxed creator; the setters run under the
+        # sandbox of the object that sandboxed code created (its provenance), so they are restricted too (the case of
+        # setters that are not restricted is tested in C++, dbg_run_datasource_pending_tests())
+        ds = pgms.sandboxed.callFunction("make_args");
+        ds.setUserName("u");
+        ds.setPassword("p");
+        ds.setDBName("x");
+        *hash<auto> obs = observe(ds);
+        assertChoosers(False, obs, "D4d", 4);
+        assertEntry("sandboxed", obs.entries[0], "D4d: the creator");
+        foreach hash<auto> e in (obs.entries[1..]) {
+            assertEntry("sandboxed", e, "D4d: a setter, under the object's sandbox");
+        }
+    }
+
+    callerTest() {
+        # L1: sandboxed code calls trusted code that creates a datasource: the record is what the policy walk gives
+        # for that code; the first manager found, the sandboxed caller's, governs
+        code make_ds = auto sub () { return new Datasource("dsoptprobe:u/p@x"); };
+        assertChoosers(False, observe(pgms.sandboxed.callFunction("through", make_ds)), "L1", 4);
+
+        # L2: the trusted code sets the database name of a trusted datasource
+        Datasource ds("dsoptprobe:u/p@x");
+        code set_db = auto sub () { ds.setDBName("y"); };
+        pgms.sandboxed.callFunction("through", set_db);
+        assertChoosers(False, observe(ds), "L2", 4);
+
+        # L3: the same trusted code inside callWithSystemPolicy()
+        code barrier = auto sub () { return SandboxManager::callWithSystemPolicy(make_ds); };
+        assertChoosers(True, observe(pgms.sandboxed.callFunction("through", barrier)), "L3", 4);
+    }
+
+    #! runs the code in a child process created with fork() and returns its result
+    /** The child writes the string that the code returns, or the code of the exception that it raises, to a pipe and
+        exits with exit() while it holds the write end of the pipe open, so the parent reads the result until the child
+        has exited (as in examples/test/qore/classes/Datasource/fork.qtest)
+    */
+    private string runChild(code child) {
+        hash<PipeInfo> pipe = File::getPipe();
+        # the child must not write the parent's buffered output again when it exits
+        flush();
+        int pid = fork();
+        if (!pid) {
+            pipe.read.close();
+            string result;
+            try {
+                result = child();
+            } catch (hash<ExceptionInfo> ex) {
+                result = "exception: " + ex.err;
+            }
+            pipe.write.write(result);
+            Qore::exit(0);
+        }
+        pipe.write.close();
+        assertGt(0, pid);
+        string result;
+        while (*binary data = pipe.read.readBinary(4096)) {
+            result += data.toString();
+        }
+        return result;
+    }
+
+    forkReopenTest() {
+        if (PlatformOS == "Windows") {
+            testSkip("the test uses fork()");
+        }
+        # F1: sandboxed code sets the database name of an open trusted datasource; in a child process created with
+        # fork(), the first use of the inherited datasource gives the inherited connection up and opens a new one with
+        # the values in use, which are copied from the pending values with their setters: the new connection is
+        # restricted
+        Datasource ds("dsoptprobe:u/p@x");
+        ds.open();
+        on_exit ds.close();
+        assertChoosers(True, ds.select("choosers"), "F1: before", 4);
+        pgms.sandboxed.callFunction("set_param", ds, "db", "y");
+        string r = runChild(string sub () {
+            ds.getOption("other");
+            *hash<auto> obs = ds.select("choosers");
+            return sprintf("known=%y allows=%y n=%y restricting=%y", obs.known, obs.allows_uncontrolled, obs.n,
+                (select obs.entries, !$1.allows_uncontrolled && $1.sandboxed).size());
+        });
+        assertEq("known=True allows=False n=4 restricting=1", r, "F1: the reopen in the child is restricted");
+        # the parent's connection is the one that it opened, with the values that trusted code set
+        assertChoosers(True, ds.select("choosers"), "F1: the parent's connection", 4);
+    }
+
+    backgroundSetterTest() {
+        # BG1: a thread that sandboxed code started sets the database name of a closed trusted datasource; trusted code
+        # opens it: the setter is the sandboxed code, which the thread inherits
+        Datasource ds("dsoptprobe:u/p@x");
+        pgms.sandboxed.callFunction("set_param_bg", ds, "db", "y");
+        *hash<auto> obs = observe(ds);
+        assertChoosers(False, obs, "BG1", 4);
+        assertOneRestricting(obs, "BG1");
+
+        # BG2: the same with the destination option
+        ds = new Datasource("dsoptprobe:u/p@x");
+        pgms.sandboxed.callFunction("set_option_bg", ds, "dest", "elsewhere");
+        obs = observe(ds);
+        assertEq(1, obs.dest, "BG2: the setter of the option is an entry");
+        assertChoosers(False, obs, "BG2", 5);
+        assertOneRestricting(obs, "BG2");
+    }
+}

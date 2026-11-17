@@ -3514,16 +3514,21 @@ static std::unique_ptr<QoreIRInstruction> readHashKeyStore(
     const char* key_name = ctx.reader.readStringRef(ctx.ptr);
     uint32_t container_slot_id = QoreAOTBinaryReader::readU32(ctx.ptr);
     auto* hi = new QoreIRHashKeyStoreInstruction(nullptr, key_name ? key_name : "");
+    std::unique_ptr<QoreIRInstruction> hi_holder(hi);
     hi->opcode = static_cast<QoreIROpcode>(opcode_raw);
     hi->container_slot_id = container_slot_id;
     // Resolve container LocalVar for COW branch — see readHashKeyStoreDynamic.
-    if (LocalVar* lv = ctx.resolveLocalBySlot(container_slot_id)) {
-        hi->container_lv = lv;
+    // the container VarRefNode is not serialized: the interpreter stores the container through the local of its
+    // slot, which must be one of the function (qore#6451)
+    hi->container_lv = ctx.resolveLocalBySlot(container_slot_id);
+    if (!hi->container_lv) {
+        ctx.error = "hash key store container slot " + std::to_string(container_slot_id) + " is not a local";
+        return nullptr;
     }
     hi->result = QoreIRValue(result_id);
     hi->operands = operands;
     hi->exception_target = exc_target;
-    return std::unique_ptr<QoreIRInstruction>(hi);
+    return hi_holder;
 }
 
 // ============================================================================
@@ -3542,18 +3547,23 @@ static std::unique_ptr<QoreIRInstruction> readListIndexStore(
         AOTInstReadCtx& ctx) {
     uint32_t container_slot_id = QoreAOTBinaryReader::readU32(ctx.ptr);
     auto* li = new QoreIRListIndexStoreInstruction(nullptr);
+    std::unique_ptr<QoreIRInstruction> li_holder(li);
     li->opcode = static_cast<QoreIROpcode>(opcode_raw);
     li->container_slot_id = container_slot_id;
     // Resolve container LocalVar for the COW branch; the container VarRefNode is
     // not serialized, so container==nullptr here and the interpreter COW path must
     // use container_lv instead (see readHashKeyStore).
-    if (LocalVar* lv = ctx.resolveLocalBySlot(container_slot_id)) {
-        li->container_lv = lv;
+    // the container VarRefNode is not serialized: the interpreter stores the container through the local of its
+    // slot, which must be one of the function (qore#6451)
+    li->container_lv = ctx.resolveLocalBySlot(container_slot_id);
+    if (!li->container_lv) {
+        ctx.error = "list index store container slot " + std::to_string(container_slot_id) + " is not a local";
+        return nullptr;
     }
     li->result = QoreIRValue(result_id);
     li->operands = operands;
     li->exception_target = exc_target;
-    return std::unique_ptr<QoreIRInstruction>(li);
+    return li_holder;
 }
 
 // ============================================================================
@@ -4082,6 +4092,7 @@ static std::unique_ptr<QoreIRInstruction> readHashKeyStoreDynamic(
         AOTInstReadCtx& ctx) {
     uint32_t container_slot_id = QoreAOTBinaryReader::readU32(ctx.ptr);
     auto* hi = new QoreIRHashKeyStoreDynamicInstruction(nullptr);
+    std::unique_ptr<QoreIRInstruction> hi_holder(hi);
     hi->opcode = static_cast<QoreIROpcode>(opcode_raw);
     hi->container_slot_id = container_slot_id;
     // Resolve the container LocalVar via slot_to_local so the COW branch in
@@ -4089,13 +4100,17 @@ static std::unique_ptr<QoreIRInstruction> readHashKeyStoreDynamic(
     // container VarRefNode*. Without this, closure bodies that write to a
     // captured hash hit the COW path (refcount > 1 because both the
     // enclosing function and the closure reference the hash) and segfault.
-    if (LocalVar* lv = ctx.resolveLocalBySlot(container_slot_id)) {
-        hi->container_lv = lv;
+    // the container VarRefNode is not serialized: the interpreter stores the container through the local of its
+    // slot, which must be one of the function (qore#6451)
+    hi->container_lv = ctx.resolveLocalBySlot(container_slot_id);
+    if (!hi->container_lv) {
+        ctx.error = "dynamic hash key store container slot " + std::to_string(container_slot_id) + " is not a local";
+        return nullptr;
     }
     hi->result = QoreIRValue(result_id);
     hi->operands = operands;
     hi->exception_target = exc_target;
-    return std::unique_ptr<QoreIRInstruction>(hi);
+    return hi_holder;
 }
 
 // ============================================================================
@@ -4323,6 +4338,12 @@ static std::unique_ptr<QoreIRInstruction> readLValuePath(
                 || step.kind == LVPathStepKind::ListIndexSlice
                 || step.kind == LVPathStepKind::ListRangeSlice) {
             uint32_t num_slice_ops = QoreAOTBinaryReader::readU32(ctx.ptr);
+            // an id has 4 bytes: a count that the IR cannot hold is refused before the ids are allocated (qore#6451)
+            if (ctx.end < ctx.ptr || num_slice_ops > static_cast<size_t>(ctx.end - ctx.ptr) / 4) {
+                ctx.error = "truncated AOT lvalue slice: " + std::to_string(num_slice_ops) + " selectors";
+                delete pi;
+                return nullptr;
+            }
             step.slice_operand_ids.reserve(num_slice_ops);
             for (uint32_t k = 0; k < num_slice_ops; ++k) {
                 if (k && !(k % 100)

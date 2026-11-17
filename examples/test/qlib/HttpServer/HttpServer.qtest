@@ -36,6 +36,58 @@
 # Test servers use IPv4 unless a case explicitly selects another family. Keep endpoints on IPv4 loopback because an
 # unrelated IPv6-only listener can independently own the same ephemeral port number.
 
+#! a logger appender that reports the ends of the connections of an HTTP server
+/** The controller logs the end of an HTTP/1.x connection (\c "Connection closed: ...") and of an HTTP/2 connection
+    (\c "HTTP/2 connection closed...", at the \c DEBUG level) in the callback that removes the connection and then
+    cancels its operation (qore#6479)
+*/
+class ConnectionCloseAppender inherits LoggerAppenderWithLayout {
+    private {
+        #! the ends of HTTP/1.x connections
+        Queue h1_closed();
+        #! the ends of HTTP/2 connections
+        Queue h2_closed();
+    }
+
+    constructor() : LoggerAppenderWithLayout("connection-close", new LoggerLayoutPattern("%m")) {
+        open();
+    }
+
+    processEventImpl(int type, auto params) {
+        if (type != EVENT_LOG) {
+            return;
+        }
+        if (params =~ /^Connection closed: /) {
+            h1_closed.push(params);
+        } else if (params =~ /^HTTP\/2 connection closed/) {
+            h2_closed.push(params);
+        }
+    }
+
+    #! Waits for the given number of connections to end
+    /** @param http2 True for HTTP/2 connections, False for HTTP/1.x connections
+        @param count the number of connections
+        @param max_wait a guard against a hang: the connections that end in the time are not checked
+
+        @return the number of the connections that ended
+    */
+    int wait(bool http2, int count, timeout max_wait = 2m) {
+        Queue q = http2 ? h2_closed : h1_closed;
+        int ended = 0;
+        try {
+            while (ended < count) {
+                q.get(max_wait);
+                ++ended;
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "QUEUE-TIMEOUT") {
+                rethrow;
+            }
+        }
+        return ended;
+    }
+}
+
 class AltHandler inherits AbstractHttpRequestHandler {
     hash handleRequest(hash cx, hash hdr, *data body) {
         return makeResponse(201, "a1, " + hdr.method + ", " + hdr.path + ", " + cx.raw_path);
@@ -3713,10 +3765,14 @@ public class HttpServerTest inherits QUnit::Test {
         running.
     */
     asyncModeCacheCleanupTest() {
-        Logger logger("async-cache-cleanup-test", LoggerLevel::getLevelInfo());
+        # the DEBUG level for the end of an HTTP/2 connection
+        Logger logger("async-cache-cleanup-test", LoggerLevel::getLevelDebug());
         if (m_options.verbose > 2) {
             logger.addAppender(new StdoutAppender());
         }
+        # the cache is checked when the server has handled the end of each connection, not after a time (qore#6479)
+        ConnectionCloseAppender closes();
+        logger.addAppender(closes);
         hash<HttpServerOptionInfo> opts = <HttpServerOptionInfo>{
             "logger": logger,
             "debug": True,
@@ -3767,22 +3823,12 @@ public class HttpServerTest inherits QUnit::Test {
                 clients += client;
             }
 
-            # Verify cache has grown (connections are active); the async I/O
-            # system may not have registered all connections yet, so allow a
-            # brief window for the cache to update
-            int active_cache_size;
-            int retries = 0;
-            while (True) {
-                active_cache_size = server.getHttpAsyncIo().getTotalCacheSize();
-                if (active_cache_size > baseline_cache_size || retries >= 20) {
-                    break;
-                }
-                usleep(50ms);
-                ++retries;
-            }
+            # Verify cache has grown (connections are active): the callbacks of the requests have resubmitted the
+            # connections' operations
+            waitForAsyncCallbacks(server);
+            int active_cache_size = server.getHttpAsyncIo().getTotalCacheSize();
             if (m_options.verbose > 1) {
-                printf("Active cache size with %d connections: %d (after %d retries)\n",
-                    num_connections, active_cache_size, retries);
+                printf("Active cache size with %d connections: %d\n", num_connections, active_cache_size);
             }
             assertTrue(active_cache_size > baseline_cache_size,
                 "cache should grow when connections are active");
@@ -3791,22 +3837,9 @@ public class HttpServerTest inherits QUnit::Test {
             map $1.disconnect(), clients;
             delete clients;
 
-            # Wait for the async I/O system to process disconnects and clean
-            # up cache entries
-            int final_cache_size;
-            int cleanup_retries = 0;
-            while (True) {
-                final_cache_size = server.getHttpAsyncIo().getTotalCacheSize();
-                if (final_cache_size <= baseline_cache_size || cleanup_retries >= 100) {
-                    break;
-                }
-                usleep(50ms);
-                ++cleanup_retries;
-            }
-            if (m_options.verbose > 1) {
-                printf("Cache cleanup took %d retries (%d ms)\n",
-                    cleanup_retries, cleanup_retries * 50);
-            }
+            # Wait until the server has handled the end of each connection and canceled its operation
+            waitForConnectionsClosed(server, closes, False, num_connections);
+            int final_cache_size = server.getHttpAsyncIo().getTotalCacheSize();
             if (m_options.verbose > 1) {
                 printf("Final cache size after disconnect: %d\n", final_cache_size);
             }
@@ -3818,6 +3851,8 @@ public class HttpServerTest inherits QUnit::Test {
             verify_client.connect();
             assertEq("GET, test2, /test2", verify_client.get("/test2"));
             verify_client.disconnect();
+            # its end must not change the HTTP/2 cache sizes below
+            waitForConnectionsClosed(server, closes, False, 1);
         }
 
         # Test 2: HTTP/2 connections - same test with HTTP/2 over SSL
@@ -3832,6 +3867,7 @@ public class HttpServerTest inherits QUnit::Test {
             int ssl_port = ssl_info.port;
 
             # Get baseline after adding SSL listener (includes accept ops for both listeners)
+            waitForAsyncCallbacks(server);
             int h2_baseline = server.getHttpAsyncIo().getTotalCacheSize();
             if (m_options.verbose > 1) {
                 printf("HTTP/2 baseline cache size: %d\n", h2_baseline);
@@ -3849,21 +3885,11 @@ public class HttpServerTest inherits QUnit::Test {
                 clients += client;
             }
 
-            # Verify cache has grown (HTTP/2 connections are active); allow a
-            # brief window for the async I/O system to register them
-            int h2_active;
-            int retries = 0;
-            while (True) {
-                h2_active = server.getHttpAsyncIo().getTotalCacheSize();
-                if (h2_active > h2_baseline || retries >= 20) {
-                    break;
-                }
-                usleep(50ms);
-                ++retries;
-            }
+            # Verify cache has grown (HTTP/2 connections are active)
+            waitForAsyncCallbacks(server);
+            int h2_active = server.getHttpAsyncIo().getTotalCacheSize();
             if (m_options.verbose > 1) {
-                printf("HTTP/2 active cache size with %d connections: %d (after %d retries)\n",
-                    num_connections, h2_active, retries);
+                printf("HTTP/2 active cache size with %d connections: %d\n", num_connections, h2_active);
             }
             assertTrue(h2_active > h2_baseline,
                 "cache should grow when HTTP/2 connections are active");
@@ -3872,22 +3898,9 @@ public class HttpServerTest inherits QUnit::Test {
             map $1.disconnect(), clients;
             delete clients;
 
-            # Wait for the async I/O system to process disconnects and clean
-            # up cache entries
-            int h2_final;
-            int h2_cleanup_retries = 0;
-            while (True) {
-                h2_final = server.getHttpAsyncIo().getTotalCacheSize();
-                if (h2_final <= h2_baseline || h2_cleanup_retries >= 100) {
-                    break;
-                }
-                usleep(50ms);
-                ++h2_cleanup_retries;
-            }
-            if (m_options.verbose > 1) {
-                printf("HTTP/2 cache cleanup took %d retries (%d ms)\n",
-                    h2_cleanup_retries, h2_cleanup_retries * 50);
-            }
+            # Wait until the server has handled the end of each connection and canceled its operation
+            waitForConnectionsClosed(server, closes, True, num_connections);
+            int h2_final = server.getHttpAsyncIo().getTotalCacheSize();
             if (m_options.verbose > 1) {
                 printf("HTTP/2 final cache size after disconnect: %d\n", h2_final);
             }
@@ -3903,6 +3916,22 @@ public class HttpServerTest inherits QUnit::Test {
 
             server.stopListenerID(ssl_info.id);
         }
+    }
+
+    #! Waits until the callbacks of the async I/O controller have run and the I/O threads have handled what they submitted
+    private waitForAsyncCallbacks(HttpServer server) {
+        server.getGlobalAsyncCtrl().flushCallbacks();
+        assertTrue(server.waitForAsyncIo(2m), "async I/O should process the submitted operations");
+    }
+
+    #! Waits until the server has handled the end of the given number of connections
+    /** The callback that logs the end of a connection then cancels its operation: the operation is out of the cache
+        when the callback has returned
+    */
+    private waitForConnectionsClosed(HttpServer server, ConnectionCloseAppender closes, bool http2, int count) {
+        assertEq(count, closes.wait(http2, count), sprintf("the server should handle the end of %d HTTP/%s "
+            "connection(s)", count, http2 ? "2" : "1.1"));
+        waitForAsyncCallbacks(server);
     }
 
     /** Test that server handles bad SSL handshakes without blocking I/O thread.

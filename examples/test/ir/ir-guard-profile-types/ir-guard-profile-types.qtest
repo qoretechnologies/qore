@@ -1,0 +1,55 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-platform: macos - the IR guard profiles of interpreted and JIT-compiled code, and Program deletion
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../TestInterpreter.qm
+
+%exec-class IRGuardProfileTypesTest
+
+#! The IR guard type profiles do not keep the types of destroyed declarations
+/** The type profile of a guard point counts the types of the values that pass it; a type of a class of another
+    Program that is deleted must be removed from the profile when the class is destroyed, so that no later code can
+    take the profile's entry for a live type, and counting it must not keep the class's declaration (issue #6421).
+    The worker (debug builds: dbg_ir_guard_profile_type_count()) profiles a function with objects of a class of a
+    child Program, deletes the Program and checks the profile, in the execution modes that run the IR.
+*/
+class IRGuardProfileTypesTest inherits QUnit::Test {
+    constructor() : QUnit::Test("IRGuardProfileTypesTest", "1.0", \ARGV) {
+        foreach hash<auto> i in ({
+                "ir": "--exec-mode=ir",
+                "jit": "--exec-mode=jit",
+                "tiered": "--exec-mode=tiered",
+                "tiered, IR tier": "--exec-mode=tiered --jit-ir-threshold=1 --jit-jit-threshold=1000000",
+            }.pairIterator()) {
+            addTestCase("guard profile types of a deleted Program: " + i.key, \testMode(), (i.key, i.value));
+        }
+        set_return_value(main());
+    }
+
+    testMode(string label, string opts) {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("dbg_ir_guard_profile_type_count() requires a debug build");
+        }
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        int status;
+        string out = backquote(sprintf("QORE_JIT_SYNC_COMPILE=1 LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s %s "
+            "%s/guard-profile-types.q 2>&1", libqore_dir, libqore_dir, qore_bin, opts, get_script_dir()), \status);
+        assertEq(0, status, out);
+        list<list<int>> gens = map (int($1[0]), int($1[1])),
+            (map ($1 =~ x/profiled types: (-?[0-9]+) -> (-?[0-9]+)/), out.split("\n")), $1;
+        assertEq(3, gens.size(), out);
+        # the function counted the type while the Program existed (with native code, at least before its compilation)
+        assertGt(0, gens[0][0], label + ": the profile counted the type: " + out);
+        # and no longer counts it once the Program is deleted
+        assertEq((), (select gens, $1[1] != 0), label + ": no type of a deleted Program is left: " + out);
+        # counting a type does not keep its declaration
+        assertRegex("declarations kept: 0\n", out, label);
+    }
+}
