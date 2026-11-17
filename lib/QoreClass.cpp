@@ -1027,6 +1027,10 @@ qore_class_private::qore_class_private(const qore_class_private& old, qore_ns_pr
     if (old.members.isFrozen()) {
         members.freeze();
     }
+    // a copy of a reachable class is reachable: a module cannot give it members either (#6422)
+    if (old.reachable.load(std::memory_order_acquire)) {
+        reachable.store(true, std::memory_order_release);
+    }
 }
 #endif
 
@@ -1198,6 +1202,10 @@ qore_class_private::qore_class_private(const qore_class_private& old, qore_ns_pr
     // a copy of a class whose members are frozen is complete when it is made (#6272)
     if (old.members.isFrozen()) {
         members.freeze();
+    }
+    // a copy of a reachable class is reachable: a module cannot give it members either (#6422)
+    if (old.reachable.load(std::memory_order_acquire)) {
+        reachable.store(true, std::memory_order_release);
     }
 }
 
@@ -2437,8 +2445,10 @@ void qore_class_private::parseCommit() {
     if (!has_public_memdecl && (scl ? scl->parseHasPublicMembersInHierarchy() : false)) {
         has_public_memdecl = true;
     }
-    // the committed class is visible to running code, which reads its members without a lock (#6272)
+    // the committed class is visible to running code, which reads its members without a lock (#6272); a module cannot
+    // add members to it (#6422)
     members.freeze();
+    markReachable();
 }
 
 void qore_class_private::addLocalMembersForInit() {
@@ -4851,14 +4861,85 @@ static const QoreClass* getStackClass() {
     return qc ? qc->cls : nullptr;
 }
 
+//! serializes the API's member additions with the marking of classes as reachable (issue #6422)
+static std::mutex qore_class_member_add_lock;
+
+//! the builtin classes committed into a namespace during the module initialization running in this thread, which
+//! become reachable when it returns (QoreModuleInitClassesHelper), or nullptr outside a module's initialization
+static thread_local std::vector<qore_class_private*>* qore_module_init_classes = nullptr;
+
+QoreModuleInitClassesHelper::QoreModuleInitClassesHelper() : prev(qore_module_init_classes) {
+    qore_module_init_classes = &classes;
+}
+
+QoreModuleInitClassesHelper::~QoreModuleInitClassesHelper() {
+    qore_module_init_classes = prev;
+}
+
+void QoreModuleInitClassesHelper::commit() {
+    for (qore_class_private* qc : classes) {
+        qc->markReachable();
+    }
+    classes.clear();
+}
+
+void qore_class_private::markReachable() {
+    std::lock_guard<std::mutex> l(qore_class_member_add_lock);
+    reachable.store(true, std::memory_order_release);
+}
+
+void qore_class_private::systemClassCommitted() {
+    if (qore_module_init_classes) {
+        qore_module_init_classes->push_back(this);
+    } else {
+        markReachable();
+    }
+}
+
+int qore_class_private::addMemberApi(const char* mem, ExceptionSink* xsink, const std::function<void()>& add) {
+    std::lock_guard<std::mutex> l(qore_class_member_add_lock);
+    if (reachable.load(std::memory_order_relaxed)) {
+        xsink->raiseException("CLASS-MEMBER-ADD-ERROR", "cannot add member '%s' to class '%s': the class has been "
+            "published, and code in other threads can read its members", mem, name.c_str());
+        return -1;
+    }
+    add();
+    return 0;
+}
+
+int QoreClass::addMember(const char* mname, ClassAccess access, const QoreTypeInfo* n_typeInfo,
+        QoreValue initial_value, ExceptionSink* xsink) {
+    return priv->addMemberApi(mname, xsink, [&] () {
+        priv->addMember(mname, access, n_typeInfo, initial_value);
+    });
+}
+
 void QoreClass::addMember(const char* mname, ClassAccess access, const QoreTypeInfo* n_typeInfo,
         QoreValue initial_value) {
-    priv->addMember(mname, access, n_typeInfo, initial_value);
+    // no sink: a refusal is reported on the standard error output
+    ExceptionSink xsink;
+    addMember(mname, access, n_typeInfo, initial_value, &xsink);
+    xsink.handleExceptions();
+}
+
+int QoreClass::addBuiltinMemberWithAccessors(const char* name, ClassAccess access, const QoreTypeInfo* typeInfo,
+        q_member_get_t get, q_member_set_t set, const void* ptr, q_member_del_t del, ExceptionSink* xsink) {
+    int rc = priv->addMemberApi(name, xsink, [&] () {
+        priv->addBuiltinMemberWithAccessors(name, access, typeInfo, get, set, ptr, del);
+    });
+    // the class takes ownership of the module data only if the member is added
+    if (rc && del) {
+        del(ptr);
+    }
+    return rc;
 }
 
 void QoreClass::addBuiltinMemberWithAccessors(const char* name, ClassAccess access, const QoreTypeInfo* typeInfo,
         q_member_get_t get, q_member_set_t set, const void* ptr, q_member_del_t del) {
-    priv->addBuiltinMemberWithAccessors(name, access, typeInfo, get, set, ptr, del);
+    // no sink: a refusal is reported on the standard error output
+    ExceptionSink xsink;
+    addBuiltinMemberWithAccessors(name, access, typeInfo, get, set, ptr, del, &xsink);
+    xsink.handleExceptions();
 }
 
 BCSMList::BCSMList(const BCSMList& old) {
