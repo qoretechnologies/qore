@@ -251,6 +251,8 @@ class ExecModeMarkerTest(unittest.TestCase):
         #   and in qcc executables
         # - deferred-callback-runtime-parse-options (#6208): its checks run in child processes that set their own
         #   execution modes
+        # - thread-reaper (#6433): its checks run in child processes without an execution mode, whose native thread
+        #   reapers it inspects
         # - unhandled-exception-report: its checks run in child processes without an execution mode, whose threads
         #   raise unhandled exceptions at the same time
         # - float-conversion-edges (#6212): its probes run in child processes that set their own --exec-mode and in qcc
@@ -308,6 +310,7 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/qore/operators/UndefinedArithmetic-2.qtest",
                                  "examples/test/qore/operators/UndefinedArithmetic-3.qtest",
                                  "examples/test/qore/lists/broken-list-range-past-end.qtest",
+                                 "examples/test/qore/threads/thread-reaper/thread-reaper.qtest",
                                  "examples/test/qore/threads/unhandled-exception-report.qtest",
                                  "examples/test/qore/threads/frame-check-stack.qtest",
                                  "examples/test/qore/functions/float-conversion-edges.qtest",

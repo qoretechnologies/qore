@@ -26694,6 +26694,28 @@ static QoreValue f_dbg_wait_thread_finish_held(const QoreListNode* params, Runti
     return qore_dbg_wait_thread_finish_held(static_cast<int>(get_param_value(params, 0).getAsBigInt()));
 }
 
+//! Releases a thread held by dbg_hold_next_thread_tls_exit() (qore#6433)
+static QoreValue f_dbg_release_thread_finish_hold(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    qore_dbg_release_thread_finish_hold();
+    return QoreValue();
+}
+
+//! Waits until the background thread count is at most the given count, as a thread leaves it once it has been
+//! joined; returns False on timeout (qore#6433)
+static QoreValue f_dbg_wait_thread_counter_at_most(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    int64 count = get_param_value(params, 0).getAsBigInt();
+    int64 timeout_ms = get_param_value(params, 1).getAsBigInt();
+    if (count < 0 || timeout_ms <= 0 || timeout_ms > INT_MAX) {
+        xsink->raiseException("DBG-ERROR", "dbg_wait_thread_counter_at_most(): count must not be negative and "
+            "timeout_ms must be positive; got %lld and %lld", (long long)count, (long long)timeout_ms);
+        return QoreValue();
+    }
+    return qore_dbg_wait_thread_counter_at_most(count > INT_MAX ? INT_MAX : static_cast<int>(count),
+        static_cast<int>(timeout_ms));
+}
+
 static QoreValue f_dbg_fail_next_program_entry(const QoreListNode* params, RuntimeConfig& rc,
         ExceptionSink* xsink) {
     qore_dbg_fail_next_program_entry(static_cast<int>(get_param_value(params, 0).getAsBigInt()));
@@ -26917,6 +26939,11 @@ void init_debug_functions(QoreNamespace& qns) {
         QDOM_DEBUG_HOOK, nothingTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "ms");
     qns.addBuiltinVariant("dbg_wait_thread_finish_held", f_dbg_wait_thread_finish_held, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, boolTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
+    qns.addBuiltinVariant("dbg_release_thread_finish_hold", f_dbg_release_thread_finish_hold, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, nothingTypeInfo);
+    qns.addBuiltinVariant("dbg_wait_thread_counter_at_most", f_dbg_wait_thread_counter_at_most, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, boolTypeInfo, 2, bigIntTypeInfo, QORE_PARAM_NO_ARG, "count", bigIntTypeInfo,
+        QORE_PARAM_NO_ARG, "timeout_ms");
     qns.addBuiltinVariant("dbg_fail_next_program_entry", f_dbg_fail_next_program_entry,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "site");
