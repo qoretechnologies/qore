@@ -472,7 +472,7 @@ void qore_ds_private::statementExecuted(int rc) {
 }
 
 void qore_ds_private::clearTypedResultHashDeclCache() {
-    AutoLocker al(m);
+    QoreDsLock al(m);
     size_t count = 0;
     for (auto& i : typed_result_hashdecl_cache) {
         if (count && !(count % 100)) {
@@ -486,7 +486,7 @@ void qore_ds_private::clearTypedResultHashDeclCache() {
 
 const TypedHashDecl* qore_ds_private::getTypedResultHashDecl(const char* driver_name, const std::string& signature,
         const qore_dbi_typed_result_members_t& members, ExceptionSink* xsink) {
-    AutoLocker al(m);
+    QoreDsLock al(m);
 
     auto i = typed_result_hashdecl_cache.find(signature);
     if (i != typed_result_hashdecl_cache.end()) {
@@ -524,8 +524,205 @@ const TypedHashDecl* qore_ds_private::getTypedResultHashDecl(const char* driver_
 }
 
 qore_ds_option_setter::qore_ds_option_setter()
-        : restrictions(QoreModuleCommandRestrictions::getCallerRestrictions()),
+        // getCallerRestrictions() needs a thread that Qore knows; C++ code can create or configure a datasource on a
+        // thread without Qore thread data, where no Qore code is calling, so nothing restricts it (qore#6142)
+        : restrictions(is_valid_qore_thread() ? QoreModuleCommandRestrictions::getCallerRestrictions()
+            : QoreModuleCommandRestrictions()),
+        // decides without allocating: nothing that can fail follows the reference to the policy manager
+        allows_uncontrolled(qore_sandbox_allows_uncontrolled_apis(QoreSandboxManagerHelper::Policy)),
         policy(qore_find_thread_sandbox_policy_manager_ref()) {
+    // the policy resolution allows code that no manager governs (under a barrier, or with no sandbox); not compared
+    // with the manager's policy, which another thread can change at any time
+    assert(policy || allows_uncontrolled);
+}
+
+bool qore_ds_option_setter::allowsUncontrolledApis() const {
+    // read now: a host that changes the policy of the sandbox later is honored in both directions (qore#6142)
+    return policy ? policy->getUncontrolledApiPolicy() : allows_uncontrolled;
+}
+
+qore_ds_creators_t qore_ds_make_creators(const qore_ds_setter_t& creator) {
+    assert(creator);
+    return std::make_shared<const std::vector<qore_ds_setter_t>>(1, creator);
+}
+
+qore_ds_creators_t qore_ds_merge_creators(const qore_ds_setter_t& a, const qore_ds_creators_t& b) {
+    assert(a);
+    assert(b);
+    std::vector<qore_ds_setter_t> v;
+    v.reserve(b->size() + 1);
+    v.push_back(a);
+    // the entries of b are not equivalent to each other
+    for (const qore_ds_setter_t& i : *b) {
+        if (!a->isEquivalent(*i)) {
+            v.push_back(i);
+        }
+    }
+    return std::make_shared<const std::vector<qore_ds_setter_t>>(std::move(v));
+}
+
+namespace {
+//! returns true if \a v has a record equivalent to \a s
+bool qore_ds_has_equivalent(const std::vector<qore_ds_setter_t>& v, const qore_ds_setter_t& s) {
+    for (const qore_ds_setter_t& i : v) {
+        if (i->isEquivalent(*s)) {
+            return true;
+        }
+    }
+    return false;
+}
+}
+
+qore_ds_creators_t qore_ds_merge_creators(const qore_ds_creators_t& a, const qore_ds_creators_t& b) {
+    assert(a);
+    assert(b);
+    if (a == b) {
+        return a;
+    }
+    std::vector<qore_ds_setter_t> v;
+    for (const qore_ds_setter_t& i : *b) {
+        if (!qore_ds_has_equivalent(*a, i)) {
+            if (v.empty()) {
+                v.reserve(a->size() + b->size());
+                v.insert(v.end(), a->begin(), a->end());
+            }
+            v.push_back(i);
+        }
+    }
+    if (v.empty()) {
+        // every entry of b is equivalent to one of a
+        return a;
+    }
+    return std::make_shared<const std::vector<qore_ds_setter_t>>(std::move(v));
+}
+
+//! the entries of a QoreDatasourceConnectChoosers object: records of code, without duplicates (qore#6142)
+struct qore_ds_connect_choosers_private {
+    std::vector<qore_ds_setter_t> entries;
+
+    //! adds \a s if it is not an entry already; can throw std::bad_alloc
+    void add(const qore_ds_setter_t& s) {
+        if (s && std::find(entries.begin(), entries.end(), s) == entries.end()) {
+            entries.push_back(s);
+        }
+    }
+
+    //! returns entry \a i, or nullptr if it is out of range
+    const qore_ds_option_setter* get(size_t i) const {
+        assert(i < entries.size());
+        return i < entries.size() ? entries[i].get() : nullptr;
+    }
+};
+
+QoreDatasourceConnectChoosers::QoreDatasourceConnectChoosers() noexcept : priv(nullptr) {
+}
+
+QoreDatasourceConnectChoosers::~QoreDatasourceConnectChoosers() {
+    delete priv;
+}
+
+size_t QoreDatasourceConnectChoosers::size() const {
+    return priv ? priv->entries.size() : 0;
+}
+
+bool QoreDatasourceConnectChoosers::allowsUncontrolledApis() const {
+    // an empty record is never a permission: a filled record always has a creator
+    if (!priv || priv->entries.empty()) {
+        return false;
+    }
+    for (const qore_ds_setter_t& i : priv->entries) {
+        if (!i->allowsUncontrolledApis()) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool QoreDatasourceConnectChoosers::allowsUncontrolledApis(size_t i) const {
+    // an entry that does not exist is never a permission
+    const qore_ds_option_setter* s = priv ? priv->get(i) : nullptr;
+    assert(s);
+    return s ? s->allowsUncontrolledApis() : false;
+}
+
+bool QoreDatasourceConnectChoosers::getRestrictions(size_t i, QoreModuleCommandRestrictions& r) const {
+    const qore_ds_option_setter* s = priv ? priv->get(i) : nullptr;
+    assert(s);
+    if (!s) {
+        return false;
+    }
+    r = s->getRestrictions();
+    return true;
+}
+
+QoreSandboxManager* QoreDatasourceConnectChoosers::getPolicyManagerRef(size_t i) const {
+    const qore_ds_option_setter* s = priv ? priv->get(i) : nullptr;
+    assert(s);
+    return s ? s->getPolicyManagerRef() : nullptr;
+}
+
+void QoreDatasourceConnectChoosers::clear() {
+    if (priv) {
+        // the records are released after the vector is emptied, so that this object is consistent if one of them
+        // releases the last reference to a policy manager
+        std::vector<qore_ds_setter_t> old;
+        old.swap(priv->entries);
+    }
+}
+
+int qore_ds_private::getConnectChoosers(QoreDatasourceConnectChoosers& c, ExceptionSink* xsink) const {
+    try {
+        // the creators: one pointer, copied in a leaf section; the vector is never changed once it is shared
+        qore_ds_creators_t cr = getCreators();
+        assert(cr && !cr->empty());
+        std::unique_ptr<qore_ds_connect_choosers_private> np(new qore_ds_connect_choosers_private);
+        np->entries.reserve(cr->size() + QDCP_COUNT);
+        for (const qore_ds_setter_t& i : *cr) {
+            np->add(i);
+        }
+        // the setters of the values in use: owned by the thread that holds the connection, which calls this
+        for (unsigned i = 0; i < QDCP_COUNT; ++i) {
+            np->add(param_setter[i]);
+        }
+        if (!c.priv) {
+            c.priv = np.release();
+        } else {
+            // the previous entries are released when np is destroyed
+            c.priv->entries.swap(np->entries);
+        }
+        return 0;
+    } catch (const std::bad_alloc&) {
+        c.clear();
+        xsink->outOfMemory();
+        return -1;
+    }
+}
+
+int Datasource::getConnectChoosers(QoreDatasourceConnectChoosers& c, ExceptionSink* xsink) const {
+    return priv->getConnectChoosers(c, xsink);
+}
+
+int Datasource::addOptionChooser(const char* opt, QoreDatasourceConnectChoosers& c, ExceptionSink* xsink) const {
+    assert(opt);
+#ifdef DEBUG
+    // the setter is read with m held: not from a section that holds one (see QoreDsLock)
+    assert(!QoreDsLock::dbgDepth());
+#endif
+    qore_ds_setter_t setter = priv->getOptionSetter(opt);
+    if (!setter) {
+        return 0;
+    }
+    try {
+        if (!c.priv) {
+            c.priv = new qore_ds_connect_choosers_private;
+        }
+        c.priv->add(setter);
+        return 1;
+    } catch (const std::bad_alloc&) {
+        c.clear();
+        xsink->outOfMemory();
+        return -1;
+    }
 }
 
 qore_ds_option_setter::~qore_ds_option_setter() {
@@ -558,7 +755,7 @@ public:
     PendingOptionSetterHelper(qore_ds_private& ds, const char* name,
             const std::shared_ptr<const qore_ds_option_setter>& setter) : ds(ds) {
         assert(setter);
-        AutoLocker al(ds.m);
+        QoreDsLock al(ds.m);
         // an option is set by one thread at a time
         assert(!ds.pending_opt_setter);
         // the name is assigned first: if it cannot be, nothing is pending
@@ -570,7 +767,7 @@ public:
     ~PendingOptionSetterHelper() {
         // the reference is released after the lock: the caller holds another, but the lock is a leaf lock
         std::shared_ptr<const qore_ds_option_setter> setter;
-        AutoLocker al(ds.m);
+        QoreDsLock al(ds.m);
         setter.swap(ds.pending_opt_setter);
     }
 
@@ -592,6 +789,47 @@ thread_local void* dbg_option_commit_hook_arg = nullptr;
 void qore_ds_private::setDbgOptionCommitHook(dbg_option_commit_hook_t hook, void* arg) {
     dbg_option_commit_hook = hook;
     dbg_option_commit_hook_arg = arg;
+}
+
+namespace {
+//! the number of sections on a qore_ds_private::m that the current thread is in (qore#6142)
+thread_local int qore_ds_m_depth = 0;
+//! the hook that a view of the pending connection values calls, for the calling thread (qore#6142)
+thread_local qore_ds_pending_params::dbg_view_hook_t dbg_pending_view_hook = nullptr;
+thread_local void* dbg_pending_view_hook_arg = nullptr;
+}
+
+int QoreDsLock::dbgDepth() {
+    return qore_ds_m_depth;
+}
+
+QoreThreadLock& QoreDsLock::checkLeaf(QoreThreadLock& l) {
+    // QoreThreadLock is not recursive: a leaf section entered with an m held can deadlock, and a section that holds
+    // an m can call driver code (see QoreDsLock)
+    assert(!qore_ds_m_depth);
+    return l;
+}
+
+void QoreDsLock::dbgEnter() {
+    ++qore_ds_m_depth;
+}
+
+void QoreDsLock::dbgLeave() {
+    assert(qore_ds_m_depth > 0);
+    --qore_ds_m_depth;
+}
+
+void qore_ds_pending_params::setDbgViewHook(dbg_view_hook_t hook, void* arg) {
+    dbg_pending_view_hook = hook;
+    dbg_pending_view_hook_arg = arg;
+}
+
+void qore_ds_pending_params::dbgCheck(const QoreDsLock& l) const {
+    // the values are guarded by the lock of their owner, and by no other
+    assert(l.holds(m));
+    if (dbg_pending_view_hook) {
+        dbg_pending_view_hook(m, dbg_pending_view_hook_arg);
+    }
 }
 #endif
 
@@ -688,7 +926,7 @@ void qore_ds_private::prepareOption(const char* name, const std::shared_ptr<cons
         tmp.emplace(name, setter);
         prep.node = tmp.extract(tmp.begin());
     }
-    AutoLocker al(m);
+    QoreDsLock al(m);
     // an option is set by one thread at a time, and a driver does not set options from its own option-setting function
     assert(!placeholder_opt);
     // assigned first, so that nothing is changed if it cannot be
@@ -701,13 +939,13 @@ void qore_ds_private::prepareOption(const char* name, const std::shared_ptr<cons
 
 QoreDsApplyStoredOptionsHelper::QoreDsApplyStoredOptionsHelper(const Datasource& ds) : ds(ds) {
     qore_ds_private* priv = qore_ds_private::get(const_cast<Datasource&>(ds));
-    AutoLocker al(priv->m);
+    QoreDsLock al(priv->m);
     ++priv->applying_stored_options;
 }
 
 QoreDsApplyStoredOptionsHelper::~QoreDsApplyStoredOptionsHelper() {
     qore_ds_private* priv = qore_ds_private::get(const_cast<Datasource&>(ds));
-    AutoLocker al(priv->m);
+    QoreDsLock al(priv->m);
     assert(priv->applying_stored_options > 0);
     --priv->applying_stored_options;
 }
@@ -720,7 +958,7 @@ void qore_ds_private::cancelOption(const char* name, OptionCommitPrep& prep) noe
     if (!prep.member || !prep.created_member) {
         return;
     }
-    AutoLocker al(m);
+    QoreDsLock al(m);
     placeholder_opt = false;
     // the member created for the value, which still has no value: the option is set by one thread at a time
     assert(prep.member->val.isNothing());
@@ -743,7 +981,7 @@ void qore_ds_private::commitOption(const char* name, QoreValue val,
     // the pending setter of the option (see setOption()), released after the lock as well
     std::shared_ptr<const qore_ds_option_setter> old_pending;
 
-    AutoLocker al(m);
+    QoreDsLock al(m);
     // nothing below allocates or fails: the member and the record of the setter were allocated by prepareOption()
     hash_assignment_priv ha(*qore_hash_private::get(*opt), prep.member, prep.created_member);
     old_val = ha.swap(new_val.release());
@@ -766,6 +1004,53 @@ void qore_ds_private::commitOption(const char* name, QoreValue val,
 }
 
 qore_ds_option_snapshot qore_ds_private::getOptionSnapshot() const {
+    return getOptionSnapshotIntern(nullptr, nullptr);
+}
+
+void qore_ds_private::setPendingConnectionValues(const qore_ds_private* other) {
+    // the values, their setters and the creators of other, in one section on its lock
+    qore_ds_pending_params::Values vals;
+    qore_ds_creators_t other_creators;
+    {
+        QoreDsLock al(other->m, QoreDsLock::Leaf);
+        qore_ds_pending_params::ConstView v(other->pending, al);
+        vals = v.get();
+        other_creators = v.creators();
+    }
+    // the creators of this datasource become the union of its own and those of other, built outside the lock; the
+    // merge is repeated if another thread changed them meanwhile, so that no creator is lost
+    qore_ds_creators_t mine = getCreators();
+    while (true) {
+        qore_ds_creators_t merged = qore_ds_merge_creators(mine, other_creators);
+        // declared before the lock, so that what it holds is released after it
+        qore_ds_creators_t stale;
+        QoreDsLock al(m, QoreDsLock::Leaf);
+        qore_ds_pending_params::View v(pending, al);
+        if (v.creators() != mine) {
+            // changed by another thread: merged again with the current creators
+            stale = std::move(mine);
+            mine = v.creators();
+            continue;
+        }
+        // the previous values and creators are released with the locals, after the lock
+        std::swap(v.get(), vals);
+        v.creators().swap(merged);
+        break;
+    }
+    setAutoCommit(other->getAutoCommit());
+}
+
+qore_ds_copy_snapshot qore_ds_private::getCopySnapshot(const qore_ds_setter_t& copier) const {
+    qore_ds_pending_params::Values vals;
+    qore_ds_creators_t old_creators;
+    qore_ds_option_snapshot opts = getOptionSnapshotIntern(&vals, &old_creators);
+    // the creators of the copy, built outside the lock: the copier and the creators of the original (qore#6142)
+    qore_ds_creators_t creators = qore_ds_merge_creators(copier, old_creators);
+    return qore_ds_copy_snapshot{std::move(opts), std::move(vals), std::move(creators)};
+}
+
+qore_ds_option_snapshot qore_ds_private::getOptionSnapshotIntern(qore_ds_pending_params::Values* pending_vals,
+        qore_ds_creators_t* creators) const {
     // the values that the driver of an open connection reports, including its defaults; read first and without the
     // lock, as the driver is not called with it held.  Without a connection, the kept values below are the options
     ReferenceHolder<QoreHashNode> vals(private_data ? getCurrentOptionHash(true) : new QoreHashNode(autoTypeInfo),
@@ -776,7 +1061,16 @@ qore_ds_option_snapshot qore_ds_private::getOptionSnapshot() const {
     qore_ds_option_setter_map_t setters;
     std::string pending;
     {
-        AutoLocker al(m);
+        // a leaf section: a copy is never made with an m held
+        QoreDsLock al(m, QoreDsLock::Leaf);
+        if (pending_vals) {
+            // the pending connection values and their setters, and the creators, in the same section as the options
+            // (qore#6142)
+            qore_ds_pending_params::ConstView v(this->pending, al);
+            *pending_vals = v.get();
+            assert(creators);
+            *creators = v.creators();
+        }
         ConstHashIterator hi(opt);
         while (hi.next()) {
             qore_hash_private::get(**kept)->setKeyValueIntern(hi.getKey(), hi.get().refSelf());
@@ -870,23 +1164,25 @@ QoreHashNode* qore_ds_private::getConfigHash() const {
             h->setKeyValue("port", port, nullptr);
         }
     } else {
-        if (!p_username.empty()) {
-            h->setKeyValue("user", new QoreStringNode(p_username), nullptr);
+        // the pending values, copied with the lock held: another thread can be setting them (qore#6142)
+        const qore_ds_pending_params::Values p = getPendingValues();
+        if (!p.username.empty()) {
+            h->setKeyValue("user", new QoreStringNode(p.username), nullptr);
         }
-        if (!p_password.empty()) {
-            h->setKeyValue("pass", new QoreStringNode(p_password), nullptr);
+        if (!p.password.empty()) {
+            h->setKeyValue("pass", new QoreStringNode(p.password), nullptr);
         }
-        if (!p_dbname.empty()) {
-            h->setKeyValue("db", new QoreStringNode(p_dbname), nullptr);
+        if (!p.dbname.empty()) {
+            h->setKeyValue("db", new QoreStringNode(p.dbname), nullptr);
         }
-        if (!p_db_encoding.empty()) {
-            h->setKeyValue("charset", new QoreStringNode(p_db_encoding), nullptr);
+        if (!p.db_encoding.empty()) {
+            h->setKeyValue("charset", new QoreStringNode(p.db_encoding), nullptr);
         }
-        if (!p_hostname.empty()) {
-            h->setKeyValue("host", new QoreStringNode(p_hostname), nullptr);
+        if (!p.hostname.empty()) {
+            h->setKeyValue("host", new QoreStringNode(p.hostname), nullptr);
         }
-        if (p_port) {
-            h->setKeyValue("port", p_port, nullptr);
+        if (p.port) {
+            h->setKeyValue("port", p.port, nullptr);
         }
     }
 
@@ -924,23 +1220,25 @@ QoreStringNode* qore_ds_private::getConfigString() const {
             str->sprintf(":%d", port);
         }
     } else {
-        if (!p_username.empty()) {
-            str->concat(p_username);
+        // the pending values, copied with the lock held: another thread can be setting them (qore#6142)
+        const qore_ds_pending_params::Values p = getPendingValues();
+        if (!p.username.empty()) {
+            str->concat(p.username);
         }
-        if (!p_password.empty()) {
-            str->sprintf("/%s", p_password.c_str());
+        if (!p.password.empty()) {
+            str->sprintf("/%s", p.password.c_str());
         }
-        if (!p_dbname.empty()) {
-            str->sprintf("@%s", p_dbname.c_str());
+        if (!p.dbname.empty()) {
+            str->sprintf("@%s", p.dbname.c_str());
         }
-        if (!p_db_encoding.empty()) {
-            str->sprintf("(%s)", p_db_encoding.c_str());
+        if (!p.db_encoding.empty()) {
+            str->sprintf("(%s)", p.db_encoding.c_str());
         }
-        if (!p_hostname.empty()) {
-            str->sprintf("%%%s", p_hostname.c_str());
+        if (!p.hostname.empty()) {
+            str->sprintf("%%%s", p.hostname.c_str());
         }
-        if (p_port) {
-            str->sprintf(":%d", p_port);
+        if (p.port) {
+            str->sprintf(":%d", p.port);
         }
     }
 
@@ -1081,7 +1379,7 @@ void qore_dbi_raise_fork_error(ExceptionSink* xsink, const Datasource& ds, const
 void qore_ds_private::abandon() {
     assert(isInherited());
     {
-        AutoLocker al(m);
+        QoreDsLock al(m);
         // the containers are replaced without being traversed; the statements drop their inherited data themselves
         if (!stmt_set.empty()) {
             std::unique_ptr<stmt_set_t> old(new stmt_set_t);
@@ -1121,13 +1419,21 @@ int qore_ds_private::forkCheck(ExceptionSink* xsink) {
     return raiseForkLostTransaction(xsink);
 }
 
-Datasource::Datasource(DBIDriver* ndsl, DatasourceStatementHelper* dsh) : priv(new qore_ds_private(this, ndsl, dsh)) {
+// the calling code is the creator of the datasource (qore#6142)
+Datasource::Datasource(DBIDriver* ndsl, DatasourceStatementHelper* dsh)
+        : priv(new qore_ds_private(this, ndsl, dsh, qore_ds_make_creators(qore_ds_option_setter::getCaller()))) {
+}
+
+// the creators of a pool connection are those of the pool, not the code that grows the pool (qore#6142)
+Datasource::Datasource(DBIDriver* ndsl, DatasourceStatementHelper* dsh, const qore_ds_pool_record& rec)
+        : priv(new qore_ds_private(this, ndsl, dsh, qore_ds_creators_t(rec.creators))) {
 }
 
 Datasource::Datasource(const Datasource& old, DatasourceStatementHelper* dsh) : priv(new qore_ds_private(*old.priv, this, dsh)) {
 }
 
-Datasource::Datasource(DBIDriver* ndsl) : priv(new qore_ds_private(this, ndsl, nullptr)) {
+Datasource::Datasource(DBIDriver* ndsl)
+        : priv(new qore_ds_private(this, ndsl, nullptr, qore_ds_make_creators(qore_ds_option_setter::getCaller()))) {
 }
 
 Datasource::Datasource(const Datasource& old) : priv(new qore_ds_private(*old.priv, this, nullptr)) {
@@ -1158,7 +1464,7 @@ int Datasource::getCapabilities() const {
 }
 
 void qore_ds_private::adoptStatementData(QoreSQLStatement* stmt) {
-    AutoLocker al(m);
+    QoreDsLock al(m);
     stmt_set.erase(stmt);
     if (!stmt->getPrivateData()) {
         // the connection's thread already closed it
@@ -1978,27 +2284,37 @@ void Datasource::setPrivateData(void* data) {
 }
 
 void Datasource::setPendingUsername(const char* u) {
-    priv->p_username = u;
+    // the calling code is the setter of the value (qore#6142); the previous setter is released with it
+    qore_ds_setter_t setter = qore_ds_option_setter::getCaller();
+    priv->setPendingParam(QDCP_USER, u, setter);
 }
 
 void Datasource::setPendingPassword(const char* p) {
-    priv->p_password = p;
+    // the calling code is the setter of the value (qore#6142); the previous setter is released with it
+    qore_ds_setter_t setter = qore_ds_option_setter::getCaller();
+    priv->setPendingParam(QDCP_PASS, p, setter);
 }
 
 void Datasource::setPendingDBName(const char* d) {
-    priv->p_dbname = d;
+    // the calling code is the setter of the value (qore#6142); the previous setter is released with it
+    qore_ds_setter_t setter = qore_ds_option_setter::getCaller();
+    priv->setPendingParam(QDCP_DB, d, setter);
 }
 
 void Datasource::setPendingDBEncoding(const char* c) {
-    priv->p_db_encoding = c;
+    priv->setPendingString(&qore_ds_pending_params::Values::db_encoding, c);
 }
 
 void Datasource::setPendingHostName(const char* h) {
-    priv->p_hostname = h;
+    // the calling code is the setter of the value (qore#6142); the previous setter is released with it
+    qore_ds_setter_t setter = qore_ds_option_setter::getCaller();
+    priv->setPendingParam(QDCP_HOST, h, setter);
 }
 
 void Datasource::setPendingPort(int port) {
-    priv->p_port = port;
+    // the calling code is the setter of the value (qore#6142); the previous setter is released with it
+    qore_ds_setter_t setter = qore_ds_option_setter::getCaller();
+    priv->setPendingPort(port, setter);
 }
 
 const std::string &Datasource::getUsernameStr() const {
@@ -2065,28 +2381,35 @@ void Datasource::setQoreEncoding(const QoreEncoding* enc) {
     priv->qorecharset = enc;
 }
 
+namespace {
+//! returns a new string with \a str, or nullptr if it is empty
+QoreStringNode* qore_ds_pending_string(const std::string& str) {
+    return str.empty() ? nullptr : new QoreStringNode(str);
+}
+}
+
 QoreStringNode* Datasource::getPendingUsername() const {
-    return priv->p_username.empty() ? nullptr : new QoreStringNode(priv->p_username.c_str());
+    return qore_ds_pending_string(priv->getPendingString(&qore_ds_pending_params::Values::username));
 }
 
 QoreStringNode* Datasource::getPendingPassword() const {
-    return priv->p_password.empty() ? nullptr : new QoreStringNode(priv->p_password.c_str());
+    return qore_ds_pending_string(priv->getPendingString(&qore_ds_pending_params::Values::password));
 }
 
 QoreStringNode* Datasource::getPendingDBName() const {
-    return priv->p_dbname.empty() ? nullptr : new QoreStringNode(priv->p_dbname.c_str());
+    return qore_ds_pending_string(priv->getPendingString(&qore_ds_pending_params::Values::dbname));
 }
 
 QoreStringNode* Datasource::getPendingDBEncoding() const {
-    return priv->p_db_encoding.empty() ? nullptr : new QoreStringNode(priv->p_db_encoding.c_str());
+    return qore_ds_pending_string(priv->getPendingString(&qore_ds_pending_params::Values::db_encoding));
 }
 
 QoreStringNode* Datasource::getPendingHostName() const {
-    return priv->p_hostname.empty() ? nullptr : new QoreStringNode(priv->p_hostname.c_str());
+    return qore_ds_pending_string(priv->getPendingString(&qore_ds_pending_params::Values::hostname));
 }
 
 int Datasource::getPendingPort() const {
-    return priv->p_port;
+    return priv->getPendingPort();
 }
 
 const char* Datasource::getDriverName() const {

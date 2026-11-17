@@ -1,0 +1,88 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - the script runs in child processes that set their own --exec-mode, or as AOT executables
+# test-platform: macos - the native code generation and linking of qcc executables
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+%requires ../../TestInterpreter.qm
+
+%exec-class GenericStaticRefTopLevelTest
+
+#! a reference in top-level code to a static method of a generic class through a class adding variants is resolved
+/** A reference made in top-level code to a static method of a generic class through a generic class over a class that
+    adds variants to the method (\W3::id() for class W3<V> inherits HX, class HX inherits G<float> declaring its own
+    id(string)) crashed at parse time in every execution mode: the swap of the class that the reference names for the
+    class of the code making it (qore#6285) used the class of the code, which top-level code does not have, when the
+    method found was that of a class that is not generic (qore#6448).  The script makes such references in top-level
+    code and calls them with values of both variants' types.
+
+    The script next to the test runs in every execution mode, on the IR tier and as AOT executables at -O0 and -O3;
+    its output must be that of the AST interpreter, which must be that of the .expected file.
+*/
+class GenericStaticRefTopLevelTest inherits QUnit::Test {
+    public {
+        #! the scripts
+        const Scripts = ("static-ref-top-level",);
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string env;
+        string dir;
+    }
+
+    constructor() : QUnit::Test("generic static reference in top-level code", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = TestInterpreter::qcc_compiler() ?? "qcc";
+        env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir, libqore_dir);
+        dir = get_script_dir();
+        foreach string script in (Scripts) {
+            addTestCase(script + ": execution modes", sub () { modesTest(script); });
+            addTestCase(script + ": AOT executable -O0", sub () { aotTest(script, "-O0"); });
+            addTestCase(script + ": AOT executable -O3", sub () { aotTest(script, "-O3"); });
+        }
+        set_return_value(main());
+    }
+
+    #! returns the output of the AST interpreter for the script
+    private string astOutput(string script) {
+        return ExecModeHarness::run(sprintf("%s %s --exec-mode=ast %s/%s.q", env, qore_bin, dir, script));
+    }
+
+    #! runs the script in every execution mode and on the IR tier
+    private modesTest(string script) {
+        string exp = astOutput(script);
+        string expected_file = sprintf("%s/%s.expected", dir, script);
+        if (is_file(expected_file)) {
+            assertEq(ReadOnlyFile::readTextFile(expected_file), exp, script + ": the output of the AST interpreter");
+        } else {
+            fail(script + ": no .expected file");
+        }
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            assertEq(exp, ExecModeHarness::run(sprintf("%s %s --exec-mode=%s %s/%s.q", env, qore_bin, mode, dir,
+                script)), script + ": " + mode);
+        }
+        assertEq(exp, ExecModeHarness::run_ir_tier(sprintf("%s %s --exec-mode=tiered %s/%s.q", env, qore_bin, dir,
+            script)), script + ": " + ExecModeHarness::IRTierName);
+    }
+
+    #! compiles the script with qcc and checks that the executable gives the output of the AST interpreter
+    private aotTest(string script, string opt) {
+        if (!is_file(qcc_bin)) {
+            testSkip("qcc is not available at " + qcc_bin);
+        }
+        TmpDir tmp("generic-static-ref-top-level-aot-");
+        string exe = tmp.path + "/" + script;
+        string out = ExecModeHarness::run_any(sprintf("%s %s %s -o %s %s/%s.q", env, qcc_bin, opt, exe, dir, script));
+        assertTrue(is_file(exe), opt + ": qcc compiles the script: " + out);
+        assertEq(astOutput(script), ExecModeHarness::run_any(sprintf("%s %s", env, exe)), script + ": AOT " + opt);
+    }
+}

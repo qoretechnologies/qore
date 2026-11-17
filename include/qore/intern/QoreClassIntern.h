@@ -57,9 +57,23 @@
 #include <memory>
 #include <set>
 #include <string>
+#include <string_view>
+#include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #define OTF_USER    CT_USER
+
+#ifdef DEBUG
+//! debug builds: the number of steps taken walking class hierarchies and member lists at parse time
+/** Counts the steps whose number grew faster than the square of the depth of a deep hierarchy before issue #6106;
+    read by the dbg_class_hierarchy_steps() test hook
+*/
+DLLLOCAL extern std::atomic<int64> qore_class_hierarchy_steps;
+#define QORE_CLASS_HIERARCHY_STEP() qore_class_hierarchy_steps.fetch_add(1, std::memory_order_relaxed)
+#else
+#define QORE_CLASS_HIERARCHY_STEP()
+#endif
 #define OTF_BUILTIN CT_BUILTIN
 
 #ifdef DEBUG
@@ -1019,24 +1033,31 @@ public:
     }
 
     // if the variant was identified at parse time, then variant will not be NULL, otherwise if NULL then it is identified at run time
+    /** @param check_self the object that the method is called through (o.s()), which is checked after the arguments:
+        arguments that deleted it raise the error of a method call on a deleted object (issue #6056); nullptr for a
+        call without an object (or through self in a method: s())
+    */
     DLLLOCAL QoreValue evalMethod(ExceptionSink* xsink, RuntimeConfig& rc,
             const AbstractQoreFunctionVariant* variant, const QoreListNode* args,
             const qore_class_private* cctx = nullptr, QoreProgram* pgm_ctx = nullptr,
             const QoreTypeInfo* receiver_type_info = nullptr,
-            const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr) const;
+            const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr,
+            QoreObject* check_self = nullptr) const;
 
     DLLLOCAL QoreValue evalMethod(LexicalSemanticPolicy policy, ExceptionSink* xsink, RuntimeConfig& rc,
             const AbstractQoreFunctionVariant* variant, const QoreListNode* args,
             const qore_class_private* cctx = nullptr, QoreProgram* pgm_ctx = nullptr,
             const QoreTypeInfo* receiver_type_info = nullptr,
-            const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr) const;
+            const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr,
+            QoreObject* check_self = nullptr) const;
 
     template <bool Lexical>
     DLLLOCAL QoreValue evalMethodImpl(LexicalSemanticPolicy policy, ExceptionSink* xsink, RuntimeConfig& rc,
             const AbstractQoreFunctionVariant* variant, const QoreListNode* args,
             const qore_class_private* cctx = nullptr, QoreProgram* pgm_ctx = nullptr,
             const QoreTypeInfo* receiver_type_info = nullptr,
-            const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr) const;
+            const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr,
+            QoreObject* check_self = nullptr) const;
 
     //! as evalMethod(), with a temporary argument list that the caller owns, whose values the parameters take over,
     //! as the AST interpreter's call moves its evaluated arguments into the parameters (issue #5882)
@@ -1068,16 +1089,19 @@ public:
 
     //! evaluates a named call whose variant is resolved at run time by parameter name; the arguments are in source
     //! order with the names in "arg_names" (see QoreFunction::runtimeFindVariant()) and are evaluated by the call
+    /** @param check_self the object that the method is called through, checked after the arguments (see
+        evalMethod())
+    */
     DLLLOCAL QoreValue evalMethodNamed(ExceptionSink* xsink, RuntimeConfig& rc, const QoreListNode* args,
             const qore_class_private* cctx, const QoreTypeInfo* receiver_type_info,
             const QoreTypeParamInstantiation* explicit_type_param_instantiation, const name_vec_t& arg_names,
-            LexicalSemanticPolicy policy = {}, QoreProgram* pgm_ctx = nullptr) const;
+            LexicalSemanticPolicy policy = {}, QoreProgram* pgm_ctx = nullptr, QoreObject* check_self = nullptr) const;
 
     //! evalMethodNamed() with temporary (evaluated) arguments, which the caller keeps
     DLLLOCAL QoreValue evalMethodTmpArgsNamed(ExceptionSink* xsink, RuntimeConfig& rc, QoreListNode* args,
             const qore_class_private* cctx, const QoreTypeInfo* receiver_type_info,
             const QoreTypeParamInstantiation* explicit_type_param_instantiation, const name_vec_t& arg_names,
-            LexicalSemanticPolicy policy = {}, QoreProgram* pgm_ctx = nullptr) const;
+            LexicalSemanticPolicy policy = {}, QoreProgram* pgm_ctx = nullptr, QoreObject* check_self = nullptr) const;
 };
 
 #define SMETHF(f) (reinterpret_cast<StaticMethodFunction*>(f))
@@ -1380,8 +1404,26 @@ protected:
     bool init = false;
 };
 
-// for the inheritance list for each member
-typedef std::vector<const qore_class_private*> cls_vec_t;
+// a class in the list of the classes where a member is accessible after the first one (see QoreMemberInfo), the
+// last one first; a member imported from a base class shares the list of the member it was copied from, so that
+// the members of a class in a deep hierarchy do not each have a copy of the list, which has an entry for each level
+// of the hierarchy (issue #6106)
+struct QoreMemberClassNode {
+    const qore_class_private* cls;
+    std::shared_ptr<QoreMemberClassNode> next;
+
+    DLLLOCAL QoreMemberClassNode(const qore_class_private* cls, std::shared_ptr<QoreMemberClassNode> next)
+            : cls(cls), next(std::move(next)) {
+    }
+
+    // releases the rest of the list iteratively, as it is as long as the hierarchy is deep
+    DLLLOCAL ~QoreMemberClassNode() {
+        std::shared_ptr<QoreMemberClassNode> n = std::move(next);
+        while (n && n.use_count() == 1) {
+            n = std::move(n->next);
+        }
+    }
+};
 
 // maps from an accessing context to the object storage context
 typedef std::map<const qore_class_private*, const qore_class_private*> cls_context_map_t;
@@ -1432,10 +1474,8 @@ public:
     DLLLOCAL QoreMemberInfo(const QoreProgramLocation* loc, const QoreTypeInfo* n_typeInfo = nullptr,
             QoreParseTypeInfo* n_parseTypeInfo = nullptr, QoreValue e = QoreValue(), ClassAccess n_access = Public,
             const qore_class_private* qc = nullptr)
-            : QoreMemberInfoBaseAccess(loc, n_typeInfo, n_parseTypeInfo, e, n_access), is_local(true) {
-        if (qc) {
-            cls_vec.push_back(qc);
-        }
+            : QoreMemberInfoBaseAccess(loc, n_typeInfo, n_parseTypeInfo, e, n_access), decl_cls(qc),
+            is_local(true) {
     }
 
     // copy to a new class - same member, new class
@@ -1447,8 +1487,8 @@ public:
     }
 
     DLLLOCAL void setDeclaringClass(const qore_class_private* qc) {
-        assert(cls_vec.empty());
-        cls_vec.push_back(qc);
+        assert(!decl_cls);
+        decl_cls = qc;
         assert(is_local);
     }
 
@@ -1464,7 +1504,12 @@ public:
 
     // returns the class where the member was declared
     DLLLOCAL const qore_class_private* getClass() const {
-        return cls_vec[0];
+        return decl_cls;
+    }
+
+    // returns the last class where the member is accessible
+    DLLLOCAL const qore_class_private* getLastClass() const {
+        return cls_list ? cls_list->cls : decl_cls;
     }
 
     // issue #2970: returns the class ptr to be used to access the member data in the object; nullptr means to access in the standard object hash
@@ -1549,8 +1594,11 @@ private:
     // the accessors of a member whose value is held in external storage owned by a module; shared with the copies of
     // the member in subclasses
     std::shared_ptr<const QoreMemberAccessors> accessors;
-    // the classes where this member is accessible; the first class is the class where the member was defined
-    cls_vec_t cls_vec;
+    // the first class where this member is accessible: the class where the member was defined (or the class it was
+    // copied to)
+    const qore_class_private* decl_cls = nullptr;
+    // the other classes where this member is accessible, the last one first
+    std::shared_ptr<QoreMemberClassNode> cls_list;
     // maps class contexts to class pointers in object storage for private members
     cls_context_map_t* cls_context_map = nullptr;
     // list of inherited members for initialization
@@ -1950,7 +1998,7 @@ public:
     DLLLOCAL T* find(const char* name) const {
         typename member_list_t::const_iterator i =
             std::find_if(member_list.begin(), member_list.end(), [name](const member_list_element_t& e)
-                -> bool {return !strcmp(e.first, name); });
+                -> bool {QORE_CLASS_HIERARCHY_STEP(); return !strcmp(e.first, name); });
         return i == member_list.end() ? nullptr : i->second;
     }
 
@@ -2049,6 +2097,8 @@ public:
             return;
         }
         frozen = true;
+        // the index of the parse (see afterChange()) had no other reader
+        delete index.exchange(nullptr, std::memory_order_acq_rel);
         publishIndex();
     }
 
@@ -2077,14 +2127,14 @@ public:
         assert(info->getClass());
         assertChangeAllowed();
         base_t::addNoCheck(name, info);
-        afterChange();
+        afterChange(name, info);
     }
 
     //! adds a member of a declaration's pending map, whose info has no class yet (see MemberList in the parser)
     DLLLOCAL void addNoCheck(std::pair<char*, QoreMemberInfo*> pair) {
         assertChangeAllowed();
         base_t::addNoCheck(pair.first, pair.second);
-        afterChange();
+        afterChange(pair.first, pair.second);
     }
 
     DLLLOCAL void addInheritedNoCheck(char* name, QoreMemberInfo* info) {
@@ -2093,7 +2143,35 @@ public:
         assert(!inList(name));
         assertChangeAllowed();
         member_list.insert(member_list.begin(), std::make_pair(name, info));
-        afterChange();
+        if (num_front != (size_t)-1) {
+            ++num_front;
+        }
+        afterChange(name, info);
+    }
+
+    //! returns an iterator to the first member that was not added at the start of the list
+    /** members imported from base classes are added at the start of the list, so the members declared in the class
+        are all after this position; in a deep hierarchy, a class has many more imported members than declared ones
+        (issue #6106)
+    */
+    DLLLOCAL const_iterator endOfFront() const {
+        if (num_front == (size_t)-1) {
+            return member_list.begin();
+        }
+        assert(num_front <= member_list.size());
+        const_iterator i = member_list.end();
+        for (size_t n = member_list.size() - num_front; n; --n) {
+            --i;
+        }
+        return i;
+    }
+
+    //! removes the members of a declaration's pending map, whose members have been moved to a class
+    DLLLOCAL void clearList() {
+        assert(!frozen);
+        member_list.clear();
+        delete index.exchange(nullptr, std::memory_order_acq_rel);
+        num_front = 0;
     }
 
     //! replaces the value of a member; the name, which the index refers to, is kept
@@ -2115,6 +2193,7 @@ public:
         delete index.exchange(nullptr, std::memory_order_acq_rel);
         retired_indexes.clear();
         frozen = false;
+        num_front = 0;
         has_internal_entries.store(false, std::memory_order_relaxed);
     }
 
@@ -2146,6 +2225,8 @@ private:
     bool init = false;
     //! true once the members are frozen (freeze())
     bool frozen = false;
+    //! the number of members added at the start of the list (imported from base classes), or -1 if not known
+    size_t num_front = 0;
     //! true if the frozen map has an entry of a private:internal member (hasInternalEntries()); read without a lock
     std::atomic<bool> has_internal_entries{false};
 
@@ -2159,9 +2240,34 @@ private:
     DLLLOCAL void assertChangeAllowed() const {
     }
 
-    DLLLOCAL void afterChange() {
+    //! updates the index after a change; \a name and \a info are those of an added member, if any
+    /** After the freeze, a new index is published.  Before it, the map is only read by the thread that parses its
+        class, and a long map (a class in a deep hierarchy has the members of all of its ancestors) is indexed so that
+        a member is not found by searching the list: the index is changed in place, without publishing a copy for
+        each change, which would take time that grows with the square of the number of members (issue #6106)
+    */
+    DLLLOCAL void afterChange(const char* name = nullptr, QoreMemberInfo* info = nullptr) {
         if (frozen) {
             publishIndex();
+            return;
+        }
+        if (member_list.size() < IndexThreshold) {
+            return;
+        }
+        MemberIndex* idx = const_cast<MemberIndex*>(index.load(std::memory_order_relaxed));
+        if (idx && name && idx->size() + 1 == member_list.size()) {
+            idx->emplace(std::string_view(name), info);
+            return;
+        }
+        if (!idx) {
+            idx = new MemberIndex;
+            index.store(idx, std::memory_order_release);
+        } else {
+            idx->clear();
+        }
+        idx->reserve(member_list.size() * 2);
+        for (auto& i : member_list) {
+            idx->emplace(std::string_view(i.first), i.second);
         }
     }
 
@@ -2376,6 +2482,21 @@ public:
 
     // parseResolve classes to the new class pointer after all namespaces and classes have been copied
     DLLLOCAL void resolveCopy();
+
+private:
+    // the classes in a long list by ID, so that adding a class does not scan the list: a class in a deep
+    // hierarchy has all of its ancestors in its list, and each is added once to the list of each subclass (issue
+    // #6106); only used from SML_INDEX_MIN entries, and rebuilt when it does not have an entry for each element (the
+    // list is also built by the copy constructor, and classes keep their IDs when copied)
+    std::unordered_map<qore_classid_t, const QoreClass*> id_index;
+
+    static constexpr size_t SML_INDEX_MIN = 16;
+
+    // returns true if the index is used for this list; makes it current first
+    DLLLOCAL bool useIndex();
+
+    // appends the class to the list and to the index if it is used
+    DLLLOCAL void append(QoreClass* qc, bool is_virtual);
 };
 
 // set of private class pointers; used when checking for recursive class inheritance lists
@@ -2527,6 +2648,10 @@ public:
     BCSMList sml;
     bool valid = true;
     bool rescanned = false;
+    // true if sml holds all ancestors of the class: set when the class has been initialized and each of its base
+    // classes is a builtin class or a class whose own sml is complete; then the base classes do not have to be walked
+    // again to add the ancestors to a subclass or to search the hierarchy (issue #6106)
+    bool sml_complete = false;
 
     DLLLOCAL BCList(BCNode* n) {
         push_back(n);
@@ -2535,7 +2660,7 @@ public:
     DLLLOCAL BCList() {
     }
 
-    DLLLOCAL BCList(const BCList& old) : sml(old.sml) {
+    DLLLOCAL BCList(const BCList& old) : sml(old.sml), sml_complete(old.sml_complete) {
         assert(old.valid);
         reserve(old.size());
         for (bclist_t::const_iterator i = old.begin(), e = old.end(); i != e; ++i)
@@ -2591,6 +2716,9 @@ public:
 
     DLLLOCAL const QoreClass* findInHierarchy(const qore_class_private& qc);
 
+    //! searches the complete list of ancestors (sml) for the class (issue #6106)
+    DLLLOCAL const QoreClass* findInSml(const qore_class_private& qc) const;
+
     DLLLOCAL const QoreClass* getClass(qore_classid_t cid, ClassAccess& n_access, bool toplevel) const;
     DLLLOCAL const QoreClass* getClass(const qore_class_private& qc, ClassAccess& n_access, bool toplevel) const;
 
@@ -2632,6 +2760,14 @@ public:
         qore_class_private::addBaseClassesToSubclass()
     */
     DLLLOCAL int addBaseClassesToSubclass(QoreClass* thisparent, QoreClass* child, bool is_virtual);
+
+    //! returns true if sml holds all ancestors of the class
+    DLLLOCAL bool smlComplete() const {
+        return sml_complete && valid;
+    }
+
+    //! sets sml_complete after the class has been initialized, if each base class's ancestor list is complete
+    DLLLOCAL void setSmlComplete();
 
     DLLLOCAL void rescanParents(QoreClass* cls);
 
@@ -3000,7 +3136,12 @@ public:
             never assigned a namespace": both leave ns null, but only the former means the
             class must no longer be executed.
         */
-        ns_deleted : 1 = false
+        ns_deleted : 1 = false,
+        //! set when initializeHierarchy() has succeeded, so that it is not done again for each subclass
+        /** The methods' inheritance lists are built there, and each subclass's hierarchy is initialized through its
+            base classes (issue #6106)
+        */
+        hierarchy_initialized : 1 = false
         ;
 
     std::vector<QoreGenericTypeParam> type_params;
@@ -3728,9 +3869,16 @@ public:
             }
             int rc = 0;
             if ((pflag & PF_FOR_ASSIGNMENT) ? !member_write_gate : !parseHasMemberGate()) {
-                // one error for one access: in a class that declares its members, an undeclared member is an
-                // illegal access whatever the parse options; otherwise it is an error only if types are required
-                if (parseHasPublicMembersInHierarchy()) {
+                // one error for one access: an undeclared member with the name of a method of the class is the
+                // method without its call (issue #2967), in every mode; in a class that declares its members, an
+                // undeclared member is an illegal access whatever the parse options; otherwise it is an error only if
+                // types are required
+                qore_class_private* self = const_cast<qore_class_private*>(this);
+                if (self->parseFindNormalMethodIntern(mem, this) || self->parseFindStaticMethodIntern(mem, this)) {
+                    parse_error(*loc, "member '%s' of class '%s' is not declared, and '%s' is a method of the class: "
+                        "a method is called with an argument list, as in %s()", mem, name.c_str(), mem, mem);
+                    rc = -1;
+                } else if (parseHasPublicMembersInHierarchy()) {
                     parse_error(*loc, "illegal access to unknown member '%s' in class '%s' which has a public " \
                         "member list (or inherited public member list)", mem, name.c_str());
                     rc = -1;
@@ -3792,8 +3940,17 @@ public:
             return rc;
         }
         if (!omi) {
-            // one error for one access; see parseCheckMemberAccess()
-            if (parseHasPublicMembersInHierarchy()) {
+            // one error for one access; see parseCheckMemberAccess(): an undeclared member with the name of a method
+            // of the class is the method without its call (issue #2967), unless a gate handles the access
+            qore_class_private* self = const_cast<qore_class_private*>(this);
+            if (((pflag & PF_FOR_ASSIGNMENT) ? !member_write_gate : !memberGate)
+                    && (self->parseFindNormalMethodIntern(mem, this) || self->parseFindStaticMethodIntern(mem, this))) {
+                parse_error(*loc, "member '%s' of class '%s' is not declared, and '%s' is a method of the class: "
+                    "a method is called with an argument list, as in %s()", mem, name.c_str(), mem, mem);
+                if (!rc) {
+                    rc = -1;
+                }
+            } else if (parseHasPublicMembersInHierarchy()) {
                 parse_error(*loc, "illegal access to unknown member '%s' in class '%s' which has a public member " \
                     "list (or inherited public member list)", mem, name.c_str());
                 if (!rc) {
@@ -4750,7 +4907,10 @@ public:
     DLLLOCAL QoreValue evalMethodGate(LexicalSemanticPolicy policy, QoreObject* self, const char* nme, const QoreListNode* args, ExceptionSink* xsink) const;
 
     template <bool Lexical>
-    DLLLOCAL QoreValue evalMethodGateImpl(LexicalSemanticPolicy policy, QoreObject* self, const char* nme, const QoreListNode* args, ExceptionSink* xsink) const;
+    //! @param given_args true if @a args is an evaluated list whose reference the call takes over (the caller gives
+    //! it), which then needs no copy
+    DLLLOCAL QoreValue evalMethodGateImpl(LexicalSemanticPolicy policy, QoreObject* self, const char* nme, const QoreListNode* args, ExceptionSink* xsink,
+            bool given_args = false) const;
 
     //! returns a reference to the call reference or closure that the member of the name holds, if any
     /** as a call of a method that the class does not have calls it (qore_class_private::evalMethod())
@@ -5663,6 +5823,11 @@ DLLLOCAL QoreProgram* qore_get_function_pgm_context(const QoreFunction* func,
 DLLLOCAL bool qore_class_eval_member_code_given_args(const qore_class_private& qcp, QoreObject* self,
         const char* nme, QoreListNode* args, const qore_class_private* class_ctx, ExceptionSink* xsink, QoreValue& rv);
 
+//! calls the call reference @a ref with the temporary argument list @a args that the caller owns, whose values the
+//! parameters of a closure or of a reference to user code take over (issue #5882); defined in QoreClassGivenArgs.cpp
+DLLLOCAL QoreValue qore_invoke_call_ref_given_args(const ResolvedCallReferenceNode* ref, QoreListNode* args,
+        ExceptionSink* xsink);
+
 class qore_class_private_holder {
     //! the class pointer (handle) to release, if the object was created with one
     /** the pointer is tracked separately from the private data, as it can be a wrapper for a class imported into
@@ -6061,6 +6226,27 @@ public:
         }
     }
 
+    //! calls the static method @a m through the object @a self (o.s()), as eval() does, checking the object after the
+    //! arguments: arguments that deleted it raise the error of a method call on a deleted object (issue #6056)
+    /** Not for a call through self without an object (s() in a method), which calls the static method whatever the
+        arguments did to the object; the variant is resolved with the arguments first, as for a method call
+        (qore_object_private::startCall())
+    */
+    template <bool Lexical>
+    DLLLOCAL static QoreValue evalStaticOnObject(LexicalSemanticPolicy policy, const QoreMethod& m,
+            ExceptionSink* xsink, RuntimeConfig& rc, QoreObject* self, const QoreListNode* args,
+            const qore_class_private* cctx, QoreProgram* pgm_ctx,
+            const QoreTypeParamInstantiation* explicit_type_param_instantiation) {
+        assert(m.priv->static_flag);
+        if constexpr (Lexical) {
+            return SMETHF(m.priv->func)->evalMethod(policy, xsink, rc, nullptr, args, cctx, pgm_ctx,
+                qore_get_object_receiver_type_info(self), explicit_type_param_instantiation, self);
+        } else {
+            return SMETHF(m.priv->func)->evalMethod(xsink, rc, nullptr, args, cctx, pgm_ctx,
+                qore_get_object_receiver_type_info(self), explicit_type_param_instantiation, self);
+        }
+    }
+
     template <bool Lexical, typename... Args>
     DLLLOCAL static QoreValue evalTmpArgsWithPolicy(LexicalSemanticPolicy policy, Args&&... args) {
         if constexpr (Lexical) {
@@ -6097,7 +6283,8 @@ public:
     DLLLOCAL static QoreValue evalNamed(const QoreMethod& m, ExceptionSink* xsink, RuntimeConfig& rc,
             QoreObject* self, const QoreListNode* args, bool tmp_args, const qore_class_private* cctx,
             const QoreTypeInfo* receiver_type_info, const QoreTypeParamInstantiation* explicit_type_param_instantiation,
-            const name_vec_t& arg_names, LexicalSemanticPolicy policy = {}, QoreProgram* pgm_ctx = nullptr) {
+            const name_vec_t& arg_names, LexicalSemanticPolicy policy = {}, QoreProgram* pgm_ctx = nullptr,
+            bool check_receiver = false) {
         const qore_method_private* p = m.priv;
         if (!p->static_flag) {
             assert(self);
@@ -6111,11 +6298,13 @@ public:
         if (!receiver_type_info && self) {
             receiver_type_info = qore_get_object_receiver_type_info(self);
         }
+        // a call through an object checks it after the arguments (issue #6056)
+        QoreObject* check_self = check_receiver ? self : nullptr;
         return tmp_args
             ? SMETHF(p->func)->evalMethodTmpArgsNamed(xsink, rc, const_cast<QoreListNode*>(args), cctx,
-                receiver_type_info, explicit_type_param_instantiation, arg_names, policy, pgm_ctx)
+                receiver_type_info, explicit_type_param_instantiation, arg_names, policy, pgm_ctx, check_self)
             : SMETHF(p->func)->evalMethodNamed(xsink, rc, args, cctx, receiver_type_info,
-                explicit_type_param_instantiation, arg_names, policy, pgm_ctx);
+                explicit_type_param_instantiation, arg_names, policy, pgm_ctx, check_self);
     }
 
     DLLLOCAL static qore_method_private* get(QoreMethod& m) {

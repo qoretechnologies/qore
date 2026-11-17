@@ -2094,6 +2094,7 @@ extern "C" DLLEXPORT void qore_rt_check_call_target_aot(QoreAOTContext* ctx, int
     @param qc the parse-time class of the call, if any
     @param method the method resolved at parse time, if any
     @param direct true if the call is made with @a method whatever the class of the object (a qualified call)
+    @param self_call true for a call through self in a method (s()), whose static method has no object
     @param xsink for the exception
 
     @return -1 if the error was raised, 0 if not
@@ -2101,7 +2102,7 @@ extern "C" DLLEXPORT void qore_rt_check_call_target_aot(QoreAOTContext* ctx, int
 static int qore_check_method_call_after_args(QoreValue base, const char* name, const QoreClass* qc,
         const QoreMethod* method, const AbstractQoreFunctionVariant* variant,
         const QoreTypeParamInstantiation* explicit_type_param_instantiation, const name_vec_t* arg_names,
-        bool direct, const QoreCallArgsSource& args, ExceptionSink* xsink) {
+        bool direct, bool self_call, const QoreCallArgsSource& args, ExceptionSink* xsink) {
     QoreObject* obj = nullptr;
     switch (base.getType()) {
         case NT_OBJECT:
@@ -2133,10 +2134,20 @@ static int qore_check_method_call_after_args(QoreValue base, const char* name, c
         // a method found by name has no variant resolved at parse time
         variant = nullptr;
     }
-    if (!m || m->isStatic()) {
-        // no method of the class (a member closure, a methodGate or a pseudo-method): the call raises its own error;
-        // a static method has no object, and the AST interpreter calls it whatever the arguments did to the object
+    if (self_call && (!m || m->isStatic())) {
+        // a call through self in a method (s()) of a static method has no object: the AST interpreter calls it
+        // whatever the arguments did to the object
         return 0;
+    }
+    if (!m) {
+        // no method of the class: a member holding a call reference, a pseudo-method of <object> or methodGate(),
+        // which the AST interpreter chooses before the arguments and calls after them, raising the error of a call on
+        // a deleted object (issue #6056)
+        if (!name) {
+            return 0;
+        }
+        qore_raise_deleted_missing_method_call_after_args(obj, name, class_ctx, xsink);
+        return -1;
     }
     // the AST interpreter raises the error when it enters the code of the variant that the call resolves with its
     // arguments, naming the variant's class (issue #5824)
@@ -2164,7 +2175,7 @@ int qore_check_call_target_after_args(const QoreValue& call, const QoreValue& ta
         const SelfFunctionCallNode* self_call = static_cast<const SelfFunctionCallNode*>(node);
         return qore_check_method_call_after_args(target, self_call->getMethodName(), self_call->getClass(),
             self_call->getMethod(), self_call->getVariant(), self_call->getExplicitTypeParamInstantiation(),
-            self_call->getRuntimeArgNames(), qore_self_call_is_qualified(self_call), args, xsink);
+            self_call->getRuntimeArgNames(), qore_self_call_is_qualified(self_call), true, args, xsink);
     }
     if (node->getType() == NT_OPERATOR) {
         // the only operator that the check is emitted for is a method call (QoreIRLowering::lowerDotEval())
@@ -2172,7 +2183,7 @@ int qore_check_call_target_after_args(const QoreValue& call, const QoreValue& ta
         const MethodCallNode* m = static_cast<const QoreDotEvalOperatorNode*>(node)->getMethodCall();
         if (m && !m->isPseudo()) {
             return qore_check_method_call_after_args(target, m->getName(), m->getClass(), m->getMethod(),
-                m->getVariant(), m->getExplicitTypeParamInstantiation(), m->getRuntimeArgNames(), false, args,
+                m->getVariant(), m->getExplicitTypeParamInstantiation(), m->getRuntimeArgNames(), false, false, args,
                 xsink);
         }
     }
@@ -2247,7 +2258,7 @@ extern "C" DLLEXPORT void qore_rt_check_call_target_after_args_aot(QoreAOTContex
         }
         const char* name = target.check_method ? target.check_method->getName() : target.method_name;
         qore_check_method_call_after_args(fromBits(target_bits), name, target.check_qc, target.check_method,
-            target.check_variant, target.explicit_type_param_instantiation, nullptr, false, source, xsink);
+            target.check_variant, target.explicit_type_param_instantiation, nullptr, false, false, source, xsink);
         return;
     }
     qore_check_call_target_after_args(fromBits(ctx->exprs[slot]), fromBits(target_bits), source, xsink);
@@ -3812,7 +3823,10 @@ extern "C" DLLEXPORT int64_t qore_rt_selector_iterator_pending(void* iter_ptr) {
 
 extern "C" DLLEXPORT int64_t qore_rt_selector_iterator_feed(void* iter_ptr, int64_t flags, uint64_t first_bits,
         uint64_t second_bits, ExceptionSink* xsink) {
-    assert(iter_ptr);
+    // no iterator, as qore_rt_selector_iterator_pending() accepts (qore#6451)
+    if (!iter_ptr) {
+        return 0;
+    }
     return static_cast<QoreRtSelectorIterator*>(reinterpret_cast<FunctionalOperatorInterface*>(iter_ptr))
         ->feed(flags & static_cast<int64_t>(QoreIRListSelectorFlag::Range), fromBits(first_bits),
             fromBits(second_bits), xsink) ? 1 : 0;
@@ -20356,6 +20370,10 @@ extern "C" DLLEXPORT int64_t qore_rt_ref_foreach_size(uint64_t state_ptr) {
 extern "C" DLLEXPORT uint64_t qore_rt_ref_foreach_get_entry(uint64_t state_ptr, int64_t index,
         ExceptionSink* xsink) {
     auto* state = reinterpret_cast<RefForeachState*>(state_ptr);
+    // no state, as the other functions of the state accept (qore#6451)
+    if (!state) {
+        return toBits(QoreValue());
+    }
     QoreValue entry;
     if (state->l_tlist) {
         entry = state->l_tlist->getReferencedEntry(static_cast<size_t>(index));
@@ -20380,6 +20398,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_ref_foreach_get_entry(uint64_t state_ptr, 
 extern "C" DLLEXPORT void qore_rt_ref_foreach_record(uint64_t state_ptr, uint64_t value_bits,
         ExceptionSink* xsink) {
     auto* state = reinterpret_cast<RefForeachState*>(state_ptr);
+    // no state, as the other functions of the state accept (qore#6451)
+    if (!state) {
+        return;
+    }
     QoreValue value = fromBits(value_bits);
     if (state->l_tlist) {
         qore_list_private::pushCanonical(*state->ln.get<QoreListNode>(), value.refSelf(), nullptr);
