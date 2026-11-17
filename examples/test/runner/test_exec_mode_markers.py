@@ -285,6 +285,7 @@ class ExecModeMarkerTest(unittest.TestCase):
         # - ir-guard-profile-types (#6421): its checks run in child processes that set their own --exec-mode
         # - number-round-exact (#6278): its probes run in child processes that set their own --exec-mode and in qcc
         #   executables
+        # - ModuleCleanupCancel (#6510): its checks run in child processes that set their own --exec-mode
         self.assertEqual(sorted(["examples/test/ir/AOTConstantImportStale.qtest",
                                  "examples/test/ir/JITFinalizeCancellation.qtest",
                                  "examples/test/ir/ir-guard-profile-types/ir-guard-profile-types.qtest",
@@ -349,6 +350,7 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/qore/functions/user-functional-domains/qlib-module-domains.qtest",
                                  "examples/test/qore/functions/user-functional-domains/qlib-all-modules-load.qtest",
                                  "examples/test/qlib/HttpClientIo/ConnectionManagerTeardown.qtest",
+                                 "examples/test/qlib/HttpClientIo/ModuleCleanupCancel.qtest",
                                  "examples/test/qlib/RestSchemaActions/RestSchemaModuleLazyTypes-1.qtest",
                                  "examples/test/qlib/RestSchemaActions/RestSchemaModuleLazyTypes-2.qtest",
                                  "examples/test/qlib/RestSchemaActions/RestSchemaModuleLazyTypes-3.qtest",

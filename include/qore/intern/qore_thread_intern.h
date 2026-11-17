@@ -794,6 +794,14 @@ public:
     */
     DLLLOCAL QoreSandboxContext(bool capture_budgets = true);
 
+    //! Creates a context that governs as \a src does (or as no sandbox does, if \a src is nullptr) and is work that
+    //! the module cleanup hands over (@ref module_cleanup_delegate)
+    /** For an operation that the module cleanup cancels: what the operation then runs is part of the cleanup (see
+        qore_close_module_programs()), while its sandbox stays the one of the code that started it.  Takes its own
+        references to the managers and budgets of \a src; may throw std::bad_alloc
+    */
+    DLLLOCAL QoreSandboxContext(const QoreSandboxContext* src, bool module_cleanup_delegate);
+
     DLLLOCAL ~QoreSandboxContext();
 
     DLLLOCAL void ref() const { ROreference(); }

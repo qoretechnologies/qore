@@ -6210,6 +6210,36 @@ QoreSandboxContext::QoreSandboxContext(bool capture_budgets) {
     provenance_policy_manager = provenance_policy.release();
 }
 
+QoreSandboxContext::QoreSandboxContext(const QoreSandboxContext* src, bool module_cleanup_delegate)
+        : module_cleanup_delegate(module_cleanup_delegate) {
+    if (!src) {
+        return;
+    }
+    // copied first, as they can throw std::bad_alloc; the references below are taken only after that
+    program_ids = src->program_ids;
+    budgets = src->budgets;
+    pgm_id = src->pgm_id;
+    for (QoreSandboxCallBudget* budget : budgets) {
+        budget->ref();
+    }
+    manager = src->manager;
+    if (manager) {
+        manager->ref();
+    }
+    policy_manager = src->policy_manager;
+    if (policy_manager) {
+        policy_manager->ref();
+    }
+    provenance_manager = src->provenance_manager;
+    if (provenance_manager) {
+        provenance_manager->ref();
+    }
+    provenance_policy_manager = src->provenance_policy_manager;
+    if (provenance_policy_manager) {
+        provenance_policy_manager->ref();
+    }
+}
+
 QoreSandboxContext::~QoreSandboxContext() {
     qore_sandbox_budgets_deref(budgets);
     if (manager) {

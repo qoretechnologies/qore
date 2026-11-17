@@ -1137,9 +1137,19 @@ private:
         DLLLOCAL ~CancelCountRef() = default;
     };
 
+    //! Returns true if the current thread is the module cleanup or runs work it handed over
+    /** (qore_module_cleanup_delegation()); taken by each Command when it is created on the requesting thread
+    */
+    DLLLOCAL static bool commandModuleCleanupDelegation();
+
     //! Command queue entry
     struct Command {
         IoCommand cmd = IoCommand::WakeSocket;
+        //! True if the thread that created the command is the module cleanup or runs work that it handed over
+        /** An operation that the command cancels is then canceled for the cleanup: what the operation runs after
+            that is part of the cleanup (see doCancelIntern() and qore_close_module_programs())
+        */
+        bool module_cleanup_delegate = commandModuleCleanupDelegation();
         std::string key;                //!< For Cancel / ContinuePollResult / SubmitOp: the cache key
         //! For Cancel: if set, only the operation of this object is canceled (another operation can have taken the key)
         /** Compared by address only; the canceling thread holds a reference to the object until the command has been
@@ -2172,12 +2182,36 @@ public:
     //! Debug-only: dispatches the timer callbacks held and waits for them to complete; returns their number
     DLLLOCAL static size_t dbgReleaseHeldTimerCallbacks(ExceptionSink* xsink);
 
+    //! Debug-only: holds the results of continuePoll() steps that callback workers send from now on
+    /** Called by the dbg_async_io_hold_step_results() test hook: the operation of a held result stays in its step
+        (continue_poll_in_flight) until the result is released (dbgReleaseHeldStepResults()), so that a test can
+        cancel an operation while its step is in flight, which defers the cancel until the step's result arrives
+        (pending_aborts); with @a hold = false, results are sent again, and the results already held stay held until
+        they are released
+    */
+    DLLLOCAL static void dbgHoldStepResults(bool hold);
+
+    //! Debug-only: waits until at least @p count step results are held; returns false if the wait timed out
+    DLLLOCAL static bool dbgWaitHeldStepResults(size_t count, int64_t timeout_ms);
+
+    //! Debug-only: sends the step results held to their I/O threads and returns their number
+    /** Each result is sent as the worker that made the step would have sent it, with the module cleanup delegation
+        of that worker (Command::module_cleanup_delegate), not of the calling thread
+    */
+    DLLLOCAL static size_t dbgReleaseHeldStepResults(ExceptionSink* xsink);
+
 private:
     //! Debug-only: holds the callback of a fired timer if timer callbacks are held; returns true if it was held
     /** The reference of @p code is taken over when it is held
     */
     DLLLOCAL bool dbgHoldTimerCallback(ResolvedCallReferenceNode* code, const std::string& owner,
             AsyncIoSandboxContext& sandbox_ctx, AsyncIoRuntimeOptions& runtime_po);
+
+    //! Debug-only: holds a step result if step results are held; returns true if it was held
+    /** The references of @p new_poll_info and @p ex_hash are taken over when it is held
+    */
+    DLLLOCAL bool dbgHoldStepResult(const std::string& key, uint64_t op_id, int thread_idx,
+            QoreHashNode* new_poll_info, QoreHashNode* ex_hash, bool completed, const std::string* state);
 #endif
 
     //! Start the I/O thread (caller must hold lock)
@@ -2211,6 +2245,16 @@ private:
 
     //! Completes the completion of an abandoned command, if any; the caller holds @ref m
     DLLLOCAL void completeAbandonedLocked(Command& cmd);
+
+    //! Makes an operation that the module cleanup cancels part of the cleanup
+    /** If the current thread is the module cleanup or runs work that it handed over (qore_module_cleanup_delegation()),
+        or processes a command that such a thread created (Command::module_cleanup_delegate), the operation gets a
+        copy of its sandbox context with QoreSandboxContext::module_cleanup_delegate set, so that its abort(),
+        onComplete() and the release of its references can enter the Programs of the modules after the cleanup has
+        closed them (qore#6510).  Called by doCancelIntern() and when a cancel waits for the operation's step
+        (pending_aborts); keeps the context if the copy cannot be allocated
+    */
+    DLLLOCAL void applyModuleCleanupCancel(PollInfo& pinfo);
 
     //! Cancel an operation internally (delivers result, called from I/O thread)
     DLLLOCAL void doCancelIntern(PollInfo& pinfo, ExceptionSink* xsink);
@@ -2577,6 +2621,14 @@ private:
     */
     DLLLOCAL void enqueueContinuePollResult(const std::string& key, uint64_t op_id, int thread_idx,
         QoreHashNode* new_poll_info, QoreHashNode* ex_hash, bool completed, const std::string* state = nullptr);
+
+    //! Sends the result of a continuePoll() step to the I/O thread; see enqueueContinuePollResult()
+    /** @param module_cleanup_delegate the module cleanup delegation of the thread that made the step (see
+        Command::module_cleanup_delegate)
+    */
+    DLLLOCAL void enqueueContinuePollResultIntern(const std::string& key, uint64_t op_id, int thread_idx,
+        QoreHashNode* new_poll_info, QoreHashNode* ex_hash, bool completed, const std::string* state,
+        bool module_cleanup_delegate);
 
     //! Dispatch a stream-data-ready notification from a worker thread
     /** Called by the DT_CONTINUE_POLL worker after getAndClearDataReadyStreams() to
