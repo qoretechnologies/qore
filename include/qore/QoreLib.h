@@ -1284,7 +1284,8 @@ DLLEXPORT std::string q_describe_functional_domains(int64 dom);
 /** @param name the name of the module
     @param msg the message that will be included in any exception when the module is attempted to be loaded
 
-    @return 0 = module added, -1 = module already loaded, cannot be blacklisted, -2 = module already in blacklist
+    @return 0 = module added, -1 = module already loaded or its load is in progress (in any thread), cannot be
+    blacklisted, -2 = module already in blacklist
 
     @since %Qore 2.1
 */
