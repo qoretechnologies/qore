@@ -505,11 +505,14 @@ public string sub decode_mime_filename(string filename) {
             decoded += encoded[i];
         }
 
-        # Convert from the specified charset to UTF-8 if needed
-        if (charset.upr() != "UTF-8" && charset.upr() != "UTF8") {
+        # Convert from the specified charset to UTF-8 if needed; the charset is untrusted data, which selects only an
+        # encoding that Qore knows or a standard character set, and the value is returned as it is for any other
+        # (issue #6460)
+        *string enc = get_known_encoding(charset);
+        if (enc && enc != "UTF-8") {
             try {
                 # First get bytes as binary, then interpret with target charset
-                decoded = force_encoding(decoded, charset);
+                decoded = force_encoding(decoded, enc);
                 decoded = convert_encoding(decoded, "UTF-8");
             } catch () {
                 # If conversion fails, return as-is
