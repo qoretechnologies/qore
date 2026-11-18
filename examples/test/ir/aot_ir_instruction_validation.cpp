@@ -10,6 +10,7 @@
 #include <qore/intern/QoreAOTBinary.h>
 #include <qore/intern/QoreAOTInstRegistry.h>
 
+#include <algorithm>
 #include <cstdio>
 #include <functional>
 
@@ -40,7 +41,43 @@ static bool check(QoreProgram* pgm, const char* label, O opcode, uint8_t group,
     }
     writer.writeStringRef("entry");
     writer.writeU8(0); // block flags
-    writer.writeU16(1); // instructions
+    // the instruction is in a function that can run (qore#6468): a constant defines each value that it uses, and a
+    // return ends the block
+    std::vector<uint32_t> defined;
+    if (!tag_only) {
+        for (uint32_t id : operands) {
+            if (id && id <= 32 && id != result_id && std::find(defined.begin(), defined.end(), id) == defined.end()) {
+                defined.push_back(id);
+            }
+        }
+    }
+    // the base fields after the opcode and the group, and the source location, of a simple instruction
+    auto writeSimple = [&](O op, G grp, uint32_t result, const std::function<void()>& simple_payload) {
+        writer.writeU16(static_cast<uint16_t>(op));
+        writer.writeU8(static_cast<uint8_t>(grp));
+        writer.writeU32(result);
+        if (wide) {
+            writer.writeU16(0);
+        } else {
+            writer.writeU8(0);
+        }
+        writer.writeU16(0xffff); // no exception target
+        simple_payload();
+        if (version >= 11) {
+            writer.writeU32(0);
+            writer.writeU32(0);
+        } else {
+            writer.writeU16(0);
+            writer.writeU16(0);
+        }
+        writer.writeStringRef("");
+    };
+    writer.writeU16(static_cast<uint16_t>(tag_only ? 1 : defined.size() + 2)); // instructions
+    for (uint32_t id : defined) {
+        writeSimple(O::ConstNothing, G::Const, id, [&]() {
+            writer.writeU8(static_cast<uint8_t>(QoreIRConstant::Kind::Nothing));
+        });
+    }
     writer.writeU16(static_cast<uint16_t>(opcode));
     writer.writeU8(group);
     if (!tag_only) {
@@ -63,6 +100,9 @@ static bool check(QoreProgram* pgm, const char* label, O opcode, uint8_t group,
             writer.writeU16(0);
         }
         writer.writeStringRef("");
+        writeSimple(O::ReturnNothing, G::Return, 0, [&]() {
+            writer.writeU8(0); // no value
+        });
     }
     writer.endSection(section);
     QoreAOTBinaryHeader header{};
@@ -206,7 +246,7 @@ int main() {
                 w.writeU8(0);
             });
     }
-    run("lowered sprintf ternary", O::SprintfIntFixed, G::Base, {1, 2, 3}, empty);
+    run("lowered sprintf ternary", O::SprintfIntFixed, G::Base, {1, 2, 4}, empty);
     for (auto [keys, values] : {std::pair{1u, 0u}, std::pair{0u, 1u}, std::pair{1u, 1u}}) {
         run("constant hash keys", O::MakeHashConstKeys, G::MakeHashConstKeys,
             std::vector<uint32_t>(values, 1), [keys](QoreAOTBinaryWriter& w) {

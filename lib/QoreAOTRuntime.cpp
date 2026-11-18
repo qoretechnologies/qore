@@ -8274,6 +8274,11 @@ std::unique_ptr<QoreIRFunction> deserializeIRFunction(
         error = "malformed IR function '" + func->name + "': " + error;
         return nullptr;
     }
+    // the control flow and the SSA form that the interpreter and the JIT take from the IR without a check (qore#6468)
+    if (!QoreIRVerifier::verifyModuleIR(*func, error)) {
+        error = "AOT IR verification failed in '" + func->name + "': " + error;
+        return nullptr;
+    }
     return func;
 }
 

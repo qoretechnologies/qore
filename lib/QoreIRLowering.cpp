@@ -24003,10 +24003,11 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
             error = "IR builder failed to create fused fold blocks";
             return QoreIRValue();
         }
+        // the flags are defined before the branch, so that each path of the fold has them (qore#6468)
+        QoreIRValue true_val = builder.createConstBool(true, loc)->result;
         builder.createBranchIf(state.fold_has_accum, fold_block, init_accum_block, loc);
 
         builder.setBlock(init_accum_block);
-        QoreIRValue true_val = builder.createConstBool(true, loc)->result;
         QoreIRValue false_val = root_string_join
             ? builder.createConstBool(false, loc)->result : QoreIRValue();
         QoreIRValue init_accum_val;

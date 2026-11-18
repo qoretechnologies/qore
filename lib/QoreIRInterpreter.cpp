@@ -10819,6 +10819,11 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                     stack.push_back(inv_dot->normal_target);
                     break;
                 }
+                // the block ends at its first terminator: the instructions after it never run (qore#6468)
+                if (const OpcodeInfo* oi = getOpcodeInfo(static_cast<uint16_t>(candidate->opcode));
+                        oi && oi->is_terminator) {
+                    break;
+                }
             }
         }
         return false;
