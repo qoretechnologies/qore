@@ -8,12 +8,15 @@
 %requires QUnit
 %requires ../TestInterpreter.qm
 %requires FsUtil
+%requires json
 
 %exec-class QccParseDiagnosticsTest
 
 #! qcc reports the parse diagnostics of the code it compiles as diagnostics (issue #6555)
 /** A parse error (of the parse or of the commit) or warning of the compiled code is reported in one line on stderr,
-    <file>:<line>[:<col>]: error|warning: <code>: <message>, in every compile mode, not as an unhandled exception.
+    <file>:<line>[:<col>]: error|warning: <code>: <message>, in every compile mode, not as an unhandled exception;
+    with --diag-format=json (or QORE_DIAG_FORMAT=json), as one JSON array on stdout at the end of the run, in the
+    form of qore --diag-format=json, and with --code-frames as code frames.
 */
 class QccParseDiagnosticsTest inherits QUnit::Test {
     private {
@@ -28,6 +31,7 @@ class QccParseDiagnosticsTest inherits QUnit::Test {
         string module;
         string warn_module;
         string not_modern;
+        string rich;
     }
 
     constructor() : QUnit::Test("QccParseDiagnosticsTest", "1.0", \ARGV) {
@@ -48,6 +52,9 @@ class QccParseDiagnosticsTest inherits QUnit::Test {
             "public sub mw() { no_such_function(); }\n");
         # parses with a warning, then fails the %modern check of the compiler
         not_modern = writeFile("not-modern.q", "%enable-warning no-such-warning\nsub nm() {}\n");
+        # a warning and an error with a hint and a possible fix
+        rich = writeFile("rich.q", "%modern\n%enable-warning no-such-warning\nclass TrapCtor {}\nsub f() {\n"
+            "    TrapCtor();\n}\n");
         addTestCase("a commit-time error of a single source", \singleCommitTest());
         addTestCase("a parse error of a single source", \singleParseTest());
         addTestCase("a commit-time error of a batch compile", \batchCommitTest());
@@ -57,6 +64,12 @@ class QccParseDiagnosticsTest inherits QUnit::Test {
         addTestCase("a warning of a compile that fails", \warningAndErrorTest());
         addTestCase("a warning and an error of a module with warnings as errors", \moduleWarningsAsErrorsTest());
         addTestCase("a warning of a compile that fails after the parse", \warningThenFailureTest());
+        addTestCase("--diag-format=json", \jsonTest());
+        addTestCase("QORE_DIAG_FORMAT=json", \jsonEnvTest());
+        addTestCase("--diag-format=json for a compile that succeeds", \jsonSuccessTest());
+        addTestCase("--diag-format=json gives the diagnostics of qore --diag-format=json", \jsonParityTest());
+        addTestCase("--code-frames", \codeFramesTest());
+        addTestCase("--diag-format=json does not change the output of --version", \jsonVersionTest());
         set_return_value(main());
     }
 
@@ -70,10 +83,12 @@ class QccParseDiagnosticsTest inherits QUnit::Test {
     }
 
     #! runs qcc with \a args; returns stdout, stderr and the exit status
-    private hash<auto> qcc(string args) {
+    private hash<auto> qcc(string args, *string env) {
         string err_file = tmp.path + DirSep + "stderr.txt";
         int rc;
-        string out = backquote(sprintf("%s %s 2>%s", qcc_bin, args, err_file), \rc);
+        # the form of the diagnostics is that of the arguments, not of the environment of the test
+        string out = backquote(sprintf("env -u QORE_DIAG_FORMAT -u QORE_CODE_FRAMES %s %s %s 2>%s", env ?? "", qcc_bin,
+            args, err_file), \rc);
         return {"out": out, "err": ReadOnlyFile::readTextFile(err_file), "status": rc};
     }
 
@@ -158,8 +173,102 @@ class QccParseDiagnosticsTest inherits QUnit::Test {
         assertRegex("(^|\n)" + quote(not_modern) + ":1:[0-9]+: warning: UNKNOWN-WARNING: ", r.err);
     }
 
+    private checkJson(hash<auto> r) {
+        assertNeq(0, r.status, r.err);
+        checkNoBanner(r);
+        list<auto> diags = parse_json(r.out);
+        assertEq(2, diags.size(), r.out);
+        assertEq(("MISSING-RETURN", "MISSING-RETURN"), (map $1.code, diags));
+        assertEq(("error", "error"), (map $1.severity, diags));
+        assertEq((missing_return, other_missing_return), (map $1.file, diags));
+        assertEq((2, 2), (map $1.startLine, diags));
+    }
+
+    #! one JSON array for the whole batch
+    jsonTest() {
+        string out_dir = tmp.path + DirSep + "json";
+        mkdir(out_dir);
+        checkJson(qcc(sprintf("--diag-format=json -c --output-dir %s %s %s %s", out_dir, missing_return, good,
+            other_missing_return)));
+    }
+
+    jsonEnvTest() {
+        string out_dir = tmp.path + DirSep + "json-env";
+        mkdir(out_dir);
+        checkJson(qcc(sprintf("-c --output-dir %s %s %s %s", out_dir, missing_return, good, other_missing_return),
+            "QORE_DIAG_FORMAT=json"));
+    }
+
+    #! stdout holds only the JSON array: the other output of the run goes to stderr
+    jsonSuccessTest() {
+        hash<auto> r = qcc(sprintf("--diag-format=json -c -o %s/warns-json.qo %s", tmp.path, warns));
+        assertEq(0, r.status, r.err);
+        list<auto> diags = parse_json(r.out);
+        assertEq(1, diags.size(), r.out);
+        assertEq("warning", diags[0].severity);
+        assertEq("UNKNOWN-WARNING", diags[0].code);
+        assertEq(2, diags[0].startLine);
+        # the report of the compiled object
+        assertRegex("warns-json\\.qo", r.err);
+    }
+
+    #! the diagnostics are those of the qore binary for the same code, with their hints and possible fixes
+    jsonParityTest() {
+        hash<auto> r = qcc(sprintf("--diag-format=json -c -o %s/rich.qo %s", tmp.path, rich));
+        assertNeq(0, r.status, r.err);
+        list<auto> qcc_diags = parse_json(r.out);
+        int rc;
+        string qore_out = backquote(sprintf("env -u QORE_DIAG_FORMAT -u QORE_CODE_FRAMES %s --diag-format=json %s "
+            "2>/dev/null", TestInterpreter::qore_interpreter(), rich), \rc);
+        assertEq(2, rc, qore_out);
+        list<auto> qore_diags = parse_json(qore_out);
+        # qcc names the file by its canonical path
+        assertEq(normalize(qore_diags), normalize(qcc_diags));
+        assertEq(("UNKNOWN-WARNING", "MISSING-NEW-CONSTRUCTOR"), (map $1.id, qcc_diags));
+        assertTrue(exists qcc_diags[1].hint, r.out);
+        assertEq(1, qcc_diags[1].fixes.size(), r.out);
+    }
+
+    #! the diagnostics with their file names reduced to the base name
+    private static list<auto> normalize(list<auto> diags) {
+        return map normalizeValue($1), diags;
+    }
+
+    private static auto normalizeValue(auto v) {
+        switch (v.typeCode()) {
+            case NT_HASH: {
+                hash<auto> rv;
+                foreach hash<auto> i in (v.pairIterator()) {
+                    rv{i.key} = (i.key == "file" && i.value.typeCode() == NT_STRING) ? basename(i.value)
+                        : normalizeValue(i.value);
+                }
+                return rv;
+            }
+            case NT_LIST:
+                return map normalizeValue($1), v;
+        }
+        return v;
+    }
+
+    #! a mode that compiles nothing reports on stdout as without --diag-format=json
+    jsonVersionTest() {
+        hash<auto> r = qcc("--diag-format=json --version");
+        assertEq(0, r.status, r.err);
+        assertRegex("^qcc ", r.out);
+        assertFalse(r.out =~ /\[\]/, r.out);
+    }
+
+    codeFramesTest() {
+        hash<auto> r = qcc(sprintf("--code-frames -c -o %s/out.qo %s", tmp.path, missing_return));
+        assertNeq(0, r.status, r.err);
+        checkNoBanner(r);
+        assertRegex("(^|\n)" + quote(missing_return) + ":2: error\\[MISSING-RETURN\\]: ", r.err);
+        assertRegex("\n  int sub f\\(\\) \\{\n", r.err);
+    }
+
     #! escapes \a str for a regular expression
     private static string quote(string str) {
         return regex_subst(str, "([.+*?^$(){}\\[\\]|\\\\])", "\\\\$1", RE_Global);
     }
 }
+

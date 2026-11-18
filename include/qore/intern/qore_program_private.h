@@ -699,6 +699,9 @@ public:
     // when true, parse errors and warnings are also captured as structured diagnostics (machine-readable
     // form for tooling / AI coding assistants); see Program::setParseDiagnosticsCollected()
     bool collect_diagnostics = false;
+    // when true, the diagnostics of the parse actions are kept together, not cleared at the start of each one (set for
+    // the Programs that the AOT compiler creates; issue #6555)
+    bool accumulate_diagnostics = false;
     // structured diagnostics captured during the current/last parse action (cleared on each parse start)
     std::vector<QoreDiagnostic> diagnostics;
 
@@ -3239,8 +3242,8 @@ public:
         pwo.setWarnMask(wm);
         parseSink = xsink;
 
-        // structured diagnostics are scoped to a single parse action
-        if (collect_diagnostics) {
+        // structured diagnostics are scoped to a single parse action, unless they are accumulated
+        if (collect_diagnostics && !accumulate_diagnostics) {
             diagnostics.clear();
         }
 
@@ -4591,7 +4594,10 @@ public:
             }
             if ((only_first_except && !exceptions_raised) || !only_first_except) {
                 QoreException *ne = new ParseException(loc, err, d.release());
-                ne->diagnostic_pgm_id = collect_diagnostics ? programId : 0;
+                if (collect_diagnostics) {
+                    ne->diagnostic_pgm_id = programId;
+                    ne->diagnostic_index = static_cast<int32_t>(diagnostics.size()) - 1;
+                }
                 sink->raiseException(ne);
             }
             exceptions_raised++;
@@ -6143,7 +6149,10 @@ public:
             pgm.priv->diagnostics.push_back(QoreDiagnostic(false, err, -1, loc, desc->c_str()));
         }
         QoreException* ne = new ParseException(loc, err, desc_holder.release());
-        ne->diagnostic_pgm_id = pgm.priv->collect_diagnostics ? pgm.priv->programId : 0;
+        if (pgm.priv->collect_diagnostics) {
+            ne->diagnostic_pgm_id = pgm.priv->programId;
+            ne->diagnostic_index = static_cast<int32_t>(pgm.priv->diagnostics.size()) - 1;
+        }
         ne->arg = arg_holder.release();
         wsink.raiseException(ne);
     }
@@ -6170,7 +6179,10 @@ public:
             pgm->priv->diagnostics.push_back(QoreDiagnostic(false, warn, code, loc, desc->c_str()));
         }
         QoreException *ne = new ParseException(loc, warn, desc);
-        ne->diagnostic_pgm_id = pgm->priv->collect_diagnostics ? pgm->priv->programId : 0;
+        if (pgm->priv->collect_diagnostics) {
+            ne->diagnostic_pgm_id = pgm->priv->programId;
+            ne->diagnostic_index = static_cast<int32_t>(pgm->priv->diagnostics.size()) - 1;
+        }
         pgm->priv->warnSink->raiseException(ne);
     }
 
@@ -6188,7 +6200,10 @@ public:
             pgm->priv->diagnostics.push_back(QoreDiagnostic(false, warn, code, loc, desc->c_str()));
         }
         QoreException *ne = new ParseException(loc, warn, desc);
-        ne->diagnostic_pgm_id = pgm->priv->collect_diagnostics ? pgm->priv->programId : 0;
+        if (pgm->priv->collect_diagnostics) {
+            ne->diagnostic_pgm_id = pgm->priv->programId;
+            ne->diagnostic_index = static_cast<int32_t>(pgm->priv->diagnostics.size()) - 1;
+        }
         pgm->priv->warnSink->raiseException(ne);
     }
 
@@ -6204,7 +6219,10 @@ public:
             pgm->priv->diagnostics.push_back(QoreDiagnostic(false, warn, code, loc, desc->c_str(), &metadata));
         }
         QoreException* ne = new ParseException(loc, warn, desc);
-        ne->diagnostic_pgm_id = pgm->priv->collect_diagnostics ? pgm->priv->programId : 0;
+        if (pgm->priv->collect_diagnostics) {
+            ne->diagnostic_pgm_id = pgm->priv->programId;
+            ne->diagnostic_index = static_cast<int32_t>(pgm->priv->diagnostics.size()) - 1;
+        }
         pgm->priv->warnSink->raiseException(ne);
     }
 
@@ -7216,6 +7234,18 @@ DLLEXPORT std::string qore_get_parse_diagnostics_json(QoreProgram& pgm);
 //! renders the collected parse diagnostics as human-readable code frames; exported so the standalone
 //! interpreter (--code-frames) can render them.  Returns the number of error diagnostics rendered.
 DLLEXPORT unsigned qore_render_parse_diagnostic_frames(QoreProgram& pgm, const char* source_text, FILE* os);
+
+//! gets the diagnostic recorded for an exception of a parse, if its Program kept it; returns false if there is none
+//! (issue #6555)
+DLLLOCAL bool qore_get_exception_parse_diagnostic(const QoreException& e, QoreDiagnostic& diag);
+
+//! serializes diagnostics as a JSON array (the form of qore_get_parse_diagnostics_json())
+DLLLOCAL std::string qore_diagnostics_json(const std::vector<QoreDiagnostic>& diags);
+
+//! renders diagnostics as code frames (the form of qore_render_parse_diagnostic_frames()); \a source_text returns
+//! the source text of the file of a diagnostic, or nullptr if it is not known; returns the number of errors rendered
+DLLLOCAL unsigned qore_render_diagnostic_frames(const std::vector<QoreDiagnostic>& diags,
+    const std::function<const char* (const QoreDiagnostic&)>& source_text, FILE* os);
 
 //! records the exceptions in \a xsink that are not diagnostics of the parse of the Program as error diagnostics
 /** For exceptions raised before a parse action starts (ex: a file that cannot be opened); exported so the standalone

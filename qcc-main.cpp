@@ -745,6 +745,10 @@ static bool include_source = false;
 static const char* metadata_compression = nullptr;
 static bool verbose = false;
 static bool warnings_are_errors = false;
+//! the form of the parse diagnostics: "json" (--diag-format=json), or nullptr (issue #6555)
+static const char* diag_format = nullptr;
+//! true for --code-frames (issue #6555)
+static bool code_frames = false;
 static bool show_help = false;
 static bool show_version = false;
 static bool dump_info = false;
@@ -1408,6 +1412,12 @@ static void print_usage(const char* prog) {
            "                         `.qo` link mode.\n");
     printf("  -r, --warnings-are-errors\n"
            "                         Treat Qore parser warnings as fatal compile errors\n");
+    printf("      --diag-format=json Report the parse errors and warnings of the compiled\n"
+           "                         code as one JSON array on stdout at the end of the run\n"
+           "                         (also QORE_DIAG_FORMAT=json); by default each is one\n"
+           "                         line on stderr: FILE:LINE[:COL]: error|warning: CODE: MSG\n");
+    printf("      --code-frames      Report the parse errors and warnings of the compiled\n"
+           "                         code as code frames on stderr (also QORE_CODE_FRAMES)\n");
     printf("  -v, --verbose          Verbose output\n");
     printf("  -h, --help             Show this help message\n");
     printf("  -V, --version          Show version information\n");
@@ -1521,6 +1531,8 @@ static struct option long_options[] = {
     {"body-contract-stamp", required_argument, nullptr, 0x129},
     {"file-prefix-map", required_argument, nullptr, 0x12a},
     {"declaration-contract-stamp", required_argument, nullptr, 0x12b},
+    {"diag-format",       required_argument, nullptr, 0x12c},
+    {"code-frames",       no_argument,       nullptr, 0x12d},
     {"from-objects",      no_argument,       nullptr, 'F'},
     {"archive",           no_argument,       nullptr, 'a'},
     {"entry",             required_argument, nullptr, 'e'},
@@ -1764,6 +1776,16 @@ static int parse_options_cmdline(int argc, char** argv) {
                 break;
             case 'e':
                 entry_fn = optarg;
+                break;
+            case 0x12c:  // --diag-format
+                if (strcmp(optarg, "json")) {
+                    fprintf(stderr, "error: invalid --diag-format '%s' (must be 'json')\n", optarg);
+                    return 1;
+                }
+                diag_format = optarg;
+                break;
+            case 0x12d:  // --code-frames
+                code_frames = true;
                 break;
             case 'r':
                 warnings_are_errors = true;
@@ -9939,6 +9961,13 @@ int main(int argc, char** argv) {
     if (metadata_compression) {
         SystemEnvironment::set("QORE_AOT_METADATA_COMPRESSION", metadata_compression, 1);
     }
+    // the form of the parse diagnostics of the compiled code (issue #6555)
+    if (diag_format) {
+        SystemEnvironment::set("QORE_DIAG_FORMAT", diag_format, 1);
+    }
+    if (code_frames) {
+        SystemEnvironment::set("QORE_CODE_FRAMES", "1", 1);
+    }
     // Propagate the CLI flag's value to QORE_AOT_BIG_FN_THRESHOLD so
     // the IR-to-LLVM lowerer picks it up.  Overwrite the env only when
     // the user explicitly passed --big-fn-threshold on the command line;
@@ -10056,6 +10085,46 @@ int main(int argc, char** argv) {
         }
         qore_cleanup();
         return rc;
+    }
+
+    // the diagnostics collected in JSON form are printed when the run ends, also when it fails; in JSON form,
+    // stdout carries only the JSON array: the other output of the run goes to stderr; set up for the modes that
+    // compile code only, after the ones that report something else on stdout (--help, --version, --dump-*) have
+    // returned
+    struct DiagnosticsFlushHelper {
+        FILE* json_out = nullptr;
+
+        ~DiagnosticsFlushHelper() {
+            qore_aot_flush_parse_diagnostics(json_out);
+            if (json_out) {
+                fclose(json_out);
+            }
+        }
+    } diagnostics_flush;
+    {
+        QoreEnvironmentValue df_holder("QORE_DIAG_FORMAT");
+        const char* df = df_holder.c_str();
+        const bool json = df && !strcmp(df, "json");
+        // the Programs that the compiler creates keep their diagnostics, with their hints and possible fixes, for
+        // the reports in these forms
+        if (json || SystemEnvironment::isSet("QORE_CODE_FRAMES")) {
+            qore_set_new_programs_collect_parse_diagnostics(true);
+        }
+        if (json) {
+            fflush(stdout);
+            // not inherited by the processes that qcc starts (the linker)
+            int json_fd = fcntl(STDOUT_FILENO, F_DUPFD_CLOEXEC, 0);
+            if (json_fd >= 0) {
+                diagnostics_flush.json_out = fdopen(json_fd, "w");
+                if (diagnostics_flush.json_out) {
+                    dup2(STDERR_FILENO, STDOUT_FILENO);
+                    // the other output keeps its order with what is written to stderr
+                    setvbuf(stdout, nullptr, _IOLBF, 0);
+                } else {
+                    close(json_fd);
+                }
+            }
+        }
     }
 
     if ((link_aggregate_symbol || qolink_map_path) && !link_qo) {

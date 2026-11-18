@@ -988,6 +988,35 @@ ProgramThreadContainersForkHandler program_thread_containers_fork_handler;
 qore_program_private_base::ThreadContainerShard
     qore_program_private_base::thread_container_shards[1u << ThreadContainerShardBits];
 
+//! see qore_set_new_programs_collect_parse_diagnostics()
+static std::atomic<bool> qore_new_programs_collect_diagnostics{false};
+
+void qore_set_new_programs_collect_parse_diagnostics(bool collect) {
+    qore_new_programs_collect_diagnostics.store(collect, std::memory_order_relaxed);
+}
+
+bool qore_get_exception_parse_diagnostic(const QoreException& e, QoreDiagnostic& diag) {
+    if (!e.diagnostic_pgm_id || e.diagnostic_index < 0) {
+        return false;
+    }
+    QoreProgram* pgm = qore_program_private::getReferencedProgram(e.diagnostic_pgm_id);
+    if (!pgm) {
+        return false;
+    }
+    bool rv = false;
+    {
+        qore_program_private* pp = qore_program_private::get(*pgm);
+        if (pp->accumulate_diagnostics && static_cast<size_t>(e.diagnostic_index) < pp->diagnostics.size()) {
+            diag = pp->diagnostics[e.diagnostic_index];
+            rv = true;
+        }
+    }
+    ExceptionSink xsink;
+    pgm->deref(&xsink);
+    xsink.clear();
+    return rv;
+}
+
 qore_program_private::qore_program_private(QoreProgram* n_pgm, const QoreParseOptions& n_parse_options,
         QoreProgram* p_pgm, const QoreParseOptions* p_parse_options)
         : qore_program_private_base(n_pgm, n_parse_options, p_pgm, p_parse_options) {
@@ -995,6 +1024,11 @@ qore_program_private::qore_program_private(QoreProgram* n_pgm, const QoreParseOp
     // every Program wherever it is created, and before the Program is registered and can be found
     if (qore_caller_is_sandboxed()) {
         sandboxed.store(true, std::memory_order_release);
+    }
+    // the Programs that the AOT compiler creates keep their parse diagnostics for its reports (issue #6555)
+    if (qore_new_programs_collect_diagnostics.load(std::memory_order_relaxed)) {
+        collect_diagnostics = true;
+        accumulate_diagnostics = true;
     }
     registerProgram();
     // the Program's ID is known now
@@ -1302,6 +1336,7 @@ void qore_program_private::collectModuleLoadErrors(const QoreProgramLocation& lo
         QoreStringValueHelper desc(e->desc);
         diagnostics.push_back(QoreDiagnostic(true, err->c_str(), -1, loc, desc->c_str()));
         e->diagnostic_pgm_id = programId;
+        e->diagnostic_index = static_cast<int32_t>(diagnostics.size()) - 1;
     }
 }
 
@@ -1319,6 +1354,7 @@ void qore_program_private::addExceptionDiagnostics(ExceptionSink* xsink) {
         diagnostics.emplace_back(err->c_str(), e->isBuiltin() ? std::string() : e->file, e->source, *e,
             desc->c_str());
         e->diagnostic_pgm_id = programId;
+        e->diagnostic_index = static_cast<int32_t>(diagnostics.size()) - 1;
     }
 }
 
@@ -1486,9 +1522,13 @@ static void json_diagnostic_metadata_append(std::string& str, const QoreDiagnost
 }
 
 std::string qore_program_private::getParseDiagnosticsJSON() const {
+    return qore_diagnostics_json(diagnostics);
+}
+
+std::string qore_diagnostics_json(const std::vector<QoreDiagnostic>& diags) {
     std::string j = "[";
     bool first = true;
-    for (auto& d : diagnostics) {
+    for (auto& d : diags) {
         if (!first) {
             j += ",";
         }
@@ -1566,8 +1606,14 @@ unsigned qore_render_parse_diagnostic_frames(QoreProgram& pgm, const char* sourc
 }
 
 unsigned qore_program_private::renderParseDiagnosticFrames(const char* source_text, FILE* os) const {
+    return qore_render_diagnostic_frames(diagnostics, [source_text] (const QoreDiagnostic&) { return source_text; },
+        os);
+}
+
+unsigned qore_render_diagnostic_frames(const std::vector<QoreDiagnostic>& diags,
+        const std::function<const char* (const QoreDiagnostic&)>& source_text, FILE* os) {
     unsigned errors = 0;
-    for (auto& d : diagnostics) {
+    for (auto& d : diags) {
         if (d.error) {
             ++errors;
         }
@@ -1581,7 +1627,7 @@ unsigned qore_program_private::renderParseDiagnosticFrames(const char* source_te
 
         // code frame: the source line plus a caret line under the offending span
         std::string line;
-        if (extract_source_line(source_text, d.start_line, line)) {
+        if (extract_source_line(source_text(d), d.start_line, line)) {
             fprintf(os, "  %s\n", line.c_str());
             if (d.start_column >= 0) {
                 std::string caret("  ");
