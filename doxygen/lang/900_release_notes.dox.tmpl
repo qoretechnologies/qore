@@ -3382,6 +3382,10 @@
       primary key joined with \c "-", so that a row whose key gave the same text was kept (ex: <tt>("a", "b-c")</tt>
       for <tt>("a-b", "c")</tt>); a table without a primary key raises \c UPSERT-ERROR before any change
       (<a href="https://github.com/qoretechnologies/qore/issues/6580">issue 6580</a>)
+    - fixed the \c in expression of @ref sqlutilintro "SqlUtil" on Oracle tables with the values as the arguments after
+      the field, as the DPQL parser gives them (ex: <tt>\@id in (1, 4)</tt>), which raised
+      \c DATA-PROVIDER-EXPRESSION-ERROR or \c RUNTIME-OVERLOAD-ERROR
+      (<a href="https://github.com/qoretechnologies/qore/issues/6581">issue 6581</a>)
     - @ref Qore::pow() "pow()" with @ref number_type "number" arguments and an exponent that is negative, NaN or
       between -1 and 1 (ex: <tt>pow(2n, 0.5n)</tt>) ended the process with an MPFR assertion (issue #1034)
     - a @ref number_type "number" division after a number operation that left an MPFR flag set (ex: <tt>nlog(0n)</tt>)
