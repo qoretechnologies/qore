@@ -116,6 +116,11 @@
     @ref Qore::<string>::isEncodingValid() "<string>::isEncodingValid()" tests a string without an exception
     (issue #6554).
 
+    @par URL Decoding Refuses a Result That Is Not Valid UTF-8
+    @ref Qore::decode_url() "decode_url()" and @ref Qore::decode_uri_request() "decode_uri_request()" raise
+    \c URL-ENCODING-ERROR when the decoded string is not valid UTF-8 (ex: from \c "%C0%AF", a lone \c "%80" or an
+    encoded surrogate), which they returned (issue #6554).
+
     @par An Octal Integer Literal Cannot Contain 8 or 9
     An integer literal with a leading zero is octal (<tt>010</tt> is \c 8), and one that contains \c 8 or \c 9
     (<tt>08</tt>, <tt>019</tt>), which was read as a decimal, is a parse error, as is an octal literal too large for a

@@ -3751,6 +3751,10 @@ string decoded_url = decode_url(encoded_url);
     - encode_uri_request()
     - decode_uri_request() for a similar function that provides AJAX-compatible URI decoding for the URI query component
 
+    @throw URL-ENCODING-ERROR the percent encoding is not valid, or the decoded string is not valid UTF-8 (ex: from
+    \c "%C0%AF", a lone \c "%80" or a surrogate), which is refused so that text decoded from outside the program is
+    valid text
+
     @since %Qore 3.0 the whole string is decoded; previously a string was cut at its first NUL character
 */
 string decode_url(string url) [flags=CONSTANT,NAMED_ARGS] {
@@ -3831,6 +3835,10 @@ string decoded_uri = decode_uri_request("path/to/something%20else?query=1%2b1+%2
     - encode_uri_request()
     - encode_url()
     - decode_url()
+
+    @throw URL-ENCODING-ERROR the percent encoding is not valid, or the decoded string is not valid UTF-8 (ex: from
+    \c "%C0%AF", a lone \c "%80" or a surrogate), which is refused so that text decoded from outside the program is
+    valid text
 
     @since
     - %Qore 0.8.12

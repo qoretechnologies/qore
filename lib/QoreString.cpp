@@ -715,6 +715,8 @@ int qore_string_private::concatDecodeUriIntern(ExceptionSink* xsink, const qore_
     }
 
     bool in_query = false;
+    // the decoded text is appended from here; it is checked when the decoding is complete
+    size_t start = len;
 
     // the whole string is decoded, including any part after a NUL character
     const char* url = str.effective_buf();
@@ -831,6 +833,34 @@ int qore_string_private::concatDecodeUriIntern(ExceptionSink* xsink, const qore_
         }
 
         concat(*(url++));
+    }
+
+    // percent encoding can give byte sequences that are not valid in the target encoding (ex: "%FF", "%C0%AF", a
+    // lone continuation byte or a surrogate in UTF-8), and the source can have raw bytes that are not; such a result
+    // is not text and is refused, so that what is decoded from outside the program is valid text (qore#6554)
+    if (len > start) {
+        size_t bad = 0;
+        bool valid;
+        if (encoding == QCS_UTF8) {
+            bool incomplete = false;
+            bad = IconvHelper::validUtf8Prefix(effective_buf() + start, len - start, incomplete);
+            valid = (bad == len - start);
+        } else {
+            QoreString decoded(effective_buf() + start, len - start, encoding);
+            valid = qore_string_encoding_valid(decoded);
+        }
+        if (!valid) {
+            // the target is left as it was
+            terminate(start);
+            if (encoding == QCS_UTF8) {
+                xsink->raiseException("URL-ENCODING-ERROR", "decoding gave a string that is not valid UTF-8: invalid "
+                    "byte sequence at byte offset %zu of the decoded string", bad);
+            } else {
+                xsink->raiseException("URL-ENCODING-ERROR", "decoding gave a string that is not valid in encoding "
+                    "\"%s\"", encoding->getCode());
+            }
+            return -1;
+        }
     }
     return 0;
 }
