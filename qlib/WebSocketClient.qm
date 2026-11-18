@@ -354,6 +354,9 @@ foreach hash<DataProviderDebugInfo> debug in (info) {
 
 
     @section wsc_v2_5 v2.5
+    - a text message is given to the callback as a UTF-8 string (RFC 6455), not one in the default encoding of the
+      process; with a default encoding other than UTF-8, messages with non-ASCII text were lost
+      (<a href="https://github.com/qoretechnologies/qore/issues/6619">issue 6619</a>)
     - errors no longer contain the values of options or credentials, which can be passwords or tokens
       (<a href="https://github.com/qoretechnologies/qore/issues/6467">issue 6467</a>)
     - errors that are written to @ref Qore::stderr "stderr" as a last resort are left out when the module's code has no
@@ -4914,8 +4917,15 @@ ws.setEventQueue();
     private int processAsyncMessage(hash<auto> msg) {
         switch (msg.type) {
             case "text": {
-                # raw_callback is handled per-frame in the poll operation
-                return handleEvent(msg.data.toString());
+                # raw_callback is handled per-frame in the poll operation; a text message is UTF-8 (RFC 6455
+                # section 5.6), whatever the default encoding of the process (qore#6619)
+                auto text = msg.data;
+                if (text.typeCode() == NT_BINARY) {
+                    text = text.toString("UTF-8");
+                } else if (text.encoding() != "UTF-8") {
+                    text = convert_encoding(text, "UTF-8");
+                }
+                return handleEvent(text);
             }
             case "binary": {
                 # raw_callback is handled per-frame in the poll operation
