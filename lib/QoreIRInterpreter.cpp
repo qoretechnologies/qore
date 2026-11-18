@@ -13646,7 +13646,10 @@ load_local_done:
                         return exitAfterUnwind();
                     }
                 }
-                if (!preserve_weak_result) {
+                // a weak reference to an object is read as its object also as the base of a call: the receiver
+                // of a call read from a container is a temporary of the statement, which keeps the object until
+                // the statement ends, as in the AST interpreter (qore#6594)
+                if (!preserve_weak_result || qore_value_is_object_weak_reference(out)) {
                     evaluateOwnedWeakReferenceResult(out, xsink);
                     if (xsink && *xsink) {
                         unwindForException();
@@ -14793,7 +14796,11 @@ load_local_done:
                 // Dot-eval method dispatch handles weak refs itself. Preserve the raw
                 // reference when this load is only used as a dot-eval base; a weak reference to a destroyed
                 // object is read as no value, as the AST interpreter reads a member without "self."
-                bool needs_eval = !isDotEvalOnlyBase(inst) && val->needsEval();
+                // a weak reference to an object is read as its object also as the base of a call: the receiver of
+                // a call read from a member is a temporary of the statement, kept until the statement ends, as in
+                // the AST interpreter (qore#6594)
+                bool needs_eval = (!isDotEvalOnlyBase(inst)
+                    || qore_value_is_object_weak_reference(*val)) && val->needsEval();
                 QoreValue out = needs_eval ? val->eval(xsink)
                     : (qore_weak_reference_target_destroyed(*val) ? QoreValue() : val.release());
                 if (xsink && *xsink) {
@@ -14859,7 +14866,11 @@ load_local_done:
                     cleanupLocalCaches();
                     return exitAfterUnwind();
                 }
-                bool needs_eval = !isDotEvalOnlyBase(inst) && val->needsEval();
+                // a weak reference to an object is read as its object also as the base of a call: the receiver of
+                // a call read from a member is a temporary of the statement, kept until the statement ends, as in
+                // the AST interpreter (qore#6594)
+                bool needs_eval = (!isDotEvalOnlyBase(inst)
+                    || qore_value_is_object_weak_reference(*val)) && val->needsEval();
                 QoreValue out = needs_eval ? val->eval(xsink) : val.release();
                 if (xsink && *xsink) {
                     unwindForException();
