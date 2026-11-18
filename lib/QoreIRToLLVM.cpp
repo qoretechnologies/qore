@@ -5969,6 +5969,10 @@ llvm::BasicBlock* QoreIRToLLVM::getExceptionEdgeTarget(llvm::Module& module, llv
         return handler;
     }
     size_t mark_index = marks.size();
+    // an outlined function-body helper opens none of the temp scopes of the coordinator: a handler's temp scope that
+    // is not among its marks is one that the coordinator opened before the call, which every temp scope of the helper
+    // is nested in (qore#6650)
+    const bool outlined_helper = current_ir_func && !current_ir_func->aot_symbol_owner.empty();
     if (scope_closed) {
         // the first scope after the handler's, below the innermost one left
         uint32_t handler_scope_id = inst->exception_target ? inst->exception_target->getHandlerTempScopeId() : 0;
@@ -5978,10 +5982,14 @@ llvm::BasicBlock* QoreIRToLLVM::getExceptionEdgeTarget(llvm::Module& module, llv
                 break;
             }
         }
-        if (!handler_scope_id || !i || i == marks.size()) {
+        if (!i && handler_scope_id && outlined_helper) {
+            // every remaining scope of the helper
+            mark_index = 1;
+        } else if (!handler_scope_id || !i || i == marks.size()) {
             return handler;
+        } else {
+            mark_index = i + 1;
         }
-        mark_index = i + 1;
     } else {
         while (mark_index > 0 && marks[mark_index - 1].scope_id != inst->temp_scope_id) {
             --mark_index;
@@ -5999,11 +6007,16 @@ llvm::BasicBlock* QoreIRToLLVM::getExceptionEdgeTarget(llvm::Module& module, llv
     if (inst->exception_target && !scope_closed) {
         uint32_t handler_scope_id = inst->exception_target->getHandlerTempScopeId();
         if (handler_scope_id && handler_scope_id != inst->temp_scope_id) {
+            bool found = false;
             for (size_t i = mark_index; i > 0; --i) {
                 if (marks[i - 1].scope_id == handler_scope_id) {
                     mark_index = i;
+                    found = true;
                     break;
                 }
+            }
+            if (!found && outlined_helper) {
+                mark_index = 0;
             }
         }
     }
