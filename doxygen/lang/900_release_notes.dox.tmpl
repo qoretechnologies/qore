@@ -2414,6 +2414,9 @@
     - the initializer of a \c private:internal member writes its own member when a class two or more levels below
       declares a member with the same name again (or inherits one from two base classes); it wrote the other member,
       and the methods of its class saw it unset (see @ref private_members; issue #6393)
+    - a class whose hierarchy has a @ref private_members "private:internal" member that hides a member of the same
+      name of another class parses whatever the order of its parent classes, instead of raising \c PARSE-ERROR when
+      the class with the accessible member is listed first (issue #6614)
     - the parse options that a parse gives only part of its code (a module header, a file with
       @ref push-parse-options "%push-parse-options", code parsed before a directive) are no longer visible to other
       threads, and changes to the Program's options made meanwhile are kept; @ref lock-options "%lock-options" in a
