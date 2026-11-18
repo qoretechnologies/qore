@@ -2342,6 +2342,10 @@
     - the creation of an object of a class whose hierarchy reaches a class without a constructor through more than
       one path walks the base classes of that class once, not once per path, which took exponential time in a chain
       of diamonds (see @ref inheritance; issue #6513)
+    - a lookup in a class hierarchy with diamonds that finds nothing (a missing method, member or constant,
+      \c instanceof an unrelated class, a failed cast or type check, at parse time or at run time) visits each
+      ancestor once, not once per path, which took exponential time in a chain of diamonds (see @ref inheritance;
+      issue #6522)
     - an absolute date literal without its day (<tt>2015-11-</tt>) is no longer read as a date with a day made of
       the text after it, which also ignored a UTC offset there (<tt>2015-11-+10</tt> is now the integer \c 1994), and
       a leap second in a date literal (<tt>2016-12-31T23:59:60Z</tt>) is a parse error that says so, also where
