@@ -19412,7 +19412,9 @@ public:
             if (iterator.isValid()) {
                 builder.createIteratorRelease(iterator, loc);
             }
-            builder.createReleaseOwnedTemp(source, loc);
+            if (source.isValid()) {
+                builder.createReleaseOwnedTemp(source, loc);
+            }
             if (partial_result.isValid()) {
                 builder.createReleaseOwnedTemp(partial_result, loc);
             }
@@ -23854,6 +23856,20 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
         return QoreIRValue();
     }
 
+    // The iterator takes its own reference before running any stage. Borrow a plain local directly. A load
+    // through a reference owns the value it read, which stays in the statement's cleanup (qore#6638).
+    QoreIRValue owned_source = source;
+    if (root_streaming && op->getKind() == QoreStreamingOperatorNode::First
+            && dynamic_cast<const VarRefNode*>(base_source.getInternalNode())) {
+        auto& instructions = builder.getBlock()->instructions;
+        QoreIRInstruction* def = instructions.empty() ? nullptr : instructions.back().get();
+        if (def && def->opcode == QoreIROpcode::LoadLocal && def->result.id == source.id) {
+            static_cast<QoreIRLocalInstruction*>(def)->auto_ref = false;
+        }
+        owned_source = QoreIRValue();
+        functional_source_captures.back().value = QoreIRValue();
+    }
+
     bool source_uses_iterate = !stages.empty()
         && (stages.front().kind == LazyPipelineStage::StreamTake
             || stages.front().kind == LazyPipelineStage::StreamDrop
@@ -24004,7 +24020,9 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
         // the iterator and the base source are released before the exception leaves the pipeline, as in
         // lowerStreamingNative()
         builder.createIteratorRelease(iter_val, stage_loc);
-        builder.createReleaseOwnedTemp(source, stage_loc);
+        if (owned_source.isValid()) {
+            builder.createReleaseOwnedTemp(owned_source, stage_loc);
+        }
         QoreIRBasicBlock* handler = exception_stack.empty() ? nullptr : exception_stack.back();
         builder.createThrow(throw_list, handler, stage_loc);
     };
@@ -25032,7 +25050,7 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
             builder.setBlock(after_block);
         }
     }
-    pipeline_cleanup.finish(iter_val, source, cleanup_element, result_list, loc, cleanup_values, partial_values);
+    pipeline_cleanup.finish(iter_val, owned_source, cleanup_element, result_list, loc, cleanup_values, partial_values);
     builder.setBlock(final_block);
     auto* result_phi = builder.createPhi(final_incoming, loc);
     // a pipeline that stops before its iterator is exhausted (a take, takewhile or takeuntil stage, or first, any and
@@ -25069,7 +25087,9 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
                 builder.createReleaseOwnedTemp(v, loc);
             }
             builder.createIteratorRelease(iter_val, loc);
-            builder.createReleaseOwnedTemp(source, loc);
+            if (owned_source.isValid()) {
+                builder.createReleaseOwnedTemp(owned_source, loc);
+            }
             if (outer_target) {
                 auto* check_inst = builder.createCheckException(loc);
                 check_inst->exception_target = outer_target;
@@ -25085,7 +25105,9 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
         // replaces the previous one (the source's temporary is released again after the operator, see
         // lowerWithSourceRelease(), which finds nothing then); the element and the stage values hold the value's
         // reference until it gets its own
-        builder.createReleaseOwnedTemp(source, loc);
+        if (owned_source.isValid()) {
+            builder.createReleaseOwnedTemp(owned_source, loc);
+        }
         QoreIRValue owned = builder.createRefSelf(result, loc)->result;
         builder.createReleaseOwnedTemp(iter_element, loc);
         for (const QoreIRValue& v : stage_values) {
