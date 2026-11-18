@@ -2972,9 +2972,13 @@ MACRO (QORE_USER_MODULE_AOT_RULES _name _is_dir _source_root)
             COMMAND ${CMAKE_COMMAND} -E echo_append ""
             VERBATIM
         )
+        # the check runs in the environment of the compile, so that qcc --check-optional-modules finds the modules
+        # that the compile would find (qore#6598)
         add_custom_command(
             OUTPUT ${_qmod_optional_stamp}
-            COMMAND ${CMAKE_COMMAND} -DCANDIDATES=${_qmod_dep}.optional -DSTAMP=${_qmod_optional_stamp}
+            COMMAND ${CMAKE_COMMAND} -E env ${QORE_QM_METADATA_ENV}
+                ${CMAKE_COMMAND} -DCANDIDATES=${_qmod_dep}.optional -DSTAMP=${_qmod_optional_stamp}
+                -DQMOD=${_qmod_out} -DQCC=${_qore_qcc_command}
                 -P ${QORE_CMAKE_DIR}/QoreOptionalModuleStamp.cmake
             DEPENDS ${_qmod_optional_check} ${QORE_CMAKE_DIR}/QoreOptionalModuleStamp.cmake
             VERBATIM

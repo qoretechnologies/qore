@@ -748,6 +748,8 @@ static bool warnings_are_errors = false;
 static bool show_help = false;
 static bool show_version = false;
 static bool dump_info = false;
+//! --check-optional-modules: whether AOT modules were compiled without an optional module that is available now
+static bool check_optional_modules = false;
 static bool dump_symbols = false;
 static bool dump_sections = false;
 static bool dump_index_json = false;
@@ -1417,6 +1419,13 @@ static void print_usage(const char* prog) {
     printf("      --dump-symbols     Include an nm-like symbol table view\n");
     printf("      --dump-sections    Include object and AOT section tables\n");
     printf("      --dump-index-json  Emit build-consumable AOT symbol-index JSON\n");
+    printf("      --check-optional-modules\n"
+           "                         For each AOT module given, print \"stale: <reason>\" if\n"
+           "                         it was compiled without an optional module (a failed\n"
+           "                         %%try-module) that can be loaded now, or one of whose\n"
+           "                         candidate files has changed since; else \"current\"\n"
+           "                         (used by the build; the module path is that of the\n"
+           "                         environment)\n");
     printf("\n");
     printf("Examples:\n");
     printf("  %s script.qr                   # Compile to 'script' executable\n", prog);
@@ -1521,6 +1530,7 @@ static struct option long_options[] = {
     {"body-contract-stamp", required_argument, nullptr, 0x129},
     {"file-prefix-map", required_argument, nullptr, 0x12a},
     {"declaration-contract-stamp", required_argument, nullptr, 0x12b},
+    {"check-optional-modules", no_argument, nullptr, 0x12c},
     {"from-objects",      no_argument,       nullptr, 'F'},
     {"archive",           no_argument,       nullptr, 'a'},
     {"entry",             required_argument, nullptr, 'e'},
@@ -1628,6 +1638,9 @@ static int parse_options_cmdline(int argc, char** argv) {
                 break;
             case 0x105:  // --dump-info
                 dump_info = true;
+                break;
+            case 0x12c:  // --check-optional-modules
+                check_optional_modules = true;
                 break;
             case 0x106:  // --dump-symbols
                 dump_symbols = true;
@@ -10042,6 +10055,32 @@ int main(int argc, char** argv) {
     if (dump_symbols || dump_sections) {
         dump_info = true;
     }
+    if (check_optional_modules) {
+        if (optind >= argc) {
+            fprintf(stderr, "error: --check-optional-modules requires at least one AOT module path\n");
+            return 1;
+        }
+        qcc_init_qore();
+        int rc = 0;
+        for (int i = optind; i < argc; ++i) {
+            std::string reason, error;
+            switch (qore_aot_check_optional_modules(argv[i], reason, error)) {
+                case QoreAOTOptionalModuleCheck::CURRENT:
+                    printf("current\n");
+                    break;
+                case QoreAOTOptionalModuleCheck::STALE:
+                    printf("stale: %s\n", reason.c_str());
+                    break;
+                case QoreAOTOptionalModuleCheck::ERROR:
+                    fprintf(stderr, "error: --check-optional-modules: '%s': %s\n", argv[i], error.c_str());
+                    rc = 1;
+                    break;
+            }
+        }
+        qore_cleanup();
+        return rc;
+    }
+
     if (dump_info) {
         if (optind >= argc) {
             fprintf(stderr, "error: --dump-info requires at least one binary/object path\n");

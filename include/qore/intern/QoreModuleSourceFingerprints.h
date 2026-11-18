@@ -115,4 +115,32 @@ DLLEXPORT bool qore_aot_read_module_source_fingerprints(const std::string& path,
 */
 DLLEXPORT bool qore_aot_read_module_depfile(const std::string& qmod, std::vector<std::string>& deps);
 
+//! the result of qore_aot_check_optional_modules()
+enum class QoreAOTOptionalModuleCheck {
+    //! the module was compiled with every optional module that can be loaded now, from the files it saw
+    CURRENT,
+    //! a module of a failed %try-module directive can be loaded now, or one of its candidate files has changed
+    STALE,
+    //! the check could not be made (the module's metadata cannot be read)
+    ERROR,
+};
+
+//! checks an AOT module of a build tree for the optional modules it was compiled without (qcc
+//! --check-optional-modules, qore#6598)
+/** The checks of the module loader for the modules of the failed %try-module directives that the module's metadata
+    records: one of their candidate files in the module path that is not the file qcc saw (its size and content
+    hash differ from those of the fingerprint file next to the module's dependency file, or it did not exist then),
+    and one of the modules that can be loaded now (QoreModuleManager::findAvailableOptionalModule(), with the
+    module's own module path directories), so that the build rebuilds a module that the loader would refuse or find
+    out of date (cmake/QoreOptionalModuleStamp.cmake).  The module path is that of the process, as for the compile.
+
+    Internal: for qcc only.
+
+    @param qmod the AOT module
+    @param reason set to the reason when the module is stale
+    @param error set to the error when the check cannot be made
+*/
+DLLEXPORT QoreAOTOptionalModuleCheck qore_aot_check_optional_modules(const char* qmod, std::string& reason,
+        std::string& error);
+
 #endif

@@ -92,7 +92,22 @@ directories of the module path, in the flat and the split forms, each name with 
 module is rebuilt then, and is left as it is otherwise, also when another file is added to a directory of the module
 path.  After the rebuild the paths of a module that is available are no longer listed, and the stamp is left as it
 is; the stamp records the time of the list, so that a module that is installed again after a rebuild without it is
-seen too.  The directive is looked for in the module's `.qm` and `.qc` files when CMake configures the module: a directive
+seen too.
+
+The listed paths are those where the modules are not.  A module whose file existed when the module was compiled but
+could not be loaded (a version that is too old for the directive, a file that cannot be loaded) and that is replaced
+by one that can be loaded is not seen by them, nor by the depfile when the new file is older than the module, as
+when it is installed with the modification time of its build (`cp -p`, `cmake --install`); the loader compares the
+contents of the files and refuses the module then (qore#6598).  So, when no listed path exists, the check of a
+module whose list is not empty also runs `qcc --check-optional-modules <qmod>` in the environment of the compile,
+which makes the loader's own checks with the module path of the compile (`qore_aot_check_optional_modules()`): a
+candidate file of a module of the failed directives that is not the file the compile saw (one that the dependency
+file does not list, or whose size and content hash differ from its fingerprint, see "When a source has changed"), and
+`QoreModuleManager::findAvailableOptionalModule()` with the module path directories of the module's metadata.  If
+either finds the module out of date, the stamp is rewritten, with the time of the list as above.  A module that
+was supplied by the qmod cache has fingerprints whose modification times are not those of the files, and its
+candidates are compared by their content hashes, so that it is not rebuilt.  The check costs one qcc process in each
+build for each module with a failed `%try-module` directive.  The directive is looked for in the module's `.qm` and `.qc` files when CMake configures the module: a directive
 added to a module is taken into account when CMake runs again, and one in a file that an `%include` directive opens
 is not seen.  A module that requires the module is not rebuilt: its depfile lists the source of the module, not its
 `.qmod`, and the loader does not refuse it either (its metadata records only its own failed directives), although it
@@ -216,3 +231,8 @@ one loaded from its source, from its own AOT module or from an identical copy is
 module path of a child process as in `run_tests.sh`, is checked (a changed source is found, a touched one is not, and
 without the depfile the module is loaded); a module compiled without `--depfile` is not checked; and an out-of-date
 module whose source fails reports `AOT-MODULE-STALE` after the source error.
+`examples/test/ir/CMakeBuildHelpers.qc` (`testQmodOptionalModuleInstalled()`, `testQmodOptionalModuleReplaced()`): a qmod
+compiled without the module of a failed `%try-module` directive is rebuilt when the module is installed where it was
+not (qore#6145), and when a file of it that existed but could not be loaded (a version that is too old, a binary
+module that cannot be loaded) is replaced by one that can, older than the qmod (qore#6598); the rebuilt qmod loads
+without a warning, and a file that only gets another modification time rebuilds nothing.

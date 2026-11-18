@@ -46,6 +46,8 @@ class CMakeBuildHelpersBase inherits CMakeBuildHelpersTestBase::CMakeBuildTest {
             \testCyclicComponentBuilds());
         addPartCase(2, "a qmod is rebuilt when a module of its %try-module directives is installed",
             \testQmodOptionalModuleInstalled());
+        addPartCase(3, "a qmod is rebuilt when a module of its %try-module directives that could not be loaded is "
+            "replaced by an older file", \testQmodOptionalModuleReplaced());
         addPartCase(3, "a group watches what its members read from outside it through one depfile",
             \testGroupExternalInputsDepfile());
         addPartCase(3, "a partial aggregate of a group links the contracts its members baked",
@@ -1106,6 +1108,11 @@ qore_external_user_module(\"qlib/OptParen.qm\" \"\")
             "    echo 'AOT runtime identity: aaaa'\n"
             "    exit 0\n"
             "fi\n"
+            # the check of the build (qore#6598): no module of the module path can be loaded
+            "if [ \"$1\" = --check-optional-modules ]; then\n"
+            "    echo current\n"
+            "    exit 0\n"
+            "fi\n"
             "out=\n"
             "while [ $# -gt 0 ]; do\n"
             "    case \"$1\" in\n"
@@ -1202,6 +1209,141 @@ qore_external_user_module(\"qlib/OptParen.qm\" \"\")
             shellQuote(qore_build_dir), shellQuote(module_dir), shellQuote(real_qcc), shellQuote(probe),
             shellQuote(probe_dir + "/OptProbe.qmod.d"), shellQuote(probe_dir + "/OptProbe.qmod")));
         assertEq("", read(probe_dir + "/OptProbe.qmod.d.optional"), "an available module is not listed: " + out);
+    }
+
+    #! A qmod compiled without the module of a failed %try-module directive whose file existed but could not be loaded
+    #! is rebuilt once the file is replaced by one that can be, also when the new file is older than the qmod (qore#6598)
+    /** The file of the optional module exists when the qmod is compiled: a source module of a version that is too old
+        for the directive, and a binary module that cannot be loaded.  Each is replaced by a module that can be loaded,
+        with a modification time older than the qmod's, as an install that keeps the time of the build does
+        (\c cp \c -p, \c cmake \c --install): the depfile, which lists the file, does not make the qmod out of date
+        then, nor does the list of the paths where the module is not, but the loader finds the qmod out of date
+        (BINARY-MODULE-SOURCE-FALLBACK) and the optional module available.  The build must rebuild the qmod, which
+        then loads without a warning, with the optional module; a file that only gets another modification time, as
+        after a restore from the qmod cache, must not rebuild it.
+    */
+    testQmodOptionalModuleReplaced() {
+        if (!qore_dir) {
+            testSkip("QoreConfig.cmake is not available for the build under test");
+        }
+        string real_qcc = qore_build_dir + "/qcc";
+        if (!is_executable(real_qcc)) {
+            testSkip("the build under test has no qcc");
+        }
+        TmpDir tmp("qore-qmod-optional-replaced-", NOTHING, cmakeTmpBase());
+        string src_dir = tmp.path + "/src";
+        string build_dir = tmp.path + "/build";
+        string module_dir = tmp.path + "/modules";
+        string stage_dir = tmp.path + "/stage";
+        mkdir(src_dir + "/qlib", 0755, True);
+        mkdir(module_dir);
+        mkdir(stage_dir);
+
+        # the fixtures report whether they were compiled with their optional module
+        code fixture = string sub (string name, string directive) {
+            return sprintf("%%modern\n"
+                "%%try-module %s\n"
+                "%%define NoOpt\n"
+                "%%endtry\n"
+                "module %s {\n"
+                "    version = \"1.0\";\n"
+                "    desc = \"optional module fixture\";\n"
+                "    author = \"Qore Technologies, s.r.o.\";\n"
+                "    license = \"MIT\";\n"
+                "}\n"
+                "public namespace %s {\n"
+                "    public string sub has() {\n"
+                "%%ifdef NoOpt\n"
+                "        return \"without\";\n"
+                "%%else\n"
+                "        return \"with\";\n"
+                "%%endif\n"
+                "    }\n"
+                "}\n", directive, name, name);
+        };
+        code dep = string sub (string name, string version) {
+            return sprintf("%%modern\nmodule %s {\n    version = \"%s\";\n    desc = \"d\";\n    author = \"a\";\n"
+                "    license = \"MIT\";\n}\n", name, version);
+        };
+        # a version that is too old for the directive
+        write(src_dir + "/qlib/OptOld6598.qm", fixture("OptOld6598", "OptDepOld6598 >= 1.3"));
+        write(module_dir + "/OptDepOld6598.qm", dep("OptDepOld6598", "1.0"));
+        # a binary module that cannot be loaded
+        write(src_dir + "/qlib/OptBad6598.qm", fixture("OptBad6598", "OptDepBad6598"));
+        write(module_dir + "/OptDepBad6598.qmod", strmul("not a module\n", 64));
+        write(src_dir + "/CMakeLists.txt",
+"cmake_minimum_required(VERSION 3.16)
+project(QoreQmodOptionalModuleReplaced NONE)
+find_package(Qore REQUIRED)
+qore_external_user_module(\"qlib/OptOld6598.qm\" \"\")
+qore_external_user_module(\"qlib/OptBad6598.qm\" \"\")
+");
+        # the compile and the build check find the optional modules in this module path only (the environment of the
+        # compile, QORE_QM_METADATA_ENV)
+        string env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s", shellQuote(qore_build_dir),
+            shellQuote(qore_build_dir));
+        string configure = run(sprintf("%s cmake -S %s -B %s -DQore_DIR=%s -DQORE_QCC_EXECUTABLE=%s "
+            "-DQORE_BUILD_AOT_MODULES=ON %s", env, shellQuote(src_dir), shellQuote(build_dir), shellQuote(qore_dir),
+            shellQuote(real_qcc), shellQuote(sprintf("-DQORE_QM_METADATA_ENV=QORE_MODULE_DIR=%s;"
+                "QORE_MODULE_DIR_ONLY=1;LD_LIBRARY_PATH=%s;DYLD_LIBRARY_PATH=%s", module_dir, qore_build_dir,
+                qore_build_dir))));
+        string qmod_dir = build_dir + "/qlib-qmod";
+        # the modules that a build compiles
+        code build = list<string> sub () {
+            string out = run(sprintf("%s cmake --build %s 2>&1", env, shellQuote(build_dir)));
+            list<string> rv = ();
+            foreach string name in (("OptOld6598", "OptBad6598")) {
+                if (regex(out, "AOT compile " + name + "\\.qmod")) {
+                    rv += name;
+                }
+            }
+            return rv;
+        };
+        # what a module says it was compiled with, and every warning of the load
+        code load = string sub (string name) {
+            return run(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s QORE_MODULE_DIR_ONLY=1 "
+                "%s -l %s -ne 'printf(\"%%s\\n\", %s::has());' 2>&1", shellQuote(qore_build_dir),
+                shellQuote(qore_build_dir), shellQuote(qmod_dir + ":" + src_dir + "/qlib:" + module_dir),
+                shellQuote(qore_bin), name, name));
+        };
+        # sets the modification time of a file to one hour before that of a qmod, as an install that keeps it
+        code age = sub (string path, string name) {
+            TestFileTime::set_file_times(hstat(qmod_dir + "/" + name + ".qmod").mtime - 1h, path);
+        };
+
+        assertEq(("OptOld6598", "OptBad6598"), build(), "both modules are compiled: " + configure);
+        assertEq("without\n", load("OptOld6598"), "compiled without the module that is too old");
+        assertEq("without\n", load("OptBad6598"), "compiled without the module that cannot be loaded");
+        assertEq((), build(), "an unchanged build recompiles nothing");
+
+        # the files only get other modification times, as after a restore from the qmod cache: nothing is rebuilt
+        age(module_dir + "/OptDepOld6598.qm", "OptOld6598");
+        age(module_dir + "/OptDepBad6598.qmod", "OptBad6598");
+        assertEq((), build(), "optional module files with only other modification times rebuild nothing");
+
+        # the module that is too old is replaced by one that is new enough, older than the qmod
+        write(module_dir + "/OptDepOld6598.qm", dep("OptDepOld6598", "1.4"));
+        age(module_dir + "/OptDepOld6598.qm", "OptOld6598");
+        assertEq(("OptOld6598",), build(), "the replaced optional module rebuilds the qmod that requested it");
+        assertEq("with\n", load("OptOld6598"), "the rebuilt module loads with the optional module, without a warning");
+        assertEq((), build(), "the build after the rebuild recompiles nothing");
+
+        # the binary module that cannot be loaded is replaced by one that can, older than the qmod
+        write(stage_dir + "/OptDepBad6598.qm", dep("OptDepBad6598", "1.0"));
+        string out = run(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s -m %s -o %s 2>&1",
+            shellQuote(qore_build_dir), shellQuote(qore_build_dir), shellQuote(real_qcc),
+            shellQuote(stage_dir + "/OptDepBad6598.qm"), shellQuote(stage_dir + "/OptDepBad6598.qmod")));
+        assertTrue(is_file(stage_dir + "/OptDepBad6598.qmod"), "the optional module is compiled: " + out);
+        # replaced by renaming a copy over it, as an atomic install does
+        File f();
+        f.open2(module_dir + "/OptDepBad6598.qmod.tmp", O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(ReadOnlyFile::readBinaryFile(stage_dir + "/OptDepBad6598.qmod"));
+        f.close();
+        rename(module_dir + "/OptDepBad6598.qmod.tmp", module_dir + "/OptDepBad6598.qmod");
+        age(module_dir + "/OptDepBad6598.qmod", "OptBad6598");
+        assertEq(("OptBad6598",), build(), "the replaced binary module rebuilds the qmod that requested it");
+        assertEq("with\n", load("OptBad6598"), "the rebuilt module loads with the optional module, without a warning");
+        assertEq((), build(), "the build after the rebuild recompiles nothing");
     }
 
     testExportedHelpers() {

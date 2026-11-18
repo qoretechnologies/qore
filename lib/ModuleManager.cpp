@@ -4684,6 +4684,116 @@ bool QoreModuleManager::findAvailableOptionalModule(ExceptionSink& xsink, const 
     return false;
 }
 
+bool QoreModuleManager::checkAvailableOptionalModule(ExceptionSink& xsink, const std::vector<std::string>& specs,
+        std::string& available) {
+    // the locks of a module load, in its order (see runTimeLoadModule())
+    QoreModuleLoadLockHelper aot_init_al;
+    OptLocker ol(&mutex);
+    return findAvailableOptionalModule(xsink, specs, nullptr, available);
+}
+
+QoreAOTOptionalModuleCheck qore_aot_check_optional_modules(const char* qmod, std::string& reason,
+        std::string& error) {
+    QoreAOTModuleFileInfo info;
+    switch (qoreAOTReadModuleInfo(qmod, info, error)) {
+        case QoreAOTModuleInfoStatus::NONE:
+            // a module without metadata records no failed %try-module directive
+            return QoreAOTOptionalModuleCheck::CURRENT;
+        case QoreAOTModuleInfoStatus::INVALID:
+            return QoreAOTOptionalModuleCheck::ERROR;
+        case QoreAOTModuleInfoStatus::FOUND:
+            break;
+    }
+    if (info.unavailable_optional_modules.empty()) {
+        return QoreAOTOptionalModuleCheck::CURRENT;
+    }
+
+    // the dependencies are found as the loader finds them for the module: with its own module path directories
+    // around those of the process (see loadBinaryModuleFromPath())
+    std::unique_ptr<QoreModulePathScope> path_scope;
+    if (!info.prepended_module_paths.empty() || !info.appended_module_paths.empty()) {
+        path_scope = std::make_unique<QoreModulePathScope>(nullptr, info.prepended_module_paths,
+            info.appended_module_paths);
+    }
+
+    ExceptionSink xsink;
+    // the candidate files of the modules, which the dependency file lists with their fingerprints: one that is not
+    // the file qcc saw makes the loader find the module out of date (qore_build_aot_module_is_stale()) even if the
+    // optional module still cannot be loaded, and its modification time can be older than the module's (a file
+    // copied with its time), which the build's comparison of modification times misses; without a dependency file
+    // (a module compiled without --depfile), they are not checked
+    std::vector<std::string> deps;
+    const bool have_depfile = qore_aot_read_module_depfile(qmod, deps);
+    std::set<std::string> dep_set(deps.begin(), deps.end());
+    std::map<std::string, QoreAOTModuleSourceFingerprint> fingerprints;
+    int64 qmod_mtime = 0;
+#ifndef _Q_WINDOWS
+    // (a module never has a dependency file on Windows, see qore_aot_read_module_depfile())
+    if (have_depfile) {
+        // the dependency file and the fingerprints are those of the file the module resolves to
+        char* resolved = realpath(qmod, nullptr);
+        std::string target = resolved ? resolved : qmod;
+        free(resolved);
+        qore_aot_read_module_source_fingerprints(target + ".d" QORE_AOT_MODULE_FINGERPRINT_SUFFIX, fingerprints);
+        struct stat sb;
+        if (!stat(target.c_str(), &sb)) {
+            qmod_mtime = qore_module_stat_mtime_ns(sb);
+        }
+    }
+#endif
+    for (const std::string& spec : info.unavailable_optional_modules) {
+        if (!have_depfile) {
+            break;
+        }
+        size_t end = spec.find_first_of(" \t<>=!");
+        std::string name = spec.substr(0, end);
+        if (name.empty()) {
+            continue;
+        }
+        std::vector<std::string> files;
+        QMM.getModuleCandidateFiles(name.c_str(), nullptr, files);
+        for (size_t i = 0; i < files.size(); ++i) {
+            if (i && !(i % 100) && qore_check_cancel(&xsink, "AOT optional module candidate check")) {
+                error = "cancelled";
+                return QoreAOTOptionalModuleCheck::ERROR;
+            }
+            if (dep_set.find(files[i]) == dep_set.end()) {
+                reason = "candidate file '" + files[i] + "' of optional module '" + spec + "' was not there when "
+                    "the module was compiled";
+                return QoreAOTOptionalModuleCheck::STALE;
+            }
+            // as the loader compares it: by its fingerprint, or without one by its modification time
+            auto fi = fingerprints.find(files[i]);
+            bool changed = fi == fingerprints.end()
+                ? qore_module_file_newer(files[i], qmod_mtime)
+                : qore_module_source_changed(files[i], fi->second, qmod_mtime, xsink);
+            if (xsink) {
+                error = "cancelled";
+                return QoreAOTOptionalModuleCheck::ERROR;
+            }
+            if (changed) {
+                reason = "candidate file '" + files[i] + "' of optional module '" + spec + "' has changed since "
+                    "the module was compiled";
+                return QoreAOTOptionalModuleCheck::STALE;
+            }
+        }
+    }
+
+    // the module loader's own check: a module that can be loaded now
+    std::string available;
+    if (QMM.checkAvailableOptionalModule(xsink, info.unavailable_optional_modules, available)) {
+        reason = "optional module '" + available + "' was not available when the module was compiled, but it is "
+            "available now";
+        return QoreAOTOptionalModuleCheck::STALE;
+    }
+    if (xsink) {
+        error = "the optional modules cannot be checked";
+        xsink.clear();
+        return QoreAOTOptionalModuleCheck::ERROR;
+    }
+    return QoreAOTOptionalModuleCheck::CURRENT;
+}
+
 void QoreModuleManager::getModuleCandidateFiles(const char* name, QoreProgram* pgm,
         std::vector<std::string>& files) {
     getModuleCandidatePaths(name, pgm, files, false);
