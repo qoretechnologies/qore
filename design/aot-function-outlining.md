@@ -166,14 +166,6 @@ This generalizes the existing Phase 1.5 init-expression outliner
      locals must not cross the boundary; a shared local's lifecycle op
      may sit inside the region only if the local has no references
      after it (the common `for`-init-in-previous-block shape);
-   - a `Return` whose value an exception can interrupt (a handler
-     lowered inline at the return raises) stays out of a region when
-     the exception can leave the function from the region: the function
-     releases such a value after its locals (qore#5941), and a helper
-     would release it when it returns with the exception, before the
-     coordinator's locals (qore#6650); an exception that a catch block
-     of the region catches is fine, as the catch block releases the
-     value first;
    - the catch blocks opened in the region are closed in it, and the
      region closes none opened before it (a dataflow of the number of
      the function's catch blocks open, from the exit depths of the
@@ -279,7 +271,11 @@ This generalizes the existing Phase 1.5 init-expression outliner
   too, qore#6651), releases its locals in their declaration
   order (the coordinator's `all_body_locals` order), and an exception in
   it whose handler's temp scope is the coordinator's leaves every temp
-  scope of the helper (qore#6650).
+  scope of the helper.  An exit of the helper on an exception returns
+  the value of a return of the helper that the exception interrupted
+  (`outline_held_return`) instead of releasing it, and the coordinator
+  holds the call's result as the value of its own return until after
+  its locals, as the function releases it (qore#5941, qore#6650).
 - Outlining disabled (`QORE_AOT_OUTLINE_FN=0`) must produce behavior
   byte-identical to the outlined build (test matrix requirement).
 

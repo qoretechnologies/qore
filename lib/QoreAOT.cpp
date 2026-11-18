@@ -4353,241 +4353,6 @@ private:
         return why;
     }
 
-    //! Returns the exception target of \a inst (nullptr if an exception leaves the function)
-    static QoreIRBasicBlock* exceptionTargetOf(const QoreIRInstruction* inst) {
-        if (auto* thr = qore_ir_inst_cast<const QoreIRThrowInstruction*>(inst)) {
-            return thr->exception_target;
-        }
-        if (auto* inv = qore_ir_inst_cast<const QoreIRInvokeInstruction*>(inst)) {
-            return inv->exception_target;
-        }
-        if (auto* inv_md = qore_ir_inst_cast<const QoreIRInvokeMethodDirectInstruction*>(inst)) {
-            return inv_md->exception_target;
-        }
-        if (auto* inv_de = qore_ir_inst_cast<const QoreIRInvokeDotEvalMethodDirectInstruction*>(inst)) {
-            return inv_de->exception_target;
-        }
-        return inst->exception_target;
-    }
-
-    //! Returns true if \a inst cannot raise an exception or a thread_exit of its own
-    /** The release of a local can run a destructor, whose exception is added to the one being raised, as in an
-        unwind; a scope exit that only drops handlers runs none
-    */
-    static bool cannotRaise(const QoreIRInstruction* inst) {
-        switch (inst->opcode) {
-            case QoreIROpcode::ConstInt:
-            case QoreIROpcode::ConstFloat:
-            case QoreIROpcode::ConstBool:
-            case QoreIROpcode::ConstBoolBoxed:
-            case QoreIROpcode::ConstNothing:
-            case QoreIROpcode::ConstNull:
-            case QoreIROpcode::ConstString:
-            case QoreIROpcode::ConstDate:
-            case QoreIROpcode::ConstChar:
-            case QoreIROpcode::ConstEnum:
-            case QoreIROpcode::DebugStatement:
-            case QoreIROpcode::DebugBlock:
-            case QoreIROpcode::PushTempMark:
-            case QoreIROpcode::PushTempMarkPair:
-            case QoreIROpcode::ScopeEnter:
-            case QoreIROpcode::LoadLocal:
-            case QoreIROpcode::RefSelf:
-            case QoreIROpcode::UninstantiateLocal:
-            case QoreIROpcode::Br:
-            case QoreIROpcode::Phi:
-                return true;
-            case QoreIROpcode::ScopeExit:
-                return static_cast<const QoreIRScopeExitInstruction*>(inst)->trim;
-            default:
-                return false;
-        }
-    }
-
-    //! Returns true if an exception raised while a Return of the region [\a first..\a last] holds its value can
-    //! leave the function from the region
-    /** The value of a return that an exception interrupts (raised by a handler that the return runs inline, for
-        example) is released after the locals of the function when the exception leaves the function, as the AST
-        interpreter keeps it until the function ends (qore#5941): a helper would release it when it returns with the
-        exception, before the coordinator releases its locals (qore#6650).  An exception that a catch block of the
-        region catches is fine: the catch block releases the value first (QoreIRFunction::catch_interrupted_returns).
-    */
-    bool interruptedReturnLeavesRegion(const QoreIRFunction& fn, size_t first, size_t last) const {
-        auto in_region = [&](const QoreIRBasicBlock* b, size_t& idx) {
-            auto it = block_idx.find(b);
-            if (it == block_idx.end() || it->second < first || it->second > last) {
-                return false;
-            }
-            idx = it->second;
-            return true;
-        };
-        // the definition of each value of the region
-        std::unordered_map<uint32_t, std::pair<size_t, size_t>> defs;
-        for (size_t bi = first; bi <= last; ++bi) {
-            const auto& insts = fn.blocks[bi]->instructions;
-            for (size_t ii = 0; ii < insts.size(); ++ii) {
-                if (insts[ii] && insts[ii]->result.isValid()) {
-                    defs[insts[ii]->result.id] = {bi, ii};
-                }
-            }
-        }
-        // true if an exception raised at an instruction whose exception target is \a target can leave the function
-        // before a catch block of the region catches it
-        auto escapes = [&](const QoreIRBasicBlock* target) {
-            size_t ti;
-            if (!target) {
-                return true;
-            }
-            if (!in_region(target, ti)) {
-                return true;
-            }
-            std::vector<size_t> work{ti};
-            std::unordered_set<size_t> seen{ti};
-            while (!work.empty()) {
-                size_t bi = work.back();
-                work.pop_back();
-                // see the statement targets below
-                const QoreIRBasicBlock* cur_target = nullptr;
-                for (const auto& inst_ptr : fn.blocks[bi]->instructions) {
-                    QoreIRInstruction* inst = inst_ptr.get();
-                    if (!inst) {
-                        continue;
-                    }
-                    // a catch block of the region releases the value first
-                    if (inst->opcode == QoreIROpcode::LandingPad || inst->opcode == QoreIROpcode::CatchException) {
-                        break;
-                    }
-                    if (inst->opcode == QoreIROpcode::DebugStatement) {
-                        cur_target = inst->exception_target;
-                        continue;
-                    }
-                    // the propagation of the exception, or an instruction that can raise one outside of a statement
-                    // with an exception target, leaves the function
-                    if (!exceptionTargetOf(inst) && (inst->opcode == QoreIROpcode::Rethrow
-                            || inst->opcode == QoreIROpcode::CheckException
-                            || inst->opcode == QoreIROpcode::Throw || (!cannotRaise(inst) && !cur_target))) {
-                        return true;
-                    }
-                    bool out = false;
-                    aotOutlineForEachBlockTarget(inst, [&](QoreIRBasicBlock*& t) {
-                        size_t next;
-                        if (!t || inst->opcode == QoreIROpcode::Phi) {
-                            return;
-                        }
-                        if (!in_region(t, next)) {
-                            out = true;
-                            return;
-                        }
-                        if (seen.insert(next).second) {
-                            work.push_back(next);
-                        }
-                    });
-                    if (out) {
-                        return true;
-                    }
-                }
-            }
-            return false;
-        };
-        for (size_t bi = first; bi <= last; ++bi) {
-            const auto& insts = fn.blocks[bi]->instructions;
-            for (size_t ii = 0; ii < insts.size(); ++ii) {
-                const QoreIRInstruction* inst = insts[ii].get();
-                if (!inst || inst->opcode != QoreIROpcode::Return) {
-                    continue;
-                }
-                const auto* ret = static_cast<const QoreIRReturnInstruction*>(inst);
-                if (!ret->has_value) {
-                    continue;
-                }
-                // the first value of the return's family (see QoreIRToLLVM::return_value_ids) defined in the region
-                auto d = defs.find(ret->value.id);
-                if (d == defs.end()) {
-                    continue;
-                }
-                std::pair<size_t, size_t> start = d->second;
-                for (;;) {
-                    const QoreIRInstruction* def = fn.blocks[start.first]->instructions[start.second].get();
-                    if ((def->opcode != QoreIROpcode::RefSelf && def->opcode != QoreIROpcode::DiscardTempsKeep)
-                            || def->operands.empty()) {
-                        break;
-                    }
-                    auto p = defs.find(def->operands[0].id);
-                    if (p == defs.end()) {
-                        break;
-                    }
-                    start = p->second;
-                }
-                // the instructions run between the definition and the return
-                // the exception target of the statement that each instruction is in (that of its DebugStatement):
-                // the lowering gives an exception target to each instruction of a statement with one that can raise,
-                // so an instruction without one in such a statement cannot raise; without a statement target, any
-                // instruction that can raise leaves the function
-                const QoreIRBasicBlock* stmt_target = nullptr;
-                {
-                    const auto& sinsts = fn.blocks[start.first]->instructions;
-                    for (size_t si = start.second + 1; si > 0; --si) {
-                        const QoreIRInstruction* si_inst = sinsts[si - 1].get();
-                        if (si_inst && si_inst->opcode == QoreIROpcode::DebugStatement) {
-                            stmt_target = si_inst->exception_target;
-                            break;
-                        }
-                    }
-                }
-                struct ScanPos {
-                    size_t block;
-                    size_t inst;
-                    const QoreIRBasicBlock* stmt_target;
-                };
-                std::vector<ScanPos> work{{start.first, start.second + 1, stmt_target}};
-                std::unordered_set<size_t> seen;
-                while (!work.empty()) {
-                    ScanPos pos = work.back();
-                    work.pop_back();
-                    const auto& winsts = fn.blocks[pos.block]->instructions;
-                    const QoreIRBasicBlock* cur_target = pos.stmt_target;
-                    for (size_t wi = pos.inst; wi < winsts.size(); ++wi) {
-                        QoreIRInstruction* w = winsts[wi].get();
-                        if (!w) {
-                            continue;
-                        }
-                        if (w == inst) {
-                            break;
-                        }
-                        if (w->opcode == QoreIROpcode::DebugStatement) {
-                            cur_target = w->exception_target;
-                            continue;
-                        }
-                        if (!cannotRaise(w)) {
-                            const QoreIRBasicBlock* target = exceptionTargetOf(w);
-                            if (!target && !cur_target && escapes(nullptr)) {
-                                return true;
-                            }
-                            if (target && escapes(target)) {
-                                return true;
-                            }
-                        }
-                        // the normal successors only: the exception edges were followed above
-                        if (w->opcode == QoreIROpcode::Br || w->opcode == QoreIROpcode::BrIf) {
-                            aotOutlineForEachBlockTarget(w, [&](QoreIRBasicBlock*& t) {
-                                size_t next;
-                                if (t && in_region(t, next) && seen.insert(next).second) {
-                                    work.push_back({next, 0, cur_target});
-                                }
-                            });
-                        } else if (auto* invoke = qore_ir_inst_cast<QoreIRInvokeInstruction*>(w)) {
-                            size_t next;
-                            if (in_region(invoke->normal_target, next) && seen.insert(next).second) {
-                                work.push_back({next, 0, cur_target});
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        return false;
-    }
-
     bool validateRegion(const QoreIRFunction& fn, AOTFnOutlineRegion& region,
             const std::unordered_set<const void*>& body_local_set, bool dbg) {
         const size_t first = region.first;
@@ -4629,8 +4394,6 @@ private:
         std::unordered_set<const LocalVar*> region_locals;
         // true if the region opens or closes a catch block
         bool has_catch_ops = false;
-        // true if the region has a Return with a value
-        bool has_value_return = false;
         // the locals that an instruction of the region can write (qore#6314)
         std::unordered_set<const LocalVar*> region_written;
         size_t temp_push_count = 0;
@@ -4669,9 +4432,6 @@ private:
                     case QoreIROpcode::CatchException:
                     case QoreIROpcode::CatchCleanup:
                         has_catch_ops = true;
-                        break;
-                    case QoreIROpcode::Return:
-                        has_value_return |= static_cast<const QoreIRReturnInstruction*>(inst)->has_value;
                         break;
                     default:
                         break;
@@ -4775,9 +4535,6 @@ private:
             if (in_region(i) != enter_in) {
                 return fail("scope enter/exit crosses region boundary");
             }
-        }
-        if (has_value_return && interruptedReturnLeavesRegion(fn, first, last)) {
-            return fail("interrupted return value can leave the function from the region");
         }
         // The catch blocks of the region must be opened and closed in it: the exit block of a catch block closes the
         // catch blocks of the frame down to the depth of its try statement, which the helper counts from the catch
