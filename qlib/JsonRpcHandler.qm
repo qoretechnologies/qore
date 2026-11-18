@@ -179,8 +179,6 @@ public class JsonRpcHandler inherits public AbstractHttpRequestHandler, Logger::
     private:internal {
         list methods = ();
         hash mi;
-        #! the compiled name patterns of the methods, by method text (qore#6603)
-        hash<string, Regex> name_res;
         int loglevel;
 
         # if True then verbose exception info will be logged
@@ -326,7 +324,6 @@ public class JsonRpcHandler inherits public AbstractHttpRequestHandler, Logger::
         splice methods, i, 1;
         # rebuild method index
         remove mi{text};
-        remove name_res{text};
         # update indices for methods after the removed one
         foreach string key in (keys mi) {
             if (mi{key} > i) {
@@ -400,8 +397,8 @@ public class JsonRpcHandler inherits public AbstractHttpRequestHandler, Logger::
         # the name pattern is compiled when the method is added, so that a pattern that is not valid fails here and
         # not in each request (qore#6603)
         Regex name_re(h.name);
-        name_res{h.text} = name_re;
-        methods[i] = h;
+        # the pattern is kept with its method, which the log callback receives without it
+        methods[i] = h + {"name_re": name_re};
         mi{h.text} = i;
     }
     #! @endcond
@@ -458,7 +455,7 @@ public class JsonRpcHandler inherits public AbstractHttpRequestHandler, Logger::
         # find method function
         hash<auto> found;
         foreach hash<auto> m in (methods) {
-            if (name_res{m.text}.match(method)) {
+            if (cast<Regex>(m.name_re).match(method)) {
                 found = m;
                 break;
             }
@@ -478,7 +475,7 @@ public class JsonRpcHandler inherits public AbstractHttpRequestHandler, Logger::
         cx.cmark = found.cmark;
         cx.function = found.function;
 
-        *string msg = exists getLogMessage ? call_function(getLogMessage, cx, found, \params) : NOTHING;
+        *string msg = exists getLogMessage ? call_function(getLogMessage, cx, found - "name_re", \params) : NOTHING;
         if (exists msg)
             log(cx, msg);
 

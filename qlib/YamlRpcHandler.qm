@@ -158,8 +158,6 @@ public namespace YamlRpcHandler {
         private {
             list methods = ();
             hash mi;
-            #! the compiled name patterns of the methods, by method text (qore#6603)
-            hash<string, Regex> name_res;
             int loglevel;
 
             # if True then verbose exception info will be logged
@@ -369,8 +367,8 @@ public namespace YamlRpcHandler {
             # the name pattern is compiled when the method is added, so that a pattern that is not valid fails here
             # and not in each request (qore#6603)
             Regex name_re(h.name);
-            name_res{h.text} = name_re;
-            methods[i] = h;
+            # the pattern is kept with its method, which the log callback receives without it
+            methods[i] = h + {"name_re": name_re};
         }
 
         private hash<auto> help() {
@@ -427,7 +425,7 @@ public namespace YamlRpcHandler {
             # find method function
             hash<auto> found;
             foreach hash<auto> m in (methods) {
-                if (name_res{m.text}.match(method)) {
+                if (cast<Regex>(m.name_re).match(method)) {
                     found = m;
                     break;
                 }
@@ -440,7 +438,7 @@ public namespace YamlRpcHandler {
                 cx.cmark = found.cmark;
                 cx.function = found.function;
 
-                *string msg = getLogMessage ? getLogMessage(cx, found, \params) : NOTHING;
+                *string msg = getLogMessage ? getLogMessage(cx, found - "name_re", \params) : NOTHING;
                 if (msg)
                     log(cx, msg);
 

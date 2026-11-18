@@ -152,6 +152,17 @@ class HandlerPatternsAtCreationTest inherits QUnit::Test {
         YamlRpcClient client({"url": sprintf("http://localhost:%d/YAML", port)});
         assertEq(3, client.call("math.add", 1, 2).result);
         assertEq(5, client.call("math.plus", 2, 3).result);
+
+        # methods with the same text each match with their own pattern
+        YamlRpcHandler dup(new PermissiveAuthenticator(), ({
+            "name": "^a\$", "text": "dup", "function": int sub () { return 1; },
+        }, {
+            "name": "^b\$", "text": "dup", "function": int sub () { return 2; },
+        }));
+        server.setHandler("dup", "DUP", MimeTypeYamlRpc, dup);
+        YamlRpcClient dup_client({"url": sprintf("http://localhost:%d/DUP", port)});
+        assertEq(1, dup_client.call("a").result);
+        assertEq(2, dup_client.call("b").result);
 %endif
     }
 
