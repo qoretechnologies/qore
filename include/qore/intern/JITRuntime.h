@@ -966,10 +966,27 @@ int8_t qore_rt_exec_on_block_exit_hold(int64_t saved_count, ExceptionSink* xsink
 //! go to the function that the handler runs for (#6074)
 void qore_rt_exec_on_block_exit_forward(int64_t saved_count, ExceptionSink* xsink);
 
+//! Runs the handlers registered since saved_count in the block cleanups of a return statement past the inline cap of
+//! the lowering (QoreIRScopeExitInstruction::hand_over_return, #6137)
+/** The values that their returns hand over replace the value in \a hold, releasing the value before, and set
+    \a handed to 1; the first releases the values of the \a n_replace slots of \a replace (the value of the return)
+
+    @return 1 if a value was handed over in this call: the caller then clears the slots of the values of \a replace
+*/
+int8_t qore_rt_exec_on_block_exit_return_hold(int64_t saved_count, ExceptionSink* xsink, uint64_t* hold,
+    int8_t* handed, uint64_t* replace, int64_t n_replace);
+
+//! Returns the value in \a hold if \a handed is set, clearing both, or a reference of its own to the borrowed value
+//! \a value_bits otherwise (QoreIROpcode::TakeHandedOverReturn, #6137)
+uint64_t qore_rt_take_handed_over_return(uint64_t* hold, int8_t* handed, uint64_t value_bits);
+
+//! Releases the value in \a hold if \a handed is set, clearing both (QoreIROpcode::ReleaseHandedOverReturn, #6137)
+void qore_rt_release_handed_over_return(uint64_t* hold, int8_t* handed, ExceptionSink* xsink);
+
 //! Hands the value of a return statement of a handler run out of line to the function that it runs for
 //! (QoreIROpcode::HandlerReturn, #6074)
-/** \a value_bits is borrowed; ignored unless the handler runs while an exception or a thread_exit is pending; see
-    QoreHandlerRunContext
+/** \a value_bits is borrowed; ignored unless the handler runs while an exception or a thread_exit is pending, or in
+    the block cleanups of a return past the inline cap; see QoreHandlerRunContext
 */
 void qore_rt_handler_return(uint64_t value_bits, ExceptionSink* xsink);
 

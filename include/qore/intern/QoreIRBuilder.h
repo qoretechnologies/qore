@@ -490,6 +490,14 @@ public:
     //! #6074); an invalid \a value is a return without a value
     QoreIRInstruction* createHandlerReturn(QoreIRValue value, const QoreProgramLocation* loc = nullptr);
 
+    //! Gives a return the value that handlers run out of line past the inline cap handed over, if any, or a reference
+    //! of its own to \a value (QoreIROpcode::TakeHandedOverReturn, #6137); an invalid \a value is a return without a
+    //! value
+    QoreIRInstruction* createTakeHandedOverReturn(QoreIRValue value, const QoreProgramLocation* loc = nullptr);
+    //! Releases the value that handlers run out of line past the inline cap handed over, if any
+    //! (QoreIROpcode::ReleaseHandedOverReturn, #6137)
+    QoreIRInstruction* createReleaseHandedOverReturn(const QoreProgramLocation* loc = nullptr);
+
     //! Sets the parse options that the top-level code runs with from here on (QoreIROpcode::SetCodeParseOptions)
     QoreIRInstruction* createSetCodeParseOptions(const QoreParseOptions& po, const QoreProgramLocation* loc = nullptr);
 

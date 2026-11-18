@@ -578,6 +578,12 @@ constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 //!        module as library code: one after the header of a module that declares the locale control domain, which
 //!        the module's own restriction disallowed when it was compiled (qore#6352)
 //! v47 (batch AI; one format version for the format changes of the batch, one line each):
+//!      - the block cleanups of a return statement that run handlers out of line past the inline cap have a ScopeExit
+//!        with flag bit 2 (hand_over_return), whose handlers hand the values of their returns to the frame's
+//!        handed-over return, and the return takes it with TakeHandedOverReturn (QoreIROpcode 441), or a return in a
+//!        handler that replaces it releases it with ReleaseHandedOverReturn (442); native code calls
+//!        qore_rt_exec_on_block_exit_return_hold(), qore_rt_take_handed_over_return() and
+//!        qore_rt_release_handed_over_return(); the AOT runtime identity changes with the runtime entries (#6137)
 constexpr uint16_t QORE_AOT_BINARY_MIN_VERSION = 9;
 //! First format version whose function variant flags record each variant's public flag (see v25 above).
 constexpr uint16_t QORE_AOT_VARIANT_PUBLIC_VERSION = 25;
@@ -667,6 +673,11 @@ constexpr uint16_t QORE_AOT_MODULE_INFO_DOMAINS_VERSION = 45;
     that a static_assert keeps equal to this one
 */
 constexpr uint16_t QORE_AOT_BATCH_AI_VERSION = 47;
+//! First format version whose return statements can take the values that handlers run out of line past the inline
+//! cap handed over (see v47 above, #6137)
+constexpr uint16_t QORE_AOT_HANDED_OVER_RETURN_VERSION = 47;
+static_assert(QORE_AOT_HANDED_OVER_RETURN_VERSION == QORE_AOT_BATCH_AI_VERSION,
+    "the format changes of batch AI share one format version (v46)");
 //! The current format version: the newest version of the history above, which is the newest feature version above
 //! when a reader branches on it (a merge with another format change takes the next version after the newest, here and
 //! in the history above)

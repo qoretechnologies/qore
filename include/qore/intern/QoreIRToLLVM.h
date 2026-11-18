@@ -828,6 +828,14 @@ private:
         handlers.
     */
     llvm::Value* handler_return_hold = nullptr;
+    //! an i8 slot set to 1 when a handler run out of line past the inline cap in the block cleanups of a return
+    //! statement hands a value over to handler_return_hold, which the return takes (#6137)
+    /** See QoreIRScopeExitInstruction::hand_over_return, qore_rt_exec_on_block_exit_return_hold(),
+        qore_rt_take_handed_over_return() and qore_rt_release_handed_over_return(); cleared with
+        handler_return_hold at the catch block of a try statement of the function.  Created at the entry of a function
+        that has such a ScopeExit, which has handler_return_hold too.
+    */
+    llvm::Value* handler_return_handed = nullptr;
     //! true if the function is the body of a handler compiled as a function of its own: the handlers of its blocks
     //! run out of line with qore_rt_exec_on_block_exit_forward() (#6074)
     bool handler_function = false;
@@ -840,6 +848,15 @@ private:
         //! the values of the returns of the try block of the try statement that catches the exception
         //! (QoreIRFunction::catch_interrupted_returns), or nullptr for those of the function (return_value_ids)
         const std::vector<uint32_t>* try_returns;
+        //! true if the first hand-over replaces the values of \a values instead: the call runs the handlers in the
+        //! block cleanups of a return past the inline cap (qore_rt_exec_on_block_exit_return_hold(), #6137)
+        bool own_values = false;
+        //! the value of the return that the first hand-over of the call replaces and the value that it took a
+        //! reference of its own to, if own_values (the operands of QoreIRScopeExitInstruction::hand_over_return)
+        std::vector<uint32_t> values;
+        //! the index of the argument of the call that takes the array of the values that the first hand-over
+        //! releases, followed by the argument that takes their number
+        unsigned replace_arg = 3;
     };
     //! the calls that run handlers out of line with handler_return_hold whose handlers replace the value of an
     //! interrupted return

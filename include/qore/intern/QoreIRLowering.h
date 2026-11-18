@@ -1289,6 +1289,12 @@ private:
     bool pending_return_active = false;
     //! try_depth at the return statement of pending_return
     int pending_return_try_depth = 0;
+    //! true if the block cleanups of pending_return have a ScopeExit whose handlers run out of line past the inline cap
+    //! and hand the values of their returns over (QoreIRScopeExitInstruction::hand_over_return, #6137)
+    /** The return takes the value handed over, if any (QoreIROpcode::TakeHandedOverReturn), and a return in a handler
+        that replaces pending_return releases it (QoreIROpcode::ReleaseHandedOverReturn).
+    */
+    bool pending_return_handed_over = false;
     //! the nesting of emitBlockCleanups() and lowerHandlersAtExit() calls (see QORE_IR_INLINE_HANDLER_BUDGET in
     //! QoreIRLowering.cpp)
     int exit_lowering_nesting = 0;
@@ -1305,6 +1311,9 @@ private:
     QoreIRValue try_replaced_return_base;
     //! the try_depth of the try statement whose end releases try_replaced_return, or 0
     int try_replaced_depth = 0;
+    //! true if the end of the try statement of try_replaced_depth releases the value that handlers run out of line
+    //! handed over to the return that it replaces (see pending_return_handed_over, #6137)
+    bool try_replaced_handed_over = false;
     //! Returns true if a return at the current point replaces the value of pending_return (see there)
     DLLLOCAL bool replacesPendingReturn() const;
     //! Releases the value of the return that a return in a handler replaces (see pending_return)

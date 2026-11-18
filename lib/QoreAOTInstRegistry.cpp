@@ -543,6 +543,8 @@ constexpr AOTOpcodeLayout aot_opcode_layouts[] = {
     {O::SetCodeParseOptions, {G::Base}},
     // written as two PushTempMark instructions (serializeIRFunction())
     {O::PushTempMarkPair, {G::Base}},
+    {O::TakeHandedOverReturn, {G::Base}},
+    {O::ReleaseHandedOverReturn, {G::Base}},
 };
 
 constexpr bool aotOpcodeLayoutsIndexed() {
@@ -2523,9 +2525,9 @@ static bool writeScopeExit(AOTInstWriteCtx& ctx) {
     auto* si = static_cast<const QoreIRScopeExitInstruction*>(ctx.inst);
     ctx.writer.writeU32(si->scope_id);
     ctx.writer.writeU8(si->is_error ? 1 : 0);
-    // bit 0: inline_lowered; bit 1: trim, followed by the number of handlers kept.  A ScopeExit that is not a trim
-    // keeps the encoding of the binaries written before trims existed (0 or 1)
-    ctx.writer.writeU8((si->inline_lowered ? 1 : 0) | (si->trim ? 2 : 0));
+    // bit 0: inline_lowered; bit 1: trim, followed by the number of handlers kept; bit 2: hand_over_return (#6137).
+    // A ScopeExit that is neither keeps the encoding of the binaries written before they existed (0 or 1)
+    ctx.writer.writeU8((si->inline_lowered ? 1 : 0) | (si->trim ? 2 : 0) | (si->hand_over_return ? 4 : 0));
     if (si->trim) {
         ctx.writer.writeU32(si->keep_handlers);
     }
@@ -2544,6 +2546,7 @@ static std::unique_ptr<QoreIRInstruction> readScopeExit(
         inst->trim = true;
         inst->keep_handlers = QoreAOTBinaryReader::readU32(ctx.ptr);
     }
+    inst->hand_over_return = (flags & 4) != 0;
     inst->result = QoreIRValue(result_id);
     inst->operands = operands;
     inst->exception_target = exc_target;

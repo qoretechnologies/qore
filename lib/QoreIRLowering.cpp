@@ -2038,22 +2038,27 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             QoreIRValue base;
             bool active;
             int try_depth;
+            bool handed_over;
             QoreIRValue try_replaced;
             QoreIRValue try_replaced_base;
             int try_replaced_depth;
+            bool try_replaced_handed_over;
             PendingReturnRestore(QoreIRLowering& l) : l(l), value(l.pending_return), base(l.pending_return_base),
                     active(l.pending_return_active), try_depth(l.pending_return_try_depth),
+                    handed_over(l.pending_return_handed_over),
                     try_replaced(l.try_replaced_return), try_replaced_base(l.try_replaced_return_base),
-                    try_replaced_depth(l.try_replaced_depth) {
+                    try_replaced_depth(l.try_replaced_depth), try_replaced_handed_over(l.try_replaced_handed_over) {
             }
             ~PendingReturnRestore() {
                 l.pending_return = value;
                 l.pending_return_base = base;
                 l.pending_return_active = active;
                 l.pending_return_try_depth = try_depth;
+                l.pending_return_handed_over = handed_over;
                 l.try_replaced_return = try_replaced;
                 l.try_replaced_return_base = try_replaced_base;
                 l.try_replaced_depth = try_replaced_depth;
+                l.try_replaced_handed_over = try_replaced_handed_over;
             }
             void set(QoreIRValue v, QoreIRValue b = QoreIRValue()) {
                 // a return in a try statement in a handler replaces the value of the return that the handler runs
@@ -2063,15 +2068,19 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
                     l.try_replaced_return = l.pending_return;
                     l.try_replaced_return_base = l.pending_return_base;
                     l.try_replaced_depth = l.pending_return_try_depth + 1;
+                    // the value that handlers run out of line handed over to the return replaced, if any (#6137)
+                    l.try_replaced_handed_over = l.pending_return_handed_over;
                 } else {
                     l.try_replaced_return = QoreIRValue();
                     l.try_replaced_return_base = QoreIRValue();
                     l.try_replaced_depth = 0;
+                    l.try_replaced_handed_over = false;
                 }
                 l.pending_return = v;
                 l.pending_return_base = b;
                 l.pending_return_active = true;
                 l.pending_return_try_depth = l.try_depth;
+                l.pending_return_handed_over = false;
             }
         } pending_return_restore(*this);
         // the hand-over of a return in a try statement of a handler body (see emitHandlerReturn()) is the state of
@@ -2115,6 +2124,11 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             // return): the code after it is unreachable and is not lowered, as its values would have no definitions
             // (#6030)
             if (blockHasTerminator(builder.getBlock())) {
+                return true;
+            }
+            if (pending_return_handed_over) {
+                // a handler run out of line past the inline cap can have replaced it with a value (#6137)
+                builder.createReturn(builder.createTakeHandedOverReturn(QoreIRValue(), stmt->loc)->result);
                 return true;
             }
             builder.createReturnNothing();
@@ -2271,6 +2285,19 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         if (!emitBlockCleanups(0, error, false, CF_FILL_REMAINING | CF_CATCH_SCOPES)) {
             return false;
         }
+        // handlers run out of line past the inline cap in the cleanups can have handed a value over that replaces the
+        // value of the return (see QoreIRScopeExitInstruction::hand_over_return, #6137): the return gives that value,
+        // of a type that the parser did not check, and releases its own value, as the value that the handler's return
+        // replaced
+        bool handed_over = pending_return_handed_over && !blockHasTerminator(builder.getBlock());
+        if (handed_over) {
+            QoreIRValue taken = builder.createTakeHandedOverReturn(lowered, stmt->loc)->result;
+            builder.createReleaseOwnedTemp(lowered, stmt->loc);
+            if (ret_base.isValid() && ret_base.id != lowered.id) {
+                builder.createReleaseOwnedTemp(ret_base, stmt->loc);
+            }
+            lowered = taken;
+        }
         // the Return is emitted even when a handler that the cleanups lowered inline ended the block (a throw or a
         // thread_exit in it): it is unreachable then, but its value is defined before the cleanups, and it records the
         // value of the return that the exception interrupts for the IR interpreter (its return slot) and for the try
@@ -2284,7 +2311,10 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         // record the parse-time type of the returned expression: the declared type of a member or otherwise the
         // type recorded for the expression; ParseNode::getTypeInfo() is not used generally, since some nodes (such as
         // method calls) resolve their types with parse-time APIs that are not available when lowering
-        if (auto* self_ref = dynamic_cast<const SelfVarrefNode*>(expr.getInternalNode())) {
+        if (handed_over) {
+            // the value can be one that a handler handed over (see above)
+            ret->value_parse_type = nullptr;
+        } else if (auto* self_ref = dynamic_cast<const SelfVarrefNode*>(expr.getInternalNode())) {
             ret->value_parse_type = self_ref->getMemberTypeInfo();
         } else if (!expr.hasNode()) {
             ret->value_parse_type = expr.getFullTypeInfo();
@@ -5414,6 +5444,10 @@ bool QoreIRLowering::replacesPendingReturn() const {
 }
 
 void QoreIRLowering::releaseReplacedReturn(const QoreProgramLocation* loc) {
+    // the value that handlers run out of line handed over to the return, if any, is replaced as well (#6137)
+    if (pending_return_active && pending_return_handed_over && try_depth == pending_return_try_depth) {
+        builder.createReleaseHandedOverReturn(loc);
+    }
     if (replacesPendingReturn()) {
         builder.createReleaseOwnedTemp(pending_return, loc);
         if (pending_return_base.isValid() && pending_return_base.id != pending_return.id) {
@@ -5706,6 +5740,13 @@ bool QoreIRLowering::emitBlockCleanups(size_t target_depth, std::string& error, 
         // try statement releases it when it ends (TryStatement::execImpl(), #5992)
         if (entry.try_end_depth && entry.try_end_depth == try_replaced_depth
                 && !blockHasTerminator(builder.getBlock())) {
+            if (try_replaced_handed_over) {
+                // the value that handlers run out of line handed over to the replaced return (#6137), once the try
+                // statement has ended without an exception, as below
+                builder.createCheckException(entry.loc)->exception_target = getCurrentExceptionTarget();
+                builder.createReleaseHandedOverReturn(entry.loc);
+                builder.createCheckException(entry.loc)->exception_target = entry.try_outer_target;
+            }
             if (try_replaced_return.isValid()) {
                 // only once the try statement has ended without an exception: a destructor of a local of its block
                 // can raise one when the block is left, which interrupts the return (qore#5941), and the value that
@@ -6212,6 +6253,22 @@ bool QoreIRLowering::lowerHandlersAtExit(bool is_error, std::string& error, size
                 auto* se_inst = builder.createScopeExit(scope_id, is_error, scope_loc, /*inline_lowered=*/false);
                 se_inst->exception_target = set_exception_target ? handler_exception_target
                     : getCurrentExceptionTarget();
+                // in the cleanups of a return statement, the values of their returns replace the value of the
+                // return, which takes the last one when its cleanups end (#6137); in a handler compiled as a function
+                // of its own, they go to the function that the handler runs for (QoreIROpcode::HandlerReturn), and a
+                // return in a try statement of a handler does not replace it (see replacesPendingReturn())
+                // The first hand-over releases the value of the return (its operands), as a return in a handler lowered
+                // inline does (see releaseReplacedReturn())
+                if (!is_error && !handler_body && pending_return_active && try_depth == pending_return_try_depth) {
+                    se_inst->hand_over_return = true;
+                    if (pending_return.isValid()) {
+                        se_inst->operands.push_back(pending_return);
+                        if (pending_return_base.isValid() && pending_return_base.id != pending_return.id) {
+                            se_inst->operands.push_back(pending_return_base);
+                        }
+                    }
+                    pending_return_handed_over = true;
+                }
                 return true;
             }
             ++inline_handlers_lowered;

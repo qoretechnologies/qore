@@ -86,7 +86,7 @@
 // Compile-time guard: forces review of interpreter dispatch when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 440,
+static_assert(QORE_IR_MAX_OPCODE == 442,
     "New IR opcode added — review QoreIRInterpreter.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRToLLVM.cpp.");
 #include <qore/intern/QoreJIT.h>
@@ -1346,12 +1346,54 @@ public:
         }
     }
 
-    //! Releases the values that holdReturn() keeps, after the locals of the frame
+    //! Releases the values that holdReturn() keeps, after the locals of the frame, and the handed-over return
+    /** The handed-over return (see handOverReturn()) is the value of the return that an exception interrupts, or that
+        the try statement that catches it releases
+    */
     DLLLOCAL void releaseHeldReturns(ExceptionSink* xsink) {
         for (QoreValue& v : held_returns) {
             v.discard(xsink);
         }
         held_returns.clear();
+        if (handed_over_set) [[unlikely]] {
+            releaseHandedOverReturn(xsink);
+        }
+    }
+
+    //! Replaces the handed-over return with \a v, whose reference it takes, releasing the value before (#6137)
+    /** The value that a handler run out of line past the inline cap hands over in the block cleanups of a return
+        statement (QoreIRScopeExitInstruction::hand_over_return), which the return takes (takeHandedOverReturn())
+    */
+    DLLLOCAL void handOverReturn(QoreValue v, ExceptionSink* xsink) {
+        QoreValue prev = handed_over;
+        handed_over = v;
+        bool had = handed_over_set;
+        handed_over_set = true;
+        if (had) {
+            prev.discard(xsink);
+        }
+    }
+
+    //! Returns the handed-over return, whose reference passes to the caller, and clears it, if one was handed over,
+    //! or a reference of its own to \a value otherwise (QoreIROpcode::TakeHandedOverReturn, #6137)
+    DLLLOCAL QoreValue takeHandedOverReturn(QoreValue value) {
+        if (!handed_over_set) {
+            return value.refSelf();
+        }
+        QoreValue rv = handed_over;
+        handed_over = QoreValue();
+        handed_over_set = false;
+        return rv;
+    }
+
+    //! Releases the handed-over return, if any (QoreIROpcode::ReleaseHandedOverReturn, #6137)
+    DLLLOCAL void releaseHandedOverReturn(ExceptionSink* xsink) {
+        if (handed_over_set) {
+            QoreValue v = handed_over;
+            handed_over = QoreValue();
+            handed_over_set = false;
+            v.discard(xsink);
+        }
     }
 
     //! Releases the values of every slot, last slot first, and resets them
@@ -1396,6 +1438,11 @@ private:
     std::vector<uint8_t> real_slots;
     //! the values of a return that an exception interrupted, released after the locals of the frame (#5920)
     std::vector<QoreValue> held_returns;
+    //! the value that handlers run out of line past the inline cap handed over to the return whose cleanups run them,
+    //! if handed_over_set (see handOverReturn())
+    QoreValue handed_over;
+    //! true if a value was handed over to handed_over (also no value, with a return without one)
+    bool handed_over_set = false;
 
     //! Releases the references that holdReturn() keeps to \a v, if any (see releaseHeldReturn())
     /** A value can be held more than once: each slot of a return that holds it (the Return's, a RefSelf's, a
@@ -8336,6 +8383,10 @@ struct IRHandlerHandOver {
     //! function that catches the exception (QoreIRFunction::catch_interrupted_returns), or nullptr for all of the
     //! function's returns (the exception or thread_exit leaves the function)
     const std::vector<uint32_t>* try_returns;
+    //! the values that the first hand-over of a run in the block cleanups of a return past the inline cap releases:
+    //! the value of the return and the value that it took a reference of its own to (the operands of a ScopeExit with
+    //! QoreIRScopeExitInstruction::hand_over_return, #6137), or nullptr
+    const std::vector<QoreIRValue>* return_values = nullptr;
     bool replaced = false;
 
     //! Releases the value of the return slot \a id if it holds a reference of its own to it: a borrowed value has none
@@ -8399,6 +8450,26 @@ static QORE_INTERN_NOINLINE void qore_ir_handler_hand_over(void* data, QoreValue
     }
 }
 
+// The value of a return statement of a handler run out of line past the inline cap in the block cleanups of a return
+// statement replaces the value of that return, which takes it when its cleanups end (QoreIROpcode::TakeHandedOverReturn),
+// as in the AST interpreter, where the handler runs with a reference to the return value of its function: the frame
+// keeps it, releasing the value of the hand-over before.  A return without a value replaces it with no value.  \a data
+// is an IRHandlerHandOver, \a value is borrowed (#6137).
+// The first hand-over releases the value of the return in its slots, as the AST interpreter releases the value that a
+// handler's return replaces (see qore_ir_handler_hand_over()); a slot that holds no reference of its own is left.
+static QORE_INTERN_NOINLINE void qore_ir_handler_hand_over_return(void* data, QoreValue value, ExceptionSink* xsink) {
+    IRHandlerHandOver& h = *static_cast<IRHandlerHandOver*>(data);
+    if (!h.replaced) {
+        h.replaced = true;
+        if (h.return_values) {
+            for (const QoreIRValue& v : *h.return_values) {
+                h.releaseReturnSlot(v.id, xsink);
+            }
+        }
+    }
+    h.frame->locals_slot_cache.handOverReturn(value.refSelf(), xsink);
+}
+
 // The IR interpreter's QoreIROpcode::HandlerReturn: hands the value of a return statement of a handler run out of line
 // to the function that it runs for (see QoreHandlerRunContext); returns true if the release of a replaced value
 // raised an exception
@@ -8410,10 +8481,13 @@ static QORE_INTERN_NOINLINE bool qore_ir_handler_return(QoreValue value, Excepti
 // Execute a single on_block_exit handler body, using compiled IR if available, otherwise AST.
 // Returns true if execution encountered an error.
 // The handler hands the values of its return statements to \a parent_frame (see qore_ir_handler_hand_over()) while it
-// runs during an unwind (\a unwinding: an exception or a thread_exit)
+// runs during an unwind (\a unwinding: an exception or a thread_exit), or, with \a returning, in the block cleanups of a
+// return statement past the inline cap (the ScopeExit of the cleanups), to the return (see
+// qore_ir_handler_hand_over_return(), #6137)
 static void executeHandlerBody(const IROnBlockExitHandler& handler, ExceptionSink* obe_xsink,
         IRCallFrame* parent_frame = nullptr, const StatementBlock* dbg_statements = nullptr,
-        QoreProgram* dbg_pgm = nullptr, bool unwinding = false, const std::vector<uint32_t>* try_returns = nullptr) {
+        QoreProgram* dbg_pgm = nullptr, bool unwinding = false, const std::vector<uint32_t>* try_returns = nullptr,
+        const QoreIRScopeExitInstruction* returning = nullptr) {
     std::vector<QoreValue>* parent_slot_cache = parent_frame ? &parent_frame->locals_slot_cache.vector() : nullptr;
     // Every on_block_exit handler must have been compiled to IR by
     // QoreIRLowering::compileAllHandlerIRs/compileBlockHandlerIRs before
@@ -8437,7 +8511,7 @@ static void executeHandlerBody(const IROnBlockExitHandler& handler, ExceptionSin
     }
     // the values of the handler's return statements are handed to the frame as they execute (#6074): the value that
     // the handler's function returns is not used
-    IRHandlerHandOver hand_over{parent_frame, try_returns};
+    IRHandlerHandOver hand_over{parent_frame, try_returns, returning ? &returning->operands : nullptr};
     QoreHandlerRunContext run_ctx;
     IRCallFramePool& pool = TlFramePool::get();
     QoreHandlerRunContext* outer = qore_handler_run_context();
@@ -8449,8 +8523,9 @@ static void executeHandlerBody(const IROnBlockExitHandler& handler, ExceptionSin
         run_ctx.forwardFrom(*outer);
     } else {
         run_ctx.unwinding = unwinding;
+        run_ctx.returning = returning != nullptr;
         if (parent_frame) {
-            run_ctx.hand_over = qore_ir_handler_hand_over;
+            run_ctx.hand_over = returning ? qore_ir_handler_hand_over_return : qore_ir_handler_hand_over;
             run_ctx.data = &hand_over;
         }
     }
@@ -17510,6 +17585,21 @@ load_local_done:
                 ++ip;
                 break;
             }
+            case QoreIROpcode::TakeHandedOverReturn: {
+                // the value that handlers run out of line past the inline cap handed over to the return, if any, or
+                // the value of the return (#6137)
+                QoreValue rv = frame.locals_slot_cache.takeHandedOverReturn(inst->operands.empty() ? QoreValue()
+                    : getIRValue(values, inst->operands.front()));
+                setOwnedValueSlot(values, cleanup, inst->result.id, rv, xsink);
+                ++ip;
+                break;
+            }
+            case QoreIROpcode::ReleaseHandedOverReturn:
+                // a return in a handler replaces the value that handlers run out of line handed over; an exception
+                // that a destructor raises is pending for the instructions after it, as with ReleaseOwnedTemp (#6137)
+                frame.locals_slot_cache.releaseHandedOverReturn(xsink);
+                ++ip;
+                break;
             case QoreIROpcode::HandlerReturn: {
                 // the value of a return statement of a handler run out of line is handed to the function that the
                 // handler runs for, as the AST interpreter's handler has a reference to its return value (#6074)
@@ -17751,8 +17841,11 @@ load_local_done:
                                         dbgHandlerStatements(), dbgHandlerProgram(),
                                         error || (xsink && xsink->isThreadExit()),
                                         // where a try statement of the function catches the exception, a handler's
-                                        // return replaces the value of its try block's return (#6074)
-                                        qore_ir_exception_catch_returns(func, scope_inst->exception_target));
+                                        // return replaces the value of its try block's return (#6074); in the
+                                        // cleanups of a return past the inline cap, the value of the return (#6137)
+                                        scope_inst->hand_over_return ? nullptr
+                                            : qore_ir_exception_catch_returns(func, scope_inst->exception_target),
+                                        scope_inst->hand_over_return ? scope_inst : nullptr);
                                     // Restore td->catchException BEFORE clearing xsink to avoid
                                     // a use-after-free window where td->catchException points to
                                     // the freed exception chain
