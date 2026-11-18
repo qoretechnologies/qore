@@ -17,6 +17,7 @@ enum EI : int {
 }
 
 typedef UIS = union<int, string>;
+typedef UON = *union<int, string>;
 
 class B {
 }
@@ -183,6 +184,10 @@ sub run(EI e, int i, float f, string s, B o) {
         union<UIS, float> b = i;
         show("nested-union-float", b);
         show("cast-nested-float-union", cast<union<float, UIS>>(i));
+        union<float, UON> on = i;
+        show("nested-float-or-nothing-union", on);
+        union<UON, float> no = i;
+        show("nested-or-nothing-union-float", no);
         union<float, softint> c = i;
         show("var-float-softint", c);
         union<softint, float> d = i;

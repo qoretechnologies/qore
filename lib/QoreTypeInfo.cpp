@@ -3110,63 +3110,9 @@ static QoreString build_union_name(const type_vec_t& member_types, bool or_nothi
     return name;
 }
 
-const QoreTypeInfo* qore_get_union_type(const type_vec_t& member_types, bool or_nothing) {
-    // Handle edge cases
-    if (member_types.empty()) {
-        return autoTypeInfo;  // empty union accepts anything
-    }
-
-    // Normalize the key for consistent cache lookup
-    type_vec_t key = normalize_union_key(member_types);
-
-    // a union of one type, also after its duplicates are removed (ex: union<int, int>), is that type, as an AOT image
-    // that writes the union without the duplicates reads it back (qore#5858)
-    if (key.size() == 1) {
-        const QoreTypeInfo* ti = key[0];
-        if (or_nothing) {
-            const QoreTypeInfo* orn = qore_get_or_nothing_type(ti);
-            return orn ? orn : ti;
-        }
-        return ti;
-    }
-
-    // Check if any member already accepts NOTHING, if so, or_nothing is already covered
-    bool has_nothing = false;
-    for (const QoreTypeInfo* ti : key) {
-        if (QoreTypeInfo::parseAcceptsReturns(ti, NT_NOTHING)) {
-            has_nothing = true;
-            break;
-        }
-    }
-
-    // Use appropriate cache
-    union_map_t& cache = (or_nothing && !has_nothing) ? union_on_map : union_map;
-
-    {
-        AutoLocker al(ctl);
-        union_map_t::iterator i = cache.find(key);
-        if (i != cache.end()) {
-            return i->second;
-        }
-    }
-
-    // the value types of the members, which a value of the union is accepted as (qore#6407), are taken outside the
-    // lock, as get_value_type() takes it to make a type, and only for a union that is not made yet (a generic call
-    // looks the union up for each call)
-    type_vec_t value_types;
-    value_types.reserve(key.size());
-    for (const QoreTypeInfo* ti : key) {
-        value_types.push_back(get_value_type(ti));
-    }
-
-    AutoLocker al(ctl);
-
-    // another thread can have made the union in the meantime
-    union_map_t::iterator i = cache.find(key);
-    if (i != cache.end()) {
-        return i->second;
-    }
-
+//! makes a union type of the members given (see qore_get_union_type())
+static QoreUnionTypeInfo* qore_make_union_type(const type_vec_t& key, bool or_nothing, bool has_nothing,
+        const type_vec_t& value_types) {
     // Build accept and return vectors from all member types
     q_accept_vec_t accept_vec;
     q_return_vec_t return_vec;
@@ -3221,9 +3167,65 @@ const QoreTypeInfo* qore_get_union_type(const type_vec_t& member_types, bool or_
     QoreUnionTypeInfo* ti = new QoreUnionTypeInfo(std::move(accept_vec), std::move(return_vec), name, key,
         or_nothing || has_nothing);
     ti->initExactMembers(value_types);
-    noteDerivedTypeKeys(nullptr, key);
-    cache[key] = ti;
     return ti;
+}
+
+const QoreTypeInfo* qore_get_union_type(const type_vec_t& member_types, bool or_nothing) {
+    // Handle edge cases
+    if (member_types.empty()) {
+        return autoTypeInfo;  // empty union accepts anything
+    }
+
+    // Normalize the key for consistent cache lookup
+    type_vec_t key = normalize_union_key(member_types);
+
+    // a union of one type, also after its duplicates are removed (ex: union<int, int>), is that type, as an AOT image
+    // that writes the union without the duplicates reads it back (qore#5858)
+    if (key.size() == 1) {
+        const QoreTypeInfo* ti = key[0];
+        if (or_nothing) {
+            const QoreTypeInfo* orn = qore_get_or_nothing_type(ti);
+            return orn ? orn : ti;
+        }
+        return ti;
+    }
+
+    // Check if any member already accepts NOTHING, if so, or_nothing is already covered
+    bool has_nothing = false;
+    for (const QoreTypeInfo* ti : key) {
+        if (QoreTypeInfo::parseAcceptsReturns(ti, NT_NOTHING)) {
+            has_nothing = true;
+            break;
+        }
+    }
+
+    // Use appropriate cache
+    union_map_t& cache = (or_nothing && !has_nothing) ? union_on_map : union_map;
+
+    // the value types of the members, which a value of the union is accepted as (qore#6407), are taken outside the
+    // lock, as get_value_type() takes it to make a type, and only for a union that is not made yet (a generic call
+    // looks the union up for each call); the union is then looked up again, as another thread can have made it
+    type_vec_t value_types;
+    while (true) {
+        {
+            AutoLocker al(ctl);
+            union_map_t::iterator i = cache.find(key);
+            if (i != cache.end()) {
+                return i->second;
+            }
+            if (!value_types.empty()) {
+                QoreUnionTypeInfo* ti = qore_make_union_type(key, or_nothing, has_nothing, value_types);
+                noteDerivedTypeKeys(nullptr, key);
+                cache[key] = ti;
+                return ti;
+            }
+        }
+        value_types.reserve(key.size());
+        for (const QoreTypeInfo* ti : key) {
+            // a union member (also an or-nothing union, whose value type is not a union) gives its exact members
+            value_types.push_back(dynamic_cast<const QoreUnionTypeInfo*>(ti) ? ti : get_value_type(ti));
+        }
+    }
 }
 
 const QoreTypeInfo* qore_get_union_or_nothing_type(const type_vec_t& member_types) {

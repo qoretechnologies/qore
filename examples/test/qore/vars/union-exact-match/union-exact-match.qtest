@@ -76,6 +76,8 @@ class UnionExactMatchTest inherits QUnit::Test {
             "nested-float-union": "integer",
             "nested-union-float": "integer",
             "cast-nested-float-union": "integer",
+            "nested-float-or-nothing-union": "integer",
+            "nested-or-nothing-union-float": "integer",
             "var-float-softint": "integer",
             "var-softint-float": "integer",
             "var-number-softfloat": "float",
