@@ -780,7 +780,7 @@ bool qoreAOTEncodeModuleInfo(const QoreAOTModuleFileInfo& info, std::vector<uint
         }
         moduleInfoPut32(payload, i.flags);
     }
-    // the declared domains (version 3): a u64 as two u32, low word first
+    // the declared domains (version 4): a u64 as two u32, low word first
     if (payload.size() > QORE_AOT_MODULE_INFO_MAX_PAYLOAD_SIZE - 8) {
         error = "the AOT module metadata exceeds the maximum size of "
             + std::to_string(QORE_AOT_MODULE_INFO_MAX_PAYLOAD_SIZE) + " bytes";
@@ -788,11 +788,11 @@ bool qoreAOTEncodeModuleInfo(const QoreAOTModuleFileInfo& info, std::vector<uint
     }
     moduleInfoPut32(payload, static_cast<uint32_t>(static_cast<uint64_t>(info.declared_domains)));
     moduleInfoPut32(payload, static_cast<uint32_t>(static_cast<uint64_t>(info.declared_domains) >> 32));
-    // the dependencies required only after the header (version 3)
+    // the dependencies required only after the header (version 4)
     if (!put_list(info.post_header_dependencies, "dependency required after the module header")) {
         return false;
     }
-    // the domains that the module's code restricts (version 3): a u64 as two u32, low word first
+    // the domains that the module's code restricts (version 4): a u64 as two u32, low word first
     if (payload.size() > QORE_AOT_MODULE_INFO_MAX_PAYLOAD_SIZE - 8) {
         error = "the AOT module metadata exceeds the maximum size of "
             + std::to_string(QORE_AOT_MODULE_INFO_MAX_PAYLOAD_SIZE) + " bytes";

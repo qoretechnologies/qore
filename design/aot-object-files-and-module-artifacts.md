@@ -426,7 +426,7 @@ of the module's image:
   is the record. The linker places it in a `PT_NOTE` segment, and it is marked
   `SHF_GNU_RETAIN`, so `--gc-sections` keeps it.
 
-The record is little-endian: magic `QAMI`, format version (3), payload size,
+The record is little-endian: magic `QAMI`, format version (4), payload size,
 then the module name, the dependency count and dependencies, the optional
 module count and requests, the count and names of the modules the module was
 compiled with (every module it requires, directly or not, and every module one
@@ -451,8 +451,8 @@ removes the declared domains from the restrictions, as its source loads them.
 A conditional directive before its header makes every entry `QMDR_INEXACT`, as
 what it requests there can depend on where it is loaded: the loader then loads
 every listed module with the restrictions of the loading code, relieving none
-(fail-closed; qore#6386).  Then follow the functional domains that the module
-declares in its header (a 64-bit value as two 32-bit words, low word first),
+(fail-closed; qore#6386).  Then (version 4) follow the functional domains that
+the module declares in its header (a 64-bit value as two 32-bit words, low word first),
 the count and names of the dependencies that it requires only after its
 header, and the functional domains that its own code restricts (64-bit, as
 before; qore#6351): the dependencies of a module loaded as library code that it
@@ -478,9 +478,12 @@ the source continues without the module and fails or not by its own code (with
 `PARSE-EXCEPTION` when it calls the module that it did not load).
 
 Version 2 added the compiled-with and module path lists, version 3 the parse
-option list and the three fields of the declared domains, which came with AOT
-format version 44 (`QORE_AOT_MODULE_DEPENDENCY_RESTRICTIONS_VERSION`), so that
-the format that a module reports tells which record it has. Every string is
+option list, which came with AOT format version 44
+(`QORE_AOT_MODULE_DEPENDENCY_RESTRICTIONS_VERSION`), and version 4 the three
+fields of the declared domains, with AOT format version 45
+(`QORE_AOT_MODULE_INFO_DOMAINS_VERSION`), so that the format that a module
+reports tells which record it has; a runtime reads only its own record version
+and refuses any other, asking for the module to be rebuilt. Every string is
 nonempty and contains no NUL; payloads are bounded to 16 MiB and 65,536 entries
 per list. `QoreAOTModuleFileInfo` in `include/qore/intern/QoreAOTBinary.h`
 documents the layout.

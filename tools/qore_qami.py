@@ -12,10 +12,10 @@ that many strings.  The payload of each version:
 - version 2: as version 1, then the modules it was compiled with, its %prepend-module-path directories and its
   %append-module-path directories;
 - version 3: as version 2, then the parse options that its directives gave its dependencies: a u32 count, then for
-  each a module name, four u32 words of options and a u32 word of flags (FLAG_*) (qore#6406, qore#6386); then the
-  functional domains that the module declares in its header (a u64 as two u32, low word first), the dependencies
-  that it requires only after its header (a list) and the functional domains that its own code restricts (a u64 as
-  two u32, low word first) (qore#6351).
+  each a module name, four u32 words of options and a u32 word of flags (FLAG_*) (qore#6406, qore#6386);
+- version 4: as version 3, then the functional domains that the module declares in its header (a u64 as two u32, low
+  word first), the dependencies that it requires only after its header (a list) and the functional domains that its
+  own code restricts (a u64 as two u32, low word first) (qore#6351).
 """
 
 import struct
@@ -23,9 +23,9 @@ import struct
 #: the record magic
 MAGIC = b"QAMI"
 #: the record version that qcc writes (QORE_AOT_MODULE_INFO_VERSION)
-CURRENT_VERSION = 3
+CURRENT_VERSION = 4
 #: the versions that parse() reads
-VERSIONS = (1, 2, 3)
+VERSIONS = (1, 2, 3, 4)
 #: the size of the record header
 HEADER_SIZE = 12
 #: the largest payload accepted (QORE_AOT_MODULE_INFO_MAX_PAYLOAD_SIZE)
@@ -55,10 +55,10 @@ class ModuleInfo:
     - prepend_paths, append_paths: the module's own module path directories (version 2 and later; else empty)
     - dependency_restrictions: (name, options, flags) for each module that a directive loaded, options being a tuple
       of four u32 words and flags a combination of FLAG_* (version 3 and later; else empty)
-    - declared_domains: the functional domains that the module declares in its header (version 3 and later; else 0)
-    - post_header_dependencies: the dependencies that the module requires only after its header (version 3 and
+    - declared_domains: the functional domains that the module declares in its header (version 4 and later; else 0)
+    - post_header_dependencies: the dependencies that the module requires only after its header (version 4 and
       later; else empty)
-    - restricted_domains: the functional domains that the module's own code restricts (version 3 and later; else 0)
+    - restricted_domains: the functional domains that the module's own code restricts (version 4 and later; else 0)
     """
 
     def __init__(self, version, name, dependencies, optional, compiled_with=(), prepend_paths=(), append_paths=(),
@@ -161,6 +161,7 @@ def parse(data, offset=0, versions=VERSIONS, exact=False):
                 if flags & ~ALL_FLAGS:
                     raise ValueError
                 restrictions.append((dep, words, flags))
+        if version >= 4:
             declared_domains, cur = read_u64(cur)
             post_header, cur = read_list(cur)
             restricted_domains, cur = read_u64(cur)
@@ -203,6 +204,7 @@ def encode(version, name, dependencies=(), optional=(), compiled_with=(), prepen
             dep, words = entry[0], entry[1]
             flags = entry[2] if len(entry) > 2 else 0
             payload += enc_str(dep) + struct.pack("<%dI" % RESTRICTION_WORDS, *words) + struct.pack("<I", flags)
+    if version >= 4:
         payload += struct.pack("<II", declared_domains & 0xffffffff, declared_domains >> 32)
         payload += enc_list(list(post_header_dependencies))
         payload += struct.pack("<II", restricted_domains & 0xffffffff, restricted_domains >> 32)

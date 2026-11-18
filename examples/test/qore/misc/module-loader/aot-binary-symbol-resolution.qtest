@@ -284,7 +284,7 @@ extern \"C\" DLLEXPORT void AotSingleMap_qore_module_desc(QoreModuleInfo& mod_in
 
     #! returns the C++ declaration of the AOT module metadata section of a module with the given name
     /** qcc stores the metadata of an AOT module in a section of its image, which the loader reads before mapping the
-        module: a record of the magic number 'QAMI', the format version 3, the payload size and the payload (the
+        module: a record of the magic number 'QAMI', the format version 4, the payload size and the payload (the
         module name and the counts of dependencies, of unavailable optional modules, of the modules it was compiled
         with, of its own prepended and appended module path directories and of the options that its directives gave
         its dependencies, here none, the functional domains it declares, a u64, here none, the count of the
@@ -305,12 +305,12 @@ extern \"C\" DLLEXPORT void AotSingleMap_qore_module_desc(QoreModuleInfo& mod_in
         payload.writei4LSB(0);
         # the options that its directives gave its dependencies (version 3)
         payload.writei4LSB(0);
-        # the declared domains (version 3)
+        # the declared domains (version 4)
         payload.writei4LSB(0);
         payload.writei4LSB(0);
-        # the dependencies required only after the header (version 3)
+        # the dependencies required only after the header (version 4)
         payload.writei4LSB(0);
-        # the restricted domains (version 3)
+        # the restricted domains (version 4)
         payload.writei4LSB(0);
         payload.writei4LSB(0);
         binary payload_data = payload_out.getData();
@@ -318,7 +318,7 @@ extern \"C\" DLLEXPORT void AotSingleMap_qore_module_desc(QoreModuleInfo& mod_in
         BinaryOutputStream record_out();
         StreamWriter record(record_out);
         record.writei4LSB(0x494d4151);
-        record.writei4LSB(3);
+        record.writei4LSB(4);
         record.writei4LSB(payload_data.size());
         record.write(payload_data);
         binary record_data = record_out.getData();

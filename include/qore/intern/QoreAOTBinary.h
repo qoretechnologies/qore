@@ -569,6 +569,14 @@ constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 //!      - the module metadata record of an AOT module (QORE_AOT_MODULE_INFO_VERSION 3) has the restrictions that its
 //!        code gives the modules it requires, each with QMDR_* flags, which the loader applies before the module's
 //!        initialization (qore#6406, qore#6386)
+//! v45 (batch AF; one format version for the format changes of the batch, one line each):
+//!      - the module metadata record of an AOT module (QORE_AOT_MODULE_INFO_VERSION 4) has the functional domains
+//!        that the module declares in its header, the dependencies that it requires only after its header and the
+//!        functional domains that its own code restricts, with which the module loader removes the declared domains
+//!        from the restrictions that those dependencies inherit when the module is loaded as library code (qore#6351)
+//!      - the flags byte of the TIME_ZONE section has bit 2 set for a directive that applies only to a load of the
+//!        module as library code: one after the header of a module that declares the locale control domain, which
+//!        the module's own restriction disallowed when it was compiled (qore#6352)
 constexpr uint16_t QORE_AOT_BINARY_MIN_VERSION = 9;
 //! First format version whose function variant flags record each variant's public flag (see v25 above).
 constexpr uint16_t QORE_AOT_VARIANT_PUBLIC_VERSION = 25;
@@ -646,10 +654,17 @@ constexpr uint32_t QORE_AOT_METADATA_CHECKSUM_SIZE = 8;
     qore#6386)
 */
 constexpr uint16_t QORE_AOT_MODULE_DEPENDENCY_RESTRICTIONS_VERSION = 44;
+//! First format version whose modules have the module metadata record with the declared domains (see v45 above)
+/** The record is outside the metadata, and its own version (QORE_AOT_MODULE_INFO_VERSION, 4 from this format) gives
+    its readers its layout; the format version of the artifacts that carry it changes with it, so that the format that
+    a module reports (qcc --dump-info, the aot-format-version of its build information) tells which record it has; a
+    record of an earlier version is refused, asking for the module to be rebuilt (qore#6351, qore#6352)
+*/
+constexpr uint16_t QORE_AOT_MODULE_INFO_DOMAINS_VERSION = 45;
 //! The current format version: the newest version of the history above, which is the newest feature version above
 //! when a reader branches on it (a merge with another format change takes the next version after the newest, here and
 //! in the history above)
-constexpr uint16_t QORE_AOT_BINARY_VERSION = QORE_AOT_MODULE_DEPENDENCY_RESTRICTIONS_VERSION;
+constexpr uint16_t QORE_AOT_BINARY_VERSION = QORE_AOT_MODULE_INFO_DOMAINS_VERSION;
 //! First format version whose serialized IR functions record their handler-own local slots (see v23 above).
 constexpr uint16_t QORE_AOT_HANDLER_OWN_LOCALS_VERSION = 23;
 //! First format version whose class records have a class-flags byte (see v22 above).
@@ -3202,8 +3217,8 @@ DLLLOCAL FILE* qore_open_regular_file(const char* path);
       contains no NUL; then the lists \c compiled_with, \c prepended_module_paths and \c appended_module_paths
       (version 2), then (version 3) uint32 num_dependency_restrictions and for each the module name and its
       restrictions as four uint32 (low 64 bits then high 64 bits, each low word first), then its uint32 QMDR_* flags
-      (any other bit makes the record invalid); then uint64 declared_domains (two
-      uint32, low word first), the list \c post_header_dependencies and uint64 restricted_domains (likewise)
+      (any other bit makes the record invalid); then (version 4) uint64 declared_domains (two uint32, low word
+      first), the list \c post_header_dependencies and uint64 restricted_domains (likewise)
 
     The loader reads the metadata before it maps the qmod: it loads the dependencies first so the qmod can be
     mapped once with RTLD_NOW, and it checks the optional modules that were unavailable when the module was compiled
@@ -3239,14 +3254,14 @@ struct QoreAOTModuleFileInfo {
     */
     std::vector<QoreModuleDependencyRestriction> dependency_restrictions;
     //! the functional domains that the module declares in its header (\c domains), as in the MODULE_DOMAINS
-    //! section of the image (version 3)
+    //! section of the image (version 4)
     /** The module loader loads the module's dependencies before the module's initialization (see
         QoreModuleManager::loadBinaryModuleFromPath()); for a module loaded as library code, they inherit the
         restrictions of the Program loading the module without these domains, as the dependencies of the module's
         source do, which its Program loads after its header has removed them (qore#6351)
     */
     int64 declared_domains = 0;
-    //! the dependencies that the module's parse requested only after its header (version 3), which inherit the
+    //! the dependencies that the module's parse requested only after its header (version 4), which inherit the
     //! restrictions without the declared domains, as those of its source do, which its Program loads after its header
     //! has removed them; the others (requested before the header, or not requested by the parse: in code that a
     //! conditional excludes) inherit them with the domains
@@ -3254,7 +3269,7 @@ struct QoreAOTModuleFileInfo {
         dependency_restrictions has QMDR_INEXACT; the loader enforces both for any record (qore#6386)
     */
     std::vector<std::string> post_header_dependencies;
-    //! the functional domains that the module's code restricts with its own parse directives (version 3): the
+    //! the functional domains that the module's code restricts with its own parse directives (version 4): the
     //! dependencies do not inherit a relief of them from a module loading this one (qore#6351)
     /** QDOM_ALL if an entry of dependency_restrictions has QMDR_INEXACT (qore#6386)
     */
@@ -3266,11 +3281,13 @@ static constexpr uint32_t QORE_AOT_MODULE_INFO_MAGIC = 0x494d4151u;
 //! The format version of AOT module metadata records
 /** version 2 added the names of the modules the module was compiled with and its own module path directories;
     version 3 the restrictions that its code gives the modules it requires (qore#6406), each with QMDR_* flags
-    (qore#6386), then the functional domains that the module declares in its header, the dependencies it requires
-    only after its header and the functional domains its own code restricts (qore#6351), from AOT format version 44
-    (QORE_AOT_MODULE_DEPENDENCY_RESTRICTIONS_VERSION)
+    (qore#6386), from AOT format version 44 (QORE_AOT_MODULE_DEPENDENCY_RESTRICTIONS_VERSION); version 4 the
+    functional domains that the module declares in its header, the dependencies it requires only after its header and
+    the functional domains its own code restricts (qore#6351), from AOT format version 45
+    (QORE_AOT_MODULE_INFO_DOMAINS_VERSION).  A record of another version is refused, asking for the module to be
+    rebuilt.
 */
-static constexpr uint32_t QORE_AOT_MODULE_INFO_VERSION = 3u;
+static constexpr uint32_t QORE_AOT_MODULE_INFO_VERSION = 4u;
 //! The size of the header of an AOT module metadata record: magic, version and payload size
 static constexpr size_t QORE_AOT_MODULE_INFO_HEADER_SIZE = 12;
 //! The segment of the Mach-O section holding AOT module metadata
