@@ -32,7 +32,10 @@
 #ifndef _QORE_QORETYPESPEC_H
 #define _QORE_QORETYPESPEC_H
 
+#include <atomic>
+#include <cstddef>
 #include <functional>
+#include <iterator>
 #include <vector>
 #include <qore/QoreType.h>
 #include <qore/QoreClass.h>
@@ -52,6 +55,144 @@ class QoreListNode;
 struct QoreAcceptSpec;
 
 #define NO_TYPE_INFO "any"
+
+//! A pointer from a derived type to a type or declaration that can be orphaned (issue #6419)
+/** When a declaration that a derived type names is retired, the pointer is repointed to the declaration's tombstone
+    (orphan()) while other threads can be reading it; the declaration is freed once every thread has passed a quiescent
+    point since (see design/derived-type-retirement.md).  A read is an acquire load, which is a plain load on x86-64
+    and AArch64 (\c ldar); the store is a release store.  Copies read the pointer once.
+*/
+template <typename T>
+class QoreOrphanablePtr {
+public:
+    DLLLOCAL QoreOrphanablePtr(T* p = nullptr) : p(p) {
+    }
+
+    DLLLOCAL QoreOrphanablePtr(const QoreOrphanablePtr& old) : p(old.get()) {
+    }
+
+    DLLLOCAL QoreOrphanablePtr& operator=(const QoreOrphanablePtr& old) {
+        p.store(old.get(), std::memory_order_relaxed);
+        return *this;
+    }
+
+    DLLLOCAL T* get() const {
+        return p.load(std::memory_order_acquire);
+    }
+
+    DLLLOCAL operator T*() const {
+        return get();
+    }
+
+    DLLLOCAL T* operator->() const {
+        return get();
+    }
+
+    //! Repoints the pointer to the tombstone of what it pointed to; the tombstone is immortal
+    DLLLOCAL void orphan(T* tombstone) const {
+        p.store(tombstone, std::memory_order_release);
+    }
+
+private:
+    mutable std::atomic<T*> p;
+};
+
+//! A read-only view of a vector of orphanable pointers, which reads each element with an acquire load
+template <typename T>
+class QoreOrphanablePtrVecView {
+public:
+    typedef std::vector<QoreOrphanablePtr<T>> vec_t;
+
+    class const_iterator {
+    public:
+        typedef std::forward_iterator_tag iterator_category;
+        typedef T* value_type;
+        typedef std::ptrdiff_t difference_type;
+        typedef T* const* pointer;
+        typedef T* reference;
+
+        DLLLOCAL const_iterator(typename vec_t::const_iterator i) : i(i) {
+        }
+
+        DLLLOCAL T* operator*() const {
+            return i->get();
+        }
+
+        DLLLOCAL const_iterator& operator++() {
+            ++i;
+            return *this;
+        }
+
+        DLLLOCAL const_iterator operator++(int) {
+            const_iterator rv = *this;
+            ++i;
+            return rv;
+        }
+
+        DLLLOCAL bool operator==(const const_iterator& other) const {
+            return i == other.i;
+        }
+
+        DLLLOCAL bool operator!=(const const_iterator& other) const {
+            return i != other.i;
+        }
+
+    private:
+        typename vec_t::const_iterator i;
+    };
+
+    DLLLOCAL QoreOrphanablePtrVecView(const vec_t& v) : v(v) {
+    }
+
+    DLLLOCAL size_t size() const {
+        return v.size();
+    }
+
+    DLLLOCAL bool empty() const {
+        return v.empty();
+    }
+
+    DLLLOCAL T* operator[](size_t i) const {
+        return v[i].get();
+    }
+
+    DLLLOCAL const_iterator begin() const {
+        return const_iterator(v.begin());
+    }
+
+    DLLLOCAL const_iterator end() const {
+        return const_iterator(v.end());
+    }
+
+    //! Returns a copy of the pointers, where a vector is expected
+    DLLLOCAL operator std::vector<T*>() const {
+        return toVector();
+    }
+
+    //! Returns a copy of the pointers
+    DLLLOCAL std::vector<T*> toVector() const {
+        std::vector<T*> rv;
+        rv.reserve(v.size());
+        for (const QoreOrphanablePtr<T>& p : v) {
+            rv.push_back(p.get());
+        }
+        return rv;
+    }
+
+    //! Returns the orphanable elements, for orphaning
+    DLLLOCAL const vec_t& getOrphanable() const {
+        return v;
+    }
+
+private:
+    const vec_t& v;
+};
+
+//! Makes a vector of orphanable pointers from a vector of pointers
+template <typename T>
+DLLLOCAL std::vector<QoreOrphanablePtr<T>> qore_orphanable_vec(const std::vector<T*>& v) {
+    return std::vector<QoreOrphanablePtr<T>>(v.begin(), v.end());
+}
 
 // adds external types to global type map
 DLLLOCAL void add_to_type_map(qore_type_t t, const QoreTypeInfo* typeInfo);
@@ -142,39 +283,39 @@ public:
     DLLLOCAL const QoreParameterizedClassTypeInfo* getParameterizedClassTypeInfo() const;
 
     DLLLOCAL const QoreTypeParameterTypeInfo* getTypeParameterTypeInfo() const {
-        return typespec == QTS_TYPEPARAM ? reinterpret_cast<const QoreTypeParameterTypeInfo*>(u.ti) : nullptr;
+        return typespec == QTS_TYPEPARAM ? reinterpret_cast<const QoreTypeParameterTypeInfo*>(uTi()) : nullptr;
     }
 
     DLLLOCAL const QoreWildcardTypeInfo* getWildcardTypeInfo() const {
-        return typespec == QTS_WILDCARD ? reinterpret_cast<const QoreWildcardTypeInfo*>(u.ti) : nullptr;
+        return typespec == QTS_WILDCARD ? reinterpret_cast<const QoreWildcardTypeInfo*>(uTi()) : nullptr;
     }
 
     DLLLOCAL const TypedHashDecl* getHashDecl() const {
-        return typespec == QTS_HASHDECL ? u.hd : nullptr;
+        return typespec == QTS_HASHDECL ? uHd() : nullptr;
     }
 
     DLLLOCAL const QoreEnumDecl* getEnum() const {
-        return typespec == QTS_ENUM ? u.ed : nullptr;
+        return typespec == QTS_ENUM ? uEd() : nullptr;
     }
 
     DLLLOCAL const QoreTypeInfo* getComplexHash() const {
-        return typespec == QTS_COMPLEXHASH ? u.ti : nullptr;
+        return typespec == QTS_COMPLEXHASH ? uTi() : nullptr;
     }
 
     DLLLOCAL const QoreTypeInfo* getComplexList() const {
-        return typespec == QTS_COMPLEXLIST || typespec == QTS_COMPLEXSOFTLIST ? u.ti : nullptr;
+        return typespec == QTS_COMPLEXLIST || typespec == QTS_COMPLEXSOFTLIST ? uTi() : nullptr;
     }
 
     DLLLOCAL const QoreTypeInfo* getComplexSoftList() const {
-        return typespec == QTS_COMPLEXSOFTLIST ? u.ti : nullptr;
+        return typespec == QTS_COMPLEXSOFTLIST ? uTi() : nullptr;
     }
 
     DLLLOCAL const QoreTypeInfo* getComplexReference() const {
-        return (typespec == QTS_COMPLEXREF || typespec == QTS_COMPLEXHARDREF) ? u.ti : nullptr;
+        return (typespec == QTS_COMPLEXREF || typespec == QTS_COMPLEXHARDREF) ? uTi() : nullptr;
     }
 
     DLLLOCAL const QoreTypeInfo* getComplexBuffer() const {
-        return typespec == QTS_COMPLEXBUFFER ? u.ti : nullptr;
+        return typespec == QTS_COMPLEXBUFFER ? uTi() : nullptr;
     }
 
     //! returns the element type, if any (nullptr if not applicable)
@@ -183,9 +324,9 @@ public:
             case QTS_COMPLEXHASH:
             case QTS_COMPLEXLIST:
             case QTS_COMPLEXSOFTLIST:
-                return u.ti;
+                return uTi();
             case QTS_COMPLEXBUFFER:
-                return qore_get_complex_buffer_value_type(u.ti);
+                return qore_get_complex_buffer_value_type(uTi());
             default:
                 break;
         }
@@ -210,35 +351,35 @@ public:
     DLLLOCAL const QoreTypeInfo* getTypeInfo() const {
         switch (typespec) {
             case QTS_HASHDECL:
-                return u.hd->getTypeInfo();
+                return uHd()->getTypeInfo();
 
             case QTS_ENUM:
-                return u.ed->getTypeInfo();
+                return uEd()->getTypeInfo();
 
             case QTS_COMPLEXLIST:
             case QTS_COMPLEXSOFTLIST:
-                return qore_get_complex_list_type(u.ti);
+                return qore_get_complex_list_type(uTi());
 
             case QTS_COMPLEXHASH:
-                return qore_get_complex_hash_type(u.ti);
+                return qore_get_complex_hash_type(uTi());
 
             case QTS_COMPLEXHARDREF:
-                return qore_get_complex_hard_reference_type(u.ti);
+                return qore_get_complex_hard_reference_type(uTi());
 
             case QTS_COMPLEXREF:
-                return qore_get_complex_reference_type(u.ti);
+                return qore_get_complex_reference_type(uTi());
 
             case QTS_COMPLEXBUFFER:
-                return u.ti;
+                return uTi();
 
             case QTS_CLASS:
-                return u.qc->getTypeInfo();
+                return uQc()->getTypeInfo();
 
             case QTS_PARAMCLASS:
             case QTS_TYPEPARAM:
             case QTS_WILDCARD:
             case QTS_INITIALIZER_FILTER:
-                return u.ti;
+                return uTi();
 
             case QTS_TYPE:
                 return getTypeInfoForType(u.t);
@@ -280,11 +421,11 @@ public:
             case QTS_EMPTYHASH:
                 return emptyHashTypeInfo;
             case QTS_ENUM:
-                return u.ed->getBaseTypeInfo();
+                return uEd()->getBaseTypeInfo();
             case QTS_TYPEPARAM:
             case QTS_WILDCARD:
             case QTS_INITIALIZER_FILTER:
-                return u.ti;
+                return uTi();
         }
         assert(false);
         return nullptr;
@@ -384,15 +525,58 @@ public:
             bool obj, int param_num, const char* param_name, QoreValue& n, LValueHelper* lvhelper, QoreListNode* l,
             bool& err) const;
 
+    //! Returns the type pointer of a spec that holds one (a complex type's element type), for orphaning
+    DLLLOCAL const QoreTypeInfo* getOrphanableTypeInfo() const {
+        return uTi();
+    }
+
+    //! Repoints the type or declaration pointer of the spec to its tombstone (issue #6419; see QoreOrphanablePtr)
+    /** Only the pointer of the spec's own kind is changed; the tombstone is immortal.  Readers read it with
+        uTi(), uQc(), uHd() and uEd()
+    */
+    DLLLOCAL void orphanTypeInfo(const QoreTypeInfo* tombstone) const {
+        __atomic_store_n(&u.ti, tombstone, __ATOMIC_RELEASE);
+    }
+
+    DLLLOCAL void orphanClass(const QoreClass* tombstone) const {
+        __atomic_store_n(&u.qc, tombstone, __ATOMIC_RELEASE);
+    }
+
+    DLLLOCAL void orphanHashDecl(const TypedHashDecl* tombstone) const {
+        __atomic_store_n(&u.hd, tombstone, __ATOMIC_RELEASE);
+    }
+
+    DLLLOCAL void orphanEnum(const QoreEnumDecl* tombstone) const {
+        __atomic_store_n(&u.ed, tombstone, __ATOMIC_RELEASE);
+    }
+
 protected:
     q_typespec_t typespec;
-    union {
+    //! the type or declaration; a pointer is read with an acquire load (uTi(), uQc(), uHd(), uEd()), as a derived
+    //! type's spec can be orphaned while it is read (issue #6419)
+    mutable union {
         qore_type_t t;
         const QoreClass* qc;
         const TypedHashDecl* hd;
         const QoreTypeInfo* ti;
         const QoreEnumDecl* ed;
     } u;
+
+    DLLLOCAL const QoreTypeInfo* uTi() const {
+        return __atomic_load_n(&u.ti, __ATOMIC_ACQUIRE);
+    }
+
+    DLLLOCAL const QoreClass* uQc() const {
+        return __atomic_load_n(&u.qc, __ATOMIC_ACQUIRE);
+    }
+
+    DLLLOCAL const TypedHashDecl* uHd() const {
+        return __atomic_load_n(&u.hd, __ATOMIC_ACQUIRE);
+    }
+
+    DLLLOCAL const QoreEnumDecl* uEd() const {
+        return __atomic_load_n(&u.ed, __ATOMIC_ACQUIRE);
+    }
 
     DLLLOCAL QoreTypeSpec(const QoreTypeInfo* ti, q_typespec_t t) : typespec(t) {
         u.ti = ti;

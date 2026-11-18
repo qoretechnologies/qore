@@ -33,6 +33,8 @@
 
 #define _QORE_SINGLEVALUEITERATOR_H
 
+#include "qore/intern/QoreTypeDeclPin.h"
+
 extern QoreClass* QC_SINGLEVALUEITERATOR;
 
 DLLLOCAL QoreObject* qore_new_single_value_iterator_object(QoreProgram* pgm, QoreValue value,
@@ -43,6 +45,7 @@ class SingleValueIterator : public QoreIteratorBase {
 public:
     DLLLOCAL SingleValueIterator(const QoreTypeInfo* element_type = autoTypeInfo)
             : element_type(element_type ? element_type : autoTypeInfo), validp(false) {
+        element_type_pin.set(this->element_type);
     }
 
     DLLLOCAL SingleValueIterator(const QoreValue v, const QoreTypeInfo* element_type = nullptr)
@@ -50,10 +53,12 @@ public:
         if (!QoreTypeInfo::hasType(this->element_type)) {
             this->element_type = autoTypeInfo;
         }
+        element_type_pin.set(this->element_type);
     }
 
     DLLLOCAL SingleValueIterator(const SingleValueIterator& old)
             : val(old.val.refSelf()), element_type(old.element_type), validp(old.validp) {
+        element_type_pin.set(element_type);
     }
 
     DLLLOCAL bool next() {
@@ -121,6 +126,8 @@ public:
 protected:
     QoreValue val{};
     const QoreTypeInfo* element_type;
+    //! keeps the declarations that the element type names (issue #6419; see QoreTypeDeclPin)
+    QoreTypeDeclPin element_type_pin;
     bool validp;
 };
 

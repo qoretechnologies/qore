@@ -1159,6 +1159,10 @@ protected:
     bool restore_runtime_ctx = false;
     bool restore_receiver_type_info = false;
     bool restore_type_param_instantiation = false;
+    //! true if the call runs generic code with a receiver type or type arguments: it holds types read through derived
+    //! types (the inferred type arguments, the substituted return type, its locals' substitutions), so the waits of
+    //! the thread are not quiescent while it runs (issue #6419; see QoreTypeUnsafeFrameHelper)
+    bool type_unsafe_frame = false;
     bool restore_rtflags = false;
     //! true while the variant's evaluation has borrowed module_po_override; see borrowPoOverride()
     bool po_override_borrowed = false;

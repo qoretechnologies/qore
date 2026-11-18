@@ -408,6 +408,8 @@ void qore_cleanup() {
 
     // set shutdown flag for external modules
     qore_shutdown.store(true, std::memory_order_relaxed);
+    // the declarations retired from now on are freed by the library cleanup (issue #6419)
+    qore_type_retirement_shutdown();
 
     // clean up global async I/O logger before modules and threading are torn down
     qore_async_io_logger_cleanup();

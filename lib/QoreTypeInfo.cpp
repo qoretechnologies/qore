@@ -51,6 +51,7 @@
 #include "qore/intern/QorePluginRegistry.h"
 #include "qore/intern/QoreTypeSpecMatchRegistry.h"
 #include "qore/intern/qore_thread_intern.h"
+#include "qore/intern/QoreTypeDeclPin.h"
 #include "qore/intern/qore_aot_deps.h"
 #include "qore/intern/AbstractIteratorHelper.h"
 #include "qore/QoreIteratorBase.h"
@@ -901,7 +902,12 @@ void qore_generic_cache_unregister(QoreGenericTypeCache* cache) {
 }
 
 //! Purges the derived types; \a dead receives the destroyed types and every derived type retired with them
-static void qore_purge_derived_types_intern(const void* owner, std::set<const QoreTypeInfo*>& dead) {
+/** @param retired_out if not null, receives the derived types retired, which the caller orphans and then records
+    (qore_record_retired_derived_types()); otherwise they are recorded here, with the epoch taken after they were
+    removed from the caches
+*/
+static void qore_purge_derived_types_intern(const void* owner, std::set<const QoreTypeInfo*>& dead,
+        std::vector<QoreTypeInfo*>* retired_out = nullptr) {
 
     auto any_dead = [&dead](const type_vec_t& types) -> bool {
         for (const QoreTypeInfo* t : types) {
@@ -929,16 +935,13 @@ static void qore_purge_derived_types_intern(const void* owner, std::set<const Qo
     //
     // There is deliberately no qore_check_cancel() in these loops: this runs in the destructor of the type's
     // owner, and stopping part way would leave entries keyed by an address about to be freed
-    // the epoch of the derived types retired here: the first one retired increments it (see qore_type_retire_epoch)
-    uint64_t epoch = 0;
+    // the derived types retired here, recorded after the loop (see qore_type_retire_epoch)
+    std::vector<QoreTypeInfo*> retired_now;
     bool removed;
     do {
         removed = false;
         auto retire = [&](QoreTypeInfo* ti) {
-            if (!epoch) {
-                epoch = qore_type_retire_epoch.fetch_add(1, std::memory_order_seq_cst) + 1;
-            }
-            push_retired(retired_derived_types, retired_derived_type_epochs, ti, epoch);
+            retired_now.push_back(ti);
             dead.insert(ti);
             removed = true;
         };
@@ -1009,13 +1012,30 @@ static void qore_purge_derived_types_intern(const void* owner, std::set<const Qo
     for (const QoreTypeInfo* t : dead) {
         derived_type_keys.erase(t);
     }
+
+    if (retired_out) {
+        retired_out->swap(retired_now);
+    } else if (!retired_now.empty()) {
+        uint64_t epoch = qore_type_retire_epoch.fetch_add(1, std::memory_order_seq_cst) + 1;
+        for (QoreTypeInfo* ti : retired_now) {
+            push_retired(retired_derived_types, retired_derived_type_epochs, ti, epoch);
+        }
+    }
 }
 
 //! The class, hashdecl and enum declarations retired and not freed yet (issue #5790; see QoreTypeOwner), guarded by
 //! ctl
 static std::vector<QoreTypeOwner*> retired_type_owners;
-//! the retirement epoch of each element of retired_type_owners (see qore_type_retire_epoch), guarded by ctl
-static std::vector<uint64_t> retired_type_owner_epochs;
+//! true while retired declarations wait to be freed, read without the lock (see qore_type_retirement_free())
+std::atomic<bool> qore_type_retirement_pending{false};
+//! true once library cleanup has started: retired declarations are no longer orphaned or freed before it (issue #6419)
+static std::atomic<bool> type_retirement_off{false};
+
+void qore_type_retirement_shutdown() {
+    type_retirement_off.store(true, std::memory_order_release);
+}
+//! the number of retired declarations freed before library cleanup (issue #6419)
+static std::atomic<int64_t> qore_freed_retired_type_owners{0};
 //! true once library cleanup frees the retired declarations: no declaration is retired anymore
 /** Read without the lock first: a Program held at static scope can be deleted by a static destructor after library
     cleanup, when the containers above can already have been destroyed
@@ -1152,11 +1172,35 @@ static void type_owner_count_names(QoreTypeOwner* o) {
     type_owner_counted_registry().insert(o);
 }
 
-//! Marks the declarations that a declaration kept until library cleanup names, which are retired, not freed; the
-//! caller holds ctl
+//! Makes \a keeper keep \a n (see QoreTypeOwner::type_owner_kept_by); the caller holds ctl
+static void type_owner_keep(QoreTypeOwner* keeper, QoreTypeOwner* n) {
+    if (n == keeper || std::find(keeper->type_owner_keeps.begin(), keeper->type_owner_keeps.end(), n)
+            != keeper->type_owner_keeps.end()) {
+        return;
+    }
+    keeper->type_owner_keeps.push_back(n);
+    ++n->type_owner_kept_by;
+    n->type_owner_forever_named = true;
+}
+
+//! Releases what a declaration keeps; the caller holds ctl
+static void type_owner_release_keeps(QoreTypeOwner* keeper) {
+    for (QoreTypeOwner* n : keeper->type_owner_keeps) {
+        assert(n->type_owner_kept_by);
+        if (!--n->type_owner_kept_by) {
+            n->type_owner_forever_named = false;
+        }
+    }
+    keeper->type_owner_keeps.clear();
+}
+
+//! Marks the declarations that a retired hashdecl names, which are retired, not freed, until it is freed; the caller
+//! holds ctl
 static void type_owner_mark_forever_names(QoreTypeOwner* o) {
-    // transitively: a declaration marked so is retired, and a retired hashdecl keeps what it names in turn
+    // transitively: a declaration marked so is retired, and a retired hashdecl keeps what it names in turn; the
+    // keeper counts them all, as one that it names can be released before it is
     std::vector<QoreTypeOwner*> work;
+    std::set<QoreTypeOwner*> seen;
     work.push_back(o);
     while (!work.empty()) {
         QoreTypeOwner* m = work.back();
@@ -1165,8 +1209,14 @@ static void type_owner_mark_forever_names(QoreTypeOwner* o) {
             continue;
         }
         for (QoreTypeOwner* n : m->type_owner_names) {
-            if (!n->type_owner_forever_named) {
-                n->type_owner_forever_named = true;
+            if (n == o || !seen.insert(n).second) {
+                continue;
+            }
+            // a declaration marked already had what it names marked with it, when every one of them was alive: it
+            // is not walked again, as one that it names can have been freed since
+            bool marked = n->type_owner_forever_named;
+            type_owner_keep(o, n);
+            if (!marked) {
                 work.push_back(n);
             }
         }
@@ -1345,8 +1395,313 @@ static void type_owner_release(std::vector<QoreTypeOwner*>& release_list) {
     }
 }
 
+namespace {
+//! Returns the declaration of a user (not builtin) class, hashdecl or enum, or nullptr
+static QoreTypeOwner* qore_user_class_owner(const QoreClass* qc) {
+    if (!qc) {
+        return nullptr;
+    }
+    qore_class_private* p = qore_class_private::get(*const_cast<QoreClass*>(qc));
+    return p && !p->type_owner.isTypeOwnerSystem() ? &p->type_owner : nullptr;
+}
+
+static QoreTypeOwner* qore_user_hashdecl_owner(const TypedHashDecl* hd) {
+    if (!hd) {
+        return nullptr;
+    }
+    typed_hash_decl_private* p = typed_hash_decl_private::get(*const_cast<TypedHashDecl*>(hd));
+    return !p->type_owner.isTypeOwnerSystem() ? &p->type_owner : nullptr;
+}
+
+static QoreTypeOwner* qore_user_enum_owner(const QoreEnumDecl* ed) {
+    if (!ed) {
+        return nullptr;
+    }
+    qore_enum_decl_private* p = qore_enum_decl_private::get(*const_cast<QoreEnumDecl*>(ed));
+    return !p->type_owner.isTypeOwnerSystem() ? &p->type_owner : nullptr;
+}
+
+//! Returns the user declaration whose own type (or or-nothing type) \a ti is, or nullptr
+static QoreTypeOwner* qore_user_decl_type_owner(const QoreTypeInfo* ti) {
+    if (!ti) {
+        return nullptr;
+    }
+    if (dynamic_cast<const QoreClassTypeInfo*>(ti)) {
+        return qore_user_class_owner(ti->getAcceptSpecs()[0].spec.getClass());
+    }
+    if (dynamic_cast<const QoreHashDeclTypeInfo*>(ti)) {
+        return qore_user_hashdecl_owner(ti->getAcceptSpecs()[0].spec.getHashDecl());
+    }
+    if (dynamic_cast<const QoreEnumTypeInfo*>(ti)) {
+        return qore_user_enum_owner(ti->getAcceptSpecs()[0].spec.getEnum());
+    }
+    return nullptr;
+}
+
+//! Orphans retired derived types from the declaration being retired (issue #6419; see lib/QoreTypeTombstone.cpp)
+/** Each pointer that a retired derived type has to the declaration being retired or to one of its own types is
+    repointed to the declaration's tombstone.  A pointer to another user declaration, which is alive, is left as it is:
+    the code that compares declarations by identity (the substitution of a generic class's type parameters, for example)
+    must still find it; it is recorded (named), and orphaned when that declaration is retired in turn.  A pointer to a
+    declaration being destroyed (skip_key) is left; one that cannot be orphaned (no tombstone can be made) makes its
+    declaration unfreeable.  The caller holds no type lock.
+*/
+class QoreDerivedTypeOrphaner {
+public:
+    //! \a retiring: the declaration being retired, if any; \a skip_key, \a skip1 and \a skip2: the key and the
+    //! types of a declaration being destroyed, whose pointers are left; compared without being read, as the
+    //! declaration can be partly destroyed
+    DLLLOCAL QoreDerivedTypeOrphaner(QoreTypeOwner* retiring, const void* skip_key = nullptr,
+            const QoreTypeInfo* skip1 = nullptr, const QoreTypeInfo* skip2 = nullptr) : retiring(retiring),
+            skip_key(skip_key), skip1(skip1), skip2(skip2) {
+        // an enum has no key: its declaration is found in its type, which is destroyed after the purge
+        if (skip1 && !skip_key && dynamic_cast<const QoreEnumTypeInfo*>(skip1)) {
+            skip_enum = skip1->getAcceptSpecs()[0].spec.getEnum();
+        }
+    }
+
+    //! the declarations that a pointer could not be orphaned from
+    std::vector<QoreTypeOwner*> unfreeable;
+    //! the other user declarations that the derived types name, with the derived types
+    std::vector<std::pair<QoreTypeOwner*, const QoreTypeInfo*>> named;
+
+    DLLLOCAL void orphan(const QoreTypeInfo* ti, int depth = 0) {
+        if (!ti || depth > 4) {
+            return;
+        }
+        if (!depth) {
+            cur = ti;
+        }
+        for (const QoreAcceptSpec& as : ti->getAcceptSpecs()) {
+            orphanSpec(as.spec);
+        }
+        for (const QoreReturnSpec& rs : ti->return_vec) {
+            orphanSpec(rs.spec);
+        }
+        if (const QoreParameterizedClassTypeInfo* pti = dynamic_cast<const QoreParameterizedClassTypeInfo*>(ti)) {
+            const QoreOrphanablePtr<const QoreClass>& base = pti->getOrphanableBaseClass();
+            if (QoreTypeOwner* o = isSkipped(base.get()) ? nullptr : qore_user_class_owner(base.get())) {
+                if (isRetiring(o)) {
+                    const QoreClass* t = qore_class_tombstone(base.get());
+                    if (t) {
+                        base.orphan(t);
+                    } else {
+                        unfreeable.push_back(o);
+                    }
+                }
+            }
+            for (const QoreOrphanablePtr<const QoreTypeInfo>& arg : pti->getTypeArgs().getOrphanable()) {
+                orphanType(arg);
+            }
+        } else if (const QoreUnionTypeInfo* uti = dynamic_cast<const QoreUnionTypeInfo*>(ti)) {
+            for (const QoreOrphanablePtr<const QoreTypeInfo>& m : uti->getOrphanableMemberTypes()) {
+                orphanType(m);
+            }
+        } else if (const QoreComplexCodeTypeInfo* cti = dynamic_cast<const QoreComplexCodeTypeInfo*>(ti)) {
+            orphanType(cti->getOrphanableReturnType());
+            for (const QoreOrphanablePtr<const QoreTypeInfo>& p : cti->getParamTypes().getOrphanable()) {
+                orphanType(p);
+            }
+        } else if (const QoreWildcardTypeInfo* wti = dynamic_cast<const QoreWildcardTypeInfo*>(ti)) {
+            orphanType(wti->getOrphanableBound());
+        } else if (const QoreComplexSoftListTypeInfo* sti = dynamic_cast<const QoreComplexSoftListTypeInfo*>(ti)) {
+            orphanType(*sti->getOrphanableElementCell());
+        } else if (const QoreComplexSoftListOrNothingTypeInfo* sti
+                = dynamic_cast<const QoreComplexSoftListOrNothingTypeInfo*>(ti)) {
+            orphanType(*sti->getOrphanableElementCell());
+        } else if (const QoreComplexReferenceTypeInfo* rti = dynamic_cast<const QoreComplexReferenceTypeInfo*>(ti)) {
+            // the hard reference type made on demand and owned by the type names the same element type
+            orphan(rti->getCreatedHardReference(), depth + 1);
+        }
+    }
+
+private:
+    QoreTypeOwner* retiring;
+    //! the retired derived type being orphaned
+    const QoreTypeInfo* cur = nullptr;
+    const void* skip_key;
+    const QoreTypeInfo* skip1;
+    const QoreTypeInfo* skip2;
+    const QoreEnumDecl* skip_enum = nullptr;
+
+    DLLLOCAL bool isSkipped(const void* p) const {
+        return p && p == skip_key;
+    }
+
+    //! Returns true if the pointer to \a o is orphaned; otherwise it is recorded
+    DLLLOCAL bool isRetiring(QoreTypeOwner* o) {
+        if (o == retiring) {
+            return true;
+        }
+        named.emplace_back(o, cur);
+        return false;
+    }
+
+    DLLLOCAL bool isSkippedType(const QoreTypeInfo* ti) const {
+        return ti && (ti == skip1 || ti == skip2);
+    }
+
+    DLLLOCAL const QoreTypeInfo* tombType(const QoreTypeInfo* ti, QoreTypeOwner* o) {
+        bool ok;
+        const QoreTypeInfo* t = qore_type_tombstone(ti, ok);
+        if (!ok || t == ti) {
+            unfreeable.push_back(o);
+            return nullptr;
+        }
+        return t;
+    }
+
+    DLLLOCAL void orphanType(const QoreOrphanablePtr<const QoreTypeInfo>& p) {
+        const QoreTypeInfo* ti = p.get();
+        if (isSkippedType(ti)) {
+            return;
+        }
+        QoreTypeOwner* o = qore_user_decl_type_owner(ti);
+        if (!o || !isRetiring(o)) {
+            return;
+        }
+        if (const QoreTypeInfo* t = tombType(ti, o)) {
+            p.orphan(t);
+        }
+    }
+
+    DLLLOCAL void orphanSpec(const QoreTypeSpec& spec) {
+        switch (spec.getTypeSpec()) {
+            case QTS_CLASS: {
+                const QoreClass* qc = spec.getClass();
+                QoreTypeOwner* o = isSkipped(qc) ? nullptr : qore_user_class_owner(qc);
+                if (o && isRetiring(o)) {
+                    if (const QoreClass* t = qore_class_tombstone(qc)) {
+                        spec.orphanClass(t);
+                    } else {
+                        unfreeable.push_back(o);
+                    }
+                }
+                break;
+            }
+            case QTS_HASHDECL: {
+                const TypedHashDecl* hd = spec.getHashDecl();
+                QoreTypeOwner* o = isSkipped(hd) ? nullptr : qore_user_hashdecl_owner(hd);
+                if (o && isRetiring(o)) {
+                    if (const TypedHashDecl* t = qore_hashdecl_tombstone(hd)) {
+                        spec.orphanHashDecl(t);
+                    } else {
+                        unfreeable.push_back(o);
+                    }
+                }
+                break;
+            }
+            case QTS_ENUM: {
+                const QoreEnumDecl* ed = spec.getEnum();
+                QoreTypeOwner* o = ed && ed == skip_enum ? nullptr : qore_user_enum_owner(ed);
+                if (o && isRetiring(o)) {
+                    if (const QoreEnumDecl* t = qore_enum_tombstone(ed)) {
+                        spec.orphanEnum(t);
+                    } else {
+                        unfreeable.push_back(o);
+                    }
+                }
+                break;
+            }
+            case QTS_COMPLEXHASH:
+            case QTS_COMPLEXLIST:
+            case QTS_COMPLEXSOFTLIST:
+            case QTS_COMPLEXHARDREF:
+            case QTS_COMPLEXREF: {
+                const QoreTypeInfo* elem = spec.getOrphanableTypeInfo();
+                QoreTypeOwner* o = isSkippedType(elem) ? nullptr : qore_user_decl_type_owner(elem);
+                if (o && isRetiring(o)) {
+                    if (const QoreTypeInfo* t = tombType(elem, o)) {
+                        spec.orphanTypeInfo(t);
+                    }
+                }
+                break;
+            }
+            default:
+                break;
+        }
+    }
+};
+}
+
+//! The retired derived types that still name a live user declaration, by declaration, guarded by ctl (issue #6419)
+/** A retired derived type is orphaned from the declaration whose retirement retired it; the pointers to the other user
+    declarations that it names are orphaned when they are retired in turn (see QoreDerivedTypeOrphaner)
+*/
+static std::map<QoreTypeOwner*, std::set<const QoreTypeInfo*>> retired_derived_naming;
+
+//! Purges the derived types built on a declaration's types and orphans the derived types retired (issue #6419)
+/** @param key the declaration's key in the caches (see qore_purge_derived_types())
+    @param retiring the declaration being retired, if any: the retired derived types that name it are orphaned from it
+    @param destroyed if not null, the declaration is being destroyed, not retired: its own pointers are not orphaned;
+    receives the dead types
+*/
+static void qore_purge_and_orphan_derived_types(const void* key, const QoreTypeInfo* ti1, const QoreTypeInfo* ti2,
+        QoreTypeOwner* retiring, std::set<const QoreTypeInfo*>* destroyed) {
+    std::set<const QoreTypeInfo*> local_dead;
+    std::set<const QoreTypeInfo*>& dead = destroyed ? *destroyed : local_dead;
+    if (ti1) {
+        dead.insert(ti1);
+    }
+    if (ti2) {
+        dead.insert(ti2);
+    }
+    // nothing is freed from library cleanup on: the derived types are recorded as before
+    bool orphan = !type_owner_cleanup.load(std::memory_order_acquire)
+        && !type_retirement_off.load(std::memory_order_acquire);
+    std::vector<QoreTypeInfo*> retired;
+    qore_purge_derived_types_intern(key, dead, orphan ? &retired : nullptr);
+    // the derived types retired before that name the declaration being retired
+    std::set<const QoreTypeInfo*> named_before;
+    if (orphan && retiring) {
+        AutoLocker al(ctl);
+        auto i = retired_derived_naming.find(retiring);
+        if (i != retired_derived_naming.end()) {
+            named_before.swap(i->second);
+            retired_derived_naming.erase(i);
+        }
+    }
+    if (!retired.empty() || !named_before.empty()) {
+        // the declaration being destroyed, if any, whose pointers are left
+        QoreDerivedTypeOrphaner orphaner = destroyed ? QoreDerivedTypeOrphaner(nullptr, key, ti1, ti2)
+            : QoreDerivedTypeOrphaner(retiring);
+        {
+            // the declarations read here are not freed while this thread reads them (see qore_type_retire_epoch)
+            QoreTypeEpochEntryHelper epoch_entry;
+            for (QoreTypeInfo* ti : retired) {
+                orphaner.orphan(ti);
+            }
+            for (const QoreTypeInfo* ti : named_before) {
+                orphaner.orphan(ti);
+            }
+        }
+        AutoLocker al(ctl);
+        for (QoreTypeOwner* o : orphaner.unfreeable) {
+            o->type_owner_unfreeable = true;
+        }
+        for (auto& i : orphaner.named) {
+            retired_derived_naming[i.first].insert(i.second);
+        }
+        // after the orphaning stores: a thread that reads this epoch reads the tombstones
+        uint64_t epoch = qore_type_retire_epoch.fetch_add(1, std::memory_order_seq_cst) + 1;
+        for (QoreTypeInfo* ti : retired) {
+            push_retired(retired_derived_types, retired_derived_type_epochs, ti, epoch);
+        }
+    }
+    // issue #5765: the generic caches drop the entries made for the destroyed types; what they removed is released
+    // after the registry's lock is released, as releasing it can purge types in turn
+    if (!dead.empty()) {
+        qore_generic_cache_release_list_t release;
+        qore_generic_cache_registry().evict(dead, release);
+    }
+}
+
 bool qore_type_owner_released(QoreTypeOwner* owner) {
     if (type_owner_cleanup.load(std::memory_order_acquire) || owner->isTypeOwnerSystem()) {
+        return false;
+    }
+    // a retired declaration freed by qore_type_retirement_free(), in this thread
+    if (owner->type_owner_freeing) {
         return false;
     }
     std::vector<QoreTypeOwner*> release_list;
@@ -1362,7 +1717,7 @@ bool qore_type_owner_released(QoreTypeOwner* owner) {
             // decides
             return true;
         }
-        bool derived = owner->type_owner_forever_named || type_owner_derived(owner);
+        bool derived = owner->type_owner_forever_named || owner->type_owner_kept_by || type_owner_derived(owner);
         QoreTypeOwnerGroup* g = owner->type_owner_group;
         if (g && owner->type_owner_group_live) {
             owner->type_owner_group_live = false;
@@ -1398,21 +1753,26 @@ bool qore_type_owner_released(QoreTypeOwner* owner) {
         owner->type_owner_retired = true;
         // no other thread frees it while it is retired without the lock
         owner->type_owner_retiring = true;
-        push_retired(retired_type_owners, retired_type_owner_epochs, owner,
-            qore_type_retire_epoch.fetch_add(1, std::memory_order_seq_cst) + 1);
-        // a retired declaration that keeps its members keeps what they name until library cleanup, without
-        // references, which would keep them whole: they are retired when they are released; marked now, while the
-        // lock decides them
+        // its epoch is taken once the derived types that name it are orphaned (below)
+        retired_type_owners.push_back(owner);
+        // a retired declaration that keeps its members keeps what they name until it is freed, without references,
+        // which would keep them whole: they are retired when they are released; marked now, while the lock decides
+        // them
         if (owner->keepsTypeOwnerMembers()) {
             type_owner_mark_forever_names(owner);
         }
     }
-    // the caches drop the entries built on the types; the derived types are retired, as their addresses are kept
-    qore_purge_derived_types(owner->getTypeOwnerKey(), owner->getTypeOwnerType(), owner->getTypeOwnerOrNothingType());
+    // the caches drop the entries built on the types; the derived types are retired, as their addresses are kept, and
+    // orphaned: they name the declaration's tombstone from now on (issue #6419)
+    qore_purge_and_orphan_derived_types(owner->getTypeOwnerKey(), owner->getTypeOwnerType(),
+        owner->getTypeOwnerOrNothingType(), owner, nullptr);
     owner->retireTypeOwner();
     {
         AutoLocker al(ctl);
         owner->type_owner_retiring = false;
+        // no derived type leads to it anymore: a thread that reads the epoch from now on can no longer reach it
+        owner->type_owner_retire_epoch = qore_type_retire_epoch.fetch_add(1, std::memory_order_seq_cst) + 1;
+        qore_type_retirement_pending.store(true, std::memory_order_relaxed);
         // what it names is marked (above), or it names nothing (a retired class keeps no members)
         type_owner_uncount_names(owner, release_list);
         // the references taken and released by other code from now on never bring its count to zero, so the
@@ -1429,6 +1789,9 @@ bool qore_type_owner_released(QoreTypeOwner* owner) {
     rv = true;
 release:
     type_owner_release(release_list);
+    // no scan here: this thread usually runs Qore code since before the retirement, which holds it back, and the
+    // caller can hold locks of the Program being deleted; the declaration is freed by a later scan (see
+    // qore_type_retirement_free())
     return rv;
 }
 
@@ -1439,6 +1802,7 @@ void qore_type_owner_destroyed(QoreTypeOwner* owner) {
         // registry is not locked for the same reason (the threads of the library have ended, and no declaration is
         // decided by another thread once type_owner_cleanup is set)
         type_owner_counted_registry().erase(owner);
+        owner->type_owner_keeps.clear();
         if (owner->type_owner_names_counted) {
             owner->type_owner_names_counted = false;
             std::vector<QoreTypeOwner*> refs;
@@ -1453,6 +1817,8 @@ void qore_type_owner_destroyed(QoreTypeOwner* owner) {
     {
         AutoLocker al(ctl);
         type_owner_counted_registry().erase(owner);
+        type_owner_release_keeps(owner);
+        retired_derived_naming.erase(owner);
         type_owner_uncount_names(owner, release_list);
         // a member of a group is freed only when the group has been collected, unless it is deleted with its class
         // object (qore_class_private::deref() with in_del): it leaves its group then
@@ -1542,6 +1908,37 @@ QoreTypeOwnerBatch::~QoreTypeOwnerBatch() {
     if (owners.empty()) {
         return;
     }
+    // the tombstones of the declarations that derived types name are made now, while this batch keeps every
+    // declaration of the Program: a tombstone is made from what the declaration names (the bounds of its type
+    // parameters, for example), which can be freed before the declaration is retired (issue #6419)
+    if (!type_owner_cleanup.load(std::memory_order_acquire) && !type_retirement_off.load(std::memory_order_acquire)) {
+        // and the concrete declarations of the Program's generic hashdecls (HD<X>), which their caches hold and
+        // release when the generic hashdecl is destroyed (referenced here while their tombstones are made)
+        std::vector<QoreTypeOwner*> concrete;
+        for (QoreTypeOwner* o : owners) {
+            o->getTypeOwnerCachedDecls(concrete);
+        }
+        std::vector<QoreTypeOwner*> named;
+        {
+            AutoLocker al(ctl);
+            for (std::vector<QoreTypeOwner*>* v : {&owners, &concrete}) {
+                for (QoreTypeOwner* o : *v) {
+                    if (o->type_owner_forever_named || o->type_owner_kept_by || type_owner_derived(o)) {
+                        named.push_back(o);
+                    }
+                }
+            }
+        }
+        if (!named.empty()) {
+            QoreTypeEpochEntryHelper epoch_entry;
+            for (QoreTypeOwner* o : named) {
+                qore_type_owner_make_tombstone(o);
+            }
+        }
+        std::vector<QoreTypeOwner*> release_concrete;
+        release_concrete.swap(concrete);
+        type_owner_release(release_concrete);
+    }
     std::vector<QoreTypeOwner*> release_list;
     {
         AutoLocker al(ctl);
@@ -1620,6 +2017,146 @@ QoreTypeOwnerBatch::~QoreTypeOwnerBatch() {
     }
 }
 
+//! true while this thread runs qore_type_retirement_free(): the frees it makes can retire and release declarations,
+//! which call it again
+static thread_local bool qore_type_retirement_freeing = false;
+
+size_t qore_type_retirement_free() {
+    if (!qore_type_retirement_pending.load(std::memory_order_relaxed) || qore_type_retirement_freeing
+            || type_owner_cleanup.load(std::memory_order_acquire)
+            || type_retirement_off.load(std::memory_order_acquire)) {
+        return 0;
+    }
+    qore_type_retirement_freeing = true;
+    size_t freed = 0;
+    // a free releases what the declaration keeps, which can make another one freeable: repeated while it does
+    while (true) {
+        // the candidates are read before the threads are scanned (see qore_type_retirement_info())
+        std::vector<std::pair<QoreTypeOwner*, uint64_t>> candidates;
+        {
+            AutoLocker al(ctl);
+            for (QoreTypeOwner* o : retired_type_owners) {
+                // a member of a group of survivors is named by the other members without references: it is freed
+                // once the group is collected
+                if (o->type_owner_retire_epoch && !o->type_owner_retiring && !o->type_owner_unfreeable
+                        && !o->type_owner_kept_by && !o->type_owner_group) {
+                    candidates.emplace_back(o, o->type_owner_retire_epoch);
+                }
+            }
+            if (retired_type_owners.empty()) {
+                qore_type_retirement_pending.store(false, std::memory_order_relaxed);
+            }
+        }
+        if (candidates.empty()) {
+            break;
+        }
+        uint64_t min_epoch = qore_type_retirement_scan(0, nullptr);
+        std::vector<QoreTypeOwner*> to_free;
+        {
+            AutoLocker al(ctl);
+            for (auto& c : candidates) {
+                QoreTypeOwner* o = c.first;
+                if (min_epoch && min_epoch < c.second) {
+                    continue;
+                }
+                auto i = std::find(retired_type_owners.begin(), retired_type_owners.end(), o);
+                // only the retirement holds a reference: no thread can reach it anymore, so none can take one
+                if (i == retired_type_owners.end() || o->type_owner_kept_by || o->type_owner_unfreeable
+                        || o->type_owner_group || !o->type_owner_retirement_ref
+                        || o->getTypeOwnerReferenceCount() != 1) {
+                    continue;
+                }
+                retired_type_owners.erase(i);
+                o->type_owner_freeing = true;
+                o->type_owner_retirement_ref = false;
+                type_owner_release_keeps(o);
+                to_free.push_back(o);
+            }
+            if (retired_type_owners.empty()) {
+                qore_type_retirement_pending.store(false, std::memory_order_relaxed);
+            }
+        }
+        if (to_free.empty()) {
+            break;
+        }
+        for (QoreTypeOwner* o : to_free) {
+            // the last reference: qore_type_owner_released() returns false for it, and it is freed
+            o->derefTypeOwner();
+        }
+        freed += to_free.size();
+        qore_freed_retired_type_owners.fetch_add(to_free.size(), std::memory_order_relaxed);
+    }
+    qore_type_retirement_freeing = false;
+    return freed;
+}
+
+//! Adds the user declarations that a type names to \a owners
+static void type_owner_collect_named(std::vector<QoreTypeOwner*>& owners, const QoreTypeInfo* ti, int depth) {
+    if (!ti || depth > 64) {
+        return;
+    }
+    if (QoreTypeOwner* o = qore_user_decl_type_owner(ti)) {
+        owners.push_back(o);
+        return;
+    }
+    for (const QoreAcceptSpec& as : ti->getAcceptSpecs()) {
+        const QoreTypeSpec& spec = as.spec;
+        if (QoreTypeOwner* o = qore_user_class_owner(spec.getClass())) {
+            owners.push_back(o);
+        } else if (QoreTypeOwner* o = qore_user_hashdecl_owner(spec.getHashDecl())) {
+            owners.push_back(o);
+        } else if (QoreTypeOwner* o = qore_user_enum_owner(spec.getEnum())) {
+            owners.push_back(o);
+        } else if (const QoreParameterizedClassTypeInfo* pti = spec.getParameterizedClassTypeInfo()) {
+            if (QoreTypeOwner* o = qore_user_class_owner(pti->getBaseClass())) {
+                owners.push_back(o);
+            }
+            for (const QoreTypeInfo* arg : pti->getTypeArgs()) {
+                type_owner_collect_named(owners, arg, depth + 1);
+            }
+        } else if (const QoreWildcardTypeInfo* wti = spec.getWildcardTypeInfo()) {
+            type_owner_collect_named(owners, wti->getBound(), depth + 1);
+        } else if (const QoreTypeInfo* elem = spec.getElementType()) {
+            type_owner_collect_named(owners, elem, depth + 1);
+        } else if (const QoreTypeInfo* ref = spec.getComplexReference()) {
+            type_owner_collect_named(owners, ref, depth + 1);
+        }
+    }
+    if (const QoreUnionTypeInfo* uti = dynamic_cast<const QoreUnionTypeInfo*>(ti)) {
+        for (const QoreTypeInfo* m : uti->getMemberTypes()) {
+            type_owner_collect_named(owners, m, depth + 1);
+        }
+    } else if (const QoreComplexCodeTypeInfo* cti = dynamic_cast<const QoreComplexCodeTypeInfo*>(ti)) {
+        type_owner_collect_named(owners, cti->getReturnType(), depth + 1);
+        for (const QoreTypeInfo* p : cti->getParamTypes()) {
+            type_owner_collect_named(owners, p, depth + 1);
+        }
+    }
+}
+
+void qore_type_owner_keep_type_args(QoreTypeOwner* keeper, const std::vector<const QoreTypeInfo*>& args) {
+    std::vector<QoreTypeOwner*> owners;
+    for (const QoreTypeInfo* arg : args) {
+        type_owner_collect_named(owners, arg, 0);
+    }
+    if (owners.empty() || type_owner_cleanup.load(std::memory_order_acquire)) {
+        return;
+    }
+    AutoLocker al(ctl);
+    for (QoreTypeOwner* o : owners) {
+        type_owner_keep(keeper, o);
+    }
+}
+
+void qore_type_owner_release_kept(QoreTypeOwner* keeper) {
+    if (type_owner_cleanup.load(std::memory_order_acquire)) {
+        keeper->type_owner_keeps.clear();
+        return;
+    }
+    AutoLocker al(ctl);
+    type_owner_release_keeps(keeper);
+}
+
 size_t qore_retired_type_owner_count() {
     AutoLocker al(ctl);
     return retired_type_owners.size();
@@ -1630,9 +2167,15 @@ void qore_type_retirement_info(QoreTypeRetirementInfo& info) {
     std::vector<uint64_t> owner_epochs, derived_epochs;
     {
         AutoLocker al(ctl);
-        owner_epochs = retired_type_owner_epochs;
+        owner_epochs.reserve(retired_type_owners.size());
+        for (QoreTypeOwner* o : retired_type_owners) {
+            // 0 while its derived types are orphaned: pending, not freeable
+            owner_epochs.push_back(o->type_owner_retire_epoch);
+        }
         derived_epochs = retired_derived_type_epochs;
     }
+    info.freed_declarations = qore_freed_retired_type_owners.load(std::memory_order_relaxed);
+    qore_type_tombstone_counts(info.tombstone_classes, info.tombstone_hashdecls, info.tombstone_enums);
     // the threads are scanned after the items are read: a thread that entered Qore code since then published an epoch
     // after theirs, which cannot read them (see qore_type_retire_epoch)
     info.min_active_epoch = qore_type_retirement_scan(0, nullptr);
@@ -1640,6 +2183,9 @@ void qore_type_retirement_info(QoreTypeRetirementInfo& info) {
     auto count = [&info](const std::vector<uint64_t>& epochs, size_t& pending, size_t& freeable) {
         pending = epochs.size();
         for (uint64_t e : epochs) {
+            if (!e) {
+                continue;
+            }
             if (!info.oldest_pending_epoch || e < info.oldest_pending_epoch) {
                 info.oldest_pending_epoch = e;
             }
@@ -1699,13 +2245,8 @@ void qore_purge_derived_types(const void* owner, const QoreTypeInfo* ti1, const 
     if (!owner && dead.empty()) {
         return;
     }
-    qore_purge_derived_types_intern(owner, dead);
-    // issue #5765: the generic caches drop the entries made for the destroyed types; what they removed is released
-    // after the registry's lock is released, as releasing it can purge types in turn
-    if (!dead.empty()) {
-        qore_generic_cache_release_list_t release;
-        qore_generic_cache_registry().evict(dead, release);
-    }
+    // the destroyed declaration's own pointers are not orphaned: it is destroyed with them (issue #6419)
+    qore_purge_and_orphan_derived_types(owner, ti1, ti2, nullptr, &dead);
 }
 
 //! Finds the survivors of deleted Programs that only each other keep, with the references that they hold for their names
@@ -1806,7 +2347,7 @@ void delete_qore_types() {
             AutoLocker al(ctl);
             type_owner_cleanup.store(true, std::memory_order_release);
             owners.swap(retired_type_owners);
-            retired_type_owner_epochs.clear();
+            qore_type_retirement_pending.store(false, std::memory_order_relaxed);
             // the groups not collected yet are dissolved, and the holds of their members released below
             for (QoreTypeOwnerGroup* g : type_owner_groups) {
                 for (QoreTypeOwner* m : g->members) {
@@ -1864,6 +2405,9 @@ void delete_qore_types() {
             }
         }
     }
+
+    // the tombstones of the declarations freed after their retirement (issue #6419)
+    qore_free_type_tombstones();
 
     // dereference global default values
     NullString->deref();
@@ -2401,12 +2945,20 @@ QoreParameterizedClassTypeInfo::QoreParameterizedClassTypeInfo(const QoreClass* 
             make_parameterized_class_return_vec(n_or_nothing ? value_type : this, n_or_nothing),
             build_parameterized_class_name(qc, normalize_parameterized_class_args(type_args), n_or_nothing, false)),
         base_class(qc),
-        type_args(normalize_parameterized_class_args(type_args)),
+        type_args(qore_orphanable_vec(normalize_parameterized_class_args(type_args))),
         or_nothing(n_or_nothing) {
     assert(base_class);
     assert(!this->type_args.empty());
     assert(!or_nothing || value_type);
-    pname = build_parameterized_class_name(base_class, this->type_args, or_nothing, true).c_str();
+    std::vector<const QoreTypeInfo*> args = getTypeArgs().toVector();
+    pname = build_parameterized_class_name(base_class, args, or_nothing, true).c_str();
+    for (const QoreTypeInfo* arg : args) {
+        if (qore_type_needs_decl_pin(arg)) {
+            user_type_args = true;
+            unsafe_receiver = true;
+            break;
+        }
+    }
 }
 
 QoreParameterizedClassTypeSpec::QoreParameterizedClassTypeSpec(const QoreParameterizedClassTypeInfo* ti)
@@ -3747,10 +4299,10 @@ QoreComplexCodeTypeInfo::QoreComplexCodeTypeInfo(const QoreTypeInfo* ret_type, t
         : QoreTypeInfo(build_complex_code_accept_vec(or_nothing_arg),
             build_complex_code_return_vec(or_nothing_arg),
             build_complex_code_name(ret_type, param_types, varargs_arg, or_nothing_arg)),
-          returnType(ret_type), paramTypes(std::move(param_types)),
+          returnType(ret_type), paramTypes(qore_orphanable_vec(param_types)),
           varargs(varargs_arg), orNothing(or_nothing_arg) {
     // Set path name
-    pname = build_complex_code_path(ret_type, paramTypes, varargs, orNothing);
+    pname = build_complex_code_path(ret_type, param_types, varargs, orNothing);
 }
 
 bool QoreComplexCodeTypeInfo::isSignatureCompatible(const AbstractFunctionSignature* sig) const {
@@ -4312,7 +4864,7 @@ const char* QoreTypeSpec::getName() const {
 
 const QoreClass* QoreTypeSpec::getClass() const {
     if (typespec == QTS_CLASS) {
-        return u.qc;
+        return uQc();
     }
     if (typespec == QTS_PARAMCLASS) {
         return getParameterizedClassTypeInfo()->getBaseClass();
@@ -4321,13 +4873,13 @@ const QoreClass* QoreTypeSpec::getClass() const {
 }
 
 const QoreParameterizedClassTypeInfo* QoreTypeSpec::getParameterizedClassTypeInfo() const {
-    return typespec == QTS_PARAMCLASS ? static_cast<const QoreParameterizedClassTypeInfo*>(u.ti) : nullptr;
+    return typespec == QTS_PARAMCLASS ? static_cast<const QoreParameterizedClassTypeInfo*>(uTi()) : nullptr;
 }
 
 const char* QoreTypeSpec::getTypeName() const {
     switch (typespec) {
         case QTS_CLASS:
-            return u.qc->getName();
+            return uQc()->getName();
 
         default:
             return QoreTypeInfo::getName(getTypeInfo());
@@ -4339,7 +4891,7 @@ const char* QoreTypeSpec::getTypeName() const {
 const char* QoreTypeSpec::getSimpleTypeName() const {
     switch (typespec) {
         case QTS_CLASS:
-            return u.qc->getName();
+            return uQc()->getName();
 
         default:
             return QoreTypeInfo::getSimpleName(getTypeInfo());
@@ -4423,11 +4975,11 @@ qore_type_result_e QoreTypeSpec::tryMatchReferenceType(const QoreTypeSpec& t, bo
         case QTS_COMPLEXREF: {
             may_not_match = true;
             // check if types match
-            if (!t.u.ti || t.u.ti->return_vec.empty()) {
+            if (!t.uTi() || t.uTi()->return_vec.empty()) {
                 return QTI_AMBIGUOUS;
             }
             qore_type_result_e rv = QTI_NOT_EQUAL;
-            for (auto& rt : t.u.ti->return_vec) {
+            for (auto& rt : t.uTi()->return_vec) {
                 qore_type_result_e max_result = QTI_NOT_EQUAL;
                 qore_type_result_e res = checkMatchType(rt.spec, may_not_match, max_result);
                 if (res == QTI_NOT_EQUAL && !may_not_match) {
@@ -4467,20 +5019,20 @@ qore_type_result_e QoreTypeSpec::matchType(qore_type_t t) const {
             return QTI_IDENT;
         }
         // any value accepted by the element type is converted to a single-element list
-        return QoreTypeInfo::parseAcceptsBaseType(u.ti, t) ? QTI_NEAR : QTI_NOT_EQUAL;
+        return QoreTypeInfo::parseAcceptsBaseType(uTi(), t) ? QTI_NEAR : QTI_NOT_EQUAL;
     } else if (typespec == QTS_COMPLEXHARDREF || typespec == QTS_HARDREF) {
         return t == NT_REFERENCE ? QTI_IDENT : QTI_NOT_EQUAL;
     } else if (typespec == QTS_COMPLEXREF) {
         if (t == NT_REFERENCE) {
             return QTI_NEAR;
         }
-        if (QoreTypeInfo::hasType(u.ti)) {
-            return QoreTypeInfo::parseAcceptsReturns(u.ti, t) ? QTI_AMBIGUOUS : QTI_NOT_EQUAL;
+        if (QoreTypeInfo::hasType(uTi())) {
+            return QoreTypeInfo::parseAcceptsReturns(uTi(), t) ? QTI_AMBIGUOUS : QTI_NOT_EQUAL;
         }
         return QTI_WILDCARD;
     } else if (typespec == QTS_ENUM) {
         // Enum types match their underlying base type at runtime
-        qore_type_t bt = QoreTypeInfo::getBaseType(u.ed->getBaseTypeInfo());
+        qore_type_t bt = QoreTypeInfo::getBaseType(uEd()->getBaseTypeInfo());
         return t == bt ? QTI_IDENT : QTI_NOT_EQUAL;
     }
     if (u.t == NT_ALL || u.t == NT_REFERENCE) {
@@ -4728,11 +5280,11 @@ bool QoreTypeSpec::acceptInputComplexHashImpl(ExceptionSink* xsink, const QoreTy
     // a container whose value type is accepted without a check is taken as it is; a value type with the same
     // signature that the target still validates (date for date<absolute> or date<relative>) is folded and checked
     // (issue #5782)
-    if (QoreTypeInfo::acceptsInputUnchecked(u.ti, ti)) {
+    if (QoreTypeInfo::acceptsInputUnchecked(uTi(), ti)) {
         return true;
     }
-    if (ti && QoreTypeInfo::hasType(ti) && !QoreTypeInfo::parseAccepts(u.ti, ti)
-            && !qore_container_value_may_convert_to(u.ti, ti)) {
+    if (ti && QoreTypeInfo::hasType(ti) && !QoreTypeInfo::parseAccepts(uTi(), ti)
+            && !qore_container_value_may_convert_to(uTi(), ti)) {
         return false;
     }
     // a hash with a hashdecl type is not a hash with a specific value type, as for the selection of a variant
@@ -4757,7 +5309,7 @@ bool QoreTypeSpec::acceptInputComplexHashImpl(ExceptionSink* xsink, const QoreTy
         }
     } else {
         // Use the base complex type, not the optional field type
-        const QoreTypeInfo* complex_type = qore_get_complex_hash_type(u.ti);
+        const QoreTypeInfo* complex_type = qore_get_complex_hash_type(uTi());
         qore_hash_private* hp = qore_hash_private::get(*h);
         hp->complexTypeInfo = complex_type;
     }
@@ -4768,22 +5320,22 @@ bool QoreTypeSpec::acceptInputComplexHashImpl(ExceptionSink* xsink, const QoreTy
         hash_assignment_priv ha(*qore_hash_private::get(*h), *qhi_priv::get(i)->i);
         QoreValue hn(ha.swap(QoreValue()));
 
-        if (policy.value(u.ti, hn, true) == QTI_NOT_EQUAL
-                && !policy.retype(hn, u.ti, xsink)) {
+        if (policy.value(uTi(), hn, true) == QTI_NOT_EQUAL
+                && !policy.retype(hn, uTi(), xsink)) {
             ha.swap(hn);
             err = true;
             if (xsink && *xsink) {
                 xsink->appendLastDescription(" (while folding values into type 'hash<%s>')",
-                    QoreTypeInfo::getName(u.ti));
+                    QoreTypeInfo::getName(uTi()));
             }
             return true;
         }
-        policy.input(*u.ti, xsink, arg_type, obj, param_num, param_name, hn, lvhelper);
+        policy.input(*uTi(), xsink, arg_type, obj, param_num, param_name, hn, lvhelper);
         ha.swap(hn);
         if (xsink && *xsink) {
             err = true;
             // enrich exception so that it's not confusing
-            xsink->appendLastDescription(" (while folding values into type 'hash<%s>')", QoreTypeInfo::getName(u.ti));
+            xsink->appendLastDescription(" (while folding values into type 'hash<%s>')", QoreTypeInfo::getName(uTi()));
             return true;
         }
     }
@@ -4806,11 +5358,11 @@ bool QoreTypeSpec::acceptInputComplexListImpl(ExceptionSink* xsink, const QoreTy
     // a container whose value type is accepted without a check is taken as it is; a value type with the same
     // signature that the target still validates (date for date<absolute> or date<relative>) is folded and checked
     // (issue #5782)
-    if (QoreTypeInfo::acceptsInputUnchecked(u.ti, ti)) {
+    if (QoreTypeInfo::acceptsInputUnchecked(uTi(), ti)) {
         return true;
     }
-    if (ti && QoreTypeInfo::hasType(ti) && !QoreTypeInfo::parseAccepts(u.ti, ti)
-            && !qore_container_value_may_convert_to(u.ti, ti)) {
+    if (ti && QoreTypeInfo::hasType(ti) && !QoreTypeInfo::parseAccepts(uTi(), ti)
+            && !qore_container_value_may_convert_to(uTi(), ti)) {
         return false;
     }
 
@@ -4819,7 +5371,7 @@ bool QoreTypeSpec::acceptInputComplexListImpl(ExceptionSink* xsink, const QoreTy
     qore_list_private* lp;
     if (!l->is_unique()) {
         // the copy is a list value, so it gets the list type even when the target type is a soft list
-        AbstractQoreNode* p = n.assign(l = qore_list_private::get(*l)->copy(qore_get_complex_list_type(u.ti)));
+        AbstractQoreNode* p = n.assign(l = qore_list_private::get(*l)->copy(qore_get_complex_list_type(uTi())));
         if (lvhelper) {
             lvhelper->saveTemp(p);
         } else {
@@ -4833,29 +5385,29 @@ bool QoreTypeSpec::acceptInputComplexListImpl(ExceptionSink* xsink, const QoreTy
     } else {
         lp = qore_list_private::get(*l);
         // Use the base complex type, not the optional field type
-        const QoreTypeInfo* complex_type = qore_get_complex_list_type(u.ti);
+        const QoreTypeInfo* complex_type = qore_get_complex_list_type(uTi());
         lp->complexTypeInfo = complex_type;
     }
 
     // now we have to fold the value types into our type
     for (size_t i = 0; i < l->size(); ++i) {
         QoreValue ln(lp->takeExists(i));
-        if (policy.value(u.ti, ln, true) == QTI_NOT_EQUAL
-                && !policy.retype(ln, u.ti, xsink)) {
+        if (policy.value(uTi(), ln, true) == QTI_NOT_EQUAL
+                && !policy.retype(ln, uTi(), xsink)) {
             lp->swap(i, ln);
             err = true;
             if (xsink && *xsink) {
                 xsink->appendLastDescription(" (while folding values into type 'list<%s>')",
-                    QoreTypeInfo::getName(u.ti));
+                    QoreTypeInfo::getName(uTi()));
             }
             return true;
         }
-        policy.input(*u.ti, xsink, arg_type, obj, param_num, param_name, ln, lvhelper);
+        policy.input(*uTi(), xsink, arg_type, obj, param_num, param_name, ln, lvhelper);
         lp->swap(i, ln);
         if (xsink && *xsink) {
             err = true;
             // enrich exception so that it's not confusing
-            xsink->appendLastDescription(" (while folding values into type 'list<%s>')", QoreTypeInfo::getName(u.ti));
+            xsink->appendLastDescription(" (while folding values into type 'list<%s>')", QoreTypeInfo::getName(uTi()));
             return true;
         }
     }
@@ -5025,7 +5577,7 @@ std::shared_ptr<const QoreTypeInfo> qore_make_initializer_filter(const QoreTypeI
 
 bool QoreTypeSpec::acceptsEnumDecl(const QoreEnumDecl* ed) const {
     assert(typespec == QTS_ENUM);
-    return ed == u.ed || qore_enum_decl_private::get(*ed)->parseEqual(*qore_enum_decl_private::get(*u.ed));
+    return ed == uEd() || qore_enum_decl_private::get(*ed)->parseEqual(*qore_enum_decl_private::get(*uEd()));
 }
 
 //! returns true if the type has an enum type that accepts the enum value \a n (qore#6277)
@@ -5054,24 +5606,24 @@ bool QoreTypeSpec::acceptInputImpl(ExceptionSink* xsink, const QoreTypeInfo& typ
         case QTS_INITIALIZER_FILTER:
             // Delegate before the ordinary mapping-filter annotation: diagnostics describe the actual target,
             // at the existing initializer filter point, with its existing holder and exception sink still alive.
-            static_cast<const QoreInitializerFilterTypeInfo*>(u.ti)->filter(xsink, arg_type, obj, param_num,
+            static_cast<const QoreInitializerFilterTypeInfo*>(uTi())->filter(xsink, arg_type, obj, param_num,
                 param_name, n, lvhelper);
             return true;
 
         case QTS_CLASS: {
             if (t == NT_OBJECT) {
                 const QoreObject* obj = n.get<const QoreObject>();
-                const qore_class_private* target = qore_class_private::get(*u.qc);
+                const qore_class_private* target = qore_class_private::get(*uQc());
                 if (!obj->getInstantiatedTypeInfo() || !target->hasTypeParams()
                         || target->rawAcceptsParameterized()) {
-                    ok = type_spec_accept_object(*u.qc, *obj->getClass(), priv_error);
+                    ok = type_spec_accept_object(*uQc(), *obj->getClass(), priv_error);
                 }
             } else if (t == NT_WEAKREF) {
                 const QoreObject* obj = n.get<const WeakReferenceNode>()->get();
-                const qore_class_private* target = qore_class_private::get(*u.qc);
+                const qore_class_private* target = qore_class_private::get(*uQc());
                 if (!obj->getInstantiatedTypeInfo() || !target->hasTypeParams()
                         || target->rawAcceptsParameterized()) {
-                    ok = type_spec_accept_object(*u.qc, *obj->getClass(), priv_error);
+                    ok = type_spec_accept_object(*uQc(), *obj->getClass(), priv_error);
                 }
             }
             break;
@@ -5083,7 +5635,7 @@ bool QoreTypeSpec::acceptInputImpl(ExceptionSink* xsink, const QoreTypeInfo& typ
             } else if (t == NT_WEAKREF) {
                 obj = n.get<const WeakReferenceNode>()->get();
             }
-            if (obj && obj->getInstantiatedTypeInfo() == u.ti) {
+            if (obj && obj->getInstantiatedTypeInfo() == uTi()) {
                 ok = true;
             } else if (obj && obj->getInstantiatedTypeInfo()) {
                 const QoreParameterizedClassTypeInfo* target_pti = getParameterizedClassTypeInfo();
@@ -5100,7 +5652,7 @@ bool QoreTypeSpec::acceptInputImpl(ExceptionSink* xsink, const QoreTypeInfo& typ
                         ->getConcreteParameterizedBaseTypeInfo(target_pti->getBaseClass());
                     bool type_may_not_match = false;
                     bool type_may_need_filter = false;
-                    if (QoreTypeInfo::equal(mapped_type, u.ti)
+                    if (QoreTypeInfo::equal(mapped_type, uTi())
                             || qore_parameterized_class_accepts(target_pti, mapped_type, type_may_not_match,
                                 type_may_need_filter) != QTI_NOT_EQUAL) {
                         ok = true;
@@ -5117,13 +5669,13 @@ bool QoreTypeSpec::acceptInputImpl(ExceptionSink* xsink, const QoreTypeInfo& typ
                 hd = n.get<const WeakHashReferenceNode>()->get()->getHashDecl();
             }
             if (hd) {
-                const typed_hash_decl_private* target = typed_hash_decl_private::get(*u.hd);
+                const typed_hash_decl_private* target = typed_hash_decl_private::get(*uHd());
                 const typed_hash_decl_private* source = typed_hash_decl_private::get(*hd);
                 bool type_may_not_match = false;
                 bool type_may_need_filter = false;
                 // Accept if same hashdecl or source is a descendant of target
                 if (source->equal(*target)
-                        || qore_parameterized_hashdecl_accepts(u.hd, hd, type_may_not_match, type_may_need_filter)
+                        || qore_parameterized_hashdecl_accepts(uHd(), hd, type_may_not_match, type_may_need_filter)
                             != QTI_NOT_EQUAL
                         || (!target->isParameterizedHashDecl() && source->isDescendantOf(*target))) {
                     ok = true;
@@ -5133,7 +5685,7 @@ bool QoreTypeSpec::acceptInputImpl(ExceptionSink* xsink, const QoreTypeInfo& typ
         }
         case QTS_COMPLEXHASH: {
             if (t == NT_HASH) {
-                if (is_auto_vti(u.ti)) {
+                if (is_auto_vti(uTi())) {
                     ok = true;
                     break;
                 }
@@ -5145,7 +5697,7 @@ bool QoreTypeSpec::acceptInputImpl(ExceptionSink* xsink, const QoreTypeInfo& typ
                     return true;
                 }
             } else if (t == NT_WEAKREF_HASH) {
-                if (is_auto_vti(u.ti)) {
+                if (is_auto_vti(uTi())) {
                     ok = true;
                     break;
                 }
@@ -5162,7 +5714,7 @@ bool QoreTypeSpec::acceptInputImpl(ExceptionSink* xsink, const QoreTypeInfo& typ
         case QTS_COMPLEXSOFTLIST:
         case QTS_COMPLEXLIST: {
             if (n.getType() == NT_LIST) {
-                if (is_auto_vti(u.ti)) {
+                if (is_auto_vti(uTi())) {
                     ok = true;
                     break;
                 }
@@ -5173,7 +5725,7 @@ bool QoreTypeSpec::acceptInputImpl(ExceptionSink* xsink, const QoreTypeInfo& typ
             } else if (n.getType() == NT_WEAKREF_LIST) {
                 // a weak reference to a list is accepted like the list it refers to, as for a weak reference to a
                 // hash above
-                if (is_auto_vti(u.ti)) {
+                if (is_auto_vti(uTi())) {
                     ok = true;
                     break;
                 }
@@ -5186,7 +5738,7 @@ bool QoreTypeSpec::acceptInputImpl(ExceptionSink* xsink, const QoreTypeInfo& typ
                 }
             } else if (typespec == QTS_COMPLEXLIST) {
                 bool err = false;
-                ok = qore_type_materialize_iterator_to_list(xsink, n, lvhelper, u.ti, err, policy);
+                ok = qore_type_materialize_iterator_to_list(xsink, n, lvhelper, uTi(), err, policy);
                 if (err) {
                     return true;
                 }
@@ -5198,7 +5750,7 @@ bool QoreTypeSpec::acceptInputImpl(ExceptionSink* xsink, const QoreTypeInfo& typ
                     break;
                 }
                 // see if value matches
-                if (policy.value(u.ti, n, true) > 0) {
+                if (policy.value(uTi(), n, true) > 0) {
                     ok = true;
                 }
             }
@@ -5208,7 +5760,7 @@ bool QoreTypeSpec::acceptInputImpl(ExceptionSink* xsink, const QoreTypeInfo& typ
             if (n.getType() == NT_BUFFER) {
                 QoreBufferNode* b = n.get<QoreBufferNode>();
                 bool needs_nullable_copy = false;
-                ok = qore_complex_buffer_accepts_runtime(u.ti, *b, needs_nullable_copy);
+                ok = qore_complex_buffer_accepts_runtime(uTi(), *b, needs_nullable_copy);
                 if (needs_nullable_copy) {
                     QoreBufferNode* copy = b->copy(true, xsink);
                     if (!copy) {
@@ -5240,9 +5792,9 @@ bool QoreTypeSpec::acceptInputImpl(ExceptionSink* xsink, const QoreTypeInfo& typ
                 assert(!lvhelper);
                 ReferenceNode* r = n.get<ReferenceNode>();
                 const QoreTypeInfo* ti = r->getLValueTypeInfo();
-                //printd(5, "cr: %p '%s' == %p '%s': %d\n", u.ti, QoreTypeInfo::getName(u.ti), ti, QoreTypeInfo::getName(ti), QoreTypeInfo::outputSuperSetOf(ti, u.ti));
+                //printd(5, "cr: %p '%s' == %p '%s': %d\n", uTi(), QoreTypeInfo::getName(uTi()), ti, QoreTypeInfo::getName(ti), QoreTypeInfo::outputSuperSetOf(ti, uTi()));
                 // first check types before instantiating reference
-                if (QoreTypeInfo::outputSuperSetOf(ti, u.ti)) {
+                if (QoreTypeInfo::outputSuperSetOf(ti, uTi())) {
                     // issue #2891: do not create a value in the source reference if none already exists
                     // do not process if there is no type restriction
                     // the value read from the lvalue is assigned back to the same lvalue in order to apply the
@@ -5251,7 +5803,7 @@ bool QoreTypeSpec::acceptInputImpl(ExceptionSink* xsink, const QoreTypeInfo& typ
                     // replaces the value hands the old one to LValueHelper::saveTemp(), which defers the
                     // dereference to the helper's destructor, so this pointer is still backed by a live reference
                     // at the comparison below and its address cannot have been reused
-                    auto assign_back = [target_ti = u.ti, policy](LValueHelper& lvh) {
+                    auto assign_back = [target_ti = uTi(), policy](LValueHelper& lvh) {
                         QoreValue val = lvh.getReferencedValue();
                         if (val.isNothing()) {
                             return;
@@ -5281,7 +5833,7 @@ bool QoreTypeSpec::acceptInputImpl(ExceptionSink* xsink, const QoreTypeInfo& typ
                                 // type rejects raises the same error as for a variable that can be written, and only
                                 // a value that the conversion changes has to be written back
                                 ValueHolder conv(val->refSelf(), xsink);
-                                policy.assignment(u.ti, "<reference>", *conv, xsink);
+                                policy.assignment(uTi(), "<reference>", *conv, xsink);
                                 if (!*xsink) {
                                     needs_write = !qore_value_unchanged_by_conversion(*val, *conv);
                                 }
@@ -5392,26 +5944,26 @@ bool QoreTypeSpec::operator==(const QoreTypeSpec& other) const {
         case QTS_EMPTYHASH:
             return u.t == other.u.t;
         case QTS_CLASS:
-            return qore_class_private::get(*u.qc)->equal(*qore_class_private::get(*other.u.qc));
+            return qore_class_private::get(*uQc())->equal(*qore_class_private::get(*other.uQc()));
         case QTS_HASHDECL:
-            return typed_hash_decl_private::get(*u.hd)->equal(*typed_hash_decl_private::get(*other.u.hd));
+            return typed_hash_decl_private::get(*uHd())->equal(*typed_hash_decl_private::get(*other.uHd()));
         case QTS_COMPLEXHASH:
         case QTS_COMPLEXLIST:
         case QTS_COMPLEXSOFTLIST:
         case QTS_COMPLEXHARDREF:
         case QTS_COMPLEXREF:
-            return QoreTypeInfo::equal(u.ti, other.u.ti);
+            return QoreTypeInfo::equal(uTi(), other.uTi());
         case QTS_COMPLEXBUFFER:
-            return u.ti == other.u.ti;
+            return uTi() == other.uTi();
         case QTS_PARAMCLASS:
         case QTS_TYPEPARAM:
         case QTS_WILDCARD:
         case QTS_INITIALIZER_FILTER:
-            return u.ti == other.u.ti;
+            return uTi() == other.uTi();
         case QTS_HARDREF:
              return true;
         case QTS_ENUM:
-            return u.ed == other.u.ed;
+            return uEd() == other.uEd();
     }
     return false;
 }
@@ -5444,12 +5996,12 @@ qore_type_result_e QoreTypeSpec::runtimeAcceptsValueImpl(const QoreValue& n, boo
                 obj = n.get<const WeakReferenceNode>()->get();
             }
             if (obj) {
-                const qore_class_private* target = qore_class_private::get(*u.qc);
+                const qore_class_private* target = qore_class_private::get(*uQc());
                 if (obj->getInstantiatedTypeInfo() && target->hasTypeParams()
                         && !target->rawAcceptsParameterized()) {
                     return QTI_NOT_EQUAL;
                 }
-                qore_type_result_e rv = qore_class_private::runtimeCheckCompatibleClass(*u.qc, *obj->getClass());
+                qore_type_result_e rv = qore_class_private::runtimeCheckCompatibleClass(*uQc(), *obj->getClass());
                 if (rv == QTI_NOT_EQUAL) {
                     return rv;
                 }
@@ -5480,7 +6032,7 @@ qore_type_result_e QoreTypeSpec::runtimeAcceptsValueImpl(const QoreValue& n, boo
                     return QTI_NOT_EQUAL;
                 }
             }
-            if (obj->getInstantiatedTypeInfo() == u.ti) {
+            if (obj->getInstantiatedTypeInfo() == uTi()) {
                 return exact ? QTI_IDENT : QTI_AMBIGUOUS;
             }
             if (obj->getInstantiatedTypeInfo()) {
@@ -5501,7 +6053,7 @@ qore_type_result_e QoreTypeSpec::runtimeAcceptsValueImpl(const QoreValue& n, boo
                         ->getConcreteParameterizedBaseTypeInfo(target_pti->getBaseClass());
                     bool type_may_not_match = false;
                     bool type_may_need_filter = false;
-                    if (QoreTypeInfo::equal(mapped_type, u.ti)
+                    if (QoreTypeInfo::equal(mapped_type, uTi())
                             || qore_parameterized_class_accepts(target_pti, mapped_type, type_may_not_match,
                                 type_may_need_filter) != QTI_NOT_EQUAL) {
                         return exact ? QTI_IDENT : QTI_AMBIGUOUS;
@@ -5519,14 +6071,14 @@ qore_type_result_e QoreTypeSpec::runtimeAcceptsValueImpl(const QoreValue& n, boo
                 hd = n.get<const WeakHashReferenceNode>()->get()->getHashDecl();
             }
             if (hd) {
-                const typed_hash_decl_private* target = typed_hash_decl_private::get(*u.hd);
+                const typed_hash_decl_private* target = typed_hash_decl_private::get(*uHd());
                 const typed_hash_decl_private* source = typed_hash_decl_private::get(*hd);
                 if (source->equal(*target)) {
                     return exact ? QTI_IDENT : QTI_AMBIGUOUS;
                 }
                 bool type_may_not_match = false;
                 bool type_may_need_filter = false;
-                qore_type_result_e rv = qore_parameterized_hashdecl_accepts(u.hd, hd, type_may_not_match,
+                qore_type_result_e rv = qore_parameterized_hashdecl_accepts(uHd(), hd, type_may_not_match,
                     type_may_need_filter);
                 if (rv != QTI_NOT_EQUAL) {
                     return exact && rv == QTI_IDENT ? QTI_IDENT : QTI_AMBIGUOUS;
@@ -5555,17 +6107,17 @@ qore_type_result_e QoreTypeSpec::runtimeAcceptsValueImpl(const QoreValue& n, boo
             if (!h) {
                 return QTI_NOT_EQUAL;
             }
-            if (is_auto_vti(u.ti)) {
+            if (is_auto_vti(uTi())) {
                 return QTI_NEAR;
             }
             // CRITICAL: A hasddecl-typed hash (with a specific structure) cannot match a complex hash type
             // with a SPECIFIC value type (a flexible map with string keys). They are mutually exclusive types.
             // This prevents incorrect variant selection when a hasddecl is passed where a complex hash
             // with specific value type is expected. However, hash<auto> should accept any hash including hasddecls.
-            if (h->getHashDecl() && u.ti != autoTypeInfo) {
+            if (h->getHashDecl() && uTi() != autoTypeInfo) {
                 return QTI_NOT_EQUAL;
             }
-            if (ti && QoreTypeInfo::hasType(ti) && QoreTypeInfo::parseAccepts(u.ti, ti)) {
+            if (ti && QoreTypeInfo::hasType(ti) && QoreTypeInfo::parseAccepts(uTi(), ti)) {
                 return exact ? QTI_IDENT : QTI_AMBIGUOUS;
             }
             // acceptInputComplexHash() folds a value whose element type the fold path can convert, so a value this
@@ -5573,7 +6125,7 @@ qore_type_result_e QoreTypeSpec::runtimeAcceptsValueImpl(const QoreValue& n, boo
             // it as an inexact match, so that variant selection and binding cannot disagree; the value does not have
             // this type, though, so it does not match otherwise (instanceof, and code that skips the conversion of a
             // value that has a slot's type)
-            if (fold && ti && QoreTypeInfo::hasType(ti) && qore_container_value_may_convert_to(u.ti, ti)) {
+            if (fold && ti && QoreTypeInfo::hasType(ti) && qore_container_value_may_convert_to(uTi(), ti)) {
                 return QTI_AMBIGUOUS;
             }
             // issue #2647: allow an empty hash with no specific type to be passed to any complex hash type
@@ -5597,16 +6149,16 @@ qore_type_result_e QoreTypeSpec::runtimeAcceptsValueImpl(const QoreValue& n, boo
                 ti = l->getValueTypeInfo();
             }
             if (l) {
-                if (is_auto_vti(u.ti)) {
+                if (is_auto_vti(uTi())) {
                     return QTI_NEAR;
                 }
-                if (ti && QoreTypeInfo::hasType(ti) && QoreTypeInfo::parseAccepts(u.ti, ti)) {
+                if (ti && QoreTypeInfo::hasType(ti) && QoreTypeInfo::parseAccepts(uTi(), ti)) {
                     return exact ? QTI_IDENT : QTI_AMBIGUOUS;
                 }
                 // as in the complex hash case above: acceptInputComplexList() folds a value whose element type
                 // the fold path can convert, so reporting no match here would reject a value that binding
                 // accepts
-                if (fold && ti && QoreTypeInfo::hasType(ti) && qore_container_value_may_convert_to(u.ti, ti)) {
+                if (fold && ti && QoreTypeInfo::hasType(ti) && qore_container_value_may_convert_to(uTi(), ti)) {
                     return QTI_AMBIGUOUS;
                 }
                 // issue #2647: allow an empty list with no specific type to be passed to any complex list type
@@ -5617,7 +6169,7 @@ qore_type_result_e QoreTypeSpec::runtimeAcceptsValueImpl(const QoreValue& n, boo
                 }
             }
             if (typespec == QTS_COMPLEXSOFTLIST) {
-                qore_type_result_e rv = policy.value(u.ti, n, fold);
+                qore_type_result_e rv = policy.value(uTi(), n, fold);
                 if (rv > 0) {
                     // do not return an exact match if we have to convert to a list
                     if (rv == QTI_IDENT) {
@@ -5635,7 +6187,7 @@ qore_type_result_e QoreTypeSpec::runtimeAcceptsValueImpl(const QoreValue& n, boo
             }
             const QoreBufferNode* b = n.get<const QoreBufferNode>();
             bool needs_nullable_copy = false;
-            if (!qore_complex_buffer_accepts_runtime(u.ti, *b, needs_nullable_copy)) {
+            if (!qore_complex_buffer_accepts_runtime(uTi(), *b, needs_nullable_copy)) {
                 return QTI_NOT_EQUAL;
             }
             return needs_nullable_copy ? QTI_NEAR : (exact ? QTI_IDENT : QTI_AMBIGUOUS);
@@ -5645,11 +6197,11 @@ qore_type_result_e QoreTypeSpec::runtimeAcceptsValueImpl(const QoreValue& n, boo
             if (ot == NT_REFERENCE) {
                 const QoreTypeInfo* ti = n.get<const ReferenceNode>()->getLValueTypeInfo();
                 //printd(5, "QoreTypeSpec::runtimeAcceptsValue() cr ti: '%s' typeInfo: '%s' eq: %d ss: %d\n",
-                //    QoreTypeInfo::getName(ti), QoreTypeInfo::getName(u.ti), QoreTypeInfo::equal(u.ti, ti),
-                //    QoreTypeInfo::outputSuperSetOf(ti, u.ti));
-                if (QoreTypeInfo::equal(u.ti, ti))
+                //    QoreTypeInfo::getName(ti), QoreTypeInfo::getName(uTi()), QoreTypeInfo::equal(uTi(), ti),
+                //    QoreTypeInfo::outputSuperSetOf(ti, uTi()));
+                if (QoreTypeInfo::equal(uTi(), ti))
                     return QTI_IDENT;
-                if (QoreTypeInfo::outputSuperSetOf(ti, u.ti))
+                if (QoreTypeInfo::outputSuperSetOf(ti, uTi()))
                     return exact ? QTI_IDENT : QTI_AMBIGUOUS;
             }
             return QTI_NOT_EQUAL;
@@ -5699,9 +6251,9 @@ qore_type_result_e QoreTypeSpec::runtimeAcceptsValueImpl(const QoreValue& n, boo
             // Accept TAG_ENUM values from same enum declaration
             if (n.isEnum()) {
                 const QoreEnumMember* member = n.getEnumMember();
-                if (member->getEnumDecl() == u.ed
+                if (member->getEnumDecl() == uEd()
                     || qore_enum_decl_private::get(*member->getEnumDecl())->parseEqual(
-                        *qore_enum_decl_private::get(*u.ed))) {
+                        *qore_enum_decl_private::get(*uEd()))) {
                     return exact ? QTI_IDENT : QTI_AMBIGUOUS;
                 }
             }
@@ -7322,10 +7874,13 @@ void QoreComplexBufferOrNothingTypeInfo::getThisTypeImpl(QoreString& str) const 
     str.sprintf("%s or no value (NOTHING)", QoreTypeInfo::getName(getFirstAcceptSpec().spec.getComplexBuffer()));
 }
 
-QoreComplexSoftListTypeInfo::QoreComplexSoftListTypeInfo(const QoreTypeInfo* vti) : QoreComplexListTypeInfo(q_accept_vec_t {
+// the conversions read the element type from the cell, which is orphaned with the specs (issue #6419)
+QoreComplexSoftListTypeInfo::QoreComplexSoftListTypeInfo(qore_orphanable_type_cell_t cell)
+        : QoreComplexListTypeInfo(q_accept_vec_t {
             {
-                QoreComplexSoftListTypeSpec(vti),
-                [vti] (QoreValue& n, ExceptionSink* xsink) {
+                QoreComplexSoftListTypeSpec(cell->get()),
+                [cell] (QoreValue& n, ExceptionSink* xsink) {
+                    const QoreTypeInfo* vti = cell->get();
                     if (n.getType() != NT_LIST || n.get<const QoreListNode>()->getValueTypeInfo() != vti) {
                         QoreValue val{};
                         n.swap(val);
@@ -7334,7 +7889,8 @@ QoreComplexSoftListTypeInfo::QoreComplexSoftListTypeInfo(const QoreTypeInfo* vti
                     }
                 },
                 true,
-                [vti] (QoreValue& n, ExceptionSink* xsink, LexicalSemanticPolicy policy) {
+                [cell] (QoreValue& n, ExceptionSink* xsink, LexicalSemanticPolicy policy) {
+                    const QoreTypeInfo* vti = cell->get();
                     if (n.getType() != NT_LIST || n.get<const QoreListNode>()->getValueTypeInfo() != vti) {
                         QoreValue val{};
                         n.swap(val);
@@ -7345,12 +7901,14 @@ QoreComplexSoftListTypeInfo::QoreComplexSoftListTypeInfo(const QoreTypeInfo* vti
             },
             {
                 NT_LIST,
-                [vti] (QoreValue& n, ExceptionSink* xsink) {
+                [cell] (QoreValue& n, ExceptionSink* xsink) {
+                    const QoreTypeInfo* vti = cell->get();
                     QoreValue val{};
                     n.swap(val);
                     n.assign(qore_list_private::newComplexListFromValue(qore_get_complex_list_type(vti), val, xsink));
                 }, false,
-                [vti] (QoreValue& n, ExceptionSink* xsink, LexicalSemanticPolicy policy) {
+                [cell] (QoreValue& n, ExceptionSink* xsink, LexicalSemanticPolicy policy) {
+                    const QoreTypeInfo* vti = cell->get();
                     QoreValue val{};
                     n.swap(val);
                     n.assign(qore_list_private::newComplexListFromValue(qore_get_complex_list_type(vti), val, xsink,
@@ -7359,23 +7917,26 @@ QoreComplexSoftListTypeInfo::QoreComplexSoftListTypeInfo(const QoreTypeInfo* vti
             },
             {
                 NT_NOTHING,
-                [vti] (QoreValue& n, ExceptionSink* xsink) {
+                [cell] (QoreValue& n, ExceptionSink* xsink) {
+                    const QoreTypeInfo* vti = cell->get();
                     QoreListNode* l = new QoreListNode(vti);
                     n.assign(l);
                 }
             },
         }, q_return_vec_t {
-            { QoreComplexSoftListTypeSpec(vti), true }
-        }, QoreStringMaker("softlist<%s>", QoreTypeInfo::getName(vti))) {
+            { QoreComplexSoftListTypeSpec(cell->get()), true }
+        }, QoreStringMaker("softlist<%s>", QoreTypeInfo::getName(cell->get()))), vti_cell(cell) {
+    const QoreTypeInfo* vti = cell->get();
     assert(vti);
     pname = QoreStringMaker("softlist<%s>", QoreTypeInfo::getPath(vti));
 }
 
-QoreComplexSoftListOrNothingTypeInfo::QoreComplexSoftListOrNothingTypeInfo(const QoreTypeInfo* vti)
+QoreComplexSoftListOrNothingTypeInfo::QoreComplexSoftListOrNothingTypeInfo(qore_orphanable_type_cell_t cell)
     : QoreComplexListOrNothingTypeInfo(q_accept_vec_t {
             {
-                QoreComplexSoftListTypeSpec(vti),
-                [vti] (QoreValue& n, ExceptionSink* xsink) {
+                QoreComplexSoftListTypeSpec(cell->get()),
+                [cell] (QoreValue& n, ExceptionSink* xsink) {
+                    const QoreTypeInfo* vti = cell->get();
                     switch (n.getType()) {
                         case NT_NOTHING:
                             break;
@@ -7397,7 +7958,8 @@ QoreComplexSoftListOrNothingTypeInfo::QoreComplexSoftListOrNothingTypeInfo(const
                     }
                 },
                 true,
-                [vti] (QoreValue& n, ExceptionSink* xsink, LexicalSemanticPolicy policy) {
+                [cell] (QoreValue& n, ExceptionSink* xsink, LexicalSemanticPolicy policy) {
+                    const QoreTypeInfo* vti = cell->get();
                     if (!n.isNothing()
                             && (n.getType() != NT_LIST || n.get<const QoreListNode>()->getValueTypeInfo() != vti)) {
                         QoreValue val{};
@@ -7409,12 +7971,14 @@ QoreComplexSoftListOrNothingTypeInfo::QoreComplexSoftListOrNothingTypeInfo(const
             },
             {
                 NT_LIST,
-                [vti] (QoreValue& n, ExceptionSink* xsink) {
+                [cell] (QoreValue& n, ExceptionSink* xsink) {
+                    const QoreTypeInfo* vti = cell->get();
                     QoreValue val{};
                     n.swap(val);
                     n.assign(qore_list_private::newComplexListFromValue(qore_get_complex_list_type(vti), val, xsink));
                 }, false,
-                [vti] (QoreValue& n, ExceptionSink* xsink, LexicalSemanticPolicy policy) {
+                [cell] (QoreValue& n, ExceptionSink* xsink, LexicalSemanticPolicy policy) {
+                    const QoreTypeInfo* vti = cell->get();
                     QoreValue val{};
                     n.swap(val);
                     n.assign(qore_list_private::newComplexListFromValue(qore_get_complex_list_type(vti), val, xsink,
@@ -7431,8 +7995,9 @@ QoreComplexSoftListOrNothingTypeInfo::QoreComplexSoftListOrNothingTypeInfo(const
                     n.assignNothing();
                 }
             },
-        }, q_return_vec_t {{QoreComplexSoftListTypeSpec(vti)}, {NT_NOTHING}
-        }, QoreStringMaker("*softlist<%s>", QoreTypeInfo::getName(vti))) {
+        }, q_return_vec_t {{QoreComplexSoftListTypeSpec(cell->get())}, {NT_NOTHING}
+        }, QoreStringMaker("*softlist<%s>", QoreTypeInfo::getName(cell->get()))), vti_cell(cell) {
+    const QoreTypeInfo* vti = cell->get();
     assert(vti);
     pname = QoreStringMaker("*softlist<%s>", QoreTypeInfo::getPath(vti));
 }
@@ -8492,9 +9057,51 @@ void QoreTypeInfo::acceptInputParam(const QoreTypeInfo* ti, int param_num, const
     }
 }
 
+#ifdef DEBUG
+//! Asserts that a runtime type check of a derived type that names a user declaration is made in a thread that
+//! publishes an epoch of type retirement (issue #6419)
+/** Otherwise the declaration can be freed while the check reads it: code that checks values in a thread outside Qore
+    code (a module's own thread) must enter a Program first.  A declaration's own type is not checked: it is read from
+    an owner that keeps the declaration.  Not checked at library cleanup, when nothing is freed anymore.
+*/
+static void qore_type_check_epoch_assert(const QoreTypeInfo* ti) {
+    if (type_owner_cleanup.load(std::memory_order_relaxed) || !qore_thread_has_no_type_epoch()
+            || dynamic_cast<const QoreClassTypeInfo*>(ti) || dynamic_cast<const QoreHashDeclTypeInfo*>(ti)
+            || dynamic_cast<const QoreEnumTypeInfo*>(ti)) {
+        return;
+    }
+    for (const QoreAcceptSpec& as : ti->getAcceptSpecs()) {
+        const QoreTypeSpec& spec = as.spec;
+        bool user = qore_user_class_owner(spec.getClass()) || qore_user_hashdecl_owner(spec.getHashDecl())
+            || qore_user_enum_owner(spec.getEnum());
+        if (!user) {
+            switch (spec.getTypeSpec()) {
+                case QTS_COMPLEXHASH:
+                case QTS_COMPLEXLIST:
+                case QTS_COMPLEXSOFTLIST:
+                case QTS_COMPLEXHARDREF:
+                case QTS_COMPLEXREF:
+                    user = qore_user_decl_type_owner(spec.getOrphanableTypeInfo());
+                    break;
+                default:
+                    break;
+            }
+        }
+        if (user) {
+            fprintf(stderr, "type check of '%s' in a thread that publishes no epoch of type retirement (issue #6419)\n",
+                QoreTypeInfo::getName(ti));
+            assert(false);
+        }
+    }
+}
+#endif
+
 template <typename FilterPolicy>
 void QoreTypeInfo::acceptInputInternImpl(ExceptionSink* xsink, const char* arg_type, bool obj, int param_num,
         const char* param_name, QoreValue& n, LValueHelper* lvhelper, q_lvalue_vts_e vts, FilterPolicy policy) const {
+#ifdef DEBUG
+    qore_type_check_epoch_assert(this);
+#endif
     // CRITICAL FIX Phase 2: Prioritize complex hash/list handlers for optional types
     // For optional types (return_vec.size() > 1), we need to ensure complex hash/list
     // handlers are tried BEFORE hashdecl handlers to prevent incorrect routing.

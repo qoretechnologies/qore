@@ -333,7 +333,12 @@ assert(!thread_list().find(tid));
 */
 bool thread_join(int tid, *timeout limit) [dom=THREAD_CONTROL] {
     int64 ms = limit == 0 ? -1 : (limit < 0 ? 0 : limit);
-    int rc = thread_list.joinThread(tid, ms, xsink);
+    int rc;
+    {
+        // a quiescent wait: no type read through a derived type is held across it (issue #6419)
+        QoreTypeQuiescentWaitHelper qwh;
+        rc = thread_list.joinThread(tid, ms, xsink);
+    }
     if (*xsink) {
         return false;
     }

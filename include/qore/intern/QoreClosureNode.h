@@ -326,6 +326,9 @@ private:
     // tests ctx
     const QoreTypeParamInstantiation* old_inst;
     const QoreTypeInfo* old_receiver_type_info;
+    //! true if the closure runs with type arguments or a receiver type of its own: a frame that holds types read
+    //! through derived types (issue #6419; see QoreTypeUnsafeFrameHelper)
+    bool type_unsafe_frame;
 
     DLLLOCAL void set();
     DLLLOCAL void restore();

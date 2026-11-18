@@ -12930,17 +12930,26 @@ static void execJITWithDeopt(const UserVariantBase* uvb, const std::string& call
     struct ReceiverTypeInfoGuard {
         const QoreTypeInfo* old = nullptr;
         bool restore = false;
+        bool unsafe = false;
 
         ReceiverTypeInfoGuard(const QoreTypeInfo* ti) {
             if (ti) {
                 old = runtime_set_receiver_type_info(ti);
                 restore = true;
+                // a parameterized receiver: the frame holds types read through it (issue #6419)
+                if (QoreParameterizedClassTypeInfo::isUnsafeReceiver(ti)) {
+                    unsafe = true;
+                    qore_type_unsafe_frame_add(1);
+                }
             }
         }
 
         ~ReceiverTypeInfoGuard() {
             if (restore) {
                 runtime_set_receiver_type_info(old);
+                if (unsafe) {
+                    qore_type_unsafe_frame_add(-1);
+                }
             }
         }
     } receiver_guard(receiver_type_info);
@@ -19140,12 +19149,15 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_call_direct_aot_impl_t(QoreAOT
                 }
                 old = runtime_set_type_param_instantiation(inst);
                 restore = true;
+                // generic code: the frame holds types read through derived types (issue #6419)
+                qore_type_unsafe_frame_add(1);
             }
         }
 
         ~TypeParamContextHelper() {
             if (restore) {
                 runtime_set_type_param_instantiation(old);
+                qore_type_unsafe_frame_add(-1);
             }
         }
     } type_param_context(target.explicit_type_param_instantiation);

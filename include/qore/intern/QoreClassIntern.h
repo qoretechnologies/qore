@@ -5773,6 +5773,10 @@ protected:
         ref();
     }
 
+    //! A class has no cache of declarations (see QoreTypeOwner::getTypeOwnerCachedDecls())
+    DLLLOCAL void getTypeOwnerCachedDecls(std::vector<QoreTypeOwner*>& owners) const {
+    }
+
     DLLLOCAL void derefTypeOwner() {
         deref(false, false, false);
     }

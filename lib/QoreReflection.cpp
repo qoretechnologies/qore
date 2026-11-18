@@ -133,9 +133,14 @@ const QoreTypeInfo* qore_type_get_code_return_type(const QoreTypeInfo* ti) {
     return code_type ? code_type->getReturnType() : nullptr;
 }
 
-const type_vec_t* qore_type_get_code_param_types(const QoreTypeInfo* ti) {
+bool qore_type_get_code_param_types(const QoreTypeInfo* ti, type_vec_t& params) {
     const QoreComplexCodeTypeInfo* code_type = QoreTypeInfo::getComplexCodeType(ti);
-    return code_type ? &code_type->getParamTypes() : nullptr;
+    if (!code_type) {
+        return false;
+    }
+    // a copy: the types can be orphaned (issue #6419)
+    params = code_type->getParamTypes().toVector();
+    return true;
 }
 
 bool qore_type_code_has_varargs(const QoreTypeInfo* ti) {
@@ -151,16 +156,19 @@ bool qore_type_is_parameterized(const QoreTypeInfo* ti) {
     return hd && typed_hash_decl_private::get(*hd)->isParameterizedHashDecl();
 }
 
-const type_vec_t* qore_type_get_type_arguments(const QoreTypeInfo* ti) {
+bool qore_type_get_type_arguments(const QoreTypeInfo* ti, type_vec_t& args) {
     const QoreParameterizedClassTypeInfo* parameterized_type = QoreTypeInfo::getParameterizedClassType(ti);
     if (parameterized_type) {
-        return &parameterized_type->getTypeArgs();
+        // a copy: the types can be orphaned (issue #6419)
+        args = parameterized_type->getTypeArgs().toVector();
+        return true;
     }
     const TypedHashDecl* hd = QoreTypeInfo::getUniqueReturnHashDecl(ti);
     if (hd && typed_hash_decl_private::get(*hd)->isParameterizedHashDecl()) {
-        return &typed_hash_decl_private::get(*hd)->getTypeArgs();
+        args = typed_hash_decl_private::get(*hd)->getTypeArgs();
+        return true;
     }
-    return nullptr;
+    return false;
 }
 
 bool qore_type_is_type_parameter(const QoreTypeInfo* ti) {

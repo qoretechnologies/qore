@@ -30,6 +30,7 @@
 */
 
 #include <qore/Qore.h>
+#include "qore/intern/QoreTypeDeclPin.h"
 #include "qore/intern/QoreStatementTemps.h"
 #include "qore/intern/QoreRuntimeDiagnostic.h"
 #include "qore/intern/QoreClassIntern.h"
@@ -1641,6 +1642,9 @@ CodeEvaluationHelper::~CodeEvaluationHelper() {
     if (restore_type_param_instantiation) {
         runtime_set_type_param_instantiation(old_type_param_instantiation);
     }
+    if (type_unsafe_frame) {
+        qore_type_unsafe_frame_add(-1);
+    }
     if (returnTypeInfo != (const QoreTypeInfo*)-1) {
         saveReturnTypeInfo(returnTypeInfo);
     }
@@ -1916,6 +1920,12 @@ QORE_INTERN_ALWAYS_INLINE void CodeEvaluationHelper::initImpl(const QoreFunction
     if (receiver_type_info) {
         old_receiver_type_info = runtime_set_receiver_type_info(receiver_type_info);
         restore_receiver_type_info = true;
+        // a parameterized receiver (Box<Foo>): the call substitutes its type arguments, which it reads through the
+        // derived type (issue #6419); a plain class receiver is the type of the object's class, which the object keeps
+        if (!type_unsafe_frame && QoreParameterizedClassTypeInfo::isUnsafeReceiver(receiver_type_info)) {
+            type_unsafe_frame = true;
+            qore_type_unsafe_frame_add(1);
+        }
     }
     PreparedCall prepared;
     if constexpr (LexicalInvocation) {
@@ -2319,6 +2329,17 @@ int CodeEvaluationHelper::setTypeParamInstantiation(const AbstractQoreFunctionVa
         xsink->raiseException("RUNTIME-TYPE-ERROR", "cannot infer type arguments for generic call '%s(%s)'",
             getCallName().c_str(), sig ? sig->getSignatureText() : "");
         return -1;
+    }
+    // the inferred type arguments can be read through the arguments' derived types: a frame whose type arguments
+    // name user declarations holds them (issue #6419)
+    if (!type_unsafe_frame) {
+        for (const QoreTypeInfo* arg : type_param_instantiation.type_args) {
+            if (qore_type_needs_decl_pin(arg)) {
+                type_unsafe_frame = true;
+                qore_type_unsafe_frame_add(1);
+                break;
+            }
+        }
     }
 
     if (!restore_type_param_instantiation) {

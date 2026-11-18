@@ -369,7 +369,41 @@ static QoreValue f_dbg_type_retirement_info(const QoreListNode* params, RuntimeC
     h->setKeyValue("oldest pending epoch", static_cast<int64>(info.oldest_pending_epoch), xsink);
     h->setKeyValue("newest pending epoch", static_cast<int64>(info.newest_pending_epoch), xsink);
     h->setKeyValue("min active epoch", static_cast<int64>(info.min_active_epoch), xsink);
+    h->setKeyValue("freed declarations", static_cast<int64>(info.freed_declarations), xsink);
+    h->setKeyValue("tombstone classes", static_cast<int64>(info.tombstone_classes), xsink);
+    h->setKeyValue("tombstone hashdecls", static_cast<int64>(info.tombstone_hashdecls), xsink);
+    h->setKeyValue("tombstone enums", static_cast<int64>(info.tombstone_enums), xsink);
     return h.release();
+}
+
+//! Frees the retired declarations that can be freed now and returns their number (issue #6419)
+/** The calling thread runs Qore code: it is quiescent for the scan, as a builtin's quiescent wait makes it, so that
+    the items that only it holds back are freed
+*/
+static QoreValue f_dbg_type_retirement_free(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    size_t freed;
+    {
+        QoreTypeQuiescentWaitHelper qwh;
+        freed = qore_type_retirement_free();
+    }
+    return static_cast<int64>(freed + qore_type_retirement_free());
+}
+
+//! Waits until a thread has entered a number of builtin waits (issue #6419); returns false on timeout
+static QoreValue f_dbg_type_wait_entered(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+#ifdef DEBUG
+    int tid = static_cast<int>(HARD_QORE_VALUE_INT(params, 0));
+    int64 count = HARD_QORE_VALUE_INT(params, 1);
+    int64 timeout_ms = HARD_QORE_VALUE_INT(params, 2);
+    return qore_type_dbg_wait_entered(tid, count, timeout_ms);
+#else
+    return false;
+#endif
+}
+
+//! Returns the number of frames of the calling thread that hold a type read through a derived type (issue #6419)
+static QoreValue f_dbg_type_unsafe_frames(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    return static_cast<int64>(qore_type_unsafe_frames());
 }
 
 //! Returns the threads that the retired declarations and derived types wait for: each thread that runs Qore code
@@ -27106,6 +27140,13 @@ void init_debug_functions(QoreNamespace& qns) {
         QDOM_DEBUG_HOOK, hashTypeInfo);
     qns.addBuiltinVariant("dbg_type_retirement_info", f_dbg_type_retirement_info, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, hashTypeInfo);
+    qns.addBuiltinVariant("dbg_type_retirement_free", f_dbg_type_retirement_free, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_type_unsafe_frames", f_dbg_type_unsafe_frames, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_type_wait_entered", f_dbg_type_wait_entered, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        boolTypeInfo, 3, bigIntTypeInfo, QORE_PARAM_NO_ARG, "tid", bigIntTypeInfo, QORE_PARAM_NO_ARG, "count",
+        bigIntTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
     qns.addBuiltinVariant("dbg_type_retirement_blockers", f_dbg_type_retirement_blockers, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, listTypeInfo);
     qns.addBuiltinVariant("dbg_live_type_declarations", f_dbg_live_type_declarations, QCF_NO_FLAGS,

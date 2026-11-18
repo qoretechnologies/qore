@@ -1351,6 +1351,12 @@ void qore_class_private::retireTypeOwner() {
 }
 
 void qore_class_private::getTypeOwnerNames(std::vector<QoreTypeOwner*>& names) const {
+    // the bounds and defaults of the type parameters, which the tombstone of the class is made from (issue #6419)
+    for (const type_vec_t* v : {&type_param_bound_types, &type_param_default_types}) {
+        for (const QoreTypeInfo* ti : *v) {
+            qore_type_owner_add_name(names, ti, &type_owner);
+        }
+    }
     for (auto& i : members.getList()) {
         if (i.second) {
             qore_type_owner_add_name(names, i.second->getTypeInfo(), &type_owner);

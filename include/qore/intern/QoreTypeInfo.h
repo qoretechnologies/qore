@@ -182,6 +182,13 @@ public:
         return accept_vec;
     }
 
+    //! Returns true if \a ti is a parameterized class type whose type arguments name user declarations: a call with
+    //! it as its receiver holds types read through it (issue #6419); one load, as it is tested for every call with a
+    //! receiver
+    DLLLOCAL static bool isUnsafeReceiver(const QoreTypeInfo* ti) {
+        return ti && ti->unsafe_receiver;
+    }
+
     DLLLOCAL static const QoreTypeInfo* getHardReference(const QoreTypeInfo* ti);
 
 #if 0
@@ -1277,6 +1284,9 @@ protected:
     QoreString tname;
     QoreString sname;
     unsigned container_nesting = 0;
+    //! true for a parameterized class type whose type arguments name user declarations: a call with it as its
+    //! receiver holds types read through it (issue #6419; see QoreParameterizedClassTypeInfo::isUnsafeReceiver())
+    bool unsafe_receiver = false;
     //! the instance serial number of the class, hashdecl or enum that made this type as its own type, otherwise 0
     /** Set by the constructors of the types of classes, hashdecls and enums, which are freed with their owners; see
         qore_get_type_identity_serial()
@@ -1614,6 +1624,11 @@ protected:
     }
 };
 
+//! A vector of types that can be orphaned (issue #6419; see QoreOrphanablePtr)
+typedef std::vector<QoreOrphanablePtr<const QoreTypeInfo>> orphanable_type_vec_t;
+//! A read-only view of an orphanable_type_vec_t
+typedef QoreOrphanablePtrVecView<const QoreTypeInfo> orphanable_type_vec_view_t;
+
 class QoreParameterizedClassTypeInfo : public QoreTypeInfo {
 public:
     DLLLOCAL QoreParameterizedClassTypeInfo(const QoreClass* qc,
@@ -1621,11 +1636,17 @@ public:
             const QoreParameterizedClassTypeInfo* value_type = nullptr);
 
     DLLLOCAL const QoreClass* getBaseClass() const {
+        return base_class.get();
+    }
+
+    //! Returns the generic class for orphaning (issue #6419)
+    DLLLOCAL const QoreOrphanablePtr<const QoreClass>& getOrphanableBaseClass() const {
         return base_class;
     }
 
-    DLLLOCAL const std::vector<const QoreTypeInfo*>& getTypeArgs() const {
-        return type_args;
+    //! Returns the type arguments; each is read with an acquire load, as it can be orphaned (issue #6419)
+    DLLLOCAL orphanable_type_vec_view_t getTypeArgs() const {
+        return orphanable_type_vec_view_t(type_args);
     }
 
     DLLLOCAL size_t getArgCount() const {
@@ -1636,9 +1657,19 @@ public:
         return or_nothing;
     }
 
+    //! Returns true if a type argument names a user declaration (or may: a type parameter): a call with the type as
+    //! its receiver reads that declaration's types through the type (issue #6419)
+    DLLLOCAL bool hasUserTypeArgs() const {
+        return user_type_args;
+    }
+
 protected:
-    const QoreClass* base_class;
-    std::vector<const QoreTypeInfo*> type_args;
+    //! true if a type argument names a user declaration; set when the type is made
+    bool user_type_args = false;
+    //! the generic class; orphaned when it is retired (issue #6419)
+    QoreOrphanablePtr<const QoreClass> base_class;
+    //! the type arguments; orphaned when a declaration that one is the type of is retired (issue #6419)
+    orphanable_type_vec_t type_args;
     bool or_nothing;
     std::string pname;
 
@@ -1746,12 +1777,18 @@ public:
     }
 
     DLLLOCAL const QoreTypeInfo* getBound() const {
+        return bound.get();
+    }
+
+    //! Returns the bound for orphaning (issue #6419)
+    DLLLOCAL const QoreOrphanablePtr<const QoreTypeInfo>& getOrphanableBound() const {
         return bound;
     }
 
 protected:
     QoreWildcardKind kind;
-    const QoreTypeInfo* bound = nullptr;
+    //! the bound; orphaned when the declaration that it is the type of is retired (issue #6419)
+    QoreOrphanablePtr<const QoreTypeInfo> bound;
     std::string pname;
 
     DLLLOCAL virtual void getThisTypeImpl(QoreString& str) const {
@@ -2172,11 +2209,26 @@ protected:
     }
 };
 
+//! The element type of a soft list type that its conversions read; orphaned with the type's specs (issue #6419)
+typedef std::shared_ptr<QoreOrphanablePtr<const QoreTypeInfo>> qore_orphanable_type_cell_t;
+
 class QoreComplexSoftListTypeInfo : public QoreComplexListTypeInfo {
 public:
-    DLLLOCAL QoreComplexSoftListTypeInfo(const QoreTypeInfo* vti);
+    DLLLOCAL QoreComplexSoftListTypeInfo(const QoreTypeInfo* vti)
+            : QoreComplexSoftListTypeInfo(std::make_shared<QoreOrphanablePtr<const QoreTypeInfo>>(vti)) {
+    }
+
+    //! Returns the element type that the conversions of the type read, for orphaning (issue #6419)
+    DLLLOCAL const QoreOrphanablePtr<const QoreTypeInfo>* getOrphanableElementCell() const {
+        return vti_cell.get();
+    }
 
 protected:
+    //! the element type read by the conversions in the accept specs
+    qore_orphanable_type_cell_t vti_cell;
+
+    DLLLOCAL QoreComplexSoftListTypeInfo(qore_orphanable_type_cell_t cell);
+
     DLLLOCAL QoreComplexSoftListTypeInfo(const q_accept_vec_t&& a_vec, const q_return_vec_t&& r_vec,
             const QoreString& tname)
             : QoreComplexListTypeInfo(std::move(a_vec), std::move(r_vec), tname) {
@@ -2185,9 +2237,21 @@ protected:
 
 class QoreComplexSoftListOrNothingTypeInfo : public QoreComplexListOrNothingTypeInfo {
 public:
-    DLLLOCAL QoreComplexSoftListOrNothingTypeInfo(const QoreTypeInfo* vti);
+    DLLLOCAL QoreComplexSoftListOrNothingTypeInfo(const QoreTypeInfo* vti)
+            : QoreComplexSoftListOrNothingTypeInfo(std::make_shared<QoreOrphanablePtr<const QoreTypeInfo>>(vti)) {
+    }
+
+    //! Returns the element type that the conversions of the type read, for orphaning (issue #6419)
+    DLLLOCAL const QoreOrphanablePtr<const QoreTypeInfo>* getOrphanableElementCell() const {
+        return vti_cell.get();
+    }
 
 protected:
+    //! the element type read by the conversions in the accept specs
+    qore_orphanable_type_cell_t vti_cell;
+
+    DLLLOCAL QoreComplexSoftListOrNothingTypeInfo(qore_orphanable_type_cell_t cell);
+
     DLLLOCAL QoreComplexSoftListOrNothingTypeInfo(const q_accept_vec_t&& a_vec, const q_return_vec_t&& r_vec,
             const QoreString& tname)
             : QoreComplexListOrNothingTypeInfo(std::move(a_vec), std::move(r_vec), tname) {
@@ -2336,6 +2400,14 @@ public:
         }
 
         return ref_type = getHardReferenceImpl();
+    }
+
+    //! Returns the hard reference type if it has been made, for orphaning (issue #6419)
+    /** Read in the lock after the type's specs were orphaned: one made afterwards is made from the orphaned specs
+    */
+    DLLLOCAL const QoreTypeInfo* getCreatedHardReference() const {
+        AutoLocker al(ref_lock);
+        return ref_type;
     }
 
 protected:
@@ -4523,7 +4595,7 @@ public:
     DLLLOCAL QoreUnionTypeInfo(const q_accept_vec_t&& a_vec, const q_return_vec_t&& r_vec,
             const QoreString& name, type_vec_t members, bool or_nothing = false)
             : QoreTypeInfo(std::move(a_vec), std::move(r_vec), name), orNothing(or_nothing),
-            members(std::move(members)) {
+            members(qore_orphanable_vec(members)) {
     }
 
     //! Returns true if this is an or-nothing union type
@@ -4536,13 +4608,19 @@ public:
         for a class, \c string for a string enum), so the members are kept as declared (qore#5858)
     */
     DLLLOCAL type_vec_t getMemberTypes() const {
+        return orphanable_type_vec_view_t(members).toVector();
+    }
+
+    //! Returns the member types for orphaning (issue #6419)
+    DLLLOCAL const orphanable_type_vec_t& getOrphanableMemberTypes() const {
         return members;
     }
 
 protected:
     bool orNothing;  //!< true if this union type accepts NOTHING
-    //! the member types as declared, without duplicates
-    const type_vec_t members;
+    //! the member types as declared, without duplicates; orphaned when a declaration that one is the type of is
+    //! retired (issue #6419)
+    const orphanable_type_vec_t members;
 
     DLLLOCAL virtual void getThisTypeImpl(QoreString& str) const {
         qore_string_private::get(str)->concat(&tname);
@@ -4871,12 +4949,17 @@ public:
 
     //! Returns the return type of this callable
     DLLLOCAL const QoreTypeInfo* getReturnType() const {
+        return returnType.get();
+    }
+
+    //! Returns the return type for orphaning (issue #6419)
+    DLLLOCAL const QoreOrphanablePtr<const QoreTypeInfo>& getOrphanableReturnType() const {
         return returnType;
     }
 
-    //! Returns the parameter types of this callable
-    DLLLOCAL const type_vec_t& getParamTypes() const {
-        return paramTypes;
+    //! Returns the parameter types of this callable; each is read with an acquire load (issue #6419)
+    DLLLOCAL orphanable_type_vec_view_t getParamTypes() const {
+        return orphanable_type_vec_view_t(paramTypes);
     }
 
     //! Returns true if this callable accepts variable arguments
@@ -4899,8 +4982,10 @@ public:
     DLLLOCAL bool isSignatureCompatible(const class AbstractFunctionSignature* sig) const;
 
 protected:
-    const QoreTypeInfo* returnType;  //!< return type (nullptr = nothing)
-    type_vec_t paramTypes;           //!< parameter types
+    //! return type (nullptr = nothing); orphaned when the declaration that it is the type of is retired (#6419)
+    QoreOrphanablePtr<const QoreTypeInfo> returnType;
+    //! parameter types; orphaned when a declaration that one is the type of is retired (issue #6419)
+    orphanable_type_vec_t paramTypes;
     bool varargs;                    //!< true if accepts variable arguments
     bool orNothing;                  //!< true if accepts NOTHING
     QoreString pname;                //!< path name for type
