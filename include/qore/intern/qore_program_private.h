@@ -702,6 +702,9 @@ public:
     // when true, the diagnostics of the parse actions are kept together, not cleared at the start of each one (set for
     // the Programs that the AOT compiler creates; issue #6555)
     bool accumulate_diagnostics = false;
+    // incremented whenever the diagnostics are cleared, so that an exception's index into them is not used once it
+    // refers to another diagnostic (issue #6555)
+    uint32_t diagnostics_gen = 0;
     // structured diagnostics captured during the current/last parse action (cleared on each parse start)
     std::vector<QoreDiagnostic> diagnostics;
 
@@ -3244,7 +3247,7 @@ public:
 
         // structured diagnostics are scoped to a single parse action, unless they are accumulated
         if (collect_diagnostics && !accumulate_diagnostics) {
-            diagnostics.clear();
+            clearDiagnostics();
         }
 
         if (pendingParseSink) {
@@ -3257,8 +3260,28 @@ public:
     DLLLOCAL void setParseDiagnosticsCollected(bool collect) {
         collect_diagnostics = collect;
         if (!collect) {
-            diagnostics.clear();
+            clearDiagnostics();
         }
+    }
+
+    //! clears the diagnostics; the exceptions that refer to them by their index no longer do (issue #6555)
+    DLLLOCAL void clearDiagnostics() {
+        diagnostics.clear();
+        ++diagnostics_gen;
+    }
+
+    //! makes the Program collect its parse diagnostics and keep those of all of its parse actions together (the
+    //! Programs that the AOT compiler creates for its reports; issue #6555)
+    DLLLOCAL void setParseDiagnosticsAccumulated() {
+        collect_diagnostics = true;
+        accumulate_diagnostics = true;
+    }
+
+    //! records that the exception is the diagnostic just recorded, the last one (issue #6555)
+    DLLLOCAL void markDiagnostic(QoreException& e) const {
+        e.diagnostic_pgm_id = programId;
+        e.diagnostic_index = static_cast<int32_t>(diagnostics.size()) - 1;
+        e.diagnostic_gen = diagnostics_gen;
     }
 
     //! returns true if structured parse-diagnostic collection is enabled
@@ -4595,8 +4618,7 @@ public:
             if ((only_first_except && !exceptions_raised) || !only_first_except) {
                 QoreException *ne = new ParseException(loc, err, d.release());
                 if (collect_diagnostics) {
-                    ne->diagnostic_pgm_id = programId;
-                    ne->diagnostic_index = static_cast<int32_t>(diagnostics.size()) - 1;
+                    markDiagnostic(*ne);
                 }
                 sink->raiseException(ne);
             }
@@ -6150,8 +6172,7 @@ public:
         }
         QoreException* ne = new ParseException(loc, err, desc_holder.release());
         if (pgm.priv->collect_diagnostics) {
-            ne->diagnostic_pgm_id = pgm.priv->programId;
-            ne->diagnostic_index = static_cast<int32_t>(pgm.priv->diagnostics.size()) - 1;
+            pgm.priv->markDiagnostic(*ne);
         }
         ne->arg = arg_holder.release();
         wsink.raiseException(ne);
@@ -6180,8 +6201,7 @@ public:
         }
         QoreException *ne = new ParseException(loc, warn, desc);
         if (pgm->priv->collect_diagnostics) {
-            ne->diagnostic_pgm_id = pgm->priv->programId;
-            ne->diagnostic_index = static_cast<int32_t>(pgm->priv->diagnostics.size()) - 1;
+            pgm->priv->markDiagnostic(*ne);
         }
         pgm->priv->warnSink->raiseException(ne);
     }
@@ -6201,8 +6221,7 @@ public:
         }
         QoreException *ne = new ParseException(loc, warn, desc);
         if (pgm->priv->collect_diagnostics) {
-            ne->diagnostic_pgm_id = pgm->priv->programId;
-            ne->diagnostic_index = static_cast<int32_t>(pgm->priv->diagnostics.size()) - 1;
+            pgm->priv->markDiagnostic(*ne);
         }
         pgm->priv->warnSink->raiseException(ne);
     }
@@ -6220,8 +6239,7 @@ public:
         }
         QoreException* ne = new ParseException(loc, warn, desc);
         if (pgm->priv->collect_diagnostics) {
-            ne->diagnostic_pgm_id = pgm->priv->programId;
-            ne->diagnostic_index = static_cast<int32_t>(pgm->priv->diagnostics.size()) - 1;
+            pgm->priv->markDiagnostic(*ne);
         }
         pgm->priv->warnSink->raiseException(ne);
     }

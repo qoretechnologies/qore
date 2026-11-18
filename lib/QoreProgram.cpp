@@ -988,11 +988,8 @@ ProgramThreadContainersForkHandler program_thread_containers_fork_handler;
 qore_program_private_base::ThreadContainerShard
     qore_program_private_base::thread_container_shards[1u << ThreadContainerShardBits];
 
-//! see qore_set_new_programs_collect_parse_diagnostics()
-static std::atomic<bool> qore_new_programs_collect_diagnostics{false};
-
-void qore_set_new_programs_collect_parse_diagnostics(bool collect) {
-    qore_new_programs_collect_diagnostics.store(collect, std::memory_order_relaxed);
+void qore_set_program_parse_diagnostics_accumulated(QoreProgram& pgm) {
+    qore_program_private::get(pgm)->setParseDiagnosticsAccumulated();
 }
 
 bool qore_get_exception_parse_diagnostic(const QoreException& e, QoreDiagnostic& diag) {
@@ -1006,7 +1003,8 @@ bool qore_get_exception_parse_diagnostic(const QoreException& e, QoreDiagnostic&
     bool rv = false;
     {
         qore_program_private* pp = qore_program_private::get(*pgm);
-        if (pp->accumulate_diagnostics && static_cast<size_t>(e.diagnostic_index) < pp->diagnostics.size()) {
+        if (pp->accumulate_diagnostics && e.diagnostic_gen == pp->diagnostics_gen
+                && static_cast<size_t>(e.diagnostic_index) < pp->diagnostics.size()) {
             diag = pp->diagnostics[e.diagnostic_index];
             rv = true;
         }
@@ -1024,11 +1022,6 @@ qore_program_private::qore_program_private(QoreProgram* n_pgm, const QoreParseOp
     // every Program wherever it is created, and before the Program is registered and can be found
     if (qore_caller_is_sandboxed()) {
         sandboxed.store(true, std::memory_order_release);
-    }
-    // the Programs that the AOT compiler creates keep their parse diagnostics for its reports (issue #6555)
-    if (qore_new_programs_collect_diagnostics.load(std::memory_order_relaxed)) {
-        collect_diagnostics = true;
-        accumulate_diagnostics = true;
     }
     registerProgram();
     // the Program's ID is known now
@@ -1335,8 +1328,7 @@ void qore_program_private::collectModuleLoadErrors(const QoreProgramLocation& lo
         QoreStringValueHelper err(e->err);
         QoreStringValueHelper desc(e->desc);
         diagnostics.push_back(QoreDiagnostic(true, err->c_str(), -1, loc, desc->c_str()));
-        e->diagnostic_pgm_id = programId;
-        e->diagnostic_index = static_cast<int32_t>(diagnostics.size()) - 1;
+        markDiagnostic(*e);
     }
 }
 
@@ -1353,8 +1345,7 @@ void qore_program_private::addExceptionDiagnostics(ExceptionSink* xsink) {
         // an exception without a source location (raised by builtin code) has no file
         diagnostics.emplace_back(err->c_str(), e->isBuiltin() ? std::string() : e->file, e->source, *e,
             desc->c_str());
-        e->diagnostic_pgm_id = programId;
-        e->diagnostic_index = static_cast<int32_t>(diagnostics.size()) - 1;
+        markDiagnostic(*e);
     }
 }
 

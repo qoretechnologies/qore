@@ -1084,6 +1084,12 @@ static void qoreAotReportParseDiagnostics(ExceptionSink& sink, bool warnings) {
     }
 }
 
+void qore_aot_prepare_compile_program(QoreProgram& pgm) {
+    if (qoreAotDiagFormat() != QoreAotDiagFormat::TEXT) {
+        qore_set_program_parse_diagnostics_accumulated(pgm);
+    }
+}
+
 void qore_aot_flush_parse_diagnostics(FILE* out) {
     if (qoreAotDiagFormat() != QoreAotDiagFormat::JSON) {
         return;
@@ -27230,6 +27236,8 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
     ExceptionSink wsink;
     QoreAotWarningReportHelper wsink_report(wsink);
     QoreProgramHelper qpgm(mod_po, xsink);
+    // its parse diagnostics are kept for the report of the compiler (issue #6555)
+    qore_aot_prepare_compile_program(**qpgm);
     if (xsink.isException()) {
         xsink.handleExceptions();
         error = "failed to create QoreProgram for module parsing";
@@ -27703,6 +27711,8 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
     ExceptionSink wsink;
     QoreAotWarningReportHelper wsink_report(wsink);
     QoreProgramHelper qpgm(mod_po, xsink);
+    // its parse diagnostics are kept for the report of the compiler (issue #6555)
+    qore_aot_prepare_compile_program(**qpgm);
     if (xsink.isException()) {
         xsink.handleExceptions();
         error = "failed to create QoreProgram for split module parsing";
@@ -29626,6 +29636,8 @@ bool QoreAOT::compileScriptFilesBatch(
     ExceptionSink wsink;
     QoreAotWarningReportHelper wsink_report(wsink);
     QoreProgramHelper qpgm(po, xsink);
+    // its parse diagnostics are kept for the report of the compiler (issue #6555)
+    qore_aot_prepare_compile_program(**qpgm);
     if (xsink.isException()) {
         xsink.handleExceptions();
         error = "failed to create QoreProgram for batch compile";
@@ -30441,6 +30453,8 @@ bool QoreAOT::compileScriptAggregate(
     QoreProgram* qpgm = parsed_program;
     if (!qpgm) {
         owned_qpgm = std::make_unique<QoreProgramHelper>(po, xsink);
+        // its parse diagnostics are kept for the report of the compiler (issue #6555)
+        qore_aot_prepare_compile_program(***owned_qpgm);
         if (xsink.isException()) {
             xsink.handleExceptions();
             error = "failed to create QoreProgram for script aggregate compile";
@@ -30948,6 +30962,8 @@ bool QoreAOT::compileScriptFile(const char* target_file,
     ExceptionSink wsink;
     QoreAotWarningReportHelper wsink_report(wsink);
     QoreProgramHelper qpgm(po, xsink);
+    // its parse diagnostics are kept for the report of the compiler (issue #6555)
+    qore_aot_prepare_compile_program(**qpgm);
     if (xsink.isException()) {
         xsink.handleExceptions();
         error = "failed to create QoreProgram for script-context compile";
@@ -31632,6 +31648,8 @@ bool QoreAOT::compileSeparatedModuleFile(const char* dir_path,
     ExceptionSink wsink;
     QoreAotWarningReportHelper wsink_report(wsink);
     QoreProgramHelper qpgm(mod_po, xsink);
+    // its parse diagnostics are kept for the report of the compiler (issue #6555)
+    qore_aot_prepare_compile_program(**qpgm);
     if (xsink.isException()) {
         xsink.handleExceptions();
         error = "failed to create QoreProgram for per-file split module parsing";
@@ -32215,6 +32233,8 @@ bool QoreAOT::compileModuleFromObjects(const char* dir_path,
     ExceptionSink wsink;
     QoreAotWarningReportHelper wsink_report(wsink);
     QoreProgramHelper qpgm(mod_po, xsink);
+    // its parse diagnostics are kept for the report of the compiler (issue #6555)
+    qore_aot_prepare_compile_program(**qpgm);
     if (xsink.isException()) {
         xsink.handleExceptions();
         error = "failed to create QoreProgram for aggregator parsing";
@@ -32793,6 +32813,8 @@ bool QoreAOT::archiveModuleFromObjects(const char* dir_path,
     ExceptionSink wsink;
     QoreAotWarningReportHelper wsink_report(wsink);
     QoreProgramHelper qpgm(mod_po, xsink);
+    // its parse diagnostics are kept for the report of the compiler (issue #6555)
+    qore_aot_prepare_compile_program(**qpgm);
     if (xsink.isException()) {
         xsink.handleExceptions();
         error = "failed to create QoreProgram for archive parsing";

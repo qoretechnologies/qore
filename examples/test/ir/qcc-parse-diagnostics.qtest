@@ -32,6 +32,7 @@ class QccParseDiagnosticsTest inherits QUnit::Test {
         string warn_module;
         string not_modern;
         string rich;
+        string user_program;
     }
 
     constructor() : QUnit::Test("QccParseDiagnosticsTest", "1.0", \ARGV) {
@@ -55,6 +56,14 @@ class QccParseDiagnosticsTest inherits QUnit::Test {
         # a warning and an error with a hint and a possible fix
         rich = writeFile("rich.q", "%modern\n%enable-warning no-such-warning\nclass TrapCtor {}\nsub f() {\n"
             "    TrapCtor();\n}\n");
+        # code run by the compile (a constant's initializer) creates a Program whose diagnostics are those of each
+        # parse action
+        user_program = writeFile("user-program.q", "%modern\nint sub count() {\n    Program p(PO_NEW_STYLE);\n"
+            "    p.setParseDiagnosticsCollected(True);\n    try { p.parse(\"sub a() { x1(); }\", \"a\"); } catch () {}\n"
+            "    try { p.parse(\"sub b() { x2(); }\", \"b\"); } catch () {}\n"
+            "    int n = p.getParseDiagnostics().size();\n    if (n != 1) {\n"
+            "        throw \"DIAGNOSTICS-ACCUMULATED\", sprintf(\"%d diagnostics\", n);\n    }\n    return n;\n}\n"
+            "const C = count();\n");
         addTestCase("a commit-time error of a single source", \singleCommitTest());
         addTestCase("a parse error of a single source", \singleParseTest());
         addTestCase("a commit-time error of a batch compile", \batchCommitTest());
@@ -69,6 +78,8 @@ class QccParseDiagnosticsTest inherits QUnit::Test {
         addTestCase("--diag-format=json for a compile that succeeds", \jsonSuccessTest());
         addTestCase("--diag-format=json gives the diagnostics of qore --diag-format=json", \jsonParityTest());
         addTestCase("--code-frames", \codeFramesTest());
+        addTestCase("a Program that the compiled code creates keeps the diagnostics of each parse",
+            \userProgramTest());
         addTestCase("--diag-format=json does not change the output of --version", \jsonVersionTest());
         set_return_value(main());
     }
@@ -256,6 +267,13 @@ class QccParseDiagnosticsTest inherits QUnit::Test {
         assertEq(0, r.status, r.err);
         assertRegex("^qcc ", r.out);
         assertFalse(r.out =~ /\[\]/, r.out);
+    }
+
+    #! only the Programs that the compiler creates accumulate their diagnostics for its report
+    userProgramTest() {
+        hash<auto> r = qcc(sprintf("--diag-format=json -c -o %s/user-program.qo %s", tmp.path, user_program));
+        assertEq(0, r.status, r.err);
+        assertEq((), parse_json(r.out), r.out);
     }
 
     codeFramesTest() {
