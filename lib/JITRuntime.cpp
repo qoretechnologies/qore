@@ -18327,6 +18327,11 @@ static uint64_t qore_rt_lv_path_binary_mut_impl(QoreIRLValuePathInstruction* ins
             } else {
                 qore_list_private::insertCanonical(*l, rhs_holder.release(), xsink);
             }
+            // the value of the operator is the list, as in the AST and the IR interpreter: an expression that holds
+            // it keeps the list alive when the variable is assigned another value (#6244)
+            if (!*xsink && inst->ref_rv) {
+                res = l->refSelf();
+            }
             break;
         }
         case LVBinaryMutOp::RegexSubst: {
@@ -20370,6 +20375,11 @@ extern "C" DLLEXPORT uint64_t qore_rt_ref_foreach_init(uint64_t parse_ref_bits, 
         delete state;
         return 0;
     }
+    // a reference to NOTHING (\NOTHING) has no lvalue: the loop has no iterations and nothing is written back, as in
+    // the AST interpreter (issue #6480)
+    if (!state->vr) {
+        return reinterpret_cast<uint64_t>(state);
+    }
 
     // Get the current value of the lvalue expression
     state->tlist = state->vr->eval(xsink);
@@ -20463,7 +20473,16 @@ extern "C" DLLEXPORT void qore_rt_ref_foreach_finalize(uint64_t state_ptr, int64
         // Exception path: clean up without write-back
         state->ln.discard(xsink);
         state->tlist.discard(xsink);
-        state->vr->deref(xsink);
+        if (state->vr) {
+            state->vr->deref(xsink);
+        }
+        delete state;
+        return;
+    }
+    // a reference to NOTHING: nothing to write back (issue #6480)
+    if (!state->vr) {
+        state->ln.discard(xsink);
+        state->tlist.discard(xsink);
         delete state;
         return;
     }
@@ -20504,7 +20523,9 @@ extern "C" DLLEXPORT void qore_rt_ref_foreach_cleanup(uint64_t state_ptr, Except
     }
     state->ln.discard(xsink);
     state->tlist.discard(xsink);
-    state->vr->deref(xsink);
+    if (state->vr) {
+        state->vr->deref(xsink);
+    }
     delete state;
 }
 

@@ -459,7 +459,9 @@ class TzifZoneFilesTest inherits QUnit::Test {
             "footer": "BBB-1",
         };
         TimeZone tz(write("wide", spec));
-        checkAtEpoch(tz, -576460752303423489, 0, False, "AAA", "before -2^59");
+        # a date at or before -2^59 cannot be made: its seconds have no year that a date can hold, so both give the
+        # earliest date, after -2^59 (qore#6431); "before -5000000000" checks that the -2^59 transition is read
+        checkAtEpoch(tz, -576460752303423489, 3600, False, "BBB", "before -2^59");
         checkAtEpoch(tz, -576460752303423488, 3600, False, "BBB", "-2^59");
         checkAtEpoch(tz, -5000000001, 3600, False, "BBB", "before -5000000000");
         checkAtEpoch(tz, -5000000000, 7200, True, "CCC", "-5000000000");

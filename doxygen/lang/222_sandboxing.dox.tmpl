@@ -406,15 +406,19 @@ authenticate();
     or a caller restricted from that domain uses the module to do what it cannot do directly:
     - a method or function that is in a domain declares it (<tt>[dom=DATABASE]</tt>, see @ref function_domains); a
       caller restricted from the domain cannot call it, when its code is parsed or at run time through a call
-      reference, a closure or @ref Qore::call_function() "call_function()"
-    - module code that the caller reaches through other code, such as the deserialization of an object or another
-      module, asks whether the calling code is restricted with
+      reference, a closure or @ref Qore::call_function() "call_function()", nor through other code of the module or
+      of another module that calls it for the caller, also on a thread that module code starts: a module's function
+      or method that declares a domain checks the calling code when it is entered (\c INVALID-FUNCTION-ACCESS)
+    - module code that the caller reaches through other code and whose decision depends on its arguments, such as the
+      deserialization of an object, asks whether the calling code is restricted with
       @ref Qore::SandboxManager::isCallerRestricted() "SandboxManager::isCallerRestricted()"
       (\c qore_caller_restricts_domain() in the C++ API, \c QORE_HAVE_CALLER_RESTRICTS_DOMAIN) and refuses the
       operation with \c PERMISSION-DENIED
 
     The calling code is the code of the nearest %Program on the thread's call stack that is not the %Program of a
-    user module, through any number of calls between modules: its parse options decide (for example
+    user module, through any number of calls between modules (on a thread that module code started, where no such
+    %Program is on the stack, the code that called the module when it started the thread): its parse options decide
+    (for example
     @ref Qore::PO_NO_DATABASE "PO_NO_DATABASE" for @ref Qore::DOM_DATABASE "DOM_DATABASE"), as do the restrictions of
     a sandboxed caller that the module code runs with; a sandbox that does not restrict the domain does not, so a
     trusted %Program that a sandbox governs only for its resources or I/O policy keeps the operation.  A closure runs

@@ -254,120 +254,6 @@
     "share_with_uuid": "00000000-0000-4000-8000-000000000001",
     "share_with_type": "User"
   },
-  "search-chat-events": {
-    "search_params": {
-      "filters": {}
-    }
-  },
-  "search-chat-event-ids": {
-    "search_params": {
-      "filters": {}
-    }
-  },
-  "get-chat-completion-event": {
-    "event_id": "00000000-0000-4000-8000-000000000001"
-  },
-  "get-similar-chat-completion-events": {
-    "event_id": "00000000-0000-4000-8000-000000000001"
-  },
-  "get-chat-completion-fields": {},
-  "get-chat-completion-field-options": {
-    "field_name": "test-value",
-    "operator": "lt"
-  },
-  "get-chat-completion-field-options-counts": {
-    "field_name": "test-value"
-  },
-  "judge-chat-event": {
-    "event_id": "00000000-0000-4000-8000-000000000001",
-    "judge_definition": {
-      "name": "test-value",
-      "description": "test-value",
-      "model_name": "test-value",
-      "output": {
-        "options": [
-          {
-            "value": "test-value",
-            "description": "test-value"
-          }
-        ]
-      },
-      "instructions": "test-value",
-      "tools": [
-        "test-value"
-      ]
-    }
-  },
-  "create-judge": {
-    "name": "test-value",
-    "description": "test-value",
-    "model_name": "test-value",
-    "output": {
-      "options": [
-        {
-          "value": "test-value",
-          "description": "test-value"
-        }
-      ]
-    },
-    "instructions": "test-value",
-    "tools": [
-      "test-value"
-    ]
-  },
-  "list-judges": {},
-  "get-judge": {
-    "judge_id": "00000000-0000-4000-8000-000000000001"
-  },
-  "delete-judge": {
-    "judge_id": "00000000-0000-4000-8000-000000000001"
-  },
-  "update-judge": {
-    "judge_id": "00000000-0000-4000-8000-000000000001",
-    "name": "test-value",
-    "description": "test-value",
-    "model_name": "test-value",
-    "output": {
-      "options": [
-        {
-          "value": "test-value",
-          "description": "test-value"
-        }
-      ]
-    },
-    "instructions": "test-value",
-    "tools": [
-      "test-value"
-    ]
-  },
-  "run-judge": {
-    "judge_id": "00000000-0000-4000-8000-000000000001",
-    "messages": [
-      {}
-    ]
-  },
-  "create-campaign": {
-    "search_params": {
-      "filters": {}
-    },
-    "judge_id": "00000000-0000-4000-8000-000000000001",
-    "name": "test-value",
-    "description": "test-value",
-    "max_nb_events": 1
-  },
-  "list-campaigns": {},
-  "get-campaign": {
-    "campaign_id": "00000000-0000-4000-8000-000000000001"
-  },
-  "delete-campaign": {
-    "campaign_id": "00000000-0000-4000-8000-000000000001"
-  },
-  "get-campaign-status": {
-    "campaign_id": "00000000-0000-4000-8000-000000000001"
-  },
-  "get-campaign-events": {
-    "campaign_id": "00000000-0000-4000-8000-000000000001"
-  },
   "create-dataset": {
     "name": "test-value",
     "description": "test-value"
@@ -393,16 +279,6 @@
       ]
     },
     "properties": {}
-  },
-  "import-dataset-from-campaign": {
-    "dataset_id": "00000000-0000-4000-8000-000000000001",
-    "campaign_id": "00000000-0000-4000-8000-000000000001"
-  },
-  "import-dataset-from-explorer": {
-    "dataset_id": "00000000-0000-4000-8000-000000000001",
-    "completion_event_ids": [
-      "test-value"
-    ]
   },
   "import-dataset-from-file": {
     "dataset_id": "00000000-0000-4000-8000-000000000001",
@@ -440,26 +316,6 @@
     "dataset_record_ids": [
       "00000000-0000-4000-8000-000000000001"
     ]
-  },
-  "judge-dataset-record": {
-    "dataset_record_id": "00000000-0000-4000-8000-000000000001",
-    "judge_definition": {
-      "name": "test-value",
-      "description": "test-value",
-      "model_name": "test-value",
-      "output": {
-        "options": [
-          {
-            "value": "test-value",
-            "description": "test-value"
-          }
-        ]
-      },
-      "instructions": "test-value",
-      "tools": [
-        "test-value"
-      ]
-    }
   },
   "update-dataset-record-payload": {
     "dataset_record_id": "00000000-0000-4000-8000-000000000001",
@@ -539,7 +395,6 @@
   "unschedule-workflow": {
     "schedule_id": "test-value"
   },
-  "get-workflow-worker": {},
   "get-workflow-events": {},
   "list-workflow-deployments": {},
   "get-workflow-deployment": {
@@ -627,5 +482,106 @@
   },
   "delete-connector": {
     "connector_id_or_name": "00000000-0000-4000-8000-000000000001"
+  },
+  "search-logs": {},
+  "list-log-fields": {},
+  "list-log-field-options": {
+    "field_name": "service_name"
+  },
+  "search-traces": {},
+  "aggregate-traces": {
+    "metric": {
+      "measure": "duration_ns",
+      "aggregation": "avg"
+    }
+  },
+  "list-trace-fields": {},
+  "list-trace-field-options": {
+    "field_name": "service_name"
+  },
+  "get-trace": {
+    "trace_id": "0123456789abcdef0123456789abcdef"
+  },
+  "list-trace-spans": {
+    "trace_id": "0123456789abcdef0123456789abcdef"
+  },
+  "get-trace-span": {
+    "trace_id": "0123456789abcdef0123456789abcdef",
+    "span_id": "0123456789abcdef"
+  },
+  "search-spans": {},
+  "aggregate-spans": {
+    "metric": {
+      "measure": "duration_ns",
+      "aggregation": "avg"
+    }
+  },
+  "list-span-fields": {},
+  "list-span-field-options": {
+    "field_name": "request_model"
+  },
+  "search-span-evaluations": {},
+  "search-latest-span-evaluations": {},
+  "aggregate-span-evaluations": {
+    "metric": {
+      "measure": "duration_ns",
+      "aggregation": "avg"
+    }
+  },
+  "list-span-evaluation-fields": {},
+  "list-span-evaluation-field-options": {
+    "field_name": "score"
+  },
+  "list-pipelines": {},
+  "create-pipeline": {
+    "name": "test-value",
+    "selectors": [
+      {
+        "source_kind": "span"
+      }
+    ],
+    "definitions": [
+      {
+        "slug": "test-value"
+      }
+    ]
+  },
+  "get-pipeline": {
+    "pipeline_id": "00000000-0000-4000-8000-000000000002"
+  },
+  "update-pipeline": {
+    "pipeline_id": "00000000-0000-4000-8000-000000000002"
+  },
+  "delete-pipeline": {
+    "pipeline_id": "00000000-0000-4000-8000-000000000002"
+  },
+  "list-pipeline-result-fields": {
+    "pipeline_id": "00000000-0000-4000-8000-000000000002"
+  },
+  "search-pipeline-results": {
+    "pipeline_config_slugs": [
+      "test-value"
+    ]
+  },
+  "import-dataset-from-spans": {
+    "dataset_id": "00000000-0000-4000-8000-000000000001",
+    "span_references": [
+      {
+        "trace_id": "0123456789abcdef0123456789abcdef",
+        "span_id": "0123456789abcdef"
+      }
+    ],
+    "mapping_contract": {
+      "version": 1,
+      "mappings": [
+        {
+          "target_field": "input",
+          "source_field": {
+            "namespace": "span_attributes",
+            "key": "gen_ai.prompt"
+          }
+        }
+      ]
+    }
   }
 }

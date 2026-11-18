@@ -149,6 +149,8 @@ rc.bulkJobClose(h.id);
     @section salesforcerestclientrelnotes Release Notes
 
     @subsection salesforcerestclientv2_1 SalesforceRestClient v2.1
+    - errors no longer contain the values of options or credentials, which can be passwords or tokens
+      (<a href="https://github.com/qoretechnologies/qore/issues/6467">issue 6467</a>)
     - debug messages give the URL without its password
     - the API list of a polling ping is decoded by the rules shared by all HTTP clients instead of as ISO-8859-1
       without a charset (see @ref Qore::decode_http_body() "decode_http_body()")
@@ -646,8 +648,9 @@ SalesforceRestClient rest({"url": "http://localhost:8001/rest"});
                 throw "SALESFORCERESTCLIENT-ERROR", sprintf("missing required option %y in option argument", key);
             }
             if (v.typeCode() != NT_STRING) {
-                throw "SALESFORCERESTCLIENT-ERROR", sprintf("required option %y was passed as a %s (%y); expecting "
-                    "\"string\"", key, v.type(), v);
+                # only the type of the value, which can be a credential
+                throw "SALESFORCERESTCLIENT-ERROR", sprintf("required option %y was passed as a %s; expecting "
+                    "\"string\"", key, v.type());
             }
 
             self{key} = v;

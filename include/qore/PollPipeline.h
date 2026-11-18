@@ -480,6 +480,18 @@ public:
 
     DLLEXPORT void cleanup(ExceptionSink* xsink);
 
+    //! Releases the pipeline's state (cleanup()) with its last reference
+    /** An async I/O controller that holds the pipeline can still continue it after the destructor of its object
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT void deref(ExceptionSink* xsink) override;
+
+    //! Releases the pipeline's state (cleanup()) with its last reference, without a caller's exception sink
+    /** @since %Qore 3.0
+    */
+    DLLEXPORT void deref() override;
+
 protected:
     DLLEXPORT const char* getStateImpl() const override;
 

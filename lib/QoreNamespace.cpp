@@ -550,6 +550,9 @@ void QoreNamespace::addSystemClass(QoreClass* oc) {
 #else
     priv->classList.add(oc);
 #endif
+    // code in other threads can reach the class from now on, or when the module being initialized returns from its
+    // initialization (issue #6422)
+    qore_class_private::get(*oc)->systemClassCommitted();
 
     // see if namespace is attached to the root
     qore_root_ns_private* rns = priv->getRoot();

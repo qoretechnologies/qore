@@ -7110,6 +7110,13 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
             exit = True;
         }
 
+        # A stop that runs in a thread that runs a request of this listener does not wait for that request, which
+        # ends only when the stop has returned to it: the request released the last reference to the server, whose
+        # destructor stops it (the program released the server while the request ran)
+        if (*Priv::RequestHelper own_request = Priv::current_request) {
+            own_request.releaseForStop(cThreads);
+        }
+
         # wait for all connection threads to terminate
         cThreads.wait();
 
@@ -7549,6 +7556,10 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         cThreads.add();
         RequestHelper request_helper(cThreads, dThreads);
         request_helper.log_info = isLogInfoEnabled();
+        # a stop of this listener that runs in this thread does not wait for this request (see stop())
+        *Priv::RequestHelper prev_request = Priv::current_request;
+        Priv::current_request = request_helper;
+        on_exit Priv::current_request = prev_request;
 
         bool is_multiplexed = (header_info.http2 ?? False) || (header_info.http3 ?? False);
         string sock_key;
@@ -9878,6 +9889,12 @@ class ExternalConnectionKeeper {
     }
 }
 
+#! The helper of the request that the current thread runs (see HttpListener::processNativeRequest())
+/** A stop of the request's listener that runs in this thread does not wait for this request, which ends only when the
+    stop has returned (see RequestHelper::releaseForStop())
+*/
+thread_local *RequestHelper current_request;
+
 #! Helper class for managing HTTP request lifecycle and thread counter tracking
 /**
     This class manages the lifecycle of HTTP connections and ensures proper counter
@@ -9912,7 +9929,8 @@ class ExternalConnectionKeeper {
 
     The WaitGroup add() happens BEFORE RequestHelper is created (in processNativeRequest
     or similar). The done() happens in the destructor. This ensures:
-    - Every add() has a matching done()
+    - Every add() has a matching done(), which releaseForStop() gives early for a stop of the listener that runs in
+      the request's thread (the destructor then gives none)
     - Server shutdown can wait for all WaitGroups to reach zero
 
     @see HttpListener::cThreads
@@ -9944,6 +9962,8 @@ class RequestHelper {
         Socket s;
         #! If True, socket is managed externally (e.g., by WebSocket handler) and won't be closed in destructor
         bool dedicated_external = False;
+        #! True while the request counts in the active WaitGroup (c); see releaseForStop()
+        bool counted = True;
     }
 
     /**
@@ -9968,7 +9988,7 @@ class RequestHelper {
     #! Destructor ensures counter is decremented and socket is cleaned up if needed
     /**
         - If not dedicated_external and socket exists and is open: shutdown and close the socket
-        - Always decrements the active counter (c) to signal this connection is complete
+        - Decrements the active counter (c) to signal this connection is complete, unless releaseForStop() did
 
         This allows HttpListener::stop() to wait for all connections to finish via
         cThreads.wait() and dThreads.wait().
@@ -9985,7 +10005,9 @@ class RequestHelper {
                 # Ignore close errors - socket may already be in error state
             }
         }
-        c.done();
+        if (counted) {
+            c.done();
+        }
     }
 
     #! Switches from normal connection mode to dedicated connection mode
@@ -10000,8 +10022,10 @@ class RequestHelper {
     */
     setDedicated() {
         @assert(c === cThreads);
-        dThreads.add();
-        cThreads.done();
+        if (counted) {
+            dThreads.add();
+            cThreads.done();
+        }
         c = dThreads;
     }
 
@@ -10026,11 +10050,30 @@ class RequestHelper {
         # Only adjust counters if not already in dedicated mode
         # (setDedicated() may have been called first in registerDedicatedSocket)
         if (c === cThreads) {
-            dThreads.add();
-            cThreads.done();
+            if (counted) {
+                dThreads.add();
+                cThreads.done();
+            }
             c = dThreads;
         }
         dedicated_external = True;
+    }
+
+    #! Ends the count of the request for a stop of its listener that runs in the request's thread
+    /** Called by HttpListener::stop() for the request that the current thread runs (see current_request): the
+        stop waits for the requests of the listener, and this request ends only when the stop has returned to it, as
+        when the request released the last reference to the server, whose destructor stops it.  The request does not
+        count from here on; the destructor does not end its count again.
+
+        @param listener_cthreads the counter of the normal connection threads of the listener that is stopped; the
+        count of a request of another listener is not ended
+    */
+    releaseForStop(WaitGroup listener_cthreads) {
+        if (!counted || cThreads !== listener_cthreads) {
+            return;
+        }
+        counted = False;
+        c.done();
     }
 
     #! Returns True if this connection is in dedicated mode (WebSocket, SSE)

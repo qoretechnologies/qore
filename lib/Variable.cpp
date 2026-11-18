@@ -4209,7 +4209,10 @@ void LValueRemoveHelper::deleteLValue() {
 }
 
 void LValueRemoveHelper::doRemove(QoreValue lvalue) {
-    assert(lvalue);
+    // NOTHING is an lvalue for check_lvalue(): there is nothing to remove, and the result is NOTHING (issue #6480)
+    if (lvalue.isNothing()) {
+        return;
+    }
     qore_type_t t = lvalue.getType();
     if (t == NT_VARREF) {
         lvalue.get<VarRefNode>()->remove(*this);

@@ -14,6 +14,7 @@
 %requires HttpClientIo
 %requires RestClientIo
 %requires ../../TestCertificates.qm
+%requires ../../RefusedQuicPort.qm
 
 %exec-class Http3IoThreadConnectionTest
 
@@ -186,8 +187,10 @@ public class Http3IoThreadConnectionTest inherits QUnit::Test {
 
     #! A failed HTTP/3 connection is retried, in the family of the address
     retryTest() {
-        # nothing receives datagrams on this port
-        string url = sprintf("https://127.0.0.1:%d", get_free_port("127.0.0.1"));
+        # the system refuses the datagrams on this port, which the test holds (issue #6461)
+        RefusedUdpPort refused();
+        on_exit refused.close();
+        string url = sprintf("https://127.0.0.1:%d", refused.port);
         foreach string api in (Apis) {
             RecordingManager mgr = getManager({"protocol": "h3", "max_request_retries": 1});
             on_exit mgr.closeAll();
@@ -250,8 +253,10 @@ public class Http3IoThreadConnectionTest inherits QUnit::Test {
         "localhost" need not resolve to both families for this case
     */
     evictedFamilyRecordedTest() {
-        # nothing receives datagrams on this port
-        int port = get_free_port("127.0.0.1");
+        # the system refuses the datagrams on this port, which the test holds (issue #6461)
+        RefusedUdpPort refused();
+        on_exit refused.close();
+        int port = refused.port;
         string url = sprintf("https://127.0.0.1:%d", port);
         foreach string api in (Apis) {
             RecordingManager mgr = getManager({"protocol": "h3", "max_request_retries": 1});
@@ -277,8 +282,10 @@ public class Http3IoThreadConnectionTest inherits QUnit::Test {
         datagrams on) and for one that completed it (to the QUIC listener)
     */
     sendErrorFamilyTest() {
-        # nothing receives datagrams on this port
-        int port = get_free_port("127.0.0.1");
+        # the system refuses the datagrams on this port, which the test holds (issue #6461)
+        RefusedUdpPort refused();
+        on_exit refused.close();
+        int port = refused.port;
         string key = sprintf("127.0.0.1:%d", port);
         RecordingManager mgr = getManager({"protocol": "h3", "max_request_retries": 0});
         on_exit mgr.closeAll();

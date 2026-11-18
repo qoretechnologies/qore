@@ -1,0 +1,145 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - AOT compilation and linking of top-level code with qcc
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires Util
+%requires FsUtil
+%requires ../../../TestInterpreter.qm
+
+%exec-class ReparseToplevelRunTest
+
+#! The top-level code of a Program with PO_ALLOW_REPARSE runs once (issues #6474, #6475)
+/** A Program that ran its top-level code without PO_ALLOW_REPARSE does not run it again when the option is set
+    later: the next run executes only the statements of the parses after it (issue #6475).  The top-level code of a
+    script with %allow-reparse that qcc compiled runs (issue #6474).
+*/
+public class ReparseToplevelRunTest inherits QUnit::Test {
+    constructor() : QUnit::Test("ReparseToplevelRunTest", "1.0", \ARGV) {
+        addTestCase("option set after a run", \optionAfterRunTest());
+        addTestCase("option set before any run", \optionBeforeRunTest());
+        addTestCase("pending code across option changes", \pendingCodeTest());
+        addTestCase("exception in a run without the option", \exceptionTest());
+        addTestCase("compiled script with %allow-reparse", \compiledTest());
+        set_return_value(main());
+    }
+
+    optionAfterRunTest() {
+        # with Program::setParseOptions()
+        Program p(PO_MODERN | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.parse("our int n; ++n;", "first");
+        p.run();
+        assertEq(1, p.getGlobalVariable("n"));
+        p.setParseOptions(PO_ALLOW_REPARSE);
+        p.parse("int b = 2;", "second");
+        p.run();
+        assertEq(1, p.getGlobalVariable("n"));
+        p.parse("n += 10;", "third");
+        p.run();
+        assertEq(11, p.getGlobalVariable("n"));
+
+        # with Program::replaceParseOptions()
+        p = new Program(PO_MODERN | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.parse("our int n; ++n;", "first");
+        p.run();
+        p.replaceParseOptions(PO_MODERN | PO_NO_CHILD_PO_RESTRICTIONS | PO_ALLOW_REPARSE);
+        p.parse("n += 10;", "second");
+        p.run();
+        assertEq(11, p.getGlobalVariable("n"));
+    }
+
+    optionBeforeRunTest() {
+        # the option set after the parse but before any run: the code runs once
+        Program p(PO_MODERN | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.parse("our int n; ++n;", "first");
+        p.setParseOptions(PO_ALLOW_REPARSE);
+        p.run();
+        assertEq(1, p.getGlobalVariable("n"));
+        p.run();
+        assertEq(1, p.getGlobalVariable("n"));
+    }
+
+    #! code parsed after a run, or pending with PO_ALLOW_REPARSE, runs when the option changes before the next run
+    pendingCodeTest() {
+        # a run of a Program without code, then code and the option: the code runs
+        Program p(PO_MODERN | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.run();
+        p.parse("our int n; ++n;", "first");
+        p.setParseOptions(PO_ALLOW_REPARSE);
+        p.run();
+        assertEq(1, p.getGlobalVariable("n"));
+
+        # code parsed with PO_ALLOW_REPARSE, then a refused change of the option (the replacement would also remove a
+        # locked restriction): the code runs
+        p = new Program(PO_MODERN | PO_NO_CHILD_PO_RESTRICTIONS | PO_ALLOW_REPARSE | PO_NO_PROCESS_CONTROL);
+        p.parse("our int n; ++n;", "first");
+        p.run();
+        p.parse("n += 100;", "second");
+        p.lockOptions();
+        assertThrows("OPTIONS-LOCKED", \p.replaceParseOptions(), PO_MODERN | PO_NO_CHILD_PO_RESTRICTIONS);
+        assertNeq(0, p.getParseOptions() & PO_ALLOW_REPARSE);
+        p.run();
+        assertEq(101, p.getGlobalVariable("n"));
+
+        # the option cleared and set again without a run between: the code parsed before runs
+        foreach string how in ("disable", "replace") {
+            p = new Program(PO_MODERN | PO_NO_CHILD_PO_RESTRICTIONS | PO_ALLOW_REPARSE);
+            p.parse("our int n; ++n;", "first");
+            p.run();
+            p.parse("n += 100;", "second");
+            if (how == "disable") {
+                p.disableParseOptions(PO_ALLOW_REPARSE);
+            } else {
+                p.replaceParseOptions(PO_MODERN | PO_NO_CHILD_PO_RESTRICTIONS);
+            }
+            p.setParseOptions(PO_ALLOW_REPARSE);
+            p.run();
+            assertEq(101, p.getGlobalVariable("n"), how);
+        }
+
+        # the option cleared, a run, then set again: the code ran in the run without the option, and runs once
+        p = new Program(PO_MODERN | PO_NO_CHILD_PO_RESTRICTIONS | PO_ALLOW_REPARSE);
+        p.parse("our int n; ++n;", "first");
+        p.run();
+        p.parse("n += 100;", "second");
+        p.disableParseOptions(PO_ALLOW_REPARSE);
+        p.run();
+        assertEq(102, p.getGlobalVariable("n"));
+        p.setParseOptions(PO_ALLOW_REPARSE);
+        p.run();
+        assertEq(102, p.getGlobalVariable("n"));
+    }
+
+    #! the statements after one that raised an exception in a run without PO_ALLOW_REPARSE count as run (documented)
+    exceptionTest() {
+        Program p(PO_MODERN | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.parse("our int n; ++n; if (n == 1) { throw \"X\"; } n += 10;", "first");
+        assertThrows("X", \p.run());
+        assertEq(1, p.getGlobalVariable("n"));
+        p.setParseOptions(PO_ALLOW_REPARSE);
+        p.parse("n += 100;", "second");
+        p.run();
+        assertEq(101, p.getGlobalVariable("n"));
+    }
+
+    compiledTest() {
+        *string qcc = TestInterpreter::qcc_compiler();
+        if (!qcc) {
+            testSkip("qcc is not available");
+        }
+        TmpDir tmp("qore-reparse-toplevel-");
+        string src = tmp.path + DirSep + "reparse-toplevel.q";
+        string bin = tmp.path + DirSep + "reparse-toplevel";
+        File f();
+        f.open2(src, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write("%modern\n%allow-reparse\nint x = 2;\nprintf(\"ran %d\\n\", x * 3);\n");
+        f.close();
+        string out = backquote(sprintf("%s -o %s %s 2>&1", qcc, bin, src));
+        assertTrue(is_file(bin), out);
+        assertEq("ran 6\n", backquote(bin + " 2>&1"));
+    }
+}
