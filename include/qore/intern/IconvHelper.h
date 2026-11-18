@@ -126,7 +126,8 @@ public:
 
    //! Returns the length of the longest prefix of the input that is made of complete, valid characters of a Unicode form
    /** A value above U+10FFFF, a surrogate code point in UTF-32 or UCS-2, and an unpaired surrogate in UTF-16 are
-       invalid; see the character functions of the encoding (QoreEncoding::getCharLen()).
+       invalid; the character functions of the encoding (QoreEncoding::getCharLen()) decode the input, so that each
+       form has one definition of a valid character: for UTF-16, q_utf16_char_len() (qore#6604).
 
        @param enc the encoding of the input; a Unicode encoding form (see isUnicodeForm())
        @param p the input

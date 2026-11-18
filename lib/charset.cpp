@@ -34,6 +34,7 @@
 #include <qore/intern/qore_string_private.h>
 #include "qore/intern/QoreForkHandlers.h"
 #include "qore/intern/QoreUtf8.h"
+#include "qore/intern/QoreUtf16.h"
 
 #include <cstdint>
 #include <cstdio>
@@ -950,14 +951,9 @@ static unsigned UTF8_getUnicode(const char* p) {
     return p[0];
 }
 
+// the UTF-16LE encoding's character function: the one definition of a valid UTF-16 character (qore#6604)
 qore_offset_t q_UTF16LE_get_char_len(const char* p, size_t len) {
-    assert(len);
-    if (len == 1)
-        return -2;
-
-    unsigned char c = (unsigned char)p[1];
-    size_t l = c >= 0xd8 && c < 0xdc ? 4 : 2;
-    return len >= l ? l : -l;
+    return q_utf16_char_len<false>(p, len);
 }
 
 static unsigned UTF16LE_getUnicode(const char* p) {
@@ -974,7 +970,7 @@ static unsigned UTF16LE_getUnicode(const char* p) {
 static size_t UTF16LE_getLength(const char* p, const char* end, bool& invalid) {
     size_t i = 0;
     while (p < end) {
-        qore_offset_t l = q_UTF16LE_get_char_len(p, end - p);
+        qore_offset_t l = q_utf16_char_len<false>(p, end - p);
         //printd(5, "UTF16_getLength() p: %p end: %p len: %p l: %zd\n", p, end, end - p, l);
         if (l <= 0) {
             invalid = true;
@@ -991,7 +987,7 @@ static size_t UTF16LE_getLength(const char* p, const char* end, bool& invalid) {
 static size_t UTF16LE_getByteLen(const char* p, const char* end, size_t l, bool& invalid) {
     size_t b = 0;
     while ((p < end) && l) {
-        qore_offset_t bl = q_UTF16LE_get_char_len(p, end - p);
+        qore_offset_t bl = q_utf16_char_len<false>(p, end - p);
         if (bl <= 0) {
             invalid = true;
             return b;
@@ -1007,7 +1003,7 @@ static size_t UTF16LE_getByteLen(const char* p, const char* end, size_t l, bool&
 static size_t UTF16LE_getCharPos(const char* p, const char* end, bool& invalid) {
     size_t i = 0;
     while (p < end) {
-        qore_offset_t l = q_UTF16LE_get_char_len(p, end - p);
+        qore_offset_t l = q_utf16_char_len<false>(p, end - p);
         if (l <= 0) {
             invalid = true;
             return i;
@@ -1020,12 +1016,10 @@ static size_t UTF16LE_getCharPos(const char* p, const char* end, bool& invalid) 
     return i;
 }
 
+// the character function of UTF-16BE and of the generic UTF-16 encoding, which is big-endian: the one definition of
+// a valid UTF-16 character (qore#6604)
 qore_offset_t q_UTF16BE_get_char_len(const char* p, size_t len) {
-    assert(len);
-
-    unsigned char c = (unsigned char)*p;
-    size_t l = c >= 0xd8 && c < 0xdc ? 4 : 2;
-    return len >= l ? l : -l;
+    return q_utf16_char_len<true>(p, len);
 }
 
 static unsigned UTF16BE_getUnicode(const char* p) {
@@ -1042,7 +1036,7 @@ static unsigned UTF16BE_getUnicode(const char* p) {
 static size_t UTF16BE_getLength(const char* p, const char* end, bool& invalid) {
     size_t i = 0;
     while (p < end) {
-        qore_offset_t l = q_UTF16BE_get_char_len(p, end - p);
+        qore_offset_t l = q_utf16_char_len<true>(p, end - p);
         //printd(5, "UTF16_getLength() p: %p end: %p len: %p l: %zd\n", p, end, end - p, l);
         if (l <= 0) {
             invalid = true;
@@ -1059,7 +1053,7 @@ static size_t UTF16BE_getLength(const char* p, const char* end, bool& invalid) {
 static size_t UTF16BE_getByteLen(const char* p, const char* end, size_t l, bool& invalid) {
     size_t b = 0;
     while ((p < end) && l) {
-        qore_offset_t bl = q_UTF16BE_get_char_len(p, end - p);
+        qore_offset_t bl = q_utf16_char_len<true>(p, end - p);
         if (bl <= 0) {
             invalid = true;
             return b;
@@ -1075,7 +1069,7 @@ static size_t UTF16BE_getByteLen(const char* p, const char* end, size_t l, bool&
 static size_t UTF16BE_getCharPos(const char* p, const char* end, bool& invalid) {
     size_t i = 0;
     while (p < end) {
-        qore_offset_t l = q_UTF16BE_get_char_len(p, end - p);
+        qore_offset_t l = q_utf16_char_len<true>(p, end - p);
         if (l <= 0) {
             invalid = true;
             return i;

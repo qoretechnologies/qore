@@ -180,6 +180,11 @@
     \c 0xf5 - \c 0xff are invalid in a \c UTF-8 string: the string functions and operators raise
     \c INVALID-ENCODING for them where they were read as characters (see @ref utf8_validity; issue #6604).
 
+    @par UTF-16 Strings Are Valid Only With Paired Surrogates
+    An unpaired surrogate is invalid in a \c UTF-16 string: the string functions and operators raise
+    \c INVALID-ENCODING for it where they read it, or a high surrogate and the code unit after it, as a character
+    (see @ref utf16_validity; issue #6604).
+
     @par trunc_str() Raises INVALID-ENCODING for a String Not Valid in Its Encoding Within the Length
     @ref Qore::trunc_str() "trunc_str()" raises \c INVALID-ENCODING for an invalid character within the length, also
     when the whole string is within it, where it returned the part before the character or the string unchecked
