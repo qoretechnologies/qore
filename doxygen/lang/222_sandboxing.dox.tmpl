@@ -879,6 +879,25 @@ sm.addNetworkAllowedPortRange(8000, 9000, QSEC_NET_TCP);  # Custom range
     against the filesystem policy of the code that chose them itself.  See the documentation of each DBI driver for
     the destinations that it reports.
 
+    The DBI drivers of the %Qore modules for a connection chosen by code whose sandbox restricts network or filesystem
+    access:
+    |!Driver|!Module|!Connection
+    |\c pgsql|\c pgsql|checked: the driver reports the destinations of the connection, as the PostgreSQL client \
+library determines them, and connects to the checked addresses only (needs the PostgreSQL client library 12 or later)
+    |\c mysql|\c mysql|checked: the driver reports the destination of the connection (a host and port, or a UNIX \
+socket) and connects to the checked addresses only
+    |\c sqlite3|\c sqlite3|local: the database file is checked against the filesystem policy
+    |\c oracle|\c oracle|refused (\c NETWORK-ACCESS-DENIED)
+    |\c odbc|\c odbc|refused (\c NETWORK-ACCESS-DENIED)
+    |\c freetds, \c sybase|\c sybase|refused (\c NETWORK-ACCESS-DENIED)
+    |\c jdbc|\c jni|refused (\c NETWORK-ACCESS-DENIED)
+
+    The drivers that are refused cannot report destinations that can be checked before they connect: their client
+    libraries determine where a connection leads from names and configuration that the library resolves itself, or
+    follow a server that sends the connection to another server while it is established.  A connection of such a
+    driver can be made by code that no restricting sandbox governs, such as a datasource or pool that trusted code
+    configured and gives to sandboxed code.
+
     A sandbox that restricts neither network nor filesystem access (for example one that is used only to interrupt
     code) does not check database connections.
 
