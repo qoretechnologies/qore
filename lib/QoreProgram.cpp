@@ -1022,6 +1022,23 @@ qore_program_private::qore_program_private(QoreProgram* n_pgm, const QoreParseOp
     // every Program wherever it is created, and before the Program is registered and can be found
     if (qore_caller_is_sandboxed()) {
         sandboxed.store(true, std::memory_order_release);
+        // the Program keeps the sandbox of the code that creates it, which governs its code wherever it runs, also
+        // when trusted code calls it without the Program object (see creator_sandbox_manager); before the Program is
+        // registered, so that nothing has to be undone if the lookup fails (std::bad_alloc: no Program is created)
+        QoreSandboxManager* all;
+        QoreSandboxManager* policy;
+        qore_caller_sandbox_refs(all, policy);
+        ReferenceHolder<QoreSandboxManager> creator_sm(all, nullptr);
+        ReferenceHolder<QoreSandboxManager> creator_policy(policy, nullptr);
+        if (creator_sm || creator_policy) {
+            try {
+                addCreatorSandbox(*creator_sm, *creator_policy);
+            } catch (...) {
+                // a manager that was attached before the failure is released: the destructor does not run
+                releaseSandboxManagers(nullptr);
+                throw;
+            }
+        }
     }
     registerProgram();
     // the Program's ID is known now
@@ -1044,7 +1061,8 @@ qore_program_private::qore_program_private(QoreProgram* n_pgm, const QoreParseOp
 }
 
 void qore_program_private::markSandboxedParse() {
-    // the flag is never cleared, so a Program that is sandboxed already needs no lookup
+    // the flag is never cleared, so a Program that is sandboxed already needs no lookup; the sandbox of the code that
+    // is parsed is attached when the code is committed (see getParseCreatorSandbox())
     if (!sandboxed.load(std::memory_order_acquire) && qore_caller_is_sandboxed()) {
         sandboxed.store(true, std::memory_order_release);
     }
@@ -1229,6 +1247,8 @@ qore_program_private::~qore_program_private() {
     }
     // wait till all debug calls are finished, no new calls possible as dpgm->removeProgram() set dpmg to NULL
     debug_program_counter.waitForZero();
+    // a Program destroyed without being cleared still holds its sandbox managers
+    releaseSandboxManagers(nullptr);
     deleteAllBreakpoints();
     // a hook that was not run (the Program was destroyed without being cleared) is never run
     qore_drop_exit_hooks(pgm);
@@ -2491,6 +2511,8 @@ int qore_program_private::beginParse(ExceptionSink* xsink, ParseStartGuard& guar
 }
 
 void qore_program_private::internParseRollback(ExceptionSink* xsink) {
+    // the code that sandboxed code parsed is gone, and so is the reason to attach its sandbox
+    dropPendingCreatorSandbox();
     bool atomic_rollback = static_cast<bool>(pwo.parse_options & PO_ALLOW_REPARSE);
     // delete pending changes to namespaces: only what the failed parse added is removed, also without
     // PO_ALLOW_REPARSE, as the namespaces hold what the Program had before the parse, including the classes and
@@ -2761,16 +2783,9 @@ void qore_program_private::waitForTerminationAndClear(ExceptionSink* xsink) {
         exec_class_rv.discard(xsink);
         exec_class_rv = QoreValue();
 
-        // clear sandbox manager if set
+        // clear the sandbox managers if set
         {
-            QoreSandboxManager* sm;
-            {
-                AutoLocker al(sm_lock);
-                sm = sandbox_manager.exchange(nullptr, std::memory_order_acq_rel);
-            }
-            if (sm) {
-                sm->deref(xsink);
-            }
+            releaseSandboxManagers(xsink);
         }
 
         // delete code
@@ -2967,6 +2982,11 @@ int qore_program_private::internParseCommit(bool standard_parse) {
         }
 
         if (parseSink->isEvent()) {
+            internParseRollback(parseSink);
+            requires_exception = false;
+            rc = -1;
+        } else if (commitPendingCreatorSandbox(parseSink)) {
+            // the code that sandboxed code parsed is not committed without its sandbox
             internParseRollback(parseSink);
             requires_exception = false;
             rc = -1;
@@ -6390,25 +6410,8 @@ bool QoreProgram::checkAllowDebugging(ExceptionSink* xsink) {
 }
 
 void QoreProgram::setSandboxManager(QoreSandboxManager* sm) {
-    QoreSandboxManager* old;
-    {
-        AutoLocker al(priv->sm_lock);
-        if (sm) {
-            // referenced before it is published: a lookup that finds it without the lock must find it alive
-            sm->ref();
-            // the Program's code is sandboxed from now on, also once the manager is removed or the Program deleted
-            priv->sandboxed.store(true, std::memory_order_release);
-        }
-        old = priv->sandbox_manager.exchange(sm, std::memory_order_acq_rel);
-        // after the manager is published: a thread that finds the new generation finds the manager (see
-        // ProgramThreadCountContextHelper::sandboxChainClear())
-        if (sm) {
-            qore_sandbox_manager_generation.fetch_add(1, std::memory_order_seq_cst);
-        }
-    }
-    if (old) {
-        old->deref(nullptr);
-    }
+    // the C++ API sets a manager that governs the Program's code alone (see qore_program_private::own_manager_additive)
+    priv->setOwnSandboxManager(sm, false, false);
 }
 
 const AbstractQoreFunctionVariant* QoreProgram::runtimeFindCall(const char* name, const QoreListNode* params, ExceptionSink* xsink) const {

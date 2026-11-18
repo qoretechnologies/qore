@@ -175,6 +175,8 @@ public class QoreStructuredExtractionTest inherits QUnit::Test {
         # Sandbox + start_thread tests
         addTestCase("ExtractionPipeline - start_thread invoked in parallel batch",
             \extractBatchStartThreadTest());
+        addTestCase("ExtractionPipeline - start_thread taken from the thread's capability",
+            \extractBatchStartThreadCapabilityTest());
         addTestCase("ExtractionPipeline - parallel batch default uses background",
             \extractBatchDefaultBackgroundTest());
         addTestCase("ExtractionPipeline - sandbox parse stub passes under PO_NO_THREAD_CONTROL",
@@ -652,6 +654,33 @@ public class QoreStructuredExtractionTest inherits QUnit::Test {
         }
         # Must have used our starter rather than the background operator
         assertEq(3, start_thread_calls);
+    }
+
+    #! Without the start_thread option, the pipeline uses the start_thread capability of the code that a host runs
+    #! (qorus#867)
+    extractBatchStartThreadCapabilityTest() {
+        string response = make_json({
+            "entities": (
+                {
+                    "entity_type": "PERSON",
+                    "text": "Beta",
+                    "start": 0,
+                    "end": 4,
+                    "confidence": 0.9,
+                },
+            ),
+        });
+        MockLlmBackend mock(response);
+        Counter started();
+        ThreadCapabilityScope scope({"start_thread": int sub (code<nothing()> body) {
+            started.inc();
+            return background body();
+        }});
+        ExtractionPipeline pipeline(mock, ExtractionSchema::NerSchema,
+            <ExtractionPipelineOptions>{"batch_parallel": 3});
+        list<hash<ExtractionResult>> results = pipeline.extractBatch(("first", "second", "third"));
+        assertEq(3, results.size());
+        assertEq(3, started.getCount(), "the capability started the pipeline's threads");
     }
 
     #! Default parallel path uses `background` when start_thread is not supplied

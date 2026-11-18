@@ -2220,6 +2220,26 @@ nothing sb_capture_applied_check_read(int handle, string path) {
     return QoreValue();
 }
 
+//! Calls code while a capture is applied, as a native bridge runs a handler for the code whose sandbox it captured
+/** The capture is applied with QoreSandboxCaptureHelper; the code runs as the submitter's operation, governed by the
+    captured sandbox (qorus#867: a capability scope set there is refused)
+
+    @param handle the handle of the capture
+    @param c the code to call
+
+    @return the value that \a c returns
+
+    @throw SB-CAPTURE-ERROR unknown handle
+*/
+auto sb_capture_applied_call(int handle, code c) [dom=THREAD_CONTROL] {
+    std::shared_ptr<QoreSandboxCapture> capture = sb_capture_get(handle, xsink);
+    if (!capture) {
+        return QoreValue();
+    }
+    QoreSandboxCaptureHelper sch(*capture);
+    return c->execValue(nullptr, xsink);
+}
+
 //! Checks read access to a path with one capture applied inside another, as a native bridge does
 /** Applies the outer capture with QoreSandboxCaptureHelper, so that only the inherited context of the outer capture
     governs the thread, then applies the inner capture and checks the path against the policy of the inner capture

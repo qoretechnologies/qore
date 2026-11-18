@@ -105,6 +105,7 @@
 #include "qore/intern/QoreAOTBatchMemory.h"
 #include "qore/intern/FileStreamIo.h"
 #include "qore/intern/qore_enum_decl_private.h"
+#include "qore/intern/QoreSandboxProvenance.h"
 #include "qore/intern/QoreSocketObjectPrivate.h"
 
 #include <llvm/MC/TargetRegistry.h>
@@ -10593,6 +10594,115 @@ static void ut_sandbox_context_inner_program_id(UnitTestCounters& c, QoreProgram
     }
     sandboxed->waitForTerminationAndDeref(&xsink);
     UT_ASSERT(c, !xsink, "the Program is destroyed");
+}
+
+//! A Program that sandboxed code creates keeps the sandbox of that code: entered alone (no sandboxed Program on the
+//! thread's stack), after QoreProgram::setSandboxManager() gave it a manager and removed it again, and by a foreign
+//! thread of a binary module with QoreExternalProgramContextHelper
+static void ut_sandbox_creator_context(UnitTestCounters& c, QoreProgram* parent) {
+    ExceptionSink xsink;
+    QoreProgram* sandboxed = parent
+        ? new QoreProgram(parent, PO_NO_CHILD_PO_RESTRICTIONS)
+        : new QoreProgram(PO_NO_CHILD_PO_RESTRICTIONS);
+    QoreSandboxManager* sm = new QoreSandboxManager;
+    sm->setUncontrolledApiPolicy(false);
+    sandboxed->setSandboxManager(sm);
+    // the Program that the sandboxed code creates
+    QoreProgram* child = nullptr;
+    {
+        ProgramThreadCountContextHelper tch(&xsink, sandboxed, true);
+        UT_ASSERT(c, !xsink, "the sandboxed Program is entered");
+        child = new QoreProgram(sandboxed, QoreParseOptions());
+    }
+    UT_ASSERT(c, qore_program_is_sandboxed(child), "the child is sandboxed");
+    // the uncontrolled-API policy (resolved without combining the managers) and the combined manager both see the
+    // creator's sandbox wherever the child is entered
+    auto check = [&c, sm](const char* label) {
+        UT_ASSERT(c, !qore_sandbox_allows_uncontrolled_apis(QoreSandboxManagerHelper::Policy),
+            (std::string(label) + ": the creator's sandbox governs policy checks").c_str());
+        UT_ASSERT(c, !qore_sandbox_allows_uncontrolled_apis(QoreSandboxManagerHelper::All),
+            (std::string(label) + ": the creator's sandbox governs").c_str());
+        qore_program_id_t pgm_id = 0;
+        QoreSandboxManager* found = qore_dbg_find_thread_sandbox_manager_ref(&pgm_id);
+        UT_ASSERT(c, found, (std::string(label) + ": a manager is found").c_str());
+        if (found) {
+            UT_ASSERT(c, found == sm || QoreSandboxComposition::members(found),
+                (std::string(label) + ": the manager is the creator's sandbox or contains it").c_str());
+            if (const std::vector<QoreSandboxManager*>* members = QoreSandboxComposition::members(found)) {
+                UT_ASSERT(c, std::find(members->begin(), members->end(), sm) != members->end(),
+                    (std::string(label) + ": the composition contains the creator's sandbox").c_str());
+            }
+            found->deref(nullptr);
+        }
+    };
+    {
+        ProgramThreadCountContextHelper tch(&xsink, child, true);
+        UT_ASSERT(c, !xsink, "the child is entered");
+        check("entered alone");
+    }
+    // a manager of its own that allows uncontrolled APIs does not loosen the sandbox, and removing it does not remove
+    // the creator's sandbox
+    {
+        QoreSandboxManager* lax = new QoreSandboxManager;
+        lax->setUncontrolledApiPolicy(true);
+        child->setSandboxManager(lax);
+        lax->deref(nullptr);
+        {
+            ProgramThreadCountContextHelper tch(&xsink, child, true);
+            UT_ASSERT(c, !xsink, "the child is entered with a manager of its own");
+            check("with a lax manager of its own");
+        }
+        QoreSandboxManager* own = qore_program_private::get(*child)->getOwnSandboxManagerRef();
+        UT_ASSERT(c, own == lax, "the manager set is the Program's own manager");
+        if (own) {
+            own->deref(nullptr);
+        }
+        child->setSandboxManager(nullptr);
+        UT_ASSERT(c, !qore_program_private::get(*child)->getOwnSandboxManagerRef(), "the manager is removed");
+        {
+            ProgramThreadCountContextHelper tch(&xsink, child, true);
+            UT_ASSERT(c, !xsink, "the child is entered after its manager was removed");
+            check("after setSandboxManager(nullptr)");
+        }
+    }
+    // a foreign thread of a binary module enters the child with no Qore caller
+    {
+        bool entered = false;
+        bool policy_refused = false;
+        bool all_refused = false;
+        std::thread foreign([&]() {
+            QoreForeignThreadHelper fth;
+            ExceptionSink txsink;
+            QoreExternalProgramContextHelper pch(&txsink, child);
+            if (txsink) {
+                txsink.clear();
+                return;
+            }
+            entered = true;
+            policy_refused = !qore_sandbox_allows_uncontrolled_apis(QoreSandboxManagerHelper::Policy);
+            all_refused = !qore_sandbox_allows_uncontrolled_apis(QoreSandboxManagerHelper::All);
+        });
+        foreign.join();
+        UT_ASSERT(c, entered, "the foreign thread enters the child");
+        UT_ASSERT(c, policy_refused, "foreign thread: the creator's sandbox governs policy checks");
+        UT_ASSERT(c, all_refused, "foreign thread: the creator's sandbox governs");
+    }
+    // a Program that trusted code creates has no sandbox
+    {
+        QoreProgram* trusted = new QoreProgram(sandboxed, QoreParseOptions());
+        UT_ASSERT(c, !qore_program_is_sandboxed(trusted), "a Program that trusted code creates is not sandboxed");
+        {
+            ProgramThreadCountContextHelper tch(&xsink, trusted, true);
+            UT_ASSERT(c, !xsink, "the trusted Program is entered");
+            UT_ASSERT(c, qore_sandbox_allows_uncontrolled_apis(QoreSandboxManagerHelper::All),
+                "no sandbox governs a Program that trusted code creates");
+        }
+        trusted->waitForTerminationAndDeref(&xsink);
+    }
+    sm->deref(nullptr);
+    child->waitForTerminationAndDeref(&xsink);
+    sandboxed->waitForTerminationAndDeref(&xsink);
+    UT_ASSERT(c, !xsink, "the Programs are destroyed");
 }
 
 //! qore#5741: inside a sandbox context continued for another thread, the context's manager and the managers of the
@@ -21749,6 +21859,7 @@ static QoreValue f_run_debug_unit_tests(const QoreListNode* params, RuntimeConfi
 #ifdef DEBUG
     ut_sandbox_context_inner_program_id(c, rc.getProgram());
     ut_sandbox_context_continued_walk(c, rc.getProgram());
+    ut_sandbox_creator_context(c, rc.getProgram());
     ut_datasource_option_commit_window(c);
 #endif
     return make_unit_test_result(c, xsink);
@@ -22150,6 +22261,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
 #ifdef DEBUG
     ut_sandbox_context_inner_program_id(c, rc.getProgram());
     ut_sandbox_context_continued_walk(c, rc.getProgram());
+    ut_sandbox_creator_context(c, rc.getProgram());
     ut_datasource_option_commit_window(c);
 #endif
     ut_event_loop_remove_recycled_fd(c);
@@ -27186,6 +27298,57 @@ static QoreValue f_dbg_system_threads_starting(const QoreListNode* params, Runti
 #endif
 
 #ifdef DEBUG
+//! Tries to create a trusted build capability in a Program that is sandboxed by its flag only, and returns it
+/** The Program is a child of the current one that had a sandbox manager, which was removed with the C++ API
+    (QoreProgram::setSandboxManager(nullptr)): no sandbox governs its code, but the code is sandboxed, so the creation
+    must be refused (qore_create_trusted_build_call()).  DEBUG builds only.
+
+    @param call the callback of the capability
+
+    @throw SANDBOX-CAPABILITY-ERROR the creation is refused
+*/
+static QoreValue f_dbg_trusted_build_from_flag_only_program(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    const ResolvedCallReferenceNode* call = get_param_value(params, 0).get<const ResolvedCallReferenceNode>();
+    QoreProgram* pgm = new QoreProgram(rc.getProgram(), PO_NO_CHILD_PO_RESTRICTIONS);
+    ON_BLOCK_EXIT([pgm, xsink] () {
+        pgm->waitForTerminationAndDeref(xsink);
+    });
+    {
+        QoreSandboxManager* sm = new QoreSandboxManager;
+        pgm->setSandboxManager(sm);
+        sm->deref(nullptr);
+    }
+    pgm->setSandboxManager(nullptr);
+    assert(qore_program_is_sandboxed(pgm));
+    ProgramThreadCountContextHelper tch(xsink, pgm, true);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return qore_create_trusted_build_call(call, xsink);
+}
+
+//! Makes a Program sandboxed by its flag only: a manager is set and removed with the C++ API (DEBUG builds only)
+/** A Program with code cannot get there from Qore; used to test a Program that is sandboxed with no manager to
+    govern it
+*/
+static QoreValue f_dbg_make_program_flag_only(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    const QoreObject* obj = get_param_value(params, 0).get<const QoreObject>();
+    ReferenceHolder<QoreProgram> pgm(static_cast<QoreProgram*>(obj->getReferencedPrivateData(CID_PROGRAM,
+        xsink)), xsink);
+    if (!pgm) {
+        return QoreValue();
+    }
+    {
+        QoreSandboxManager* sm = new QoreSandboxManager;
+        (*pgm)->setSandboxManager(sm);
+        sm->deref(nullptr);
+    }
+    (*pgm)->setSandboxManager(nullptr);
+    assert(qore_program_is_sandboxed(*pgm));
+    return QoreValue();
+}
+
 //! Returns the CPU time in nanoseconds used by the current call into a sandbox with a CPU time limit, or -1
 static QoreValue f_dbg_sandbox_cpu_used(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     return qore_sandbox_dbg_cpu_used();
@@ -27365,6 +27528,10 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_fail_next_program_entry", f_dbg_fail_next_program_entry,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "site");
+    qns.addBuiltinVariant("dbg_trusted_build_from_flag_only_program", f_dbg_trusted_build_from_flag_only_program,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, codeTypeInfo, 1, codeTypeInfo, QORE_PARAM_NO_ARG, "call");
+    qns.addBuiltinVariant("dbg_make_program_flag_only", f_dbg_make_program_flag_only, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, nothingTypeInfo, 1, QC_PROGRAM->getTypeInfo(), QORE_PARAM_NO_ARG, "pgm");
     qns.addBuiltinVariant("dbg_get_string_scan_bytes", f_dbg_get_string_scan_bytes, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_string_is_view", f_dbg_string_is_view, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolTypeInfo, 1,

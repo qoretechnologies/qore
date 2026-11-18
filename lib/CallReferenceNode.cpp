@@ -47,6 +47,7 @@
 #include "qore/intern/WeakHashReferenceNode.h"
 
 #include <shared_mutex>
+#include <optional>
 #include <unordered_map>
 
 namespace {
@@ -1391,7 +1392,10 @@ static const UserVariantBase* qore_call_reference_function_variant(const Resolve
 }
 
 int qore_call_reference_code_parse_options(const ResolvedCallReferenceNode* rcr, QoreParseOptions& po,
-        ExceptionSink* xsink) {
+        ExceptionSink* xsink, bool* sandboxed) {
+    if (sandboxed) {
+        *sandboxed = false;
+    }
     // the code of a user function runs in the Program that defines it (see qore_get_function_pgm_context()), which
     // can have been deleted: it is taken with a reference while its options are read
     if (const UserVariantBase* uvb = qore_call_reference_function_variant(rcr)) {
@@ -1405,6 +1409,9 @@ int qore_call_reference_code_parse_options(const ResolvedCallReferenceNode* rcr,
                 return -1;
             }
             po = pgm->getParseOptions();
+            if (sandboxed) {
+                *sandboxed = qore_program_is_sandboxed(pgm);
+            }
             return 1;
         }
         if (holder.sourceDeleted()) {
@@ -1416,6 +1423,9 @@ int qore_call_reference_code_parse_options(const ResolvedCallReferenceNode* rcr,
         return 0;
     }
     po = pgm->getParseOptions();
+    if (sandboxed) {
+        *sandboxed = qore_program_is_sandboxed(pgm);
+    }
     return 1;
 }
 
@@ -2532,11 +2542,22 @@ public:
             if (*xsink) {
                 return QoreValue();
             }
+            // a trusted build's barrier hides the caller; it never hides the current Program, which is the Program
+            // that created the capability once it has been entered, so that Program's sandbox governs the build
+            std::optional<QoreModuleInitSandboxBarrierHelper> build_barrier;
+            std::optional<QoreTrustedBuildChargeHelper> build_charge;
+            if (enterBuild(build_barrier, build_charge, xsink)) {
+                return QoreValue();
+            }
             ProgramThreadCountContextHelper registration_context(xsink, trusted_program, true);
             if (*xsink) {
                 return QoreValue();
             }
-            QoreSandboxTrustedPolicyHelper privilege;
+            // the caller's policy is masked for a system-policy callback; a trusted build's barrier hides it already
+            std::optional<QoreSandboxTrustedPolicyHelper> privilege;
+            if (!build) {
+                privilege.emplace();
+            }
             return qore_call_ref_invoke_named(callback, *evaluated, arg_names, policy, xsink);
         }
         return qore_call_ref_invoke_named(callback, args, arg_names, policy, xsink);
@@ -2546,9 +2567,12 @@ public:
         return dispatchValue(args, xsink);
     }
 
-    SandboxBoundCallReference(const ResolvedCallReferenceNode* callback, bool trusted)
-            : callback(const_cast<ResolvedCallReferenceNode*>(callback)), trusted(trusted),
+    //! a binding: \a trusted for a capability (SandboxManager::createSystemPolicyCall()), \a build for a trusted
+    //! build capability as well (SandboxManager::createTrustedBuildCall())
+    SandboxBoundCallReference(const ResolvedCallReferenceNode* callback, bool trusted, bool build = false)
+            : callback(const_cast<ResolvedCallReferenceNode*>(callback)), trusted(trusted), build(build),
                 trusted_program(trusted ? ::getProgram() : nullptr) {
+        assert(!build || trusted);
         callback->ref();
         if (trusted_program) {
             trusted_program->depRef();
@@ -2568,11 +2592,22 @@ public:
             if (*xsink) {
                 return QoreValue();
             }
+            // a trusted build's barrier hides the caller; it never hides the current Program, which is the Program
+            // that created the capability once it has been entered, so that Program's sandbox governs the build
+            std::optional<QoreModuleInitSandboxBarrierHelper> build_barrier;
+            std::optional<QoreTrustedBuildChargeHelper> build_charge;
+            if (enterBuild(build_barrier, build_charge, xsink)) {
+                return QoreValue();
+            }
             ProgramThreadCountContextHelper registration_context(xsink, trusted_program, true);
             if (*xsink) {
                 return QoreValue();
             }
-            QoreSandboxTrustedPolicyHelper privilege;
+            // the caller's policy is masked for a system-policy callback; a trusted build's barrier hides it already
+            std::optional<QoreSandboxTrustedPolicyHelper> privilege;
+            if (!build) {
+                privilege.emplace();
+            }
             return callback->invoke(*evaluated, xsink);
         }
         return callback->invoke(args, xsink);
@@ -2592,11 +2627,22 @@ public:
             if (*xsink) {
                 return QoreValue();
             }
+            // a trusted build's barrier hides the caller; it never hides the current Program, which is the Program
+            // that created the capability once it has been entered, so that Program's sandbox governs the build
+            std::optional<QoreModuleInitSandboxBarrierHelper> build_barrier;
+            std::optional<QoreTrustedBuildChargeHelper> build_charge;
+            if (enterBuild(build_barrier, build_charge, xsink)) {
+                return QoreValue();
+            }
             ProgramThreadCountContextHelper registration_context(xsink, trusted_program, true);
             if (*xsink) {
                 return QoreValue();
             }
-            QoreSandboxTrustedPolicyHelper privilege;
+            // the caller's policy is masked for a system-policy callback; a trusted build's barrier hides it already
+            std::optional<QoreSandboxTrustedPolicyHelper> privilege;
+            if (!build) {
+                privilege.emplace();
+            }
             return callback->invokeLexical(*evaluated, xsink, policy);
         }
         return callback->invokeLexical(args, xsink, policy);
@@ -2607,6 +2653,7 @@ public:
     const ResolvedCallReferenceNode* getCallback() const { return callback; }
     const ResolvedCallReferenceNode* getSandboxBoundCallback() const override { return callback; }
     bool isTrusted() const { return trusted; }
+    bool isBuild() const { return build; }
 
 protected:
     bool derefImpl(ExceptionSink* xsink) override {
@@ -2621,7 +2668,44 @@ protected:
 private:
     ResolvedCallReferenceNode* const callback;
     const bool trusted;
+    //! a trusted build: the callback runs under a construction barrier (see SandboxManager::createTrustedBuildCall())
+    const bool build;
     QoreProgram* const trusted_program;
+
+    //! Establishes the construction barrier of a trusted build, if this is one
+    /** Under it nothing of the caller below it is seen: what the callback creates or commits keeps no sandbox of the
+        caller (see qore_program_private::creator_sandbox_manager), and the threads that it starts inherit none; the
+        provenance of the objects and callbacks of the caller that it uses still applies to them
+
+        @return 0 for OK, -1 if the barrier could not be recorded (an out-of-memory exception is raised)
+    */
+    int enterBuild(std::optional<QoreModuleInitSandboxBarrierHelper>& barrier,
+            std::optional<QoreTrustedBuildChargeHelper>& charge, ExceptionSink* xsink) const {
+        if (!build) {
+            return 0;
+        }
+        // the sandboxes that govern the caller, resolved before the barrier hides them: the code that they govern is
+        // the caller's code in the build (QoreSandboxBudgetStack::suspendCharge())
+        QoreSandboxManager* callers = qore_find_thread_sandbox_manager_ref();
+        barrier.emplace(QoreTrustedBuildTag());
+        if (!barrier->recorded()) {
+            if (callers) {
+                callers->deref(nullptr);
+            }
+            xsink->outOfMemory();
+            return -1;
+        }
+        // the memory that the build's own code allocates is shared state, charged to no caller but to the sandbox of
+        // the Program that created the capability, if it has a memory limit; the caller's code that it calls stays
+        // charged to the caller (QoreSandboxBudgetStack::suspendCharge()); the floor is set before the creator is
+        // entered, so that the creator's budgets are above it
+        charge.emplace(trusted_program, callers);
+        if (!charge->established()) {
+            xsink->outOfMemory();
+            return -1;
+        }
+        return 0;
+    }
 };
 }
 
@@ -2655,6 +2739,11 @@ ResolvedCallReferenceNode* qore_bind_sandbox_call(const ResolvedCallReferenceNod
             const auto* bound = dynamic_cast<const SandboxBoundCallReference*>(callback);
             if (!bound) {
                 break;
+            }
+            if (bound->isBuild()) {
+                xsink->raiseException("SANDBOX-CAPABILITY-ERROR", "a trusted build capability cannot be registered as "
+                    "a system-policy callback");
+                return nullptr;
             }
             if (bound->isTrusted()) {
                 return bound->refRefSelf();
@@ -2712,6 +2801,47 @@ private:
     //! the Program that created the capability, in which the thread runs; with a dependency reference
     QoreProgram* const pgm;
 };
+}
+
+ResolvedCallReferenceNode* qore_create_trusted_build_call(const ResolvedCallReferenceNode* callback,
+        ExceptionSink* xsink) {
+    // code that any sandbox governs, whatever policy barrier is active, and sandboxed code that no manager governs (a
+    // Program sandboxed by its flag): the capability removes the caller's sandbox from what its callback builds
+    if (qore_caller_is_sandboxed()) {
+        xsink->raiseException("SANDBOX-CAPABILITY-ERROR", "a trusted build capability cannot be created by code "
+            "that a sandbox governs or that is sandboxed");
+        return nullptr;
+    }
+    if (QoreSandboxContext* creation = qore_get_call_reference_provenance(callback)) {
+        creation->deref();
+        xsink->raiseException("SANDBOX-CAPABILITY-ERROR", "the callback of a trusted build capability must not have "
+            "sandbox provenance");
+        return nullptr;
+    }
+    if (qore_get_sandbox_bound_callback(callback) || dynamic_cast<const SystemThreadCallReference*>(callback)) {
+        xsink->raiseException("SANDBOX-CAPABILITY-ERROR", "the callback of a trusted build capability must be a plain "
+            "callback, not a bound callback or a capability");
+        return nullptr;
+    }
+    // the code of the callback must not be sandboxed code either (a function of a Program that sandboxed code
+    // created, imported into a trusted Program)
+    QoreParseOptions code_po;
+    bool code_sandboxed;
+    int rc = qore_call_reference_code_parse_options(callback, code_po, xsink, &code_sandboxed);
+    if (*xsink) {
+        return nullptr;
+    }
+    if (rc < 0) {
+        xsink->raiseException("SANDBOX-CAPABILITY-ERROR", "the Program of the callback of a trusted build capability "
+            "has been deleted");
+        return nullptr;
+    }
+    if (rc > 0 && code_sandboxed) {
+        xsink->raiseException("SANDBOX-CAPABILITY-ERROR", "the callback of a trusted build capability belongs to a "
+            "sandboxed Program");
+        return nullptr;
+    }
+    return new SandboxBoundCallReference(callback, true, true);
 }
 
 ResolvedCallReferenceNode* qore_create_system_thread_call(const ResolvedCallReferenceNode* callback,

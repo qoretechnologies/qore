@@ -1,0 +1,91 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes of its own binary started without an execution mode
+# test-platform: macos - module threads of a restricted Program under its sandbox's thread limit and network policy
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class RestrictedFirstModulesTest
+
+#! Library modules that start threads for their callers, loaded first by a Program that may not control threads
+/** Each module declares the THREAD_CONTROL domain in its module header, which a module of the process-wide module path
+    keeps however it is loaded: its threads start for a caller restricted with PO_NO_THREAD_CONTROL, and they are
+    governed by the caller's sandbox (a thread over its thread limit is refused).  A module's declared domains widen
+    only the parse-option domains of its own code, never the caller's sandbox (qorus#867, design/thread-capability-scope.md).
+
+    Each check runs a script of restricted-first/ in a child process, whose main Program does not load the module, so
+    that the restricted Program loads it first; the module path is the process-wide one (QORE_MODULE_DIR), as domain
+    declarations apply only to such modules.
+*/
+class RestrictedFirstModulesTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string script_dir;
+    }
+
+    constructor() : QUnit::Test("RestrictedFirstModules", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        script_dir = get_script_dir() + "/restricted-first";
+
+        addTestCase("FilePoller", \testModule(), "filepoller.q");
+        addTestCase("FtpPoller", \testModule(), "ftppoller.q");
+        addTestCase("ParallelToolDispatcher", \testModule(), "dispatcher.q");
+        addTestCase("ExtractionPipeline", \testModule(), "extraction.q");
+        addTestCase("ServerSentEventClient", \testModule(), "sse.q");
+        addTestCase("WebSocketClient", \testModule(), "websocket.q");
+        addTestCase("declared domains widen only the module's parse-option domains", \testDomains());
+        set_return_value(main());
+    }
+
+    #! runs a script of restricted-first/ in a child process; returns its result lines by name
+    private hash<string, string> run(string script) {
+        TmpDir dir("restricted-first-");
+        string module_dir = script_dir + ":" + get_script_dir() + "/../../../../qlib"
+            + (ENV.QORE_MODULE_DIR ? ":" + ENV.QORE_MODULE_DIR : "");
+        string out = backquote(sprintf("QORE_MODULE_DIR=%s %s -b %s/%s %s 2>&1", module_dir, qore_bin, script_dir,
+            script, dir.path));
+        hash<string, string> rv = {};
+        foreach string line in (out.split("\n")) {
+            *list<*string> m = (line =~ x/^([a-z]+): (.*)$/);
+            if (m) {
+                rv{m[0]} = m[1];
+            }
+        }
+        assertTrue(rv.limited && rv.started, sprintf("%s result lines: %s", script, out));
+        return rv;
+    }
+
+    testModule(string script) {
+        hash<string, string> h = run(script);
+        # a thread over the caller's sandbox thread limit is refused: the module's threads are governed by the
+        # caller's sandbox
+        assertNeq(-1, (h.limited ?? "").find("THREAD-CREATION-FAILURE"),
+            sprintf("%s: a thread over the sandbox thread limit is refused: %y", script, h.limited));
+        # and within the limit, every thread starts for the caller that may not control threads
+        assertEq(-1, (h.started ?? "").find("THREAD-CREATION-FAILURE"),
+            sprintf("%s: the threads start within the limit: %y", script, h.started));
+        assertTrue((h.started ?? "") =~ /^(started|ok)(,(started|ok))*$/,
+            sprintf("%s: the threads started: %y", script, h.started));
+    }
+
+    testDomains() {
+        TmpDir dir("restricted-first-domains-");
+        string module_dir = script_dir + ":" + get_script_dir() + "/../../../../qlib"
+            + (ENV.QORE_MODULE_DIR ? ":" + ENV.QORE_MODULE_DIR : "");
+        string out = backquote(sprintf("QORE_MODULE_DIR=%s %s -b %s/domains.q %s 2>&1", module_dir, qore_bin,
+            script_dir, dir.path + "/none"));
+        list<string> lines = select out.split("\n"), $1 =~ /^(restricted|plain|sandboxed): /;
+        # the declared NETWORK domain is granted to the module's thread, the undeclared FILESYSTEM domain is not
+        assertEq("restricted: net ok, fs INVALID-FUNCTION-ACCESS", lines[0], out);
+        # a module without the declaration cannot be loaded by a caller that may not control threads
+        assertEq("plain: PARSE-EXCEPTION", lines[1], out);
+        # the declaration never widens the caller's sandbox: its network policy applies in the module's thread
+        assertEq("sandboxed: net NETWORK-ACCESS-DENIED", lines[2], out);
+    }
+}
