@@ -4876,3 +4876,22 @@ void TempEncodingHelper::removeBom() {
     assert(pstr->encoding);
     q_remove_bom(str, pstr->encoding);
 }
+
+// documented in qore_string_private.h
+bool qore_string_encoding_valid(const QoreString& str) {
+    if (!str.size()) {
+        return true;
+    }
+    if (str.getEncoding() == QCS_UTF8) {
+        bool incomplete = false;
+        return IconvHelper::validUtf8Prefix(str.c_str(), str.size(), incomplete) == str.size();
+    }
+    // a string in another encoding is valid if it can be converted to UTF-8; the conversion's exception is not raised
+    ExceptionSink xsink;
+    TempEncodingHelper t(str, QCS_UTF8, &xsink);
+    if (xsink) {
+        xsink.clear();
+        return false;
+    }
+    return true;
+}

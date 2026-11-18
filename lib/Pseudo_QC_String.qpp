@@ -1280,6 +1280,35 @@ bool <string>::isDataPrintableAscii() [const;flags=CONSTANT] {
     return str->isDataPrintableAscii();
 }
 
+//! returns @ref True if the string is valid in its encoding
+/** A string that is not valid in its encoding (one in UTF-8 with byte sequences that are not well-formed UTF-8, or
+    one in another encoding that cannot be converted to UTF-8) cannot be processed reliably as text.  This method tests
+    a string without raising an exception, as code that receives text from outside the program does before it
+    processes it.
+
+    A UTF-8 string is checked strictly (RFC 3629), as the regular expression engine checks it: overlong forms,
+    surrogate code points, values above U+10FFFF and unexpected continuation bytes are not valid; the time taken is
+    proportional to the size of the string.
+
+    @return @ref True if the string is empty or valid in its encoding
+
+    @par Example:
+    @code{.py}
+if (!str.isEncodingValid()) {
+    throw "INPUT-ERROR", sprintf("the input of %d bytes is not valid in its encoding", str.size());
+}
+    @endcode
+
+    @see
+    - @ref Qore::<string>::isDataAscii() "<string>::isDataAscii()"
+    - @ref Qore::<string>::isDataPrintableAscii() "<string>::isDataPrintableAscii()"
+
+    @since %Qore 3.0
+ */
+bool <string>::isEncodingValid() [const;flags=CONSTANT] {
+    return qore_string_encoding_valid(*str);
+}
+
 //! returns a string of hexadecimal digits corresponding to the contents of the string
 /** @par Example:
     @code{.py}

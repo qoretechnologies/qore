@@ -1779,6 +1779,13 @@ DLLLOCAL T* binary_to_string(BinaryNode* bin, const QoreEncoding* qe) {
 */
 DLLLOCAL bool qore_string_get_as_bool(const char* str, size_t len);
 
+//! Returns true if the string is valid in its encoding; never raises an exception
+/** A UTF-8 string is checked strictly (RFC 3629: no overlong forms, surrogates, values above U+10FFFF or unexpected
+    continuation bytes; see IconvHelper::validUtf8Prefix()), as the regular expression engine checks it; a string in
+    another encoding is valid if it can be converted to UTF-8.  O(n) in the size of the string (qore#6554).
+*/
+DLLLOCAL bool qore_string_encoding_valid(const QoreString& str);
+
 
 //! a source for a QoreString operation: a copy if the source is part of the string's text, which the operation moves
 class QoreStringOwnSource {
