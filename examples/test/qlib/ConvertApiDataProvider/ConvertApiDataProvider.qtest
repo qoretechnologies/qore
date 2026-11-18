@@ -310,6 +310,7 @@ public class ConvertApiDataProviderTest inherits QUnit::Test {
         addTestCase("negative tests", \negativeTests());
         addTestCase("client option tests", \clientOptionTests());
         addTestCase("local server tests", \localServerTests());
+        addTestCase("sandbox tests", \sandboxTests());
         addTestCase("semantic string type tests", \semanticStringTypeTests());
         addTestCase("option presentation tests", \optionPresentationTests());
         addTestCase("converter parameter tests", \converterParameterTests());
@@ -780,6 +781,62 @@ public class ConvertApiDataProviderTest inherits QUnit::Test {
         });
     }
 
+    #! The requests of sandboxed code are governed by its sandbox's network policy
+    /** The connector sends the files and URLs of a request to ConvertAPI, or to the server of its \c url option: a
+        request made for sandboxed code is refused when the sandbox does not allow the connection, before anything is
+        sent, and is sent when it does
+    */
+    sandboxTests() {
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": new Logger("server", LoggerLevel::getLevelError()),
+        });
+        on_exit server.stop();
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
+        FakeConvertApiHandler handler();
+        server.setHandler("convertapi", "", NOTHING, handler);
+        server.setDefaultHandler("convertapi", handler);
+        string url = "http://localhost:" + port;
+
+        # the sandboxed code makes a conversion request with a provider that it creates itself
+        string code = "hash<auto> sub convert(string url) {
+    ConvertApiDataProvider provider({\"convertapirestclient_options\": {\"url\": url, \"apikey\": \"test-key\"}});
+    return provider.getChildProviderEx(\"compress-pdf\").doRequest({\"url\": \"https://example.com/a.pdf\"});
+}
+";
+        # a sandbox that blocks private networks (SSRF protection) refuses the connection to the local server
+        {
+            SandboxManager sm();
+            sm.blockPrivateNetworks();
+            sm.setNetworkDefaultPolicy(True);
+            Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS, True);
+            p.loadModule("ConvertApiDataProvider");
+            p.parse(code, "sandboxed-convert");
+            p.setSandboxManager(sm);
+            handler.requests = ();
+            try {
+                p.callFunction("convert", url);
+                assertTrue(False, "no exception");
+            } catch (hash<ExceptionInfo> ex) {
+                assertEq("NETWORK-ACCESS-DENIED", ex.err);
+            }
+            assertEq(0, handler.requests.size());
+        }
+
+        # a sandbox that allows the connection lets the same request through
+        {
+            SandboxManager sm();
+            sm.setNetworkDefaultPolicy(True);
+            Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS, True);
+            p.loadModule("ConvertApiDataProvider");
+            p.parse(code, "sandboxed-convert");
+            p.setSandboxManager(sm);
+            handler.requests = ();
+            hash<auto> result = p.callFunction("convert", url);
+            assertEq(binary("%PDF-1.7"), result.Files[0].FileData);
+            assertEq(("convert/pdf/to/compress",), (map $1.path, handler.requests));
+        }
+    }
+
     #! Requests against a local server
     localServerTests() {
         HttpServer server(<HttpServerOptionInfo>{
@@ -901,6 +958,11 @@ public class ConvertApiDataProviderTest inherits QUnit::Test {
             assertRegex("Converter not found", ex.desc);
             assertEq(400, ex.arg.status_code);
             assertEq(4000, ex.arg.body.Code);
+            # the API token is a credential: it never appears in the exception, also not in the request headers that
+            # the argument reports
+            assertEq(-1, ex.desc.find("test-key"));
+            assertEq("<redacted>", ex.arg.request_headers.authorization);
+            assertEq(-1, sprintf("%y", ex.arg).find("test-key"));
         }
 
         # converter information
@@ -990,6 +1052,8 @@ public class ConvertApiDataProviderTest inherits QUnit::Test {
             assertRegex("no source formats are offered: CONVERTAPI-API-ERROR", errors[0]);
             assertRegex("no destination formats are offered: CONVERTAPI-API-ERROR", errors[1]);
             assertRegex("not offered as typed options: CONVERTAPI-API-ERROR", errors[2]);
+            # the API token is never logged, although the client logs its requests at this level
+            assertEq(-1, log.getMessages().join("\n").find("test-key"));
         }
 
         # a conversion without an input is rejected before a request is made
