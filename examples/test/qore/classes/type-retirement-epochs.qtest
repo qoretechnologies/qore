@@ -74,9 +74,11 @@ class TypeRetirementEpochsTest inherits QUnit::Test {
         done.inc();
         int new_tid = background waitThread(started_after, release, done);
         started_after.get();
+        # this thread waits in a quiescent wait: Queue::get() above does not wait if the thread has already pushed
+        usleep(1);
 
         hash<auto> blockers = map {$1.tid.toString(): $1.epoch}, call_function("dbg_type_retirement_blockers");
-        # this thread has waited in Queue::get() since the retirement, a quiescent wait
+        # this thread has waited in usleep() since the retirement, a quiescent wait
         assertFalse(exists blockers{gettid()}, sprintf("the main thread is no blocker: %y", blockers));
         assertTrue(exists blockers{old_tid}, sprintf("the thread started before the retirement is a blocker: %y",
             blockers));
