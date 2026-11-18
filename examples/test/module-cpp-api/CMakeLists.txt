@@ -123,6 +123,28 @@ if (CMAKE_HOST_APPLE)
     target_link_options(uncontrolledprobe PRIVATE -Wl,-undefined -Wl,dynamic_lookup)
 endif()
 
+# --- the module that runs code of a Program with and without entering it (qore#6185) ---------------------------------
+# (program-tlpd/tlpdprobe-module.cpp)
+
+add_library(tlpdprobe MODULE program-tlpd/tlpdprobe-module.cpp)
+add_dependencies(tlpdprobe libqore)
+target_include_directories(tlpdprobe PRIVATE
+    ${CMAKE_BINARY_DIR}
+    ${CMAKE_BINARY_DIR}/include
+    ${CMAKE_SOURCE_DIR}/include)
+target_compile_definitions(tlpdprobe PRIVATE
+    BUILDING_DLL=1
+    HAVE_UNIX_CONFIG_H
+    PACKAGE_VERSION="${VERSION}"
+    $<$<BOOL:${HAVE_GCC_VISIBILITY}>:HAVE_GCC_VISIBILITY=1>)
+set_target_properties(tlpdprobe PROPERTIES
+    PREFIX ""
+    SUFFIX "${_cppapi_test_module_suffix}"
+    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/modules/tlpdprobe")
+if (CMAKE_HOST_APPLE)
+    target_link_options(tlpdprobe PRIVATE -Wl,-undefined -Wl,dynamic_lookup)
+endif()
+
 # --- the module with a DBI driver that reports the setters of its options (qore#5741) --------------------------------
 # (datasource-option-setter/dsoptprobe-module.cpp)
 
@@ -282,7 +304,7 @@ target_compile_definitions(aotv1fail PRIVATE AOTV1_FAIL=1)
 target_compile_definitions(aotv1ok PRIVATE AOTV1_FAIL=0)
 
 # remove the files of these modules built for another module API (see qore_remove_stale_module_api_files())
-foreach(_cppapi_test_module cppapitest cppapiuser cmdctxaware cmdctxlegacy uncontrolledprobe dsoptprobe forkexita
-        forkexitb apicur apiold tdpgmowner aotv1fail aotv1ok pluginordera pluginorderb)
+foreach(_cppapi_test_module cppapitest cppapiuser cmdctxaware cmdctxlegacy uncontrolledprobe tlpdprobe dsoptprobe
+        forkexita forkexitb apicur apiold tdpgmowner aotv1fail aotv1ok pluginordera pluginorderb)
     qore_remove_stale_module_api_files(${_cppapi_test_module})
 endforeach()
