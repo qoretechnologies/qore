@@ -1799,8 +1799,9 @@ DLLLOCAL QoreStringNode* qore_http_field_value_string(const char* p, size_t len)
 DLLLOCAL void qore_http_field_value_check(QoreStringNode* str);
 
 //! Returns true if an HTTP request target (a path with an optional query) is text that the HTTP server accepts
-/** The path and the query are decoded with the decoder of decode_url(), as \c HttpServer decodes them, and each must
-    decode to valid UTF-8; the decoded path must not have a NUL character (qore#6554).  No exception is left in an
+/** A target with a raw byte above 0x7f or a raw NUL is not accepted (the normal path decides, in the encoding of the
+    socket); otherwise the path and the query are decoded with the decoder of decode_url(), as \c HttpServer decodes
+    them, and each must decode to valid UTF-8; the decoded path must not have a NUL character (qore#6554).  No exception is left in an
     exception sink; O(n), with no allocation for a target without \c "%" and bytes above 0x7f.
 */
 DLLLOCAL bool qore_http_target_text_valid(const char* p, size_t len);

@@ -4956,6 +4956,14 @@ bool qore_http_target_text_valid(const char* p, size_t len) {
     if (simple) {
         return true;
     }
+    // a raw byte above 0x7f (which RFC 3986 requires to be percent-encoded) or a NUL: the normal path decides, in the
+    // encoding of the socket, which the glue does not know
+    for (size_t i = 0; i < len; ++i) {
+        unsigned char c = static_cast<unsigned char>(p[i]);
+        if (c > 0x7f || !c) {
+            return false;
+        }
+    }
     // the path and the query are decoded as HttpServer decodes them (decodeRequestPath(): decode_url() of each), with
     // the same decoder, so that the result is the same; a NUL character is refused in the decoded path only
     const char* q = static_cast<const char*>(memchr(p, '?', len));

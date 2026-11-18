@@ -112,6 +112,14 @@ class HttpServerInvalidEncodingTest inherits QUnit::Test {
         assertEq(400, s.readHTTPHeader(30s).status_code);
         assertEq(2, path_handler.calls);
 
+        # a raw lead byte and a percent-encoded continuation byte decode to valid text, but the raw query, which the
+        # handler gets, is not valid
+        response = rawRequest(port, binary_to_string(binary("GET /a?x=") + <c3>
+            + binary("%A9 HTTP/1.1\r\nHost: localhost\r\n\r\n"), "ISO-8859-1"));
+        assertEq(400, response.hdr.status_code);
+        assertRegex("the request target of [0-9]+ bytes is not valid text", response.body);
+        assertEq(2, path_handler.calls);
+
         # the masking of a target that is not valid text
         string masked = mask_sensitive_url_query_values(binary_to_string(binary("/a?token=s") + <e9>
             + binary("&b=") + <ff>, "UTF-8"));

@@ -7600,10 +7600,17 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
     }
 
     #! URL-decodes the resource path while preserving the raw query string
-    /** The whole request target, the query included, must decode to valid text; otherwise \a err is set and \c "/" is
-        returned, so that the code before the request is answered does not process the path (qore#6554)
+    /** The whole request target, the query included, must be valid text and decode to valid text; otherwise \a err is
+        set and \c "/" is returned, so that the code before the request is answered does not process the path
+        (qore#6554)
     */
     private string decodeRequestPath(string path, reference<*string> err) {
+        # the raw query is given to the handler, so the raw target must be valid text as well: a raw byte followed by a
+        # percent-encoded one can decode to valid text that the raw target is not
+        if (!path.isEncodingValid()) {
+            err = sprintf("the request target of %d bytes is not valid text", path.size());
+            return "/";
+        }
         try {
             int i = path.find("?");
             if (i == -1) {
@@ -7615,7 +7622,9 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
             string decoded_query = decode_url(query);
             return decode_url(path.substr(0, i)) + query;
         } catch (hash<ExceptionInfo> ex) {
-            if (ex.err != "URL-ENCODING-ERROR" && ex.err != "INVALID-ENCODING") {
+            # ENCODING-CONVERSION-ERROR: a target that cannot be converted from the socket encoding to UTF-8
+            if (ex.err != "URL-ENCODING-ERROR" && ex.err != "INVALID-ENCODING"
+                    && ex.err != "ENCODING-CONVERSION-ERROR") {
                 rethrow;
             }
             err = sprintf("the request target of %d bytes is not valid: %s", path.size(), ex.desc);
@@ -9420,7 +9429,8 @@ class HttpServerNativeAsyncTarget inherits HttpServerAsyncIo::HttpAsyncTarget {
             try {
                 string decoded = decode_url(hdr.path);
             } catch (hash<ExceptionInfo> ex) {
-                if (ex.err != "URL-ENCODING-ERROR") {
+                if (ex.err != "URL-ENCODING-ERROR" && ex.err != "INVALID-ENCODING"
+                        && ex.err != "ENCODING-CONVERSION-ERROR") {
                     rethrow;
                 }
                 return False;
