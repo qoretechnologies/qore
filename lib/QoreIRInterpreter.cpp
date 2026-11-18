@@ -398,6 +398,38 @@ static const QoreTypeInfo* substituteRuntimeTypeParams(const QoreTypeInfo* typeI
     return qore_substitute_type_params_if_needed(typeInfo);
 }
 
+//! The locals of a call that its caller instantiated (pre-instantiated), which the IR interpreter looks up for each
+//! local of the call (qore#6627)
+/** Wraps the set that QoreIRInterpreter::execute() is given; when that set is the function's own
+    (QoreIRFunction::cached_pre_instantiated), the lookups probe QoreIRFunction::cached_pre_instantiated_probe, which
+    QoreIRFunction::setCachedPreInstantiated() built from the same set, instead of hashing into it; a debug build
+    checks that both give the same answer
+*/
+class IRPreInstantiated {
+public:
+    //! sets the set and its probe table, if any
+    DLLLOCAL void reset(const std::unordered_set<const LocalVar*>* n_set, const QoreIRLocalProbeSet* n_probe) {
+        assert(n_set);
+        set = n_set;
+        probe = n_probe;
+    }
+
+    //! returns 1 if the local is pre-instantiated, 0 if not
+    DLLLOCAL QORE_INTERN_ALWAYS_INLINE size_t count(const LocalVar* lv) const {
+        if (probe) {
+            bool rv = probe->contains(lv);
+            assert(rv == (set->count(lv) > 0));
+            return rv ? 1 : 0;
+        }
+        return set->count(lv);
+    }
+
+private:
+    const std::unordered_set<const LocalVar*>* set = nullptr;
+    //! the probe table built from the same set, or nullptr
+    const QoreIRLocalProbeSet* probe = nullptr;
+};
+
 // QoreIRInterpreterGivenArgs.cpp compiles this file with QORE_IR_INTERPRETER_GIVEN_ARGS_UNIT defined, outside the
 // single compilation unit, for the code of the calls that give the references of their temporary arguments to the
 // callee (the IRGivenCallArgs instantiations of the call sites of execute() and of evalInvoke(), issue #5882): it
@@ -991,7 +1023,7 @@ struct IRScopeEntry {
     //! reads them from the scope and no lambda of the frame captures more for it
     IRCallFrame* frame = nullptr;
     const QoreIRFunction* func = nullptr;
-    const std::unordered_set<const LocalVar*>* pre_instantiated = nullptr;
+    const IRPreInstantiated* pre_instantiated = nullptr;
 };
 #endif // QORE_IR_INTERPRETER_GIVEN_ARGS_UNIT
 
@@ -1689,7 +1721,7 @@ struct QoreIRDebugNest {
     std::vector<QoreIRDebugNestEntry> entries;
     //! the function of the frame and its pre-instantiated locals, for the release of the locals of a block (#5921)
     const QoreIRFunction* func = nullptr;
-    const std::unordered_set<const LocalVar*>* pre_instantiated = nullptr;
+    const IRPreInstantiated* pre_instantiated = nullptr;
     //! the index of the next statement to report for the current exception, or -1
     int chain = -1;
     //! the statement that ended last, which tells whether the block that it was in is a try block or a catch block
@@ -1705,6 +1737,8 @@ struct QoreIRDebugNest {
 
 struct IRCallFrame {
     std::vector<QoreValue> values;
+    //! the lookup of the call's pre-instantiated locals (see QoreIRInterpreter::execute())
+    IRPreInstantiated pre_instantiated_lookup;
     IRCleanupSlots cleanup;
     // Remaining uses for borrowed SSA values. Indexed by value ID so hot
     // list-element reads avoid hash-table traffic; storage is pooled per frame.
@@ -2303,7 +2337,7 @@ static bool qore_ir_type_may_hold_reference(const QoreTypeInfo* ti) {
 
 static void ensureLocalInstantiated(LocalVar* var, IRLocalVarSet& locals,
         std::vector<const LocalVar*>& locals_ordered,
-        const std::unordered_set<const LocalVar*>* pre_instantiated = nullptr,
+        const IRPreInstantiated* pre_instantiated = nullptr,
         const std::unordered_set<const void*>* function_own_locals = nullptr,
         IRLocalVarSet* locally_uninstantiated = nullptr) {
     if (!var) {
@@ -2387,7 +2421,7 @@ private:
     frame has not instantiated (or has uninstantiated) is left alone.
 */
 static void releaseFrameRuntimeLocal(const LocalVar* lv, const IRLocalVarSet& instantiated,
-        const std::unordered_set<const LocalVar*>* pre_instantiated, ExceptionSink* xsink) {
+        const IRPreInstantiated* pre_instantiated, ExceptionSink* xsink) {
     if (!lv) {
         return;
     }
@@ -2442,7 +2476,7 @@ static void qore_ir_hold_pending_returns(const QoreIRFunction& func, const Value
     if no closure holds it.  Called only on the unwind path, with the frame that the scope keeps.
 */
 static void qore_ir_release_block_locals(const std::vector<LocalVar*>& locals, const std::vector<uint32_t>& slots,
-        IRCallFrame& frame, const QoreIRFunction* func, const std::unordered_set<const LocalVar*>* pre_instantiated,
+        IRCallFrame& frame, const QoreIRFunction* func, const IRPreInstantiated* pre_instantiated,
         ExceptionSink* xsink) {
     for (size_t i = locals.size(); i; --i) {
         const LocalVar* lv = locals[i - 1];
@@ -2490,7 +2524,7 @@ static void qore_ir_release_unwound_scope_locals(const IRScopeEntry& scope, Exce
 }
 
 static void cleanupInstantiatedLocals(const std::vector<const LocalVar*>& locals_ordered, ExceptionSink* xsink,
-        const std::unordered_set<const LocalVar*>* pre_instantiated = nullptr) {
+        const IRPreInstantiated* pre_instantiated = nullptr) {
     // Iterate in REVERSE instantiation order so that closures that capture
     // other closures release their references before the captured CVVs are deref'd.
     // This matches AST mode's reverse-declaration-order finalization and prevents
@@ -2498,7 +2532,7 @@ static void cleanupInstantiatedLocals(const std::vector<const LocalVar*>& locals
     for (auto it = locals_ordered.rbegin(); it != locals_ordered.rend(); ++it) {
         const LocalVar* var = *it;
         if (var) {
-            if (pre_instantiated && pre_instantiated->find(var) != pre_instantiated->end()) {
+            if (pre_instantiated && pre_instantiated->count(var) > 0) {
                 continue;
             }
             var->uninstantiate(xsink);
@@ -2794,7 +2828,7 @@ static void updateLocalVarFromLvalue(
         std::vector<const LocalVar*>& instantiated_locals_ordered,
         const QoreValue& lvalue,
         const QoreValue& value, ExceptionSink* xsink,
-        const std::unordered_set<const LocalVar*>* pre_instantiated = nullptr,
+        const IRPreInstantiated* pre_instantiated = nullptr,
         const std::unordered_set<const void*>* function_own_locals = nullptr,
         IRLocalVarSet* locally_uninstantiated = nullptr,
         const std::unordered_map<const LocalVar*, uint32_t>* local_var_slots = nullptr,
@@ -8624,7 +8658,7 @@ static QORE_INTERN_NOINLINE void qore_ir_dbg_nest_statement(QoreIRDebugFrameStat
 //! Records the block of a DebugBlock instruction, which has locals, on the statement that contains it (#5921)
 static QORE_INTERN_NOINLINE void qore_ir_dbg_nest_block(QoreIRDebugFrameState& st,
         const QoreIRDebugStatementInstruction* inst, const QoreIRFunction* func,
-        const std::unordered_set<const LocalVar*>* pre_instantiated) {
+        const IRPreInstantiated* pre_instantiated) {
     if (!st.nest_used) {
         return;
     }
@@ -9687,7 +9721,7 @@ static __attribute__((noinline)) void takeOverRuntimeStackParams(const QoreIRFun
 
 bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_value, ExceptionSink* xsink,
         std::vector<std::string>* cleanup_log, const std::vector<QoreValue>* args,
-        const std::vector<QoreValue>* closure, const std::unordered_set<const LocalVar*>* pre_instantiated,
+        const std::vector<QoreValue>* closure, const std::unordered_set<const LocalVar*>* pre_instantiated_set,
         const LocalVar* excluded_selfid, const StatementBlock* statements, QoreProgram* pgm, bool suppress_guard_deopt,
         const IRDirectParams* direct_params, std::vector<QoreValue>* parent_slot_cache, bool handler_frame) {
 #ifdef QORE_MANAGE_STACK
@@ -9704,6 +9738,14 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
         ? 0 : static_cast<size_t>(func.max_local_slot_id) + 1;
     IRCallFramePool& tl_frame_pool = TlFramePool::get();
     IRCallFrame& frame = tl_frame_pool.push(reserve_size, local_slot_count);
+    // the lookups of the pre-instantiated locals probe the function's table when the set is its own; the lookup
+    // object is in the pooled frame, not in this function's stack frame (qore#6627)
+    const IRPreInstantiated* pre_instantiated = nullptr;
+    if (pre_instantiated_set) {
+        frame.pre_instantiated_lookup.reset(pre_instantiated_set, pre_instantiated_set == func.cached_pre_instantiated
+            ? &func.cached_pre_instantiated_probe : nullptr);
+        pre_instantiated = &frame.pre_instantiated_lookup;
+    }
     // RAII guard: return the frame to the pool on any exit path
     struct FrameGuard {
         IRCallFrame& frame;
@@ -10400,7 +10442,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     struct LocalInstantiationCleanup {
         std::vector<const LocalVar*>& locals_ordered;
         ExceptionSink* xsink;
-        const std::unordered_set<const LocalVar*>* pre_instantiated;
+        const IRPreInstantiated* pre_instantiated;
         ~LocalInstantiationCleanup() {
             cleanupInstantiatedLocals(locals_ordered, xsink, pre_instantiated);
         }
@@ -10430,7 +10472,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
         const std::vector<const LocalVar*>& slot_locals;
         const std::vector<uint8_t>& ir_only;
         const IRLocalVarSet& instantiated;
-        const std::unordered_set<const LocalVar*>* pre_instantiated;
+        const IRPreInstantiated* pre_instantiated;
         std::unordered_map<FunctionalOperatorInterface*, IRActiveIterator>& iters;
         // the slots of IR-only locals own their values: they are released last slot first, as the AST interpreter
         // releases the variables of a frame (a local's slot is assigned where it first appears, after those of the
@@ -15867,14 +15909,14 @@ load_local_done:
                 static constinit QoreEnvFlag debug_uninst_env("QORE_DEBUG_UNINST");
                 const bool debug_uninst = debug_uninst_env.get();
                 if (debug_uninst) {
-                    bool ip2 = pre_instantiated && pre_instantiated->find(local_inst->local) != pre_instantiated->end();
+                    bool ip2 = pre_instantiated && pre_instantiated->count(local_inst->local) > 0;
                     fprintf(stderr, "UNINST: %s is_closure=%d slot=%d is_pre=%d\n",
                         local_inst->local ? local_inst->local->getName() : "null",
                         local_inst->is_closure, (int)local_inst->slot_id, ip2);
                 }
                 // Uninstantiate the local variable (calls destructor for objects)
                 if (local_inst->local) {
-                    bool is_pre = pre_instantiated && pre_instantiated->find(local_inst->local) != pre_instantiated->end();
+                    bool is_pre = pre_instantiated && pre_instantiated->count(local_inst->local) > 0;
                     // Check if this variable was actually instantiated by the IR
                     // interpreter. For non-pre-instantiated (IR-only) variables,
                     // ensureLocalInstantiated() pushes them on first use. If a
